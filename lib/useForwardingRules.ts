@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useSignMessage } from 'wagmi'
 import { mutationHeaders, parseRSendError } from './rsendFetch'
+import { useWalletAuth } from './walletAuth'
 
 // Same-origin proxy → eliminates CORS entirely.
 // All requests go through /api/backend/* which is forwarded server-side
@@ -117,25 +117,7 @@ export function useForwardingRules(address: string | undefined) {
   const [backendOffline, setBackendOffline] = useState(false)
   const failCountRef = useRef(0)
   const errorLoggedRef = useRef(false)
-  const signingRef = useRef(false)
-  const { signMessageAsync } = useSignMessage()
-
-  // Guard: prevent concurrent signature requests
-  // Timeout prevents infinite hang if MetaMask popup doesn't open
-  const signOnce = useCallback(async (message: string): Promise<string> => {
-    if (signingRef.current) throw new Error('Signature already in progress')
-    signingRef.current = true
-    try {
-      const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(
-          'Signature timed out — open your wallet and approve the pending request'
-        )), 60_000)
-      )
-      return await Promise.race([signMessageAsync({ message }), timeout])
-    } finally {
-      signingRef.current = false
-    }
-  }, [signMessageAsync])
+  const { signOnce } = useWalletAuth(address)
 
   // ── Fetch ──────────────────────────────────────────────
 
