@@ -403,13 +403,22 @@ async def list_contracts(
 # ═══════════════════════════════════════════════════════════
 
 @split_router.get("/contracts/{contract_id}")
+@require_wallet_auth
 async def get_contract(
+    request: Request,
     contract_id: int,
     db: AsyncSession = Depends(get_db),
+    wallet_address: Optional[str] = None,
 ):
     """Dettaglio di un SplitContract con tutti i recipient."""
+    if not wallet_address:
+        raise HTTPException(
+            status_code=500,
+            detail="wallet_address not injected by @require_wallet_auth",
+        )
     try:
         contract = await _get_contract_or_404(db, contract_id, with_recipients=True)
+        await _verify_split_owner(contract, wallet_address)
         return {"contract": _serialize_contract(contract)}
     except HTTPException:
         raise
