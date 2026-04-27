@@ -117,7 +117,7 @@ export function useForwardingRules(address: string | undefined) {
   const [backendOffline, setBackendOffline] = useState(false)
   const failCountRef = useRef(0)
   const errorLoggedRef = useRef(false)
-  const { signOnce } = useWalletAuth(address)
+  const { signOnce, getAuthHeaders, clearCache } = useWalletAuth(address)
 
   // ── Fetch ──────────────────────────────────────────────
 
@@ -125,10 +125,21 @@ export function useForwardingRules(address: string | undefined) {
     if (!address) return
     if (!silent) setLoading(true)
     try {
-      const res = await fetch(
-        `${BACKEND}/api/v1/forwarding/rules?owner_address=${address.toLowerCase()}`,
-        { signal: AbortSignal.timeout(15000) }
-      )
+      const doFetch = async () => {
+        const headers = await getAuthHeaders()
+        return fetch(
+          `${BACKEND}/api/v1/forwarding/rules`,
+          { headers, signal: AbortSignal.timeout(15000) }
+        )
+      }
+      let res = await doFetch()
+      // 401 → cache may be stale (clock skew / server-side invalidation).
+      // Drop cache and retry once with a fresh signature. If still 401,
+      // bubble up as normal error.
+      if (res.status === 401) {
+        clearCache()
+        res = await doFetch()
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       setRules(data.rules ?? [])
@@ -146,7 +157,7 @@ export function useForwardingRules(address: string | undefined) {
       if (failCountRef.current >= 5) setBackendOffline(true)
     }
     if (!silent) setLoading(false)
-  }, [address])
+  }, [address, getAuthHeaders, clearCache])
 
   useEffect(() => { fetchRules() }, [fetchRules])
 
