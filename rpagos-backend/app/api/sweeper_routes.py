@@ -1126,8 +1126,9 @@ async def list_logs(
 # ═══════════════════════════════════════════════════════════
 
 @sweeper_router.get("/forwarding/logs/export")
+@require_wallet_auth
 async def export_logs(
-    owner_address: str = Query(...),
+    request: Request,
     format: str = Query("csv", description="csv or json"),
     rule_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
@@ -1135,8 +1136,14 @@ async def export_logs(
     date_from: Optional[datetime] = Query(None),
     date_to: Optional[datetime] = Query(None),
     db: AsyncSession = Depends(get_db),
+    wallet_address: Optional[str] = None,
 ):
-    owner = owner_address.lower()
+    if not wallet_address:
+        raise HTTPException(
+            status_code=500,
+            detail="wallet_address not injected by @require_wallet_auth",
+        )
+    owner = wallet_address.lower()
     if format not in ("csv", "json"):
         raise HTTPException(status_code=422, detail="format must be csv or json")
 
