@@ -1279,12 +1279,19 @@ async def get_stats(
 # ═══════════════════════════════════════════════════════════
 
 @sweeper_router.get("/forwarding/stats/daily")
+@require_wallet_auth
 async def get_daily_stats(
-    owner_address: str = Query(...),
+    request: Request,
     days: int = Query(30, ge=1, le=365),
     db: AsyncSession = Depends(get_db),
+    wallet_address: Optional[str] = None,
 ):
-    owner = owner_address.lower()
+    if not wallet_address:
+        raise HTTPException(
+            status_code=500,
+            detail="wallet_address not injected by @require_wallet_auth",
+        )
+    owner = wallet_address.lower()
     rule_ids_q = select(ForwardingRule.id).where(ForwardingRule.user_id == owner)
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
