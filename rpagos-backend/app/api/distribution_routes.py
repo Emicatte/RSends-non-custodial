@@ -553,11 +553,20 @@ async def import_csv(
 # ═══════════════════════════════════════════════════════════
 
 @distribution_router.get("/distributions/{dist_id}/export-csv")
+@require_wallet_auth
 async def export_csv(
+    request: Request,
     dist_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    wallet_address: Optional[str] = None,
 ):
+    if not wallet_address:
+        raise HTTPException(
+            status_code=500,
+            detail="wallet_address not injected by @require_wallet_auth",
+        )
     dl = await _get_distribution_or_404(db, dist_id)
+    await _verify_dist_owner(dl, wallet_address)
 
     active_recipients = [r for r in (dl.recipients or []) if r.is_active]
 
