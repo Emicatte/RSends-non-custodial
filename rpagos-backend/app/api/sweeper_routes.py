@@ -1374,7 +1374,9 @@ def _serialize_batch(b: SweepBatch) -> dict:
 
 
 @sweeper_router.get("/forwarding/rules/{rule_id}/batches")
+@require_wallet_auth
 async def list_batches(
+    request: Request,
     rule_id: int,
     status: Optional[str] = Query(None, description="PENDING|PROCESSING|COMPLETED|FAILED|PARTIAL"),
     date_from: Optional[datetime] = Query(None),
@@ -1382,9 +1384,16 @@ async def list_batches(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
+    wallet_address: Optional[str] = None,
 ):
+    if not wallet_address:
+        raise HTTPException(
+            status_code=500,
+            detail="wallet_address not injected by @require_wallet_auth",
+        )
     # Verify rule exists
-    await _get_rule_or_404(db, rule_id)
+    rule = await _get_rule_or_404(db, rule_id)
+    await _verify_owner(rule, wallet_address)
 
     q = select(SweepBatch).where(SweepBatch.forwarding_rule_id == rule_id)
     count_q = select(func.count()).select_from(SweepBatch).where(
