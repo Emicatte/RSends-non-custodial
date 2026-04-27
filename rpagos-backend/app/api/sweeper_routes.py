@@ -1189,12 +1189,19 @@ async def export_logs(
 # ═══════════════════════════════════════════════════════════
 
 @sweeper_router.get("/forwarding/stats")
+@require_wallet_auth
 async def get_stats(
-    owner_address: str = Query(...),
+    request: Request,
     period: str = Query("30d", description="24h|7d|30d|all"),
     db: AsyncSession = Depends(get_db),
+    wallet_address: Optional[str] = None,
 ):
-    owner = owner_address.lower()
+    if not wallet_address:
+        raise HTTPException(
+            status_code=500,
+            detail="wallet_address not injected by @require_wallet_auth",
+        )
+    owner = wallet_address.lower()
     rule_ids_q = select(ForwardingRule.id).where(ForwardingRule.user_id == owner)
 
     q_base = SweepLog.rule_id.in_(rule_ids_q)
