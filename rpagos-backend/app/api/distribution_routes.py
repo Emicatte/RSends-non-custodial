@@ -234,12 +234,19 @@ async def create_distribution(
 # ═══════════════════════════════════════════════════════════
 
 @distribution_router.get("/distributions")
+@require_wallet_auth
 async def list_distributions(
-    owner_address: str = Query(..., description="Owner wallet address"),
+    request: Request,
     chain_id: Optional[int] = Query(None),
     db: AsyncSession = Depends(get_db),
+    wallet_address: Optional[str] = None,
 ):
-    owner = owner_address.lower()
+    if not wallet_address:
+        raise HTTPException(
+            status_code=500,
+            detail="wallet_address not injected by @require_wallet_auth",
+        )
+    owner = wallet_address.lower()
     q = select(DistributionList).where(
         DistributionList.owner_address == owner,
         DistributionList.is_active == True,  # noqa: E712
