@@ -523,15 +523,24 @@ async def simulate_split(req: SimulateSplitRequest):
 # ═══════════════════════════════════════════════════════════
 
 @split_router.get("/contracts/{contract_id}/executions")
+@require_wallet_auth
 async def list_executions(
+    request: Request,
     contract_id: int,
     limit: int = Query(20, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
+    wallet_address: Optional[str] = None,
 ):
     """Lista esecuzioni di un contratto (audit trail)."""
+    if not wallet_address:
+        raise HTTPException(
+            status_code=500,
+            detail="wallet_address not injected by @require_wallet_auth",
+        )
     try:
         # 404 se il contratto non esiste
-        await _get_contract_or_404(db, contract_id, with_recipients=False)
+        contract = await _get_contract_or_404(db, contract_id, with_recipients=False)
+        await _verify_split_owner(contract, wallet_address)
 
         result = await db.execute(
             select(SplitExecution)
