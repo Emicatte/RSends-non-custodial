@@ -737,11 +737,20 @@ async def list_rules(
 # ═══════════════════════════════════════════════════════════
 
 @sweeper_router.get("/forwarding/rules/{rule_id}")
+@require_wallet_auth
 async def get_rule(
+    request: Request,
     rule_id: int,
     db: AsyncSession = Depends(get_db),
+    wallet_address: Optional[str] = None,
 ):
+    if not wallet_address:
+        raise HTTPException(
+            status_code=500,
+            detail="wallet_address not injected by @require_wallet_auth",
+        )
     rule = await _get_rule_or_404(db, rule_id)
+    await _verify_owner(rule, wallet_address)
 
     stats_q = await db.execute(
         select(
