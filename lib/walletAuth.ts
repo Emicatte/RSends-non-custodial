@@ -26,6 +26,8 @@ export interface WalletAuthHeaders {
   'X-Wallet-Address': string
   'X-Wallet-Signature': string
   'X-Timestamp': string
+  // Index signature required to satisfy `HeadersInit` (fetch overload).
+  [key: string]: string
 }
 
 interface CachedAuth {
