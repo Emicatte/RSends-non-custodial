@@ -276,11 +276,20 @@ async def list_distributions(
 # ═══════════════════════════════════════════════════════════
 
 @distribution_router.get("/distributions/{dist_id}")
+@require_wallet_auth
 async def get_distribution(
+    request: Request,
     dist_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    wallet_address: Optional[str] = None,
 ):
+    if not wallet_address:
+        raise HTTPException(
+            status_code=500,
+            detail="wallet_address not injected by @require_wallet_auth",
+        )
     dl = await _get_distribution_or_404(db, dist_id)
+    await _verify_dist_owner(dl, wallet_address)
     data = _serialize_distribution(dl)
 
     # Include rules that use this list
