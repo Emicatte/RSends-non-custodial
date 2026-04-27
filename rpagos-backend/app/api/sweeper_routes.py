@@ -1053,8 +1053,9 @@ async def emergency_stop(
 # ═══════════════════════════════════════════════════════════
 
 @sweeper_router.get("/forwarding/logs")
+@require_wallet_auth
 async def list_logs(
-    owner_address: str = Query(..., description="Owner wallet address"),
+    request: Request,
     rule_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None, description="pending|executing|completed|failed|gas_too_high"),
     token: Optional[str] = Query(None, description="Filter by token symbol"),
@@ -1063,8 +1064,14 @@ async def list_logs(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
+    wallet_address: Optional[str] = None,
 ):
-    owner = owner_address.lower()
+    if not wallet_address:
+        raise HTTPException(
+            status_code=500,
+            detail="wallet_address not injected by @require_wallet_auth",
+        )
+    owner = wallet_address.lower()
 
     # Subquery: rule IDs belonging to this owner
     rule_ids_q = select(ForwardingRule.id).where(ForwardingRule.user_id == owner)
