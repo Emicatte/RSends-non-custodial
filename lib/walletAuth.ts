@@ -12,7 +12,7 @@
  * (5 min backend tolerance - 30 s safety buffer). Cache invalidates
  * automatically when `address` changes (wallet switch / disconnect).
  *
- * Cache + dedupe scope: MODULE-LEVEL (shared across hook instances).
+ * Cache + dedupe scope: GLOBAL SINGLETON via globalThis + Symbol.for.
  * Multiple components calling useWalletAuth(address) for the same wallet
  * see ONE signature popup, not N. Two independent dedupe layers:
  *  - inflightAuthMap: getAuthHeaders waiters share the full
@@ -21,6 +21,16 @@
  *  - signingPromiseMap: signOnce-level dedupe for direct mutation
  *    callers. Concurrent mutations on the same address share one
  *    signature instead of queueing two MetaMask popups.
+ *
+ * Why globalThis (and not plain module-level const)? Next.js dynamic
+ * imports cause this module to be inlined into multiple bundler chunks
+ * (e.g. one copy in the AutoForward chunk, another in the command-center
+ * chunk). Each chunk gets its own module instance with its own const
+ * Maps, so plain module-level state is NOT a singleton at runtime. By
+ * stashing the state on `globalThis[Symbol.for('rsends.walletAuth.state.v1')]`
+ * we share the Maps across every chunk that loads this file in the same
+ * JS realm (the browser tab). The Symbol.for key is stable across calls
+ * and namespaced to avoid collisions on the global object.
  */
 
 import { useCallback, useEffect, useRef } from 'react'
@@ -43,12 +53,26 @@ interface CachedAuth {
   expiresAt: number
 }
 
-// ── Module-level state (shared across hook instances) ───────────
+// ── Global singleton state (shared across bundler chunks) ──────
 // Keyed by address.toLowerCase() so different casings of the same
 // wallet share entries. Not exported — encapsulated state.
-const cacheMap = new Map<string, CachedAuth>()
-const inflightAuthMap = new Map<string, Promise<CachedAuth>>()
-const signingPromiseMap = new Map<string, Promise<string>>()
+// See module JSDoc above for why globalThis is required (Next.js
+// dynamic imports duplicate this module into multiple chunks).
+const GLOBAL_STATE_KEY = Symbol.for('rsends.walletAuth.state.v1')
+type GlobalAuthState = {
+  cacheMap: Map<string, CachedAuth>
+  inflightAuthMap: Map<string, Promise<CachedAuth>>
+  signingPromiseMap: Map<string, Promise<string>>
+}
+const _g = globalThis as unknown as Record<symbol, GlobalAuthState>
+if (!_g[GLOBAL_STATE_KEY]) {
+  _g[GLOBAL_STATE_KEY] = {
+    cacheMap: new Map(),
+    inflightAuthMap: new Map(),
+    signingPromiseMap: new Map(),
+  }
+}
+const { cacheMap, inflightAuthMap, signingPromiseMap } = _g[GLOBAL_STATE_KEY]
 
 function toHeaders(address: string, auth: CachedAuth): WalletAuthHeaders {
   return {
