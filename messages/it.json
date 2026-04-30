@@ -14,6 +14,34 @@
       "commandCenter": "Command Center",
       "reports": "Report",
       "settings": "Impostazioni"
+    },
+    "dashboard": {
+      "title": "Dashboard",
+      "mainnetBadge": "Mainnet",
+      "metrics": {
+        "volume24h": "Volume 24h",
+        "transactions24h": "Transazioni 24h",
+        "totalBalance": "Saldo totale",
+        "activeClients": "Clienti attivi",
+        "chainsLabel": "su {count} chain",
+        "thisWeek": "+{count} questa settimana"
+      },
+      "volumeTrend": {
+        "title": "Andamento volume (7g)",
+        "comingSoon": "Grafico in arrivo"
+      },
+      "recentTransactions": {
+        "title": "Transazioni recenti",
+        "viewAll": "Vedi tutte",
+        "time": "Ora",
+        "type": "Tipo",
+        "amount": "Importo",
+        "chain": "Chain",
+        "status": "Stato",
+        "statusConfirmed": "Confermata",
+        "statusPending": "In attesa",
+        "statusFailed": "Fallita"
+      }
     }
   },
   "auth": {

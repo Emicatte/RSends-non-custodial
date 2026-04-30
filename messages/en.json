@@ -14,6 +14,34 @@
       "commandCenter": "Command Center",
       "reports": "Reports",
       "settings": "Settings"
+    },
+    "dashboard": {
+      "title": "Dashboard",
+      "mainnetBadge": "Mainnet",
+      "metrics": {
+        "volume24h": "Volume 24h",
+        "transactions24h": "Transactions 24h",
+        "totalBalance": "Total balance",
+        "activeClients": "Active clients",
+        "chainsLabel": "{count} chains",
+        "thisWeek": "+{count} this week"
+      },
+      "volumeTrend": {
+        "title": "Volume trend (7d)",
+        "comingSoon": "Chart coming soon"
+      },
+      "recentTransactions": {
+        "title": "Recent transactions",
+        "viewAll": "View all",
+        "time": "Time",
+        "type": "Type",
+        "amount": "Amount",
+        "chain": "Chain",
+        "status": "Status",
+        "statusConfirmed": "Confirmed",
+        "statusPending": "Pending",
+        "statusFailed": "Failed"
+      }
     }
   },
   "auth": {
