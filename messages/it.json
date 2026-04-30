@@ -43,6 +43,19 @@
         "statusFailed": "Fallita"
       }
     },
+    "balances": {
+      "title": "Saldi",
+      "banner": "Saldi live in arrivo — visualizzazione dati di esempio",
+      "metrics": {
+        "total": "Totale",
+        "settled": "Saldato",
+        "pending": "In sospeso"
+      },
+      "breakdown": {
+        "title": "Distribuzione per token",
+        "subtitle": "{assets} asset · {chains} chain"
+      }
+    },
     "transactions": {
       "title": "Transazioni",
       "exportCsv": "Esporta CSV",

@@ -43,6 +43,19 @@
         "statusFailed": "Failed"
       }
     },
+    "balances": {
+      "title": "Balances",
+      "banner": "Live balances coming soon — showing sample data",
+      "metrics": {
+        "total": "Total",
+        "settled": "Settled",
+        "pending": "Pending"
+      },
+      "breakdown": {
+        "title": "Breakdown by token",
+        "subtitle": "{assets} assets · {chains} chains"
+      }
+    },
     "transactions": {
       "title": "Transactions",
       "exportCsv": "Export CSV",
