@@ -56,6 +56,18 @@
         "subtitle": "{assets} asset · {chains} chain"
       }
     },
+    "clients": {
+      "title": "Clienti",
+      "card": {
+        "title": "Clienti",
+        "subtitle": "{count} attivi"
+      },
+      "rowSubtitle": "{chain} · {count} tx",
+      "status": {
+        "active": "Attivo",
+        "onboarding": "In onboarding"
+      }
+    },
     "transactions": {
       "title": "Transazioni",
       "exportCsv": "Esporta CSV",
