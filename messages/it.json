@@ -56,6 +56,24 @@
         "subtitle": "{assets} asset · {chains} chain"
       }
     },
+    "reports": {
+      "title": "Report",
+      "metrics": {
+        "volumeApr": "Volume Apr",
+        "feesCollected": "Commissioni incassate",
+        "avgTxSize": "Importo medio tx"
+      },
+      "monthlyVolume": {
+        "title": "Volume mensile 2026",
+        "comingSoon": "Grafico in arrivo"
+      },
+      "export": {
+        "dac8": "Export DAC8",
+        "taxIt": "Report fiscale (IT)",
+        "customPeriod": "Periodo personalizzato",
+        "comingSoon": "In arrivo"
+      }
+    },
     "commandCenter": {
       "title": "Command Center",
       "tabs": {

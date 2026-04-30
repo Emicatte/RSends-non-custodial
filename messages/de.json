@@ -57,6 +57,24 @@
         "subtitle": "{assets} assets · {chains} chains"
       }
     },
+    "reports": {
+      "title": "Reports",
+      "metrics": {
+        "volumeApr": "Volume Apr",
+        "feesCollected": "Fees collected",
+        "avgTxSize": "Avg tx size"
+      },
+      "monthlyVolume": {
+        "title": "Monthly volume 2026",
+        "comingSoon": "Chart coming soon"
+      },
+      "export": {
+        "dac8": "DAC8 export",
+        "taxIt": "Tax report (IT)",
+        "customPeriod": "Custom period",
+        "comingSoon": "Coming soon"
+      }
+    },
     "commandCenter": {
       "title": "Command Center",
       "tabs": {
