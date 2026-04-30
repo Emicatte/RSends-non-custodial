@@ -57,6 +57,35 @@
         "subtitle": "{assets} assets · {chains} chains"
       }
     },
+    "settings": {
+      "title": "Settings",
+      "boxes": {
+        "api": "API",
+        "merchant": "Merchant",
+        "security": "Security",
+        "notifications": "Notifications"
+      },
+      "fields": {
+        "apiKey": "API key",
+        "webhookUrl": "Webhook URL",
+        "rateLimit": "Rate limit",
+        "companyName": "Company name",
+        "contactEmail": "Contact email",
+        "kybStatus": "KYB status",
+        "authMethod": "Auth method",
+        "twoFa": "2FA",
+        "ipWhitelist": "IP whitelist",
+        "failedTxAlerts": "Failed tx alerts",
+        "dailyDigest": "Daily digest",
+        "thresholdAlerts": "Threshold alerts"
+      },
+      "values": {
+        "verified": "Verified",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "addresses": "{count} addresses"
+      }
+    },
     "reports": {
       "title": "Reports",
       "metrics": {

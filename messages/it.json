@@ -56,6 +56,35 @@
         "subtitle": "{assets} asset · {chains} chain"
       }
     },
+    "settings": {
+      "title": "Impostazioni",
+      "boxes": {
+        "api": "API",
+        "merchant": "Merchant",
+        "security": "Sicurezza",
+        "notifications": "Notifiche"
+      },
+      "fields": {
+        "apiKey": "API key",
+        "webhookUrl": "Webhook URL",
+        "rateLimit": "Rate limit",
+        "companyName": "Ragione sociale",
+        "contactEmail": "Email contatto",
+        "kybStatus": "Stato KYB",
+        "authMethod": "Metodo autenticazione",
+        "twoFa": "2FA",
+        "ipWhitelist": "IP whitelist",
+        "failedTxAlerts": "Alert tx fallite",
+        "dailyDigest": "Riepilogo giornaliero",
+        "thresholdAlerts": "Alert soglia"
+      },
+      "values": {
+        "verified": "Verificato",
+        "enabled": "Attivo",
+        "disabled": "Disattivato",
+        "addresses": "{count} indirizzi"
+      }
+    },
     "reports": {
       "title": "Report",
       "metrics": {
