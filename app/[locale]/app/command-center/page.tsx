@@ -2,7 +2,7 @@
 
 import { useTranslations } from 'next-intl'
 
-export default function AppDashboardPage() {
+export default function CommandCenterPage() {
   const t = useTranslations('app.sidebar')
   return (
     <main style={{ padding: '32px 32px', maxWidth: 1200, margin: '0 auto' }}>
@@ -15,7 +15,7 @@ export default function AppDashboardPage() {
           letterSpacing: '-0.02em',
         }}
       >
-        {t('dashboard')}
+        {t('commandCenter')}
       </h1>
     </main>
   )

@@ -1,5 +1,22 @@
 {
   "_TODO": "Translations pending — currently showing English as placeholder. Replace before production launch.",
+  "app": {
+    "sidebar": {
+      "overview": "Overview",
+      "actions": "Actions",
+      "management": "Management",
+      "dashboard": "Dashboard",
+      "send": "Send",
+      "swap": "Swap",
+      "flow": "Flow",
+      "transactions": "Transactions",
+      "balances": "Balances",
+      "clients": "Clients",
+      "commandCenter": "Command Center",
+      "reports": "Reports",
+      "settings": "Settings"
+    }
+  },
   "auth": {
     "signIn": "Iniciar sesión",
     "signUp": "Registrarse",

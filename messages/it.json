@@ -1,4 +1,21 @@
 {
+  "app": {
+    "sidebar": {
+      "overview": "Panoramica",
+      "actions": "Azioni",
+      "management": "Gestione",
+      "dashboard": "Dashboard",
+      "send": "Invia",
+      "swap": "Converti",
+      "flow": "Flow",
+      "transactions": "Transazioni",
+      "balances": "Saldi",
+      "clients": "Clienti",
+      "commandCenter": "Command Center",
+      "reports": "Report",
+      "settings": "Impostazioni"
+    }
+  },
   "auth": {
     "signIn": "Accedi",
     "signUp": "Registrati",
