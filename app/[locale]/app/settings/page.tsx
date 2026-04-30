@@ -82,19 +82,6 @@ export default function SettingsPage() {
 
   return (
     <main style={{ padding: '24px 32px 80px', maxWidth: 1200, margin: '0 auto' }}>
-      <h1
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: 28,
-          fontWeight: 700,
-          color: COLORS.ink,
-          letterSpacing: '-0.02em',
-          margin: '0 0 20px',
-        }}
-      >
-        {t('title')}
-      </h1>
-
       {/* 2x2 grid (1 col on mobile, 2 on md+) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {BOXES.map((box) => (

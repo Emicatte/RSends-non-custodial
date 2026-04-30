@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import AppNav from '@/components/app/AppNav'
 import AppSidebar from '@/components/app/AppSidebar'
+import AppTopbar from '@/components/app/AppTopbar'
 import { TransactionPersistence } from '@/components/TransactionPersistence'
 import { ContactsPersistence } from '@/components/ContactsPersistence'
 import { PostLoginMerge } from '@/components/auth/PostLoginMerge'
@@ -19,6 +20,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         className="min-h-screen pt-[75px] md:pt-[90px] md:pl-[210px]"
         style={{ background: '#f7f6f3' }}
       >
+        <AppTopbar />
         {children}
       </div>
       <TransactionPersistence />

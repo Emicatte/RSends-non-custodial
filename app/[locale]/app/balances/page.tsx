@@ -62,20 +62,6 @@ export default function BalancesPage() {
 
   return (
     <main style={{ padding: '24px 32px 80px', maxWidth: 1200, margin: '0 auto' }}>
-      {/* Title */}
-      <h1
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: 28,
-          fontWeight: 700,
-          color: COLORS.ink,
-          letterSpacing: '-0.02em',
-          margin: '0 0 16px',
-        }}
-      >
-        {t('title')}
-      </h1>
-
       {/* Sample-data banner */}
       <div
         role="note"

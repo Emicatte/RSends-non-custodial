@@ -70,68 +70,6 @@ export default function AppDashboardPage() {
 
   return (
     <main style={{ padding: '24px 32px 80px', maxWidth: 1200, margin: '0 auto' }}>
-      {/* Top bar */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          flexWrap: 'wrap',
-          marginBottom: 24,
-        }}
-      >
-        <h1
-          style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: 28,
-            fontWeight: 700,
-            color: COLORS.ink,
-            letterSpacing: '-0.02em',
-            margin: 0,
-          }}
-        >
-          {t('title')}
-        </h1>
-        <span
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '4px 10px',
-            borderRadius: 999,
-            background: COLORS.greenLight,
-            color: COLORS.green,
-            fontFamily: 'var(--font-display)',
-            fontSize: 11,
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '0.06em',
-          }}
-        >
-          <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              background: COLORS.green,
-              display: 'inline-block',
-            }}
-          />
-          {t('mainnetBadge')}
-        </span>
-        <span
-          style={{
-            marginLeft: 'auto',
-            fontFamily: 'var(--font-display)',
-            fontSize: 13,
-            fontWeight: 600,
-            color: COLORS.muted,
-          }}
-        >
-          RPagos SRL
-        </span>
-      </div>
-
       {/* Metric cards */}
       <div
         className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"

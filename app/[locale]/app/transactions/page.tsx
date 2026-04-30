@@ -176,36 +176,21 @@ export default function TransactionsPage() {
 
   return (
     <main style={{ padding: '24px 32px 80px', maxWidth: 1200, margin: '0 auto' }}>
-      {/* Title row */}
+      {/* Export buttons */}
       <div
         style={{
           display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          flexWrap: 'wrap',
-          marginBottom: 20,
+          justifyContent: 'flex-end',
+          gap: 8,
+          marginBottom: 16,
         }}
       >
-        <h1
-          style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: 28,
-            fontWeight: 700,
-            color: COLORS.ink,
-            letterSpacing: '-0.02em',
-            margin: 0,
-          }}
-        >
-          {t('title')}
-        </h1>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-          <button type="button" style={exportBtnStyle}>
-            {t('exportCsv')}
-          </button>
-          <button type="button" style={exportBtnStyle}>
-            {t('exportPdf')}
-          </button>
-        </div>
+        <button type="button" style={exportBtnStyle}>
+          {t('exportCsv')}
+        </button>
+        <button type="button" style={exportBtnStyle}>
+          {t('exportPdf')}
+        </button>
       </div>
 
       {/* Filter row */}
