@@ -42,6 +42,39 @@
         "statusPending": "In attesa",
         "statusFailed": "Fallita"
       }
+    },
+    "transactions": {
+      "title": "Transazioni",
+      "exportCsv": "Esporta CSV",
+      "exportPdf": "Esporta PDF",
+      "filters": {
+        "all": "Tutti",
+        "status": "Stato",
+        "chain": "Chain",
+        "token": "Token",
+        "date": "Data",
+        "searchPlaceholder": "Cerca hash o indirizzo..."
+      },
+      "columns": {
+        "date": "Data",
+        "hash": "Hash",
+        "type": "Tipo",
+        "to": "A",
+        "amount": "Importo",
+        "chain": "Chain",
+        "status": "Stato"
+      },
+      "status": {
+        "confirmed": "Confermata",
+        "pending": "In attesa",
+        "failed": "Fallita"
+      },
+      "pagination": {
+        "showing": "{from}-{to} di {total}",
+        "prev": "Indietro",
+        "next": "Avanti"
+      },
+      "empty": "Nessuna transazione corrisponde ai filtri"
     }
   },
   "auth": {

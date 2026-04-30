@@ -43,6 +43,39 @@
         "statusPending": "Pending",
         "statusFailed": "Failed"
       }
+    },
+    "transactions": {
+      "title": "Transactions",
+      "exportCsv": "Export CSV",
+      "exportPdf": "Export PDF",
+      "filters": {
+        "all": "All",
+        "status": "Status",
+        "chain": "Chain",
+        "token": "Token",
+        "date": "Date",
+        "searchPlaceholder": "Search hash or address..."
+      },
+      "columns": {
+        "date": "Date",
+        "hash": "Hash",
+        "type": "Type",
+        "to": "To",
+        "amount": "Amount",
+        "chain": "Chain",
+        "status": "Status"
+      },
+      "status": {
+        "confirmed": "Confirmed",
+        "pending": "Pending",
+        "failed": "Failed"
+      },
+      "pagination": {
+        "showing": "{from}-{to} of {total}",
+        "prev": "Prev",
+        "next": "Next"
+      },
+      "empty": "No transactions match the current filters"
     }
   },
   "auth": {
