@@ -13,7 +13,6 @@ import SwapModule from '@/app/SwapModule'
 import { ChainFamilySwitch } from '@/components/shared/ChainFamilySwitch'
 import NetworkSelector from '@/app/NetworkSelector'
 import AccountHeader, { type NonEvmWalletProps } from '@/app/AccountHeader'
-import { AuthButtons } from '@/components/auth/AuthButtons'
 import { TransactionPersistence } from '@/components/TransactionPersistence'
 import { ContactsPersistence } from '@/components/ContactsPersistence'
 import { PostLoginMerge } from '@/components/auth/PostLoginMerge'
@@ -132,7 +131,7 @@ export default function AppPage() {
         }} />
       </div>
 
-      {/* Navbar /app — flat flex justify-between, logo+tabs left, cluster right */}
+      {/* Navbar /app — wallet-only: logo, chain family, network, wallet */}
       <nav
         data-phase={phase}
         data-dir={direction}
@@ -143,23 +142,56 @@ export default function AppPage() {
           WebkitBackdropFilter: 'blur(16px) saturate(180%)',
         }}
       >
-        {/* Left: logo + tabs, flat */}
-        <div className="flex items-center gap-6">
-          <Link href="/" className="rp-brand flex items-center gap-2 no-underline">
-            <img
-              src="/favicon.svg"
-              alt="RSends"
-              width={28}
-              height={28}
-              className="rp-brand-dot rounded-[7px]"
-            />
-            {!isMobile && (
-              <span className="font-display text-[16px] font-extrabold tracking-[-0.03em]" style={{ color: C.text }}>
-                RSends
-              </span>
-            )}
-          </Link>
+        {/* Left: logo (links to /app) */}
+        <Link href="/app" className="rp-brand flex items-center gap-2 no-underline">
+          <img
+            src="/favicon.svg"
+            alt="RSends"
+            width={28}
+            height={28}
+            className="rp-brand-dot rounded-[7px]"
+          />
+          {!isMobile && (
+            <span className="font-display text-[16px] font-extrabold tracking-[-0.03em]" style={{ color: C.text }}>
+              RSends
+            </span>
+          )}
+        </Link>
 
+        {/* Right: cluster ChainFamily | Network | Wallet */}
+        <div className="flex items-center gap-2">
+          <div className="rp-chain-pills">
+            <ChainFamilySwitch
+              active={activeFamily}
+              onSelect={(family) => wallet.setActiveFamily(family)}
+              connections={wallet.connections}
+            />
+          </div>
+          <NetworkSelector />
+          <div className="rp-wallet">
+            <AccountHeader nonEvmWallet={nonEvmWallet} />
+          </div>
+        </div>
+      </nav>
+
+      {/* Main container */}
+      <main style={{
+        paddingTop: isMobile ? 75 : 90,
+        paddingBottom: 80,
+        minHeight: '100vh',
+        background: C.bg,
+      }}>
+        {/* Tabs row — moved from navbar into body */}
+        <div
+          style={{
+            maxWidth: 680,
+            margin: '0 auto',
+            padding: '0 20px',
+            marginBottom: 16,
+            display: 'flex',
+            justifyContent: 'center',
+          }}
+        >
           <div
             ref={tabsContainerRef}
             className="flex items-center gap-1 relative"
@@ -194,30 +226,6 @@ export default function AppPage() {
           </div>
         </div>
 
-        {/* Right: cluster EVM/SOL/TRX | Network | Wallet */}
-        <div className="flex items-center gap-2">
-          <div className="rp-chain-pills">
-            <ChainFamilySwitch
-              active={activeFamily}
-              onSelect={(family) => wallet.setActiveFamily(family)}
-              connections={wallet.connections}
-            />
-          </div>
-          <NetworkSelector />
-          <AuthButtons />
-          <div className="rp-wallet">
-            <AccountHeader nonEvmWallet={nonEvmWallet} />
-          </div>
-        </div>
-      </nav>
-
-      {/* Main container */}
-      <main style={{
-        paddingTop: isMobile ? 75 : 90,
-        paddingBottom: 80,
-        minHeight: '100vh',
-        background: C.bg,
-      }}>
         <div
           className="rp-tab-stage"
           data-phase={phase}
