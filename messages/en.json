@@ -56,6 +56,22 @@
         "subtitle": "{assets} assets · {chains} chains"
       }
     },
+    "commandCenter": {
+      "title": "Command Center",
+      "tabs": {
+        "forwarding": "Forwarding",
+        "splits": "Splits",
+        "sweeper": "Sweeper"
+      },
+      "actions": {
+        "newRule": "+ New rule",
+        "newSplit": "+ New split"
+      },
+      "status": {
+        "active": "Active",
+        "paused": "Paused"
+      }
+    },
     "clients": {
       "title": "Clients",
       "card": {
