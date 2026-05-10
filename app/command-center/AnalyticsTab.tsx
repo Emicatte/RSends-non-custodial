@@ -7,6 +7,7 @@ import { C, EASE, PIE_COLORS, BACKEND, smooth, fiat, Sk, ChartTip } from './shar
 import { useAccount } from 'wagmi'
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, BarChart, Bar } from 'recharts'
 import { logger } from '../../lib/logger'
+import { useWalletAuth } from '../../lib/walletAuth'
 
 function AnalyticsTab({ stats: parentStats, daily: parentDaily, loading: parentLoading, ethPrice, isVisible = true }: {
   stats: any; daily: any[]; loading: boolean; ethPrice: number; isVisible?: boolean
@@ -15,6 +16,7 @@ function AnalyticsTab({ stats: parentStats, daily: parentDaily, loading: parentL
   const [tokenBreakdown, setTokenBreakdown] = useState<{ name: string; value: number }[]>([])
   const [topRoutes, setTopRoutes] = useState<{ label: string; volume: number }[]>([])
   const { address } = useAccount()
+  const { getAuthHeaders, clearCache } = useWalletAuth(address)
 
   // Period selector
   type Period = '24h' | '7d' | '30d' | 'all'
@@ -34,10 +36,26 @@ function AnalyticsTab({ stats: parentStats, daily: parentDaily, loading: parentL
     const fetchPeriod = async () => {
       try {
         const days = period === '24h' ? 1 : period === '7d' ? 7 : 365
-        const [sRes, dRes] = await Promise.all([
-          fetch(`${BACKEND}/api/v1/forwarding/stats?owner_address=${address.toLowerCase()}&period=${period}`, { signal: AbortSignal.timeout(15000) }),
-          fetch(`${BACKEND}/api/v1/forwarding/stats/daily?owner_address=${address.toLowerCase()}&days=${days}`, { signal: AbortSignal.timeout(15000) }),
+        const statsUrl = `${BACKEND}/api/v1/forwarding/stats?period=${period}`
+        const dailyUrl = `${BACKEND}/api/v1/forwarding/stats/daily?days=${days}`
+        const doFetch = (url: string, headers: Record<string, string>) =>
+          fetch(url, { headers, signal: AbortSignal.timeout(15000) })
+        // Sign once → reuse the same headers for both parallel fetches.
+        // If either returns 401 (stale cache / clock skew), drop cache and
+        // retry both with a fresh signature. Mirrors useSweepStats.
+        const headers = await getAuthHeaders()
+        let [sRes, dRes] = await Promise.all([
+          doFetch(statsUrl, headers),
+          doFetch(dailyUrl, headers),
         ])
+        if (sRes.status === 401 || dRes.status === 401) {
+          clearCache()
+          const fresh = await getAuthHeaders()
+          ;[sRes, dRes] = await Promise.all([
+            doFetch(statsUrl, fresh),
+            doFetch(dailyUrl, fresh),
+          ])
+        }
         if (sRes.ok) setPeriodStats(await sRes.json())
         if (dRes.ok) { const d = await dRes.json(); setPeriodDaily(d.data ?? []) }
       } catch (err) {
@@ -46,7 +64,7 @@ function AnalyticsTab({ stats: parentStats, daily: parentDaily, loading: parentL
       setPeriodLoading(false)
     }
     fetchPeriod()
-  }, [period, address])
+  }, [period, address, getAuthHeaders, clearCache])
 
   // Token breakdown + top routes
   useEffect(() => {
