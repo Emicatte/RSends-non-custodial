@@ -164,7 +164,7 @@ export function useSplitContracts(address: string | undefined) {
   const failCountRef = useRef(0)
   const [backendOffline, setBackendOffline] = useState(false)
 
-  const { signOnce } = useWalletAuth(address)
+  const { signOnce, getAuthHeaders, clearCache } = useWalletAuth(address)
 
   // ── client_id derivation ──────────────────────────────
   // Usiamo l'owner address come client_id (stabile, unique per utente).
@@ -181,7 +181,15 @@ export function useSplitContracts(address: string | undefined) {
     if (!silent) setLoading(true)
     try {
       const url = `${BACKEND}/api/v1/splits/contracts?client_id=${clientId}&active_only=false`
-      const res = await fetch(url, { signal: AbortSignal.timeout(15000) })
+      const doFetch = async () => {
+        const headers = await getAuthHeaders()
+        return fetch(url, { headers, signal: AbortSignal.timeout(15000) })
+      }
+      let res = await doFetch()
+      if (res.status === 401) {
+        clearCache()
+        res = await doFetch()
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       setContracts(Array.isArray(data?.contracts) ? data.contracts : [])
@@ -194,7 +202,7 @@ export function useSplitContracts(address: string | undefined) {
       if (failCountRef.current >= 5) setBackendOffline(true)
     }
     if (!silent) setLoading(false)
-  }, [clientId])
+  }, [clientId, getAuthHeaders, clearCache])
 
   useEffect(() => { fetchContracts() }, [fetchContracts])
 
@@ -248,14 +256,22 @@ export function useSplitContracts(address: string | undefined) {
 
   // ── Get contract detail ───────────────────────────────
   const getContract = useCallback(async (contractId: number): Promise<SplitContract> => {
-    const res = await fetch(
-      `${BACKEND}/api/v1/splits/contracts/${contractId}`,
-      { signal: AbortSignal.timeout(10000) }
-    )
+    const doFetch = async () => {
+      const headers = await getAuthHeaders()
+      return fetch(
+        `${BACKEND}/api/v1/splits/contracts/${contractId}`,
+        { headers, signal: AbortSignal.timeout(10000) },
+      )
+    }
+    let res = await doFetch()
+    if (res.status === 401) {
+      clearCache()
+      res = await doFetch()
+    }
     if (!res.ok) throw new Error(await parseRSendError(res))
     const data = await res.json()
     return data?.contract as SplitContract
-  }, [])
+  }, [getAuthHeaders, clearCache])
 
   // ── Deactivate contract ───────────────────────────────
   const deactivateContract = useCallback(async (contractId: number) => {
@@ -315,14 +331,22 @@ export function useSplitContracts(address: string | undefined) {
     contractId: number,
     limit = 20,
   ): Promise<SplitExecution[]> => {
-    const res = await fetch(
-      `${BACKEND}/api/v1/splits/contracts/${contractId}/executions?limit=${limit}`,
-      { signal: AbortSignal.timeout(10000) }
-    )
+    const doFetch = async () => {
+      const headers = await getAuthHeaders()
+      return fetch(
+        `${BACKEND}/api/v1/splits/contracts/${contractId}/executions?limit=${limit}`,
+        { headers, signal: AbortSignal.timeout(10000) },
+      )
+    }
+    let res = await doFetch()
+    if (res.status === 401) {
+      clearCache()
+      res = await doFetch()
+    }
     if (!res.ok) throw new Error(await parseRSendError(res))
     const data = await res.json()
     return Array.isArray(data?.executions) ? data.executions : []
-  }, [])
+  }, [getAuthHeaders, clearCache])
 
   return {
     contracts,
