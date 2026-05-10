@@ -1,26 +1,14 @@
 'use client'
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { WagmiProvider, createConfig, http, fallback } from 'wagmi'
-import {
-  mainnet, optimism, bsc, polygon, zksync,
-  base, arbitrum, celo, avalanche, blast,
-  baseSepolia, sepolia,
-} from 'wagmi/chains'
-import {
-  RainbowKitProvider, darkTheme,
-  connectorsForWallets,
-} from '@rainbow-me/rainbowkit'
-import {
-  metaMaskWallet, coinbaseWallet, rainbowWallet,
-  walletConnectWallet, injectedWallet, trustWallet, ledgerWallet,
-} from '@rainbow-me/rainbowkit/wallets'
-import '@rainbow-me/rainbowkit/styles.css'
-import '@solana/wallet-adapter-react-ui/styles.css'
+import { WagmiProvider, createConfig, http } from 'wagmi'
+import { base } from 'wagmi/chains'
 import dynamic from 'next/dynamic'
-import { useState, useEffect, createContext, useContext } from 'react'
+import {
+  useState, useEffect, useCallback,
+  createContext, useContext,
+} from 'react'
 import { usePathname } from 'next/navigation'
-import { useChainId, useSwitchChain } from 'wagmi'
 import { registerAdapter } from '../lib/chain-adapters/registry'
 import { createEVMAdapter } from '../lib/chain-adapters/evm-adapter'
 import { createSolanaAdapter } from '../lib/chain-adapters/solana-adapter'
@@ -28,6 +16,10 @@ import { createTronAdapter } from '../lib/chain-adapters/tron-adapter'
 
 const SolanaProviders = dynamic(() => import('./providers-solana'), { ssr: false })
 const TronProvider = dynamic(() => import('./providers-tron').then(m => ({ default: m.TronProvider })), { ssr: false })
+// Lazy: contains all wallet SDK imports (MetaMask SDK, Coinbase WalletLink, etc.)
+// Loaded only when walletRequested becomes true — avoids window.ethereum probing
+// on the landing page before user clicks Connect.
+const WalletStackFull = dynamic(() => import('./providers-wallet-stack'), { ssr: false })
 
 // ── Register all chain adapters at module load ────────────────────────────
 const EVM_CHAIN_IDS = [1, 10, 56, 137, 324, 8453, 42161, 42220, 43114, 81457, 84532]
@@ -36,8 +28,6 @@ registerAdapter(createSolanaAdapter())
 registerAdapter(createTronAdapter())
 
 // ── Valori letterali — necessari per Wagmi v2 type safety ──────────────────
-// NON usare base.id / mainnet.id nelle chiamate switchChain o confronti:
-// quei campi sono tipizzati come `number`, non come `8453 | 1 | ...`
 const CHAIN = {
   BASE:         8453   as const,
   MAINNET:      1      as const,
@@ -47,87 +37,15 @@ const CHAIN = {
 
 type SupportedChainId = typeof CHAIN[keyof typeof CHAIN]
 
-const WC_PROJECT_ID = process.env.NEXT_PUBLIC_WC_PROJECT_ID!
-
-// ── Multi-provider RPC with automatic failover ──────────────────────────
-const ALCHEMY_KEY = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY ?? ''
-const INFURA_KEY  = process.env.NEXT_PUBLIC_INFURA_API_KEY ?? ''
-
-function alchemy(sub: string) {
-  return ALCHEMY_KEY
-    ? http(`https://${sub}.g.alchemy.com/v2/${ALCHEMY_KEY}`, { batch: true })
-    : null
-}
-
-function infura(net: string) {
-  return INFURA_KEY
-    ? http(`https://${net}.infura.io/v3/${INFURA_KEY}`)
-    : null
-}
-
-/** Build a fallback transport: Alchemy → Infura → public RPCs. Null entries filtered out. */
-function rpcFallback(
-  alchemySub: string | null,
-  infuraNet: string | null,
-  ...publicUrls: string[]
-) {
-  const transports = [
-    alchemySub ? alchemy(alchemySub) : null,
-    infuraNet  ? infura(infuraNet)   : null,
-    ...publicUrls.map(url => http(url)),
-  ].filter(Boolean) as ReturnType<typeof http>[]
-
-  return transports.length === 1 ? transports[0] : fallback(transports)
-}
-
-const connectors = connectorsForWallets(
-  [
-    {
-      groupName: 'Raccomandati',
-      wallets:   [metaMaskWallet, coinbaseWallet, rainbowWallet],
-    },
-    {
-      groupName: 'Altri',
-      wallets:   [walletConnectWallet, trustWallet, ledgerWallet, injectedWallet],
-    },
-  ],
-  { appName: 'RPagos — Omni-chain Gateway', projectId: WC_PROJECT_ID }
-)
-
-// ── Wagmi config ───────────────────────────────────────────────────────────
-// Usiamo le chain objects per createConfig (necessario per metadata)
-// ma i chainId numerici per tutto il resto
-const config = createConfig({
-  chains: [
-    base,          // Default — FeeRouterV4
-    mainnet,
-    arbitrum,
-    optimism,
-    polygon,
-    bsc,
-    avalanche,
-    zksync,
-    celo,
-    blast,
-    baseSepolia,   // Testnet ultimo
-    sepolia,
-  ] as const,
-  connectors,
-  transports: {
-    [base.id]:        rpcFallback('base-mainnet',    null,             'https://mainnet.base.org', 'https://base.llamarpc.com'),
-    [mainnet.id]:     rpcFallback('eth-mainnet',     'mainnet',        'https://rpc.ankr.com/eth', 'https://rpc.ankr.com/eth'),
-    [arbitrum.id]:    rpcFallback('arb-mainnet',     'arbitrum-mainnet', 'https://arb1.arbitrum.io/rpc'),
-    [optimism.id]:    rpcFallback('opt-mainnet',     'optimism-mainnet', 'https://mainnet.optimism.io'),
-    [polygon.id]:     rpcFallback('polygon-mainnet', 'polygon-mainnet', 'https://polygon-rpc.com'),
-    [bsc.id]:         rpcFallback(null,              null,             'https://bsc-dataseed.binance.org', 'https://bsc-dataseed1.ninicoin.io'),
-    [avalanche.id]:   rpcFallback(null,              'avalanche-mainnet', 'https://api.avax.network/ext/bc/C/rpc'),
-    [zksync.id]:      rpcFallback('zksync-mainnet',  null,             'https://mainnet.era.zksync.io'),
-    [celo.id]:        rpcFallback(null,              'celo-mainnet',   'https://forno.celo.org'),
-    [blast.id]:       rpcFallback('blast-mainnet',   null,             'https://rpc.blast.io'),
-    [baseSepolia.id]: rpcFallback('base-sepolia',    null,             'https://sepolia.base.org'),
-    [sepolia.id]:     rpcFallback('eth-sepolia',     'sepolia',        'https://rpc.sepolia.org'),
-  },
-  ssr: false,
+// ── Safe config for landing pre-click ─────────────────────────────────────
+// Zero connectors → no MetaMask/Coinbase SDK loaded → no window.ethereum probe.
+// Wagmi hooks (useAccount, useChainId, useBalance, useReadContract, useSignMessage)
+// remain callable and return disconnected state.
+const safeConfig = createConfig({
+  chains:     [base],
+  connectors: [],
+  transports: { [base.id]: http('https://mainnet.base.org') },
+  ssr:        false,
 })
 
 function makeQueryClient() {
@@ -136,120 +54,65 @@ function makeQueryClient() {
   })
 }
 
-// ── Chain Guard ────────────────────────────────────────────────────────────
-interface ChainGuardCtx {
-  isCorrectChain:  boolean
-  isL2:            boolean
-  currentChainId:  number
-  switchToBase:    () => void
-  switchToMainnet: () => void
-  gasWarning:      string | null
+// ── Wallet mount gate ─────────────────────────────────────────────────────
+interface WalletMount {
+  walletRequested: boolean
+  mountWallet:     () => void
 }
 
-const ChainGuardContext = createContext<ChainGuardCtx>({
-  isCorrectChain:  true,
-  isL2:            true,
-  currentChainId:  CHAIN.BASE,
-  switchToBase:    () => {},
-  switchToMainnet: () => {},
-  gasWarning:      null,
+const WalletMountContext = createContext<WalletMount>({
+  walletRequested: false,
+  mountWallet:     () => {},
 })
 
-function ChainGuardProvider({ children }: { children: React.ReactNode }) {
-  const chainId         = useChainId()
-  const { switchChain } = useSwitchChain()
-
-  const supported: readonly number[] = [
-    base.id, mainnet.id, arbitrum.id, optimism.id, polygon.id,
-    bsc.id, avalanche.id, zksync.id, celo.id, blast.id,
-    baseSepolia.id, sepolia.id,
-  ]
-  const isCorrectChain = supported.includes(chainId)
-  const isL2           = chainId === CHAIN.BASE || chainId === CHAIN.BASE_SEPOLIA
-  const gasWarning     = null
-
-  return (
-    <ChainGuardContext.Provider value={{
-      isCorrectChain,
-      isL2,
-      currentChainId:  chainId,
-      // Valori letterali → TypeScript soddisfatto
-      switchToBase:    () => switchChain({ chainId: CHAIN.BASE }),
-      switchToMainnet: () => switchChain({ chainId: CHAIN.MAINNET }),
-      gasWarning,
-    }}>
-      {children}
-    </ChainGuardContext.Provider>
-  )
-}
-
-export function useChainGuard() {
-  return useContext(ChainGuardContext)
-}
-
-function GasWarningBanner() {
-  const { gasWarning, switchToBase } = useChainGuard()
-  if (!gasWarning) return null
-  return (
-    <div className="bf-blur-8" style={{
-      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 1000,
-      background: 'rgba(245,158,11,0.9)',
-      padding: '9px 20px',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
-      fontFamily: 'var(--font-display)', fontSize: 13,
-    }}>
-      <span>⚠ {gasWarning}</span>
-      <button
-        onClick={switchToBase}
-        style={{
-          padding: '3px 12px', borderRadius: 6, border: 'none',
-          background: 'rgba(0,0,0,0.2)', color: '#fff',
-          fontWeight: 700, cursor: 'pointer', fontSize: 12,
-        }}
-      >
-        Passa a Base →
-      </button>
-    </div>
-  )
-}
+export const useWalletMount = () => useContext(WalletMountContext)
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(makeQueryClient)
   const [mounted, setMounted] = useState(false)
+  const [explicitlyRequested, setExplicitlyRequested] = useState(false)
   const pathname = usePathname()
   useEffect(() => setMounted(true), [])
+  const mountWallet = useCallback(() => setExplicitlyRequested(true), [])
 
-  // Admin pages don't need wallet providers — render children directly
+  // Admin / pay / merchant: bypass providers entirely (no wallet needed)
   if (pathname?.startsWith('/admin') || pathname?.startsWith('/pay') || pathname?.startsWith('/merchant')) {
     return <>{children}</>
   }
 
+  // Landing pages: '/' or any /<two-letter-locale>. We do NOT load wallet
+  // SDKs here — only after user clicks Connect (sets explicitlyRequested).
+  // Inside /app and other deep routes we mount the full wallet stack from
+  // the first render so reconnect works on refresh.
+  const isLanding = pathname === '/' || pathname?.match(/^\/[a-z]{2}$/) !== null
+  const walletRequested = !isLanding || explicitlyRequested
+
+  const innerChrome = mounted ? (
+    <SolanaProviders>
+      <TronProvider>
+        {children}
+      </TronProvider>
+    </SolanaProviders>
+  ) : null
+
   return (
-    <WagmiProvider config={config}>
-      <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider
-          theme={darkTheme({
-            accentColor:           '#00ffa3',
-            accentColorForeground: '#000',
-            borderRadius:          'medium',
-            overlayBlur:           'small',
-          })}
-          modalSize="compact"
-          appInfo={{ appName: 'RPagos', learnMoreUrl: 'https://rpagos.com' }}
+    <WalletMountContext.Provider value={{ walletRequested, mountWallet }}>
+      {walletRequested ? (
+        <WalletStackFull
+          autoOpenModal={isLanding && explicitlyRequested}
+          reconnectOnMount={!isLanding}
+          queryClient={queryClient}
         >
-          {mounted && (
-            <ChainGuardProvider>
-              <GasWarningBanner />
-              <SolanaProviders>
-                <TronProvider>
-                  {children}
-                </TronProvider>
-              </SolanaProviders>
-            </ChainGuardProvider>
-          )}
-        </RainbowKitProvider>
-      </QueryClientProvider>
-    </WagmiProvider>
+          {innerChrome}
+        </WalletStackFull>
+      ) : (
+        <WagmiProvider config={safeConfig} reconnectOnMount={false}>
+          <QueryClientProvider client={queryClient}>
+            {innerChrome}
+          </QueryClientProvider>
+        </WagmiProvider>
+      )}
+    </WalletMountContext.Provider>
   )
 }
 
@@ -275,3 +138,4 @@ export function decodeWalletError(error: unknown): {
     return { message: 'Fondi insufficienti per il gas.', type: 'funds', isUserAction: false }
   return { message: 'Errore: ' + raw.slice(0, 100), type: 'unknown', isUserAction: false }
 }
+

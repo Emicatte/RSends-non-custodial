@@ -5,6 +5,7 @@ import { useState, useEffect, useRef, useCallback, useMemo, useTransition } from
 import { createPortal } from 'react-dom'
 import { useAccount, useBalance, useDisconnect, useChainId } from 'wagmi'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
+import { useWalletMount } from './providers'
 import { formatUnits } from 'viem'
 import { getRegistry } from '../lib/contractRegistry'
 import dynamic from 'next/dynamic'
@@ -70,7 +71,27 @@ const NON_EVM_META: Record<string, { name: string; color: string; icon: string; 
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-export default function AccountHeader({ nonEvmWallet }: { nonEvmWallet?: NonEvmWalletProps } = {}) {
+// Wallet mount gate: pre-click on landing, RainbowKit isn't loaded yet, so
+// ConnectButton.Custom wouldn't work. Render a static button that triggers
+// the lazy mount instead. After mountWallet() flips the flag, the full
+// AccountHeaderImpl renders with all wagmi/RainbowKit hooks available.
+export default function AccountHeader(props: { nonEvmWallet?: NonEvmWalletProps } = {}) {
+  const { walletRequested, mountWallet } = useWalletMount()
+  if (!walletRequested) {
+    return (
+      <button onClick={mountWallet} style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '8px 16px', borderRadius: 20,
+        background: 'linear-gradient(135deg, #00ffa3, #00cc80)',
+        border: 'none', fontFamily: 'var(--font-display)',
+        fontSize: 13, fontWeight: 700, color: '#000', cursor: 'pointer',
+      }}>Connetti Wallet</button>
+    )
+  }
+  return <AccountHeaderImpl {...props} />
+}
+
+function AccountHeaderImpl({ nonEvmWallet }: { nonEvmWallet?: NonEvmWalletProps } = {}) {
   const { address: evmAddress, isConnected: evmConnected } = useAccount()
   const { disconnect: evmDisconnect }  = useDisconnect()
   const chainId                        = useChainId()
