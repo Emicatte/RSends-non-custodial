@@ -71,10 +71,16 @@ function AnalyticsTab({ stats: parentStats, daily: parentDaily, loading: parentL
     if (!address) return
     const f = async () => {
       try {
-        const res = await fetch(
-          `${BACKEND}/api/v1/forwarding/logs?owner_address=${address.toLowerCase()}&per_page=200`,
-          { signal: AbortSignal.timeout(15000) }
-        )
+        const url = `${BACKEND}/api/v1/forwarding/logs?per_page=200`
+        const doFetch = async () => {
+          const headers = await getAuthHeaders()
+          return fetch(url, { headers, signal: AbortSignal.timeout(15000) })
+        }
+        let res = await doFetch()
+        if (res.status === 401) {
+          clearCache()
+          res = await doFetch()
+        }
         if (!res.ok) return
         const data = await res.json()
         const logs = data.logs ?? []
@@ -102,7 +108,7 @@ function AnalyticsTab({ stats: parentStats, daily: parentDaily, loading: parentL
       }
     }
     f()
-  }, [address])
+  }, [address, getAuthHeaders, clearCache])
 
   const s = stats ?? {
     total_sweeps: 0, completed: 0, failed: 0,
