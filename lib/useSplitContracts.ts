@@ -15,6 +15,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { mutationHeaders, parseRSendError } from './rsendFetch'
+import { useWalletAuth } from './walletAuth'
 
 // Same-origin proxy → see app/api/backend/[...path]/route.ts
 const BACKEND = '/api/backend'
@@ -163,6 +164,8 @@ export function useSplitContracts(address: string | undefined) {
   const failCountRef = useRef(0)
   const [backendOffline, setBackendOffline] = useState(false)
 
+  const { signOnce } = useWalletAuth(address)
+
   // ── client_id derivation ──────────────────────────────
   // Usiamo l'owner address come client_id (stabile, unique per utente).
   // È anche la stessa stringa usata per `master_wallet` — l'address riceve
@@ -208,6 +211,11 @@ export function useSplitContracts(address: string | undefined) {
   ): Promise<SplitContract> => {
     assertBpsSumExact(payload.recipients)
 
+    if (!address) throw new Error('Wallet not connected')
+    const isoTimestamp = new Date().toISOString()
+    const message = `RSends:${address}:${isoTimestamp}`
+    const signature = await signOnce(message)
+
     const body: CreateSplitContractPayload = {
       ...payload,
       master_wallet: payload.master_wallet.toLowerCase(),
@@ -224,7 +232,11 @@ export function useSplitContracts(address: string | undefined) {
 
     const res = await fetch(`${BACKEND}/api/v1/splits/contracts`, {
       method: 'POST',
-      headers: mutationHeaders(),
+      headers: mutationHeaders({
+        'X-Wallet-Address': address,
+        'X-Wallet-Signature': signature,
+        'X-Timestamp': isoTimestamp,
+      }),
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(15000),
     })
@@ -232,7 +244,7 @@ export function useSplitContracts(address: string | undefined) {
     const data = await res.json()
     await fetchContracts(true)
     return data?.contract as SplitContract
-  }, [fetchContracts])
+  }, [address, fetchContracts, signOnce])
 
   // ── Get contract detail ───────────────────────────────
   const getContract = useCallback(async (contractId: number): Promise<SplitContract> => {
@@ -247,18 +259,27 @@ export function useSplitContracts(address: string | undefined) {
 
   // ── Deactivate contract ───────────────────────────────
   const deactivateContract = useCallback(async (contractId: number) => {
+    if (!address) throw new Error('Wallet not connected')
+    const isoTimestamp = new Date().toISOString()
+    const message = `RSends:${address}:${isoTimestamp}`
+    const signature = await signOnce(message)
+
     const res = await fetch(
       `${BACKEND}/api/v1/splits/contracts/${contractId}/deactivate`,
       {
         method: 'POST',
-        headers: mutationHeaders(),
+        headers: mutationHeaders({
+          'X-Wallet-Address': address,
+          'X-Wallet-Signature': signature,
+          'X-Timestamp': isoTimestamp,
+        }),
         signal: AbortSignal.timeout(10000),
       }
     )
     if (!res.ok) throw new Error(await parseRSendError(res))
     await fetchContracts(true)
     return res.json()
-  }, [fetchContracts])
+  }, [address, fetchContracts, signOnce])
 
   // ── Simulate split (preview) ──────────────────────────
   // NO state-change: questa chiamata è pura, usabile per preview live nel wizard.

@@ -693,11 +693,18 @@ async def create_rule(
 # ═══════════════════════════════════════════════════════════
 
 @sweeper_router.get("/forwarding/rules")
+@require_wallet_auth
 async def list_rules(
-    owner_address: str = Query(..., description="Owner wallet address"),
+    request: Request,
     db: AsyncSession = Depends(get_db),
+    wallet_address: Optional[str] = None,
 ):
-    owner = owner_address.lower()
+    if not wallet_address:
+        raise HTTPException(
+            status_code=500,
+            detail="wallet_address not injected by @require_wallet_auth",
+        )
+    owner = wallet_address.lower()
 
     result = await db.execute(
         select(ForwardingRule).where(
@@ -730,11 +737,20 @@ async def list_rules(
 # ═══════════════════════════════════════════════════════════
 
 @sweeper_router.get("/forwarding/rules/{rule_id}")
+@require_wallet_auth
 async def get_rule(
+    request: Request,
     rule_id: int,
     db: AsyncSession = Depends(get_db),
+    wallet_address: Optional[str] = None,
 ):
+    if not wallet_address:
+        raise HTTPException(
+            status_code=500,
+            detail="wallet_address not injected by @require_wallet_auth",
+        )
     rule = await _get_rule_or_404(db, rule_id)
+    await _verify_owner(rule, wallet_address)
 
     stats_q = await db.execute(
         select(
@@ -1046,8 +1062,9 @@ async def emergency_stop(
 # ═══════════════════════════════════════════════════════════
 
 @sweeper_router.get("/forwarding/logs")
+@require_wallet_auth
 async def list_logs(
-    owner_address: str = Query(..., description="Owner wallet address"),
+    request: Request,
     rule_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None, description="pending|executing|completed|failed|gas_too_high"),
     token: Optional[str] = Query(None, description="Filter by token symbol"),
@@ -1056,8 +1073,14 @@ async def list_logs(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
+    wallet_address: Optional[str] = None,
 ):
-    owner = owner_address.lower()
+    if not wallet_address:
+        raise HTTPException(
+            status_code=500,
+            detail="wallet_address not injected by @require_wallet_auth",
+        )
+    owner = wallet_address.lower()
 
     # Subquery: rule IDs belonging to this owner
     rule_ids_q = select(ForwardingRule.id).where(ForwardingRule.user_id == owner)
@@ -1112,8 +1135,9 @@ async def list_logs(
 # ═══════════════════════════════════════════════════════════
 
 @sweeper_router.get("/forwarding/logs/export")
+@require_wallet_auth
 async def export_logs(
-    owner_address: str = Query(...),
+    request: Request,
     format: str = Query("csv", description="csv or json"),
     rule_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
@@ -1121,8 +1145,14 @@ async def export_logs(
     date_from: Optional[datetime] = Query(None),
     date_to: Optional[datetime] = Query(None),
     db: AsyncSession = Depends(get_db),
+    wallet_address: Optional[str] = None,
 ):
-    owner = owner_address.lower()
+    if not wallet_address:
+        raise HTTPException(
+            status_code=500,
+            detail="wallet_address not injected by @require_wallet_auth",
+        )
+    owner = wallet_address.lower()
     if format not in ("csv", "json"):
         raise HTTPException(status_code=422, detail="format must be csv or json")
 
@@ -1168,12 +1198,19 @@ async def export_logs(
 # ═══════════════════════════════════════════════════════════
 
 @sweeper_router.get("/forwarding/stats")
+@require_wallet_auth
 async def get_stats(
-    owner_address: str = Query(...),
+    request: Request,
     period: str = Query("30d", description="24h|7d|30d|all"),
     db: AsyncSession = Depends(get_db),
+    wallet_address: Optional[str] = None,
 ):
-    owner = owner_address.lower()
+    if not wallet_address:
+        raise HTTPException(
+            status_code=500,
+            detail="wallet_address not injected by @require_wallet_auth",
+        )
+    owner = wallet_address.lower()
     rule_ids_q = select(ForwardingRule.id).where(ForwardingRule.user_id == owner)
 
     q_base = SweepLog.rule_id.in_(rule_ids_q)
@@ -1251,12 +1288,19 @@ async def get_stats(
 # ═══════════════════════════════════════════════════════════
 
 @sweeper_router.get("/forwarding/stats/daily")
+@require_wallet_auth
 async def get_daily_stats(
-    owner_address: str = Query(...),
+    request: Request,
     days: int = Query(30, ge=1, le=365),
     db: AsyncSession = Depends(get_db),
+    wallet_address: Optional[str] = None,
 ):
-    owner = owner_address.lower()
+    if not wallet_address:
+        raise HTTPException(
+            status_code=500,
+            detail="wallet_address not injected by @require_wallet_auth",
+        )
+    owner = wallet_address.lower()
     rule_ids_q = select(ForwardingRule.id).where(ForwardingRule.user_id == owner)
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
@@ -1330,7 +1374,9 @@ def _serialize_batch(b: SweepBatch) -> dict:
 
 
 @sweeper_router.get("/forwarding/rules/{rule_id}/batches")
+@require_wallet_auth
 async def list_batches(
+    request: Request,
     rule_id: int,
     status: Optional[str] = Query(None, description="PENDING|PROCESSING|COMPLETED|FAILED|PARTIAL"),
     date_from: Optional[datetime] = Query(None),
@@ -1338,9 +1384,16 @@ async def list_batches(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
+    wallet_address: Optional[str] = None,
 ):
+    if not wallet_address:
+        raise HTTPException(
+            status_code=500,
+            detail="wallet_address not injected by @require_wallet_auth",
+        )
     # Verify rule exists
-    await _get_rule_or_404(db, rule_id)
+    rule = await _get_rule_or_404(db, rule_id)
+    await _verify_owner(rule, wallet_address)
 
     q = select(SweepBatch).where(SweepBatch.forwarding_rule_id == rule_id)
     count_q = select(func.count()).select_from(SweepBatch).where(
