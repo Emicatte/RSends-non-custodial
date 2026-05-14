@@ -21,7 +21,7 @@ export default function SecurityOverlay() {
     { title: 'Blockchain Foundation', desc: 'Base L2 with Ethereum settlement finality', tag: 'L1', color: C.blue, detail: 'Transactions execute on Base L2 for minimal gas costs (~$0.01), with full security inherited from Ethereum L1. Settlement finality via Optimism Bedrock.' },
     { title: 'Infrastructure', desc: 'HMAC-SHA256, rate limiting, SSL termination', tag: 'L2', color: C.amber, detail: 'All API requests are HMAC-SHA256 signed. Rate limiting at both API and transaction level. Nginx SSL termination at the edge. Monitored around the clock.' },
     { title: 'Smart Contract', desc: 'ReentrancyGuard, OpenZeppelin, FeeRouterV4', tag: 'L3', color: C.purple, detail: 'FeeRouterV4.sol inherits from OpenZeppelin\'s ReentrancyGuard and Ownable. All state-changing functions are protected. Contract verified on Basescan.' },
-    { title: 'Compliance Engine', desc: 'EIP-712 Oracle, AML/DAC8/MiCA screening', tag: 'L4', color: C.green, detail: 'Every transaction requires a valid EIP-712 typed signature from the compliance Oracle. Screens against AML databases, verifies DAC8 reporting, ensures MiCA compliance. Nothing moves without it.' },
+    { title: 'Compliance Engine', desc: 'EIP-712 Oracle, AML/MiCA screening', tag: 'L4', color: C.green, detail: 'Every transaction requires a valid EIP-712 typed signature from the compliance Oracle. Screens against AML databases and ensures MiCA compliance. Nothing moves without it.' },
     { title: 'Monitoring', desc: 'Sentry, Prometheus, Z-score anomaly detection', tag: 'L5', color: '#FF4C6A', detail: 'Real-time error tracking, metrics collection, and custom Z-score anomaly detection. Unusual transaction patterns get flagged instantly.' },
   ]
 

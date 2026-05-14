@@ -47,7 +47,7 @@ const C = { ...BaseC, pink: '#C8512C', green: '#40B66B', red: '#FD766B', blue: '
 // ═══════════════════════════════════════════════════════════
 interface Asset {
   symbol: string; name: string; balance: number; decimals: number
-  usdValue: number; contractAddress: string; dac8Monitored: boolean
+  usdValue: number; contractAddress: string
   logo?: string | null
 }
 interface Tx {
@@ -450,9 +450,6 @@ function TokenRow({ a, idx, total, isLast }: { a: Asset; idx: number; total: num
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ fontFamily: C.D, fontSize: 14, fontWeight: 600, color: C.text }}>{a.name}</span>
-            {a.dac8Monitored && (
-              <span style={{ fontFamily: C.M, fontSize: 8, color: C.pink, background: `${C.pink}12`, padding: '1px 5px', borderRadius: 3 }}>DAC8</span>
-            )}
           </div>
           <div style={{ fontFamily: C.M, fontSize: 11, color: C.dim, marginTop: 1 }}>{a.symbol}</div>
         </div>
@@ -502,16 +499,6 @@ function TokenRow({ a, idx, total, isLast }: { a: Asset; idx: number; total: num
             <span style={{ fontFamily: C.M, fontSize: 10, color: C.dim }}>Balance</span>
             <span style={{ fontFamily: C.M, fontSize: 10, color: C.sub }}>{fb(a.balance, a.symbol)} {a.symbol}</span>
           </div>
-          {a.dac8Monitored && (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 5, marginTop: 6,
-              padding: '4px 8px', borderRadius: 6,
-              background: 'rgba(64,182,107,0.06)', border: '1px solid rgba(64,182,107,0.12)',
-            }}>
-              <span style={{ fontFamily: C.M, fontSize: 10, color: C.green }}>✓</span>
-              <span style={{ fontFamily: C.M, fontSize: 9, color: C.green }}>DAC8 monitored — included in fiscal report</span>
-            </div>
-          )}
         </div>
       )}
     </motion.div>
@@ -1381,7 +1368,7 @@ export default function PortfolioDashboard({ open, onClose, initialTab, override
                       Fiscal Status: Compliant
                     </div>
                     <div style={{ fontFamily: C.M, fontSize: 10, color: C.dim, marginTop: 2 }}>
-                      All TX monitored DAC8/MiCA
+                      All TX monitored MiCA
                     </div>
                   </div>
                 </div>
@@ -1432,9 +1419,6 @@ export default function PortfolioDashboard({ open, onClose, initialTab, override
                       <TIcon symbol={a.symbol} logo={a.logo} size={32} />
                       <div style={{ flex: 1 }}>
                         <span style={{ fontFamily: C.D, fontSize: 14, fontWeight: 600, color: C.text }}>{a.name}</span>
-                        {a.dac8Monitored && (
-                          <span style={{ fontFamily: C.M, fontSize: 8, color: C.pink, marginLeft: 6, background: `${C.pink}12`, padding: '1px 5px', borderRadius: 3 }}>DAC8</span>
-                        )}
                       </div>
                       <div style={{ textAlign: 'right' }}>
                         <div style={{ fontFamily: C.M, fontSize: 13, fontWeight: 600, color: C.text }}>{fb(a.balance, a.symbol)}</div>

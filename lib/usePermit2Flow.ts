@@ -88,7 +88,6 @@ export interface ComplianceCheckResponse {
   fiscalRef:           `0x${string}`  // bytes32 keccak256
   riskScore:           number         // 0-100
   jurisdiction:        string         // 'IT', 'DE', 'EU'...
-  dac8Reportable:      boolean
   rejectionReason?:    string
 }
 
@@ -98,7 +97,6 @@ export interface Permit2FlowResult {
   fiscalRef:  `0x${string}`
   complianceNonce: `0x${string}`
   riskScore:  number
-  dac8Reportable: boolean
 }
 
 // ── API Base URL ────────────────────────────────────────────────────────────
@@ -367,7 +365,6 @@ export function usePermit2Flow(feeRouterV3: `0x${string}`) {
         fiscalRef:       compliance.fiscalRef,
         complianceNonce: compliance.complianceNonce,
         riskScore:       compliance.riskScore,
-        dac8Reportable:  compliance.dac8Reportable,
       }
       setResult(res)
       setPhase('done')

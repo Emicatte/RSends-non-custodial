@@ -26,8 +26,6 @@ const KNOWN_LOGOS: Record<string, string> = {
   DEGEN: 'https://assets.coingecko.com/coins/images/34515/small/android-chrome-512x512.png',
 }
 
-const DAC8_TOKENS = new Set(['USDC','USDT','EURC','WETH','ETH','cbBTC','WBTC','DEGEN'])
-
 let rpcId = 1
 async function alchemyPost(chainId: number, method: string, params: unknown[]) {
   const url = ALCHEMY_URLS[chainId]
@@ -45,7 +43,7 @@ async function alchemyPost(chainId: number, method: string, params: unknown[]) {
 
 interface EnrichedAsset {
   symbol: string; name: string; balance: number; decimals: number
-  usdValue: number; contractAddress: string; dac8Monitored: boolean
+  usdValue: number; contractAddress: string
   logo: string | null
 }
 
@@ -72,7 +70,6 @@ export async function GET(
       symbol: 'ETH', name: 'Ethereum', balance: ethBal, decimals: 18,
       usdValue: ethBal * (USD_PRICES.ETH ?? 0),
       contractAddress: '0x0000000000000000000000000000000000000000',
-      dac8Monitored: true,
       logo: KNOWN_LOGOS.ETH,
     }]
 
@@ -95,7 +92,6 @@ export async function GET(
             balance: bal, decimals: dec,
             usdValue: bal * (USD_PRICES[m.symbol] ?? 0),
             contractAddress: tok.contractAddress,
-            dac8Monitored: DAC8_TOKENS.has(m.symbol),
             logo: m.logo ?? KNOWN_LOGOS[m.symbol] ?? null,
           }
         } catch { return null }

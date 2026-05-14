@@ -122,8 +122,7 @@ export default function DevelopersOverlay() {
   "status": "completed"
 }`,
         response: `{
-  "acknowledged": true,
-  "dac8_report_id": "RPT-2026-Q1-00847"
+  "acknowledged": true
 }`,
       },
     },

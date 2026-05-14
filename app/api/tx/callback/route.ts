@@ -19,7 +19,7 @@ import { createHmac } from 'crypto'
  *   currency, eur_value?, network, is_testnet, recipient, status,
  *   timestamp, compliance_record?: { compliance_id, block_timestamp,
  *   fiat_rate?, asset, fiat_gross?, ip_jurisdiction, mica_applicable,
- *   fiscal_ref, network, dac8_reportable }
+ *   fiscal_ref, network }
  *
  * rpagos-backend (routes.py + schemas.py) expects:
  *   All of the above + x_signature (body field, pipe-separated HMAC)

@@ -20,9 +20,9 @@ const METRICS: ReadonlyArray<{ key: MetricKey; value: string }> = [
   { key: 'avgTxSize',     value: '$1,420' },
 ]
 
-type ExportKey = 'dac8' | 'taxIt' | 'customPeriod'
+type ExportKey = 'taxIt' | 'customPeriod'
 
-const EXPORTS: ReadonlyArray<ExportKey> = ['dac8', 'taxIt', 'customPeriod']
+const EXPORTS: ReadonlyArray<ExportKey> = ['taxIt', 'customPeriod']
 
 const exportBtnStyle: React.CSSProperties = {
   fontFamily: 'var(--font-display)',

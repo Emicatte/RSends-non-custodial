@@ -34,7 +34,7 @@ export default function AboutOverlay() {
         {[
           'I built RSends because I got tired of watching European businesses struggle with crypto payments. Either you use a centralized gateway that holds your funds hostage, or you go full DeFi and pray the taxman doesn\'t knock.',
           'Every transaction goes through a compliance Oracle before anything moves on-chain. Not a post-hoc audit. Not a checkbox. Actual pre-execution verification, enforced at the smart contract level.',
-          'Base L2 keeps gas under $0.05. Settlement in 2 seconds. DAC8 reporting built in from day one. Because in this space, "we\'ll add compliance later" is how companies get shut down.',
+          'Base L2 keeps gas under $0.05. Settlement in 2 seconds. Compliance built in from day one. Because in this space, "we\'ll add compliance later" is how companies get shut down.',
         ].map((p, i) => (
           <motion.p
             key={i}

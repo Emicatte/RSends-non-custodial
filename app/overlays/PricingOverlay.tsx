@@ -48,7 +48,6 @@ export default function PricingOverlay() {
     { feature: 'Settlement Time', rsend: '~2 seconds', traditional: '1 — 3 days', web3: '~15 seconds' },
     { feature: 'Pre-TX Compliance', rsend: true, traditional: false, web3: false },
     { feature: 'On-Chain Transparency', rsend: true, traditional: false, web3: true },
-    { feature: 'DAC8 Reporting', rsend: true, traditional: false, web3: false },
     { feature: 'Minimum Amount', rsend: 'None', traditional: '$50+', web3: 'Varies' },
     { feature: 'Custody', rsend: 'Non-custodial', traditional: 'Custodial', web3: 'Varies' },
   ]

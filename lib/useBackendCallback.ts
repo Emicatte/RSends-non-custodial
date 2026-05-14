@@ -29,7 +29,6 @@ interface CallbackPayload {
     mica_applicable: boolean
     fiscal_ref: string
     network: string
-    dac8_reportable: boolean
   }
 }
 

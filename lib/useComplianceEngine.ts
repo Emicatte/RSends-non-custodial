@@ -1,9 +1,9 @@
 /**
- * useComplianceEngine.ts — MiCA/DAC8 Compliance Module
+ * useComplianceEngine.ts — MiCA Compliance Module
  *
  * Genera report fiscali real-time per ogni transazione:
  * - Timestamp certificato (ISO 8601 + unix)
- * - Riferimento fiscale DAC8
+ * - Riferimento fiscale
  * - Tasso di cambio al blocco (CoinGecko)
  * - Geolocation IP → giurisdizione UE
  * - Hash di conformità SHA-256
@@ -40,10 +40,8 @@ export interface ComplianceRecord {
   fiat_gross:        string | null    // importo in EUR
   fiat_fee:          string | null    // fee in EUR
 
-  // DAC8
   payment_ref:       string
   fiscal_ref:        string
-  dac8_reportable:   boolean  // true se > 1000 EUR
 
   // Giurisdizione
   ip_jurisdiction:   string   // es. 'IT', 'DE', 'EU_UNKNOWN'
@@ -134,9 +132,6 @@ export function useComplianceEngine() {
     const fiatGross = fiatRate ? (grossNum * fiatRate).toFixed(2) : null
     const fiatFee   = fiatRate ? (feeNum   * fiatRate).toFixed(2) : null
 
-    // DAC8: reportabile se > 1000 EUR
-    const dac8 = fiatGross ? parseFloat(fiatGross) > 1000 : false
-
     // Hash di conformità
     const hashInput = [params.txHash, params.sender, params.recipient, grossStr, params.symbol, isoNow].join('|')
     const complianceId = await generateComplianceHash(hashInput)
@@ -158,7 +153,6 @@ export function useComplianceEngine() {
       fiat_fee:           fiatFee,
       payment_ref:        params.paymentRef || '—',
       fiscal_ref:         params.fiscalRef  || '—',
-      dac8_reportable:    dac8,
       ip_jurisdiction:    jurisdiction.country,
       mica_applicable:    jurisdiction.mica,
       network:            params.isTestnet ? 'BASE_SEPOLIA' : 'BASE',

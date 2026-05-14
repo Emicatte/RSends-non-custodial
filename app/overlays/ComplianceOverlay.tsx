@@ -26,18 +26,6 @@ function MiCAIcon({ active }: { active: boolean }) {
   )
 }
 
-function DAC8Icon({ active }: { active: boolean }) {
-  return (
-    <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-      <rect x="8" y="6" width="24" height="28" rx="3" stroke={active ? '#C8512C' : 'rgba(10,10,10,0.55)'} strokeWidth="1.5" fill="none" />
-      <path d="M13 12h14M13 16h14M13 20h10M13 24h6" stroke={active ? '#C8512C' : 'rgba(10,10,10,0.45)'} strokeWidth="1" strokeLinecap="round">
-        <animate attributeName="opacity" values="0.5;1;0.5" dur="2.5s" repeatCount="indefinite" />
-      </path>
-      <path d="M26 22l2 2 4-4" stroke={active ? C.green : 'rgba(10,10,10,0.55)'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
 function AMLIcon({ active }: { active: boolean }) {
   return (
     <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
@@ -167,17 +155,6 @@ export default function ComplianceOverlay() {
       },
     },
     {
-      key: 'dac8',
-      title: 'DAC8',
-      subtitle: 'Tax Reporting Directive',
-      Icon: DAC8Icon,
-      details: {
-        requires: 'Automatic exchange of tax-relevant information on crypto-asset transactions between EU member states. XML reporting in CARF format.',
-        implements: 'Automated fiscal report generation for every transaction. XML reports follow DAC8/CARF schema with no manual editing required.',
-        component: 'DAC8 Reporting Engine — generates compliant XML automatically from on-chain transaction data, linked to fiscal references.',
-      },
-    },
-    {
       key: 'aml',
       title: 'AML',
       subtitle: 'Anti-Money Laundering',
@@ -200,19 +177,9 @@ export default function ComplianceOverlay() {
 
   const badges = [
     { label: 'MiCA Framework Aligned', tip: 'Compliant with EU Markets in Crypto-Assets regulation' },
-    { label: 'DAC8/CARF Reporting Ready', tip: 'Automated tax reporting in OECD CARF format' },
     { label: 'AML Pre-TX Screening', tip: 'Every transaction screened before blockchain execution' },
     { label: 'EIP-712 Cryptographic Attestation', tip: 'Typed structured data signing for compliance proof' },
     { label: 'On-Chain Audit Trail', tip: 'Immutable record of all compliance attestations' },
-  ]
-
-  const xmlFields = [
-    { field: 'ReportingPeriod', value: '2026-Q1' },
-    { field: 'TransactionRef', value: 'RSN-2026-00847' },
-    { field: 'SenderAddress', value: '0xB217...691D' },
-    { field: 'Amount', value: '1,000.00 USDC' },
-    { field: 'FeeAmount', value: '5.00 USDC' },
-    { field: 'ComplianceStatus', value: 'VERIFIED' },
   ]
 
   return (
@@ -314,57 +281,6 @@ export default function ComplianceOverlay() {
             {pipelineSteps.map((step, i) => (
               <PipelineNode key={step.title} step={step} index={i} total={pipelineSteps.length} />
             ))}
-          </div>
-        </div>
-      </div>
-
-      {/* ═══ C) DAC8 Reporting Engine ═══ */}
-      <div style={{ marginBottom: 32 }}>
-        <div style={{ fontFamily: C.M, fontSize: 9, fontWeight: 700, color: C.dim, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 14 }}>
-          DAC8 Reporting Engine
-        </div>
-        <div style={{
-          background: C.bg, borderRadius: 16, padding: '18px 16px',
-          border: `1px solid ${C.border}`, fontFamily: C.M, fontSize: 11,
-        }}>
-          <div style={{ color: C.dim, marginBottom: 12, fontSize: 9 }}>
-            {'<?xml version="1.0" encoding="UTF-8"?>'}
-          </div>
-          <div style={{ color: C.dim, marginBottom: 8, fontSize: 9 }}>
-            {'<DAC8Report xmlns="urn:oecd:ties:carf">'}
-          </div>
-          {xmlFields.map((f, i) => (
-            <motion.div
-              key={f.field}
-              initial={{ opacity: 0, x: -10 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.1, duration: 0.3 }}
-              style={{
-                display: 'flex', gap: 8, padding: '5px 0 5px 16px',
-                borderLeft: `2px solid ${f.field === 'ComplianceStatus' ? C.green : 'rgba(200,81,44,0.2)'}`,
-                marginBottom: 4,
-              }}
-            >
-              <span style={{ color: C.purple, fontSize: 10 }}>{`<${f.field}>`}</span>
-              <Typewriter text={f.value} delay={i * 200 + 300} speed={25} />
-              <span style={{ color: C.purple, fontSize: 10 }}>{`</${f.field}>`}</span>
-            </motion.div>
-          ))}
-          <div style={{ color: C.dim, marginTop: 8, fontSize: 9 }}>
-            {'</DAC8Report>'}
-          </div>
-
-          {/* Badge */}
-          <div style={{
-            marginTop: 16, padding: '10px 14px', borderRadius: 10,
-            background: `${C.green}08`, border: `1px solid ${C.green}15`,
-            display: 'flex', alignItems: 'center', gap: 8,
-          }}>
-            <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, boxShadow: `0 0 8px ${C.green}60` }} />
-            <span style={{ fontFamily: C.M, fontSize: 10, color: C.green }}>
-              Automated fiscal reporting. No manual XML editing.
-            </span>
           </div>
         </div>
       </div>

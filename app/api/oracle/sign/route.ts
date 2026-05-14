@@ -180,7 +180,6 @@ export async function POST(req: NextRequest) {
         oracleNonce: ('0x' + '0'.repeat(64)) as Hex,
         oracleDeadline: 0, paymentRef: '0x', fiscalRef: '0x',
         riskScore: 100, riskLevel: 'BLOCKED', jurisdiction: 'BLOCKED',
-        dac8Reportable: false,
         rejectionReason: 'Transazione negata per policy di conformità AML.',
       })
     }
@@ -216,7 +215,6 @@ export async function POST(req: NextRequest) {
             oracleNonce: ('0x' + '0'.repeat(64)) as Hex,
             oracleDeadline: 0, paymentRef: '0x', fiscalRef: '0x',
             riskScore: 100, riskLevel: 'BLOCKED', jurisdiction: 'BLOCKED',
-            dac8Reportable: false,
             rejectionReason: `AML: ${aml.details}`,
           }, { status: 403 })
         }
@@ -371,7 +369,6 @@ export async function POST(req: NextRequest) {
       riskScore,
       riskLevel,
       jurisdiction:    'EU_UNKNOWN',
-      dac8Reportable:  eurValue > 1000,
       eurValue:        Math.round(eurValue * 100) / 100,
       isEurc:          symUpper === 'EURC',
       isSwap:          tokenInN !== tokenOutN,

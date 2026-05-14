@@ -863,7 +863,7 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
         margin: '0 0 28px',
         maxWidth: 540,
       }}>
-        Non-custodial payment infrastructure for European business. Double-entry ledger, 3-level AML screening, DAC8 reporting built into the primitives — not bolted on.
+        Non-custodial payment infrastructure for European business. Double-entry ledger and 3-level AML screening built into the primitives — not bolted on.
       </p>
 
       {/* CTAs */}
@@ -952,23 +952,6 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
             letterSpacing: '0.8px',
             textTransform: 'uppercase' as const,
           }}>AML screening</div>
-        </div>
-        <div>
-          <div style={{
-            fontFamily: C.D,
-            fontSize: 32,
-            fontWeight: 500,
-            color: C.text,
-            letterSpacing: '-0.5px',
-            marginBottom: 3,
-          }}>DAC8</div>
-          <div style={{
-            fontFamily: C.M,
-            fontSize: 11,
-            color: C.sub,
-            letterSpacing: '0.8px',
-            textTransform: 'uppercase' as const,
-          }}>EU-ready</div>
         </div>
         <div>
           <div style={{

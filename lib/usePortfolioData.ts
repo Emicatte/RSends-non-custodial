@@ -8,7 +8,6 @@ export interface PortfolioAsset {
   decimals:        number
   usdValue:        number
   contractAddress: string
-  dac8Monitored:   boolean
 }
 
 export interface ActivityItem {

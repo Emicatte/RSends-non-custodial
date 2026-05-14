@@ -18,11 +18,11 @@ export default function HowOverlay() {
     },
     {
       n: '02', title: 'Verify', desc: 'The compliance Oracle checks your transaction and signs off with an EIP-712 attestation. If it doesn\'t pass, nothing moves.',
-      detail: 'Before any funds move, the Oracle performs AML screening, DAC8 reporting checks, and MiCA compliance verification. It returns a typed EIP-712 signature that the smart contract independently verifies on-chain. No trust assumptions.',
+      detail: 'Before any funds move, the Oracle performs AML screening and MiCA compliance verification. It returns a typed EIP-712 signature that the smart contract independently verifies on-chain. No trust assumptions.',
     },
     {
       n: '03', title: 'Execute', desc: 'FeeRouterV4 verifies the signature, splits the payment (99.5% recipient, 0.5% protocol), settles in ~2 seconds.',
-      detail: 'The contract checks the Oracle signature on-chain, executes split routing, and emits events for the DAC8 reporting engine. Final settlement on Base L2, gas under $0.05.',
+      detail: 'The contract checks the Oracle signature on-chain, executes split routing, and emits events for the audit log. Final settlement on Base L2, gas under $0.05.',
     },
   ]
 
@@ -30,7 +30,6 @@ export default function HowOverlay() {
     { title: 'Swap & Forward', desc: 'Pay in ETH, recipient gets USDC. Automatic DEX routing with compliance.' },
     { title: 'Auto-Split', desc: 'Programmable treasury routing — split payments across multiple wallets.' },
     { title: 'Sweeper', desc: 'Auto-forward incoming funds to configured destinations based on rules.' },
-    { title: 'DAC8 Reports', desc: 'Generate fiscal XML reports on demand for any transaction period.' },
   ]
 
   return (

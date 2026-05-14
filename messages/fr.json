@@ -98,7 +98,6 @@
         "comingSoon": "Chart coming soon"
       },
       "export": {
-        "dac8": "DAC8 export",
         "taxIt": "Tax report (IT)",
         "customPeriod": "Custom period",
         "comingSoon": "Coming soon"
@@ -344,7 +343,7 @@
     "developers": {
       "eyebrow": "FOR DEVELOPERS",
       "title": "Build with the API",
-      "body": "REST endpoints and SDKs for sending, swapping, and routing crypto across chains. Typed webhooks, double-entry ledger, AML screening, and DAC8 reporting — all built in, so you don't engineer compliance from scratch.",
+      "body": "REST endpoints and SDKs for sending, swapping, and routing crypto across chains. Typed webhooks, double-entry ledger, and AML screening — all built in, so you don't engineer compliance from scratch.",
       "b1": "Send, swap, route via REST API",
       "b2": "Typed webhooks for every event",
       "b3": "Multi-chain: EVM + Tron + Solana",
@@ -408,7 +407,6 @@
     "input": "Input",
     "output": "Output",
     "swapCompleted": "Swap completed ✓",
-    "dac8Recorded": "DAC8 — Recorded in fiscal report",
     "viewOnExplorer": "View on Explorer ↗",
     "newSwap": "New Swap",
     "amlCheck": "AML Check…",
@@ -476,8 +474,7 @@
     "ctaSwapBridge": "Swap & Bridge {from} → {to} ({dest})",
     "ctaInsufficient": "{symbol} insufficient",
     "estimatedTimeL2": "~4 seconds",
-    "estimatedTimeL1": "~15 seconds",
-    "dac8Reportable": "DAC8 reportable (≥ €1,000)"
+    "estimatedTimeL1": "~15 seconds"
   },
   "txStatus": {
     "amlChecking": "AML verification in progress…",
@@ -1064,7 +1061,7 @@
           "intro": "Nous traitons vos données à caractère personnel sur les bases légales suivantes :",
           "items": [
             "<strong>Exécution d'un contrat</strong> — pour fournir le Service, traiter les transactions et gérer votre compte.",
-            "<strong>Obligation légale</strong> — pour satisfaire aux obligations en matière de lutte contre le blanchiment de capitaux (LCB), de financement du terrorisme (FT), de déclaration DAC8 (utilisateurs UE), fiscales et de filtrage des sanctions.",
+            "<strong>Obligation légale</strong> — pour satisfaire aux obligations en matière de lutte contre le blanchiment de capitaux (LCB), de financement du terrorisme (FT), fiscales et de filtrage des sanctions.",
             "<strong>Intérêt légitime</strong> — prévention de la fraude, sécurité du réseau, amélioration du produit et analyses internes.",
             "<strong>Consentement</strong> — lorsque requis (par exemple, communications marketing facultatives), que vous pouvez retirer à tout moment."
           ]
@@ -1085,7 +1082,7 @@
           "intro": "Nous partageons des données à caractère personnel uniquement avec :",
           "items": [
             "<strong>Prestataires de services</strong> — fournisseurs KYC, partenaires d'analyse blockchain, hébergeurs cloud et outils de communication, tous liés par des accords de traitement de données.",
-            "<strong>Autorités et régulateurs</strong> — lorsque la loi l'exige, sur décision de justice, ou en réponse à une demande légale, y compris au titre des obligations d'échange d'informations DAC8.",
+            "<strong>Autorités et régulateurs</strong> — lorsque la loi l'exige, sur décision de justice, ou en réponse à une demande légale.",
             "<strong>Successeurs</strong> — dans le cadre d'une fusion, acquisition ou cession d'actifs, sous réserve de protections de confidentialité équivalentes."
           ],
           "note": "Nous ne vendons <strong>pas</strong> vos données à caractère personnel et nous ne les partageons pas avec des annonceurs."
@@ -1301,7 +1298,7 @@
     "amlKyc": {
       "metadata": {
         "title": "Avis LCB-FT / KYC — RSends",
-        "description": "Obligations de lutte contre le blanchiment et de connaissance du client applicables aux utilisateurs de RSends, y compris GAFI, DAC8 UE et cadre LCB-FT du Costa Rica."
+        "description": "Obligations de lutte contre le blanchiment et de connaissance du client applicables aux utilisateurs de RSends, y compris GAFI et cadre LCB-FT du Costa Rica."
       },
       "eyebrow": "Avis LCB-FT / KYC",
       "title": "Programme de lutte contre le blanchiment et de connaissance du client",
@@ -1314,7 +1311,6 @@
           "intro": "RSends exploite un programme de conformité fondé sur les risques, aligné sur :",
           "items": [
             "Les Recommandations du <strong>Groupe d'action financière (GAFI / FATF)</strong>, en particulier la Recommandation 15 sur les prestataires de services d'actifs virtuels.",
-            "La <strong>directive UE 2023/2226 (DAC8)</strong> pour l'échange automatique d'informations sur les transactions en crypto-actifs des utilisateurs ayant leur résidence fiscale dans l'Union européenne.",
             "Le cadre LCB-FT du Costa Rica, notamment la <em>Ley 8204</em> et les règlements applicables émis par la SUGEF et l'Instituto Costarricense sobre Drogas (ICD).",
             "Les régimes de sanctions internationaux, y compris l'<strong>OFAC</strong> (États-Unis), les sanctions consolidées des Nations Unies et les mesures restrictives de l'UE."
           ]

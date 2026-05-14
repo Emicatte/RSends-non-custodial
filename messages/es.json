@@ -98,7 +98,6 @@
         "comingSoon": "Chart coming soon"
       },
       "export": {
-        "dac8": "DAC8 export",
         "taxIt": "Tax report (IT)",
         "customPeriod": "Custom period",
         "comingSoon": "Coming soon"
@@ -344,7 +343,7 @@
     "developers": {
       "eyebrow": "FOR DEVELOPERS",
       "title": "Build with the API",
-      "body": "REST endpoints and SDKs for sending, swapping, and routing crypto across chains. Typed webhooks, double-entry ledger, AML screening, and DAC8 reporting — all built in, so you don't engineer compliance from scratch.",
+      "body": "REST endpoints and SDKs for sending, swapping, and routing crypto across chains. Typed webhooks, double-entry ledger, and AML screening — all built in, so you don't engineer compliance from scratch.",
       "b1": "Send, swap, route via REST API",
       "b2": "Typed webhooks for every event",
       "b3": "Multi-chain: EVM + Tron + Solana",
@@ -408,7 +407,6 @@
     "input": "Input",
     "output": "Output",
     "swapCompleted": "Swap completed ✓",
-    "dac8Recorded": "DAC8 — Recorded in fiscal report",
     "viewOnExplorer": "View on Explorer ↗",
     "newSwap": "New Swap",
     "amlCheck": "AML Check…",
@@ -476,8 +474,7 @@
     "ctaSwapBridge": "Swap & Bridge {from} → {to} ({dest})",
     "ctaInsufficient": "{symbol} insufficient",
     "estimatedTimeL2": "~4 seconds",
-    "estimatedTimeL1": "~15 seconds",
-    "dac8Reportable": "DAC8 reportable (≥ €1,000)"
+    "estimatedTimeL1": "~15 seconds"
   },
   "txStatus": {
     "amlChecking": "AML verification in progress…",
@@ -1064,7 +1061,7 @@
           "intro": "Tratamos tus datos personales sobre las siguientes bases jurídicas:",
           "items": [
             "<strong>Ejecución de un contrato</strong> — para prestar el Servicio, ejecutar transacciones y operar tu cuenta.",
-            "<strong>Obligación legal</strong> — para cumplir con las obligaciones de prevención del blanqueo de capitales (AML), de la financiación del terrorismo (CTF), de reporte DAC8 (usuarios UE), fiscales y de cribado de sanciones.",
+            "<strong>Obligación legal</strong> — para cumplir con las obligaciones de prevención del blanqueo de capitales (AML), de la financiación del terrorismo (CTF), fiscales y de cribado de sanciones.",
             "<strong>Interés legítimo</strong> — prevención del fraude, seguridad de la red, mejora del producto y analíticas internas.",
             "<strong>Consentimiento</strong> — cuando sea necesario (por ejemplo, comunicaciones de marketing opcionales), revocable en cualquier momento."
           ]
@@ -1085,7 +1082,7 @@
           "intro": "Compartimos los datos personales únicamente con:",
           "items": [
             "<strong>Proveedores de servicios</strong> — proveedores KYC, partners de blockchain analytics, proveedores de hosting en la nube y herramientas de correo/comunicación, todos vinculados por contratos de tratamiento de datos.",
-            "<strong>Autoridades y reguladores</strong> — cuando lo exija la ley, una orden judicial o en respuesta a una solicitud legítima, incluyendo las obligaciones de intercambio de información DAC8.",
+            "<strong>Autoridades y reguladores</strong> — cuando lo exija la ley, una orden judicial o en respuesta a una solicitud legítima.",
             "<strong>Sucesores</strong> — en relación con una fusión, adquisición o cesión de activos, sujeto a protecciones de privacidad equivalentes."
           ],
           "note": "<strong>No</strong> vendemos tus datos personales y no los compartimos con anunciantes."
@@ -1301,7 +1298,7 @@
     "amlKyc": {
       "metadata": {
         "title": "Aviso AML / KYC — RSends",
-        "description": "Obligaciones de prevención del blanqueo de capitales y de conocimiento del cliente aplicables a los usuarios de RSends, incluidos FATF, DAC8 UE y el marco AML/CFT de Costa Rica."
+        "description": "Obligaciones de prevención del blanqueo de capitales y de conocimiento del cliente aplicables a los usuarios de RSends, incluidos FATF y el marco AML/CFT de Costa Rica."
       },
       "eyebrow": "Aviso AML / KYC",
       "title": "Programa de prevención del blanqueo de capitales y conocimiento del cliente",
@@ -1314,7 +1311,6 @@
           "intro": "RSends aplica un programa de cumplimiento basado en el riesgo, alineado con:",
           "items": [
             "Las Recomendaciones del <strong>Financial Action Task Force (FATF)</strong>, en particular la Recomendación 15 sobre Proveedores de Servicios de Activos Virtuales.",
-            "La <strong>Directiva UE 2023/2226 (DAC8)</strong> para el intercambio automático de información sobre transacciones de criptoactivos para usuarios con residencia fiscal en la Unión Europea.",
             "El marco AML/CFT de Costa Rica, incluida la <em>Ley 8204</em> y las regulaciones aplicables emitidas por SUGEF y el Instituto Costarricense sobre Drogas (ICD).",
             "Los regímenes internacionales de sanciones, incluidos <strong>OFAC</strong> (Estados Unidos), las sanciones consolidadas de las Naciones Unidas y las medidas restrictivas de la UE."
           ]

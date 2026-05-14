@@ -75,11 +75,6 @@ function SettingsTab({
   const [exportFormat, setExportFormat] = useState<'csv' | 'json'>('csv')
   const [exportDateFrom, setExportDateFrom] = useState('')
   const [exportDateTo, setExportDateTo] = useState('')
-  const [dac8Year, setDac8Year] = useState(new Date().getFullYear())
-  const [dac8Loading, setDac8Loading] = useState(false)
-  const dac8Ref = useRef(false)
-  const [dac8Result, setDac8Result] = useState<string | null>(null)
-
   // ── Danger ──
   const [confirmEmergency, setConfirmEmergency] = useState(false)
   const [emergencyLoading, setEmergencyLoading] = useState(false)
@@ -208,38 +203,6 @@ function SettingsTab({
     if (exportDateFrom) params.set('date_from', exportDateFrom)
     if (exportDateTo) params.set('date_to', exportDateTo)
     window.open(`${BACKEND}/api/v1/forwarding/logs/export?${params}`, '_blank')
-  }
-
-  // DAC8 handler (ref guard prevents double-click)
-  const handleDac8 = async () => {
-    if (dac8Ref.current) return
-    dac8Ref.current = true
-    setDac8Loading(true)
-    setDac8Result(null)
-    try {
-      const res = await fetch(`${BACKEND}/api/v1/dac8/generate?fiscal_year=${dac8Year}`, {
-        method: 'POST',
-        headers: mutationHeaders(),
-        body: JSON.stringify({ owner_address: address }),
-      })
-      if (res.ok) {
-        const blob = await res.blob()
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `dac8_report_${dac8Year}.xml`
-        a.click()
-        URL.revokeObjectURL(url)
-        setDac8Result(t('reportDownloaded'))
-      } else {
-        setDac8Result(await parseRSendError(res))
-      }
-    } catch (e) {
-      setDac8Result(e instanceof Error ? e.message : t('networkError'))
-    } finally {
-      dac8Ref.current = false
-      setDac8Loading(false)
-    }
   }
 
   // Emergency stop handler (ref guard prevents double-click)
@@ -822,43 +785,6 @@ function SettingsTab({
             style={{ overflow: 'hidden' }}
           >
             <div style={{ padding: '10px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
-
-              {/* DAC8 Report */}
-              <div style={cardStyle}>
-                <div style={{ fontFamily: C.M, fontSize: 9, color: C.dim, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>DAC8 / CARF Report</div>
-                <div style={{ fontFamily: C.M, fontSize: 10, color: C.sub, marginBottom: 10, lineHeight: 1.5 }}>
-                  Generate an XML report for European DAC8 tax reporting obligations.
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <label style={{ ...labelStyle, marginBottom: 0 }}>Year</label>
-                  <select
-                    style={{ ...selectStyle, width: 90 }}
-                    value={dac8Year}
-                    onChange={e => setDac8Year(Number(e.target.value))}
-                  >
-                    {[2024, 2025, 2026].map(y => (
-                      <option key={y} value={y}>{y}</option>
-                    ))}
-                  </select>
-                  <button
-                    onClick={handleDac8}
-                    disabled={dac8Loading}
-                    style={{
-                      padding: '7px 14px', borderRadius: 8, border: 'none',
-                      background: `${C.amber}15`, color: C.amber,
-                      fontFamily: C.D, fontSize: 10, fontWeight: 600,
-                      cursor: dac8Loading ? 'wait' : 'pointer',
-                    }}
-                  >
-                    {dac8Loading ? t('generating') : t('generateXml')}
-                  </button>
-                </div>
-                {dac8Result && (
-                  <div style={{ fontFamily: C.M, fontSize: 10, color: dac8Result.startsWith('Report') ? C.green : C.red, marginTop: 6 }}>
-                    {dac8Result}
-                  </div>
-                )}
-              </div>
 
               {/* Export Sweep Logs */}
               <div style={cardStyle}>

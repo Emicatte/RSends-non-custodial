@@ -9,7 +9,6 @@
  *   - Barra di progresso balistica (~2s Base finality)
  *   - Micro-stati animati
  *   - Address AML check (mock)
- *   - DAC8 compliance badge
  */
 
 import { useState, useEffect, useRef } from 'react'
@@ -227,13 +226,8 @@ export function ComplianceBadge({ record }: { record: ComplianceRecord }): React
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
         <span style={{ fontFamily: T.mono, fontSize: 11, color: T.emerald, fontWeight: 700, letterSpacing: '0.08em' }}>
-          MiCA/DAC8 · COMPLIANCE RECORD
+          MiCA · COMPLIANCE RECORD
         </span>
-        {record.dac8_reportable && (
-          <span style={{ fontFamily: T.mono, fontSize: 9, padding: '2px 6px', borderRadius: 4, background: T.amber + '20', color: T.amber, border: `1px solid ${T.amber}40` }}>
-            DAC8 REPORTABLE
-          </span>
-        )}
       </div>
 
       {/* Dati */}
@@ -409,9 +403,8 @@ export function TransactionStatusUI({
         {/* Compliance record */}
         {complianceRecord && <ComplianceBadge record={complianceRecord} />}
 
-        {/* DAC8 note */}
         <div style={{ fontFamily: T.mono, fontSize: 10, color: T.muted, textAlign: 'center' as const }}>
-          x_signature: PENDING_HMAC_SHA256 · Payload MiCA/DAC8 salvato in rp_compliance_db
+          x_signature: PENDING_HMAC_SHA256 · Payload MiCA salvato in rp_compliance_db
         </div>
 
         {/* Azioni */}

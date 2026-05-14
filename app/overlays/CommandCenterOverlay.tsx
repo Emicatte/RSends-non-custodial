@@ -199,7 +199,7 @@ export default function CommandCenterOverlay({ onClose, onGoToCommand }: { onClo
     { icon: <IconRoute color={C.purple} />, title: 'Route Management', desc: 'Forward funds across wallets and chains. Create complex routing rules with no code.' },
     { icon: <IconDash color={C.green} />, title: 'Real-Time Dashboard', desc: 'See every transaction as it happens. Status, amounts, chains, recipients — all live.' },
     { icon: <IconBell color={C.amber} />, title: 'Alerts', desc: 'Telegram and webhook notifications for critical events. Never miss a payment.' },
-    { icon: <IconShield color={C.green} />, title: 'Compliance', desc: 'DAC8 reports, AML screening, audit logs. Built-in compliance for regulated flows.' },
+    { icon: <IconShield color={C.green} />, title: 'Compliance', desc: 'AML screening, audit logs. Built-in compliance for regulated flows.' },
     { icon: <IconGlobe color={C.blue} />, title: 'Multi-Chain', desc: 'Base, Ethereum, Arbitrum, Optimism, Tron, and more. Manage all chains from one place.' },
   ]
 

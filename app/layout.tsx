@@ -14,8 +14,8 @@ const dmMono = DM_Mono({
 
 export const metadata: Metadata = {
   title:       'RSends',
-  description: 'Non-custodial Web3 financial automation on Base L2 with split routing and DAC8 compliance.',
-  keywords:    ['Web3', 'Base', 'USDC', 'EURC', 'payments', 'crypto', 'B2B', 'split routing', 'DAC8'],
+  description: 'Non-custodial Web3 financial automation on Base L2 with split routing.',
+  keywords:    ['Web3', 'Base', 'USDC', 'EURC', 'payments', 'crypto', 'B2B', 'split routing'],
   icons: {
     icon: [
       

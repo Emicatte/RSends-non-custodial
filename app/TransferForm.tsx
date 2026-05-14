@@ -156,7 +156,7 @@ interface OracleResponse {
   approved: boolean
   oracleSignature: string; oracleNonce: string; oracleDeadline: number
   paymentRef: string; fiscalRef: string
-  riskScore: number; riskLevel: string; dac8Reportable: boolean
+  riskScore: number; riskLevel: string
   eurValue?: number; isEurc?: boolean; isSwap?: boolean
   sourceChain?: string; gasless?: boolean; rejectionReason?: string
 }
@@ -1025,7 +1025,6 @@ export default function TransferForm({ noCard, externalToken }: { noCard?: boole
           mica_applicable:  rec.mica_applicable,
           fiscal_ref:       rec.fiscal_ref,
           network:          rec.network,
-          dac8_reportable:  rec.dac8_reportable,
         } : undefined,
       }).catch(err => console.warn('[RPagos Backend] callback error:', err))
     })
@@ -1751,7 +1750,7 @@ export default function TransferForm({ noCard, externalToken }: { noCard?: boole
 
           {showExtras && (
             <div className="mt-2 rounded-xl px-3.5 py-3 bg-[#FAFAF7] border border-[rgba(200,81,44,0.2)]">
-              <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.08em] text-[#888780]">MiCA/DAC8</div>
+              <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.08em] text-[#888780]">MiCA</div>
               <input
                 type="text"
                 placeholder={t('paymentRefPlaceholder')}
@@ -1774,9 +1773,6 @@ export default function TransferForm({ noCard, externalToken }: { noCard?: boole
                 disabled={busy}
                 className="w-full px-3 py-2 text-sm text-[#2C2C2A] bg-white border border-[rgba(200,81,44,0.2)] rounded-lg placeholder:text-[#888780] outline-none focus:border-[#C8512C]/60 transition-colors"
               />
-              {oracleData?.dac8Reportable && (
-                <div className="mt-1.5 text-[10px] text-[#B45309]">⚠ {t('dac8Reportable')}</div>
-              )}
             </div>
           )}
 

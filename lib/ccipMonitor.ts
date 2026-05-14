@@ -1,6 +1,6 @@
 /**
  * Monitor CCIP CrossChainSwapAndBridge events.
- * Registra ogni bridge per audit trail e DAC8.
+ * Registra ogni bridge per audit trail.
  */
 
 export interface CrossChainEvent {
@@ -26,6 +26,5 @@ export async function processCrossChainEvent(event: CrossChainEvent): Promise<vo
     `net=${event.netBridged}, fee=${event.fee}, msgId=${event.messageId.slice(0, 10)}`
   )
   // TODO: Salva nel DB (nuova tabella cross_chain_transfers)
-  // TODO: Registra per DAC8 reporting
   // TODO: Invia webhook al merchant se configurato
 }

@@ -729,9 +729,6 @@ export default function SwapModule({ onSwapComplete, portfolioAssets, noCard }: 
         {phase === 'success' && txHash && (
           <div className="mt-2 px-4 py-3.5 rounded-2xl bg-[rgba(29,158,117,0.08)] border border-[rgba(29,158,117,0.25)] text-center">
             <div className="text-[13px] font-semibold text-[#0F7A52]">{t('swapCompleted')}</div>
-            <div className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[rgba(200,81,44,0.08)] border border-[rgba(200,81,44,0.2)] text-[9px] text-[#C8512C]">
-              {t('dac8Recorded')}
-            </div>
             <div className="mt-2">
               <a
                 href={`${reg?.blockExplorer ?? 'https://basescan.org'}/tx/${txHash}`}

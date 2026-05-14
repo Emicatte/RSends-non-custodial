@@ -348,7 +348,7 @@ export async function generatePdfReceipt(p: PdfReceiptParams): Promise<void> {
   )
   y += 13
 
-  // ── DAC8 / MiCA Section ────────────────────────────────────────────────
+  // ── MiCA Section ────────────────────────────────────────────────
   doc.setDrawColor(...C.border)
   doc.line(ml, y, W - mr, y)
   y += 3
@@ -362,7 +362,7 @@ export async function generatePdfReceipt(p: PdfReceiptParams): Promise<void> {
   doc.setTextColor(...C.em)
   doc.setFontSize(6.5)
   doc.setFont('helvetica', 'bold')
-  doc.text('DATI FISCALI (DAC8 / MiCA)', ml + 6, y + 6)
+  doc.text('DATI FISCALI (MiCA)', ml + 6, y + 6)
 
   const fiscalRows = [
     { key: 'payment_ref', val: p.paymentRef },
@@ -394,7 +394,7 @@ export async function generatePdfReceipt(p: PdfReceiptParams): Promise<void> {
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(5)
     doc.text(
-      'Dir. 2013/34/UE (Contabilità) · Reg. UE 2023/1114 (MiCA) · Dir. 2011/16/UE (DAC8)',
+      'Dir. 2013/34/UE (Contabilità) · Reg. UE 2023/1114 (MiCA)',
       ml + 6, y + 9,
     )
     doc.text(

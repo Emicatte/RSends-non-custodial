@@ -177,9 +177,4 @@ describe('risk scoring', () => {
     const eurValue = 1 * EUR_RATES['ETH']
     expect(eurValue).toBe(2200)
   })
-
-  it('DAC8 reportable threshold: > 1000 EUR', () => {
-    expect(2200 > 1000).toBe(true)  // 1 ETH → reportable
-    expect(500 * 0.92 > 1000).toBe(false) // 500 USDC → not reportable
-  })
 })
