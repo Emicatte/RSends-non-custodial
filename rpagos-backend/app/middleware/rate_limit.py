@@ -16,7 +16,6 @@ Limiti specifici:
   GET  /api/v1/merchant/payment-intent/{id}
        + X-Checkout-Public header              → 20/min  per IP
   POST /api/v1/tx/callback                    → 10/min  per IP
-  POST /api/v1/dac8/generate                  → 5/min   per IP
   GET  /api/v1/audit/log                      → 30/min  per IP
   Admin brute-force: 5/min per IP, ban 15min dopo 10 fail/ora
 
@@ -53,7 +52,6 @@ ENDPOINT_LIMITS: list[tuple[str, str, int, int, str]] = [
     ("GET",  "/api/v1/merchant/payment-intent/",     60,    60,  "api_key"),  # get by id
     ("GET",  "/api/v1/merchant/transactions",        60,    60,  "api_key"),
     ("POST", "/api/v1/tx/callback",                  10,    60,  "ip"),
-    ("POST", "/api/v1/dac8/generate",                 5,    60,  "ip"),
     ("POST", "/api/v1/webhooks/alchemy",           1000,    60,  "ip"),
     ("GET",  "/api/v1/audit/log",                    30,    60,  "ip"),
     # End-user auth (Google OAuth + session mgmt)

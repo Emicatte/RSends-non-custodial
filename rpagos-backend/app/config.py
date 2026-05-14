@@ -50,12 +50,6 @@ class Settings(BaseSettings):
     # ── CORS Origins (prod) ───────────────────────────────
     cors_origins: str = "https://fee-router-dapp.vercel.app,https://rpagos.io"
 
-    # ── DAC8 Reporting ────────────────────────────────────
-    dac8_reporting_entity_name: str = "RPagos S.r.l."
-    dac8_reporting_entity_tin: str = "IT12345678901"
-    dac8_reporting_country: str = "IT"
-    dac8_fiscal_year: int = 2025
-
     # ── Anomaly Detection ─────────────────────────────────
     anomaly_z_score_threshold: float = 3.0
     anomaly_min_sample_size: int = 10

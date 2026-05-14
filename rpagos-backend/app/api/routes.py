@@ -5,7 +5,6 @@ Endpoint principali:
   POST /api/v1/tx/callback     → Riceve i dati dal frontend
   GET  /api/v1/tx/{fiscal_ref} → Recupera una transazione
   GET  /api/v1/anomalies       → Lancia l'analizzatore di anomalie
-  POST /api/v1/dac8/generate   → Genera il report XML DAC8
 """
 
 from typing import Optional
@@ -19,11 +18,9 @@ from app.models.schemas import (
     TransactionCallbackPayload,
     CallbackResponse,
     AnomalyReportResponse,
-    DAC8ReportResponse,
 )
 from app.services.hmac_service import verify_signature
 from app.services.anomaly_service import analyze_transactions
-from app.services.dac8_service import generate_dac8_report
 from app.services.idempotency_service import check_idempotency, ConflictError
 from app.services.audit_service import log_event
 from app.services.transaction_matcher import match_transaction, IncomingTx
@@ -53,7 +50,7 @@ async def receive_transaction(
       2. Controlla duplicati (tx_hash e fiscal_ref)
       3. Salva la transazione su DB
       4. Se presente, salva il compliance record
-      5. Restituisce conferma con flag dac8_reportable
+      5. Restituisce conferma
     """
 
     # ── 0. Idempotency check (se chiave presente) ─────────────
@@ -67,7 +64,6 @@ async def receive_transaction(
                     message=f"Idempotent replay: TX {existing_tx.id}",
                     transaction_id=0,  # legacy field — il vero ID è in existing_tx.id
                     compliance_logged=False,
-                    dac8_reportable=False,
                 )
         except ConflictError:
             raise HTTPException(
@@ -157,7 +153,6 @@ async def receive_transaction(
 
     # ── 4. Salvataggio ComplianceSnapshot (se presente) ──────
     compliance_logged = False
-    dac8_reportable = False
 
     if payload.compliance_record:
         cr = payload.compliance_record
@@ -170,13 +165,11 @@ async def receive_transaction(
             fiat_gross=cr.fiat_gross,
             ip_jurisdiction=cr.ip_jurisdiction,
             mica_applicable=cr.mica_applicable,
-            dac8_reportable=cr.dac8_reportable,
             network=cr.network,
             fiscal_ref=cr.fiscal_ref,
         )
         db.add(snapshot)
         compliance_logged = True
-        dac8_reportable = cr.dac8_reportable
 
     # ── 5. Commit TX to DB before matching ────────────────────
     await db.commit()
@@ -228,10 +221,9 @@ async def receive_transaction(
 
     return CallbackResponse(
         status="success" if matching_mode != "queued" else "received",
-        message=f"TX {payload.tx_hash[:16]}… loggata per compliance DAC8",
+        message=f"TX {payload.tx_hash[:16]}… loggata per compliance",
         transaction_id=tx.id,
         compliance_logged=compliance_logged,
-        dac8_reportable=dac8_reportable,
         matched_intent_id=matched_intent_id,
         webhook_triggered=webhook_triggered,
         matching=matching_mode,
@@ -380,22 +372,3 @@ async def run_anomaly_analysis(
             },
         )
     return report
-
-
-# ═══════════════════════════════════════════════════════════════
-#  POST /api/v1/dac8/generate
-# ═══════════════════════════════════════════════════════════════
-
-@router.post("/dac8/generate", response_model=DAC8ReportResponse)
-async def generate_dac8(
-    fiscal_year: Optional[int] = Query(default=None, description="Anno fiscale"),
-    db: AsyncSession = Depends(get_db),
-) -> DAC8ReportResponse:
-    """
-    Genera il report XML DAC8/CARF per l'anno fiscale indicato.
-
-    Prende tutte le transazioni con dac8_reportable=True
-    e le impacchetta nel formato XML richiesto dalle autorità
-    fiscali europee per le cripto-attività.
-    """
-    return await generate_dac8_report(db, fiscal_year)

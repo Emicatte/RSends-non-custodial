@@ -27,7 +27,6 @@ class ComplianceRecordPayload(BaseModel):
     mica_applicable: bool = Field(False, description="Se MiCA è applicabile")
     fiscal_ref: str = Field(..., description="Riferimento fiscale unico")
     network: str = Field(..., description="BASE, BASE_SEPOLIA, ecc.")
-    dac8_reportable: bool = Field(False, description="Se la TX va nel report DAC8")
 
 
 class TransactionCallbackPayload(BaseModel):
@@ -133,7 +132,6 @@ class CallbackResponse(BaseModel):
     message: str
     transaction_id: int
     compliance_logged: bool = False
-    dac8_reportable: bool = False
     matched_intent_id: Optional[str] = None
     webhook_triggered: bool = False
     matching: Optional[str] = None       # "queued" | "inline" | None (no match attempted)
@@ -153,11 +151,3 @@ class AnomalyReportResponse(BaseModel):
     anomalies_found: int
     alerts: list[AnomalyAlertResponse]
     analysis_window_hours: int
-
-
-class DAC8ReportResponse(BaseModel):
-    status: str
-    fiscal_year: int
-    total_reportable: int
-    xml_path: str
-    xml_preview: str

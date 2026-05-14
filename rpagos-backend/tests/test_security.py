@@ -94,7 +94,6 @@ def make_valid_payload(**overrides) -> dict:
             "mica_applicable": True,
             "fiscal_ref": fiscal_ref,
             "network": "BASE_MAINNET",
-            "dac8_reportable": False,
         },
     }
     base.update(overrides)

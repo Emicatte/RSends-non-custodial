@@ -3,7 +3,7 @@ RPagos Backend Core — Modelli SQLAlchemy.
 
 Mappatura 1:1 con i dati generati da TransactionStatus.tsx:
   - TransactionLog: ogni callback POST ricevuto
-  - ComplianceSnapshot: record MiCA/DAC8 collegato
+  - ComplianceSnapshot: record MiCA collegato
   - AnomalyAlert: segnalazioni generate dall'analizzatore
 """
 
@@ -88,7 +88,7 @@ class TransactionLog(Base):
 
 
 # ═══════════════════════════════════════════════════════════════
-#  ComplianceSnapshot — record MiCA / DAC8
+#  ComplianceSnapshot — record MiCA
 # ═══════════════════════════════════════════════════════════════
 
 class ComplianceSnapshot(Base):
@@ -107,13 +107,10 @@ class ComplianceSnapshot(Base):
     fiat_gross = Column(Float, nullable=True)              # controvalore EUR lordo
     ip_jurisdiction = Column(String(8), nullable=True)     # es. "IT"
     mica_applicable = Column(Boolean, default=False)
-    dac8_reportable = Column(Boolean, default=False)
     network = Column(String(32), nullable=True)
 
     # Fiscal
     fiscal_ref = Column(String(128), nullable=True)
-    dac8_xml_generated = Column(Boolean, default=False)
-    dac8_xml_path = Column(String(512), nullable=True)
 
     created_at = Column(
         DateTime(timezone=True),

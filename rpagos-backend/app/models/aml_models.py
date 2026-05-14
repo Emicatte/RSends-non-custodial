@@ -128,7 +128,6 @@ class AMLAlert(Base):
     reviewed_at = Column(DateTime(timezone=True), nullable=True)
     review_notes = Column(Text, nullable=True)
 
-    # DAC8 linkage
     requires_kyc = Column(Boolean, default=False, nullable=False)
     sar_filed = Column(Boolean, default=False, nullable=False)
 

@@ -176,7 +176,6 @@ async def lifespan(app: FastAPI):
             "redis": settings.redis_url,
             "sentry": bool(settings.sentry_dsn),
             "tx_detection": webhook_mode,
-            "dac8_entity": settings.dac8_reporting_entity_name,
         },
     )
 

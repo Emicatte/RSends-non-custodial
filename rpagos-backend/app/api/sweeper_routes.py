@@ -921,7 +921,7 @@ async def delete_rule(
     # Audit log creato e flushato PRIMA del delete: rule_id ancora valido,
     # old_values cattura lo stato pre-mutazione. Su hard-delete il successivo
     # ondelete=SET NULL azzererà rule_id anche su questa riga, ma action,
-    # actor e old_values["id"] preservano l'identità per DAC8.
+    # actor e old_values["id"] preservano l'identità per audit.
     audit = AuditLog(
         rule_id=rule_id,
         action=action,

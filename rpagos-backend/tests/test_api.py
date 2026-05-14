@@ -77,7 +77,6 @@ def make_payload(
             "mica_applicable": True,
             "fiscal_ref": fiscal_ref,
             "network": "BASE_MAINNET",
-            "dac8_reportable": True,
         },
     }
     base.update(overrides)
@@ -108,7 +107,6 @@ async def test_callback_success(client: AsyncClient):
     data = r.json()
     assert data["status"] == "success"
     assert data["compliance_logged"] is True
-    assert data["dac8_reportable"] is True
 
 
 @pytest.mark.asyncio
@@ -203,32 +201,6 @@ async def test_anomaly_with_data(client: AsyncClient):
 
     r = await client.get("/api/v1/anomalies?window_hours=1")
     assert r.status_code == 200
-
-
-# ═══════════════════════════════════════════════════════════════
-#  Test: POST /api/v1/dac8/generate
-# ═══════════════════════════════════════════════════════════════
-
-@pytest.mark.asyncio
-async def test_dac8_generate_empty(client: AsyncClient):
-    """Report vuoto se non ci sono TX reportable."""
-    r = await client.post("/api/v1/dac8/generate?fiscal_year=2025")
-    assert r.status_code == 200
-    assert r.json()["total_reportable"] == 0
-
-
-@pytest.mark.asyncio
-async def test_dac8_generate_with_data(client: AsyncClient):
-    """Genera XML DAC8 con TX inserite."""
-    payload = make_payload()
-    await client.post("/api/v1/tx/callback", json=payload)
-
-    r = await client.post("/api/v1/dac8/generate?fiscal_year=2026")
-    assert r.status_code == 200
-    data = r.json()
-    assert data["total_reportable"] >= 1
-    assert "DAC8_CARF" in data["xml_preview"]
-    assert "RPagos" in data["xml_preview"]
 
 
 # ═══════════════════════════════════════════════════════════════
