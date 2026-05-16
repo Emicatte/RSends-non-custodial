@@ -315,14 +315,6 @@
       }
     }
   },
-  "nav": {
-    "about": "About",
-    "howItWorks": "How It Works",
-    "security": "Security",
-    "compliance": "Compliance",
-    "developers": "Developers",
-    "pricing": "Pricing"
-  },
   "hero": {
     "eyebrow": "MULTI-CHAIN PAYMENT LAYER",
     "titleLine1": "Crypto Payments.",

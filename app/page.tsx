@@ -12,13 +12,6 @@ import Link from 'next/link'
 
 // STATIC IMPORTS
 import AccountHeader from './AccountHeader'
-// Overlays — lazy loaded (only when user opens menu)
-const AboutOverlay = dynamic(() => import('./overlays/AboutOverlay'), { ssr: false })
-const HowOverlay = dynamic(() => import('./overlays/HowOverlay'), { ssr: false })
-const SecurityOverlay = dynamic(() => import('./overlays/SecurityOverlay'), { ssr: false })
-const ComplianceOverlay = dynamic(() => import('./overlays/ComplianceOverlay'), { ssr: false })
-const DevelopersOverlay = dynamic(() => import('./overlays/DevelopersOverlay'), { ssr: false })
-const PricingOverlay = dynamic(() => import('./overlays/PricingOverlay'), { ssr: false })
 import { useSweepWebSocket } from '../lib/useSweepWebSocket'
 import { useSweepStats } from '../lib/useSweepStats'
 import AntiPhishingSetup from './AntiPhishingSetup'
@@ -41,8 +34,6 @@ import { C, EASE } from '@/app/designTokens'
 
 
 
-type Overlay = null | 'about' | 'how' | 'security' | 'compliance' | 'developers' | 'pricing'
-
 const GRAD: React.CSSProperties = {
   color: '#C8512C',
 }
@@ -59,11 +50,6 @@ const formV: Variants = {
   enter:  { opacity: 0, y: 12, scale: 0.97 },
   center: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.45, ease: EASE } },
   exit:   { opacity: 0, y: -8, scale: 0.97, transition: { duration: 0.3, ease: EASE } },
-}
-
-const overlayV: Variants = {
-  hidden:  { opacity: 0, y: 40, filter: 'blur(8px)' },
-  visible: { opacity: 1, y: 0,  filter: 'blur(0px)' },
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -523,18 +509,14 @@ function NetworkTokenWidget({
 //  LIQUID GLASS NAVBAR
 // ═══════════════════════════════════════════════════════════
 function Navbar({
-  activeOverlay, setActiveOverlay, sweeps24h, vol24h, unseenCount,
+  sweeps24h, vol24h, unseenCount,
   nonEvmWallet,
 }: {
-  activeOverlay: Overlay
-  setActiveOverlay: (o: Overlay) => void
   sweeps24h: number
   vol24h: number
   unseenCount: number
   nonEvmWallet?: NonEvmWalletProps
 }) {
-  const [hoveredLink, setHoveredLink] = useState<string | null>(null)
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
@@ -543,17 +525,7 @@ function Navbar({
     return () => window.removeEventListener('resize', check)
   }, [])
 
-  const links: { key: Overlay; label: string }[] = [
-    { key: 'about',      label: 'About' },
-    { key: 'how',        label: 'How It Works' },
-    { key: 'security',   label: 'Security' },
-    { key: 'compliance', label: 'Compliance' },
-    { key: 'developers', label: 'Developers' },
-    { key: 'pricing',    label: 'Pricing' },
-  ]
-
   return (
-    <>
     <nav className="bf-blur-24s" style={{
       position: 'fixed', top: 3, left: 0, right: 0, zIndex: 1000,
       height: isMobile ? 52 : 60,
@@ -564,66 +536,15 @@ function Navbar({
       padding: isMobile ? '0 12px' : '0 24px',
     }}>
         {/* Left: Logo */}
-        <button
-          onClick={() => { setActiveOverlay(null) }}
+        <div
           style={{
             display: 'flex', alignItems: 'center', gap: 8,
-            background: 'none', border: 'none', cursor: 'pointer',
           }}
         >
           <img src="/favicon.svg" alt="RSends" width={28} height={28} style={{ borderRadius: 7 }} />
           <span style={{ fontFamily: C.D, fontSize: 16, fontWeight: 800, color: C.text, letterSpacing: '-0.03em' }}>
             RSends
           </span>
-        </button>
-
-        {/* Hamburger — mobile only */}
-        {isMobile && (
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              padding: 8, display: 'flex', alignItems: 'center',
-            }}
-          >
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              {mobileMenuOpen ? (
-                <path d="M4 4L16 16M16 4L4 16" stroke={C.text} strokeWidth="1.5" strokeLinecap="round"/>
-              ) : (
-                <>
-                  <path d="M3 5H17" stroke={C.sub} strokeWidth="1.5" strokeLinecap="round"/>
-                  <path d="M3 10H17" stroke={C.sub} strokeWidth="1.5" strokeLinecap="round"/>
-                  <path d="M3 15H17" stroke={C.sub} strokeWidth="1.5" strokeLinecap="round"/>
-                </>
-              )}
-            </svg>
-          </button>
-        )}
-
-        {/* Center: Menu links */}
-        <div className="navbar-center-links" style={{ display: 'flex', gap: 4, position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}>
-          {links.map(link => (
-            <button
-              key={link.key}
-              onClick={() => setActiveOverlay(activeOverlay === link.key ? null : link.key)}
-              onMouseEnter={() => setHoveredLink(link.key)}
-              onMouseLeave={() => setHoveredLink(null)}
-              style={{
-                padding: '7px 16px', borderRadius: 10, border: 'none',
-                background: activeOverlay === link.key
-                  ? 'rgba(10,10,10,0.08)'
-                  : hoveredLink === link.key
-                    ? 'rgba(10,10,10,0.04)'
-                    : 'transparent',
-                color: activeOverlay === link.key ? C.text : C.sub,
-                fontFamily: C.D, fontSize: 12, fontWeight: 500,
-                cursor: 'pointer',
-                transition: 'all 0.25s ease',
-              }}
-            >
-              {link.label}
-            </button>
-          ))}
         </div>
 
         {/* Right: Stats + Wallet */}
@@ -653,52 +574,6 @@ function Navbar({
           <AccountHeader nonEvmWallet={nonEvmWallet} />
         </div>
     </nav>
-
-    {/* Mobile menu panel */}
-    <AnimatePresence>
-      {mobileMenuOpen && isMobile && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.2, ease: EASE }}
-          style={{
-            position: 'fixed',
-            top: 52,
-            left: 0, right: 0,
-            zIndex: 999,
-            background: 'rgba(10,10,15,0.95)',
-            backdropFilter: 'blur(24px) saturate(180%)',
-            WebkitBackdropFilter: 'blur(24px) saturate(180%)',
-            borderBottom: '1px solid rgba(10,10,10,0.08)',
-            padding: '12px 16px',
-            paddingTop: 'calc(12px + var(--sat, 0px))',
-            display: 'flex', flexDirection: 'column', gap: 4,
-          }}
-        >
-          {links.map(link => (
-            <button
-              key={link.key}
-              onClick={() => {
-                setActiveOverlay(activeOverlay === link.key ? null : link.key)
-                setMobileMenuOpen(false)
-              }}
-              style={{
-                padding: '14px 16px', borderRadius: 12, border: 'none',
-                background: activeOverlay === link.key ? 'rgba(10,10,10,0.08)' : 'transparent',
-                color: activeOverlay === link.key ? C.text : C.sub,
-                fontFamily: C.D, fontSize: 14, fontWeight: 500,
-                cursor: 'pointer', textAlign: 'left',
-                width: '100%',
-              }}
-            >
-              {link.label}
-            </button>
-          ))}
-        </motion.div>
-      )}
-    </AnimatePresence>
-    </>
   )
 }
 
@@ -724,96 +599,6 @@ function EngineStatus() {
     </div>
   )
 }
-
-// ═══════════════════════════════════════════════════════════
-//  OVERLAYS — About / How / Security
-// ═══════════════════════════════════════════════════════════
-function OverlayShell({ active, onClose, children, isMobile }: { active: boolean; onClose: () => void; children: React.ReactNode; isMobile: boolean }) {
-  useEffect(() => {
-    if (!active) return
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', h)
-    return () => document.removeEventListener('keydown', h)
-  }, [active, onClose])
-
-  return (
-    <AnimatePresence>
-      {active && (
-        <>
-          {/* Blurred backdrop */}
-          <motion.div
-            key="overlay-bg"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
-            onClick={onClose}
-            className="bf-blur-12"
-            style={{
-              position: 'fixed', inset: 0, zIndex: 900,
-              background: 'rgba(0,0,0,0.5)',
-            }}
-          />
-          {/* Content */}
-          <motion.div
-            key="overlay-content"
-            variants={overlayV}
-            initial="hidden"
-            animate="visible"
-            exit="hidden"
-            transition={{ duration: 0.5, ease: EASE }}
-            style={{
-              position: 'fixed',
-              top: isMobile ? 0 : 72,
-              left: isMobile ? 0 : '50%',
-              right: isMobile ? 0 : 'auto',
-              bottom: isMobile ? 0 : 'auto',
-              transform: isMobile ? 'none' : 'translateX(-50%)',
-              width: isMobile ? '100%' : '90%',
-              maxWidth: isMobile ? '100%' : 700,
-              maxHeight: isMobile ? '100%' : 'calc(100vh - 100px)',
-              height: isMobile ? '100%' : 'auto',
-              overflowY: 'auto',
-              WebkitOverflowScrolling: 'touch',
-              zIndex: 950,
-              background: C.surface,
-              border: isMobile ? 'none' : `1px solid ${C.border}`,
-              borderRadius: isMobile ? 0 : 20,
-              padding: isMobile ? '16px 16px 32px' : '32px 36px',
-              paddingTop: isMobile ? 'calc(16px + var(--sat, 0px))' : '32px',
-              boxShadow: isMobile ? 'none' : '0 40px 100px rgba(0,0,0,0.6)',
-            }}
-          >
-            {/* Close button */}
-            <button
-              onClick={onClose}
-              style={{
-                position: isMobile ? 'fixed' : 'absolute',
-                top: isMobile ? 'calc(12px + var(--sat, 0px))' : 16,
-                right: 16,
-                width: isMobile ? 40 : 32,
-                height: isMobile ? 40 : 32,
-                borderRadius: 10,
-                background: 'rgba(10,10,10,0.04)',
-                border: `1px solid ${C.border}`, color: C.dim,
-                cursor: 'pointer', fontSize: isMobile ? 18 : 14,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                transition: 'all 0.2s',
-                zIndex: 10,
-              }}
-            >✕</button>
-            <div className="overlay-content">
-              {children}
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
-  )
-}
-
-
-
 
 // ═══════════════════════════════════════════════════════════
 //  HERO TITLE — AnimatePresence mode="wait" for no overlap
@@ -1007,7 +792,6 @@ export default function Home() {
       disconnect: activeFamily === 'tron' ? tron.disconnect : solanaDisconnect,
     }
   })()
-  const [activeOverlay, setActiveOverlay] = useState<Overlay>(null)
   const [showIntro, setShowIntro] = useState(false)
   const [ready, setReady] = useState(false)
   const [showAntiPhishing, setShowAntiPhishing] = useState(false)
@@ -1114,7 +898,7 @@ export default function Home() {
       </div>
 
       {/* Navbar */}
-      <Navbar activeOverlay={activeOverlay} setActiveOverlay={setActiveOverlay} sweeps24h={sweeps24h} vol24h={vol24h} unseenCount={unseenCount} nonEvmWallet={nonEvmWallet} />
+      <Navbar sweeps24h={sweeps24h} vol24h={vol24h} unseenCount={unseenCount} nonEvmWallet={nonEvmWallet} />
 
       {/* Network + Token + Gas — fixed top-right below navbar */}
       {ready && !isMobileHome && (
@@ -1134,25 +918,6 @@ export default function Home() {
         />
       )}
 
-      {/* Overlays */}
-      <OverlayShell isMobile={isMobileHome} active={activeOverlay === 'about'} onClose={() => setActiveOverlay(null)}>
-        <AboutOverlay />
-      </OverlayShell>
-      <OverlayShell isMobile={isMobileHome} active={activeOverlay === 'how'} onClose={() => setActiveOverlay(null)}>
-        <HowOverlay />
-      </OverlayShell>
-      <OverlayShell isMobile={isMobileHome} active={activeOverlay === 'security'} onClose={() => setActiveOverlay(null)}>
-        <SecurityOverlay />
-      </OverlayShell>
-      <OverlayShell isMobile={isMobileHome} active={activeOverlay === 'compliance'} onClose={() => setActiveOverlay(null)}>
-        <ComplianceOverlay />
-      </OverlayShell>
-      <OverlayShell isMobile={isMobileHome} active={activeOverlay === 'developers'} onClose={() => setActiveOverlay(null)}>
-        <DevelopersOverlay />
-      </OverlayShell>
-      <OverlayShell isMobile={isMobileHome} active={activeOverlay === 'pricing'} onClose={() => setActiveOverlay(null)}>
-        <PricingOverlay />
-      </OverlayShell>
       {/* Main content — padded below navbar */}
       <main className="main-content" style={{
         minHeight: '100dvh',

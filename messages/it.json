@@ -314,14 +314,6 @@
       }
     }
   },
-  "nav": {
-    "about": "Chi siamo",
-    "howItWorks": "Come funziona",
-    "security": "Sicurezza",
-    "compliance": "Compliance",
-    "developers": "Sviluppatori",
-    "pricing": "Prezzi"
-  },
   "hero": {
     "eyebrow": "PAYMENT LAYER MULTI-CHAIN",
     "titleLine1": "Pagamenti crypto.",
