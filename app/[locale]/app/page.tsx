@@ -69,7 +69,7 @@ export default function AppDashboardPage() {
   const t = useTranslations('app.dashboard')
 
   return (
-    <main style={{ padding: '24px 32px 80px', maxWidth: 1200, margin: '0 auto' }}>
+    <main className="rp-app-page">
       {/* Metric cards */}
       <div
         className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
@@ -85,6 +85,7 @@ export default function AppDashboardPage() {
           return (
             <div
               key={m.key}
+              className="rp-stat-card"
               style={{
                 background: COLORS.paper,
                 border: `1px solid ${COLORS.border}`,

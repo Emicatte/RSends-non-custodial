@@ -101,7 +101,7 @@ export default function TokenClient({ id }: { id: string }) {
   if (loading && !token) {
     return (
       <main className="min-h-screen py-32">
-        <div className="mx-auto max-w-[1440px] px-24">
+        <div className="mx-auto max-w-[1440px] px-4 md:px-24">
           <div className="text-[#0A0A0A]/50">Loading {id}…</div>
         </div>
       </main>
@@ -111,7 +111,7 @@ export default function TokenClient({ id }: { id: string }) {
   if (!token) {
     return (
       <main className="min-h-screen py-32">
-        <div className="mx-auto max-w-[1440px] px-24">
+        <div className="mx-auto max-w-[1440px] px-4 md:px-24">
           <h1 className="text-[48px] font-semibold text-[#0A0A0A] mb-4">
             Token not found
           </h1>

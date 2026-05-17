@@ -91,7 +91,7 @@ export default function AppNav() {
         </Link>
 
         <div className="flex items-center gap-2">
-          <div className="rp-chain-pills">
+          <div className="rp-chain-pills hidden md:flex">
             <ChainFamilySwitch
               active={activeFamily}
               onSelect={(family) => wallet.setActiveFamily(family)}

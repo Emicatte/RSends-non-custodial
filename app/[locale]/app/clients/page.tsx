@@ -43,7 +43,7 @@ export default function ClientsPage() {
   const t = useTranslations('app.clients')
 
   return (
-    <main style={{ padding: '24px 32px 80px', maxWidth: 1200, margin: '0 auto' }}>
+    <main className="rp-app-page">
       <section
         style={{
           background: COLORS.white,

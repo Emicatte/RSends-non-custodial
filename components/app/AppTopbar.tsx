@@ -44,12 +44,12 @@ export default function AppTopbar() {
 
   return (
     <div
+      className="px-4 md:px-8 py-[18px]"
       style={{
         display: 'flex',
         alignItems: 'center',
         gap: 12,
         flexWrap: 'wrap',
-        padding: '18px 32px',
         background: COLORS.white,
         borderBottom: `1px solid ${COLORS.border}`,
       }}
