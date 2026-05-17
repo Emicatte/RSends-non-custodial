@@ -688,13 +688,15 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
           justifyContent: isMobile ? 'center' : 'flex-start',
         }}
       >
-        <Link href="/app" style={{ textDecoration: 'none' }}>
+        <Link href="/app" style={{ textDecoration: 'none', width: isMobile ? '100%' : 'auto' }}>
           <motion.button
             whileHover={{ y: -2 }}
             whileTap={{ y: 0, scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 400, damping: 28 }}
             style={{
               padding: '14px 28px',
+              minHeight: 48,
+              width: isMobile ? '100%' : 'auto',
               background: C.text,
               color: C.bg,
               border: 'none',

@@ -131,7 +131,7 @@ export function LandingAuthButtons() {
     <div className="flex items-center gap-2">
       <Link
         href={`/${locale}/login`}
-        className="text-sm px-3 py-1.5 transition-colors"
+        className="hidden sm:inline-flex text-sm px-3 py-1.5 transition-colors"
         style={{ color: "#2C2C2A", textDecoration: "none" }}
         onMouseEnter={(e) => (e.currentTarget.style.color = "#C8512C")}
         onMouseLeave={(e) => (e.currentTarget.style.color = "#2C2C2A")}
