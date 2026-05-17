@@ -72,7 +72,7 @@ export default function AppNav() {
           WebkitBackdropFilter: 'blur(16px) saturate(180%)',
         }}
       >
-        <Link href="/app" className="rp-brand flex items-center gap-2 no-underline">
+        <Link href="/" className="rp-brand flex items-center gap-2 no-underline">
           <img
             src="/favicon.svg"
             alt="RSends"
