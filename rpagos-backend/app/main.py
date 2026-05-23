@@ -326,6 +326,8 @@ from app.api.organizations_routes import router as organizations_router
 app.include_router(organizations_router)
 from app.api.org_invites_public_routes import router as org_invites_public_router
 app.include_router(org_invites_public_router)
+from app.api.dashboard_routes import router as dashboard_router
+app.include_router(dashboard_router)
 
 
 # ── Health checks ────────────────────────────────────────
