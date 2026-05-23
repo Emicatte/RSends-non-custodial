@@ -36,7 +36,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import func, select, case, cast, Date
+from sqlalchemy import func, select, case, cast, Date, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -1061,15 +1061,29 @@ async def emergency_stop(
 #  9. GET /forwarding/logs — Sweep logs (paginati)
 # ═══════════════════════════════════════════════════════════
 
+# Frontend chain label → ForwardingRule.chain_id
+_CHAIN_TO_ID = {"Base": 8453, "Tron": 728126428, "Sol": 101}
+
+# Frontend status label → backend SweepStatus values
+_STATUS_FE_TO_BE = {
+    "confirmed": ["completed"],
+    "pending": ["pending", "executing"],
+    "failed": ["failed", "gas_too_high", "skipped"],
+}
+
+
 @sweeper_router.get("/forwarding/logs")
 @require_wallet_auth
 async def list_logs(
     request: Request,
     rule_id: Optional[int] = Query(None),
-    status: Optional[str] = Query(None, description="pending|executing|completed|failed|gas_too_high"),
+    status: Optional[str] = Query(None, description="pending|executing|completed|failed|gas_too_high OR frontend label confirmed|pending|failed"),
     token: Optional[str] = Query(None, description="Filter by token symbol"),
     date_from: Optional[datetime] = Query(None, description="ISO datetime"),
     date_to: Optional[datetime] = Query(None, description="ISO datetime"),
+    chain: Optional[str] = Query(None, description="Frontend chain label: Base|Tron|Sol"),
+    search: Optional[str] = Query(None, max_length=128, description="ILIKE on tx_hash and destination_wallet"),
+    date: Optional[str] = Query(None, regex=r"^\d{4}-\d{2}-\d{2}$", description="YYYY-MM-DD UTC, single-day window"),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
@@ -1093,14 +1107,21 @@ async def list_logs(
     if rule_id is not None:
         q = q.where(SweepLog.rule_id == rule_id)
         count_q = count_q.where(SweepLog.rule_id == rule_id)
-    if status:
-        try:
-            status_enum = SweepStatus(status)
-        except ValueError:
-            raise HTTPException(status_code=422, detail=f"Invalid status: {status}")
-        q = q.where(SweepLog.status == status_enum)
-        count_q = count_q.where(SweepLog.status == status_enum)
-    if token:
+    if status and status != "all":
+        if status in _STATUS_FE_TO_BE:
+            # Frontend label → list of backend values
+            be_values = _STATUS_FE_TO_BE[status]
+            q = q.where(SweepLog.status.in_(be_values))
+            count_q = count_q.where(SweepLog.status.in_(be_values))
+        else:
+            # Backwards-compat: raw backend enum value
+            try:
+                status_enum = SweepStatus(status)
+            except ValueError:
+                raise HTTPException(status_code=422, detail=f"Invalid status: {status}")
+            q = q.where(SweepLog.status == status_enum)
+            count_q = count_q.where(SweepLog.status == status_enum)
+    if token and token != "all":
         q = q.where(SweepLog.token_symbol == token.upper())
         count_q = count_q.where(SweepLog.token_symbol == token.upper())
     if date_from:
@@ -1109,6 +1130,36 @@ async def list_logs(
     if date_to:
         q = q.where(SweepLog.created_at <= date_to)
         count_q = count_q.where(SweepLog.created_at <= date_to)
+
+    # New filters (additive, frontend-driven)
+    if chain and chain != "all":
+        chain_id = _CHAIN_TO_ID.get(chain)
+        if chain_id is not None:
+            chain_rule_ids = select(ForwardingRule.id).where(
+                ForwardingRule.user_id == owner,
+                ForwardingRule.chain_id == chain_id,
+            )
+            q = q.where(SweepLog.rule_id.in_(chain_rule_ids))
+            count_q = count_q.where(SweepLog.rule_id.in_(chain_rule_ids))
+        # Unknown chain label → return empty (no rows match the impossible condition)
+        else:
+            q = q.where(SweepLog.id == -1)
+            count_q = count_q.where(SweepLog.id == -1)
+
+    if search:
+        pat = f"%{search.strip()}%"
+        search_cond = or_(
+            SweepLog.tx_hash.ilike(pat),
+            SweepLog.destination_wallet.ilike(pat),
+        )
+        q = q.where(search_cond)
+        count_q = count_q.where(search_cond)
+
+    if date:
+        day_start = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        day_end = day_start + timedelta(days=1)
+        q = q.where(SweepLog.created_at >= day_start, SweepLog.created_at < day_end)
+        count_q = count_q.where(SweepLog.created_at >= day_start, SweepLog.created_at < day_end)
 
     # Count
     total = (await db.execute(count_q)).scalar()
