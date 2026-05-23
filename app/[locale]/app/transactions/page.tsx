@@ -1,7 +1,9 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
+import { useAccount } from 'wagmi'
+import { useWalletAuth } from '@/lib/walletAuth'
 
 const COLORS = {
   ink: '#1a1a1a',
@@ -24,6 +26,32 @@ const CHAIN_BADGE: Record<string, { bg: string; text: string }> = {
   Base: { bg: 'rgba(0, 82, 255, 0.08)', text: '#0052ff' },
   Tron: { bg: 'rgba(255, 6, 10, 0.08)', text: '#cc0510' },
   Sol:  { bg: 'rgba(153, 69, 255, 0.08)', text: '#7c2dc7' },
+}
+
+interface SweepLogDTO {
+  id: number
+  tx_hash: string | null
+  amount_usd: number | null
+  amount_human: number | null
+  token_symbol: string | null
+  destination_wallet: string | null
+  source_wallet: string | null
+  status: string
+  created_at: string | null
+  executed_at: string | null
+  is_split: boolean
+}
+
+interface SweepLogsPagination {
+  page: number
+  per_page: number
+  total: number
+  pages: number
+}
+
+interface SweepLogsResponse {
+  logs: SweepLogDTO[]
+  pagination: SweepLogsPagination
 }
 
 type TxStatus = 'confirmed' | 'pending' | 'failed'
@@ -50,20 +78,16 @@ type Tx = {
   status: TxStatus
 }
 
-const TXS: ReadonlyArray<Tx> = [
-  { id: 1,  date: '2026-04-30', dateLabel: '30 Apr 2026, 14:32', hash: '0x4f3e9c2a8b1d7e5f4a3b2c1d0e9f8a7b6c5d4e3a2bc8f1d', type: 'Send', to: '0x7a1b9c8d4e2f3a5b6c7d8e9f0a1b2c3d4e5f9d2', amount: '$1,250', token: 'USDC', chain: 'Base', status: 'confirmed' },
-  { id: 2,  date: '2026-04-30', dateLabel: '30 Apr 2026, 13:18', hash: '0x8c2a7e3f9d1b5e4a6c8f0d2b4a6e8c1d3f5a91ef', type: 'Swap', to: '0xb4d18e6c2a4f9e7d1b3c5a7e9f0b2d4c6a83a87', amount: '$3,400', token: 'USDT', chain: 'Tron', status: 'confirmed' },
-  { id: 3,  date: '2026-04-30', dateLabel: '30 Apr 2026, 12:45', hash: '0x1d9f4c5b3e7a8d2f6b0a9c1e4d7f8b2a5c4c5b', type: 'Send', to: '0x2e88c1a37b4d9e2f5a6b8c0d1e3f4a5b7d9c1a3', amount: '$890',   token: 'USDC', chain: 'Sol',  status: 'pending'   },
-  { id: 4,  date: '2026-04-30', dateLabel: '30 Apr 2026, 11:30', hash: '0x6b278e4d1a3f7c5b9d0e2a4c6f8b1e3d5a78e4d', type: 'Send', to: '0x9c14f0b62a8d4e7c1b3a5d9e0f2b4c6a8d3f0b6', amount: '$5,200', token: 'DAI',  chain: 'Base', status: 'confirmed' },
-  { id: 5,  date: '2026-04-30', dateLabel: '30 Apr 2026, 10:15', hash: '0x3a8ed2f74b1c6a9e0d8b2f5c7a3e6b1d4f8d2f7', type: 'Swap', to: '0x55a3e8b91c7d4f2a6b0e8c1d3f5a7b9d2c4e8b9', amount: '$420',   token: 'ETH',  chain: 'Tron', status: 'failed'    },
-  { id: 6,  date: '2026-04-29', dateLabel: '29 Apr 2026, 22:50', hash: '0x9e1c7b34a8f2d5e6b0c4a9d1e3f8b2c5a7d7b34', type: 'Send', to: '0xd2f50916e8b3c7a1d4f6b9c2e5a8d0b3c6e0916', amount: '$2,100', token: 'USDC', chain: 'Base', status: 'confirmed' },
-  { id: 7,  date: '2026-04-29', dateLabel: '29 Apr 2026, 19:22', hash: '0x2f6b51ac9d3e7a4f8b1c5d6e9a0b2c4f7d51ac', type: 'Send', to: '0x081e4d22b6a9c3f5e8d1b4c7a0f2e5b8d2c4d22', amount: '$760',   token: 'USDT', chain: 'Sol',  status: 'confirmed' },
-  { id: 8,  date: '2026-04-29', dateLabel: '29 Apr 2026, 16:08', hash: '0xc70d3f9a2e8b1d4c6f5a9b0e7d2c4a8f5e3f9a', type: 'Swap', to: '0x4b7cf8a16e3d9b2c5a0f8e7d4b1a6c9e3df8a1', amount: '$1,800', token: 'USDC', chain: 'Base', status: 'pending'   },
-  { id: 9,  date: '2026-04-29', dateLabel: '29 Apr 2026, 14:45', hash: '0x5421e0bd8c3a9f2d6b4e7a1c5f0d8e2b9a3e0bd', type: 'Send', to: '0x6cd82a14e5b8d1f3a7c0e9b4d2c5f8a1e6b2a14', amount: '$3,950', token: 'DAI',  chain: 'Tron', status: 'confirmed' },
-  { id: 10, date: '2026-04-29', dateLabel: '29 Apr 2026, 11:30', hash: '0xb8a419c5d7e3f2a6b0c8e1d4f9a2b5c7e3119c5', type: 'Send', to: '0xf34107ee2c6b8a4d1f9e3b7c0a5d2f8e6b407ee', amount: '$620',   token: 'ETH',  chain: 'Base', status: 'failed'    },
-  { id: 11, date: '2026-04-28', dateLabel: '28 Apr 2026, 23:15', hash: '0x7f1244d8b2e6a9c3f0d8e1b5a4c7f2d6e944d8',  type: 'Swap', to: '0xae23c5b04f7e9d2a6b8c1f0d3e5a8b2c4d6c5b0', amount: '$4,750', token: 'USDC', chain: 'Sol',  status: 'confirmed' },
-  { id: 12, date: '2026-04-28', dateLabel: '28 Apr 2026, 18:30', hash: '0x0c5e82ab9f3d4a7c1b8e6d0f2a5b9c4e7d182ab', type: 'Send', to: '0x33b07d4ea5c1f8b9d2e6a4c0f7b3d8e1a5c87d4e', amount: '$1,150', token: 'USDT', chain: 'Base', status: 'confirmed' },
-]
+const USD_FMT = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
+const ALLOWED_TOKENS: ReadonlyArray<Token> = ['USDC', 'USDT', 'ETH', 'DAI']
+const BE_TO_FE_STATUS: Record<string, TxStatus> = {
+  completed: 'confirmed',
+  pending: 'pending',
+  executing: 'pending',
+  failed: 'failed',
+  gas_too_high: 'failed',
+  skipped: 'failed',
+}
 
 const STATUS_OPTIONS: ReadonlyArray<TxStatus | 'all'> = ['all', 'confirmed', 'pending', 'failed']
 const CHAIN_OPTIONS: ReadonlyArray<{ value: Chain | 'all'; label: string }> = [
@@ -74,7 +98,6 @@ const CHAIN_OPTIONS: ReadonlyArray<{ value: Chain | 'all'; label: string }> = [
 ]
 const TOKEN_OPTIONS: ReadonlyArray<Token | 'all'> = ['all', 'USDC', 'USDT', 'ETH', 'DAI']
 
-const FAKE_TOTAL = 1247
 const PAGE_SIZE = 10
 
 function truncate(value: string, head = 6, tail = 4): string {
@@ -150,32 +173,92 @@ export default function TransactionsPage() {
   const [dateFilter, setDateFilter] = useState<string>('')
   const [searchFilter, setSearchFilter] = useState<string>('')
 
-  const filtered = useMemo(() => {
-    const q = searchFilter.trim().toLowerCase()
-    return TXS.filter((tx) => {
-      if (statusFilter !== 'all' && tx.status !== statusFilter) return false
-      if (chainFilter !== 'all' && tx.chain !== chainFilter) return false
-      if (tokenFilter !== 'all' && tx.token !== tokenFilter) return false
-      if (dateFilter && tx.date !== dateFilter) return false
-      if (q && !tx.hash.toLowerCase().includes(q) && !tx.to.toLowerCase().includes(q)) return false
-      return true
-    })
+  const { address } = useAccount()
+  const { getAuthHeaders } = useWalletAuth(address)
+  const [txs, setTxs] = useState<Tx[]>([])
+  const [total, setTotal] = useState<number>(0)
+  const [page, setPage] = useState<number>(1)
+  const [loading, setLoading] = useState<boolean>(true)
+  const [error, setError] = useState<boolean>(false)
+
+  // Reset to page 1 whenever filters change (NOT when page itself changes).
+  useEffect(() => {
+    setPage(1)
   }, [statusFilter, chainFilter, tokenFilter, dateFilter, searchFilter])
 
-  const anyFilterActive =
-    statusFilter !== 'all' ||
-    chainFilter !== 'all' ||
-    tokenFilter !== 'all' ||
-    dateFilter !== '' ||
-    searchFilter.trim() !== ''
+  useEffect(() => {
+    let cancelled = false
+    if (!address) {
+      setLoading(false)
+      setTxs([])
+      setTotal(0)
+      setError(false)
+      return
+    }
+    async function load(): Promise<void> {
+      try {
+        setLoading(true)
+        const headers = await getAuthHeaders()
+        const params = new URLSearchParams()
+        params.set('page', String(page))
+        params.set('per_page', String(PAGE_SIZE))
+        if (statusFilter !== 'all') params.set('status', statusFilter)
+        if (chainFilter !== 'all') params.set('chain', chainFilter)
+        if (tokenFilter !== 'all') params.set('token', tokenFilter)
+        if (dateFilter) params.set('date', dateFilter)
+        if (searchFilter.trim()) params.set('search', searchFilter.trim())
+        const res = await fetch(`/api/backend/api/v1/forwarding/logs?${params.toString()}`, { headers, cache: 'no-store' })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = (await res.json()) as SweepLogsResponse
+        if (cancelled) return
+        const mapped: Tx[] = data.logs.map((row, idx) => {
+          const ts = row.created_at ?? ''
+          const dateOnly = ts.slice(0, 10)
+          const dateObj = ts ? new Date(ts) : null
+          const dateLabel = dateObj && !Number.isNaN(dateObj.getTime())
+            ? dateObj.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+            : ''
+          const tokenSym = (row.token_symbol ?? 'ETH').toUpperCase()
+          const token: Token = ALLOWED_TOKENS.includes(tokenSym as Token) ? (tokenSym as Token) : 'ETH'
+          return {
+            id: row.id ?? idx + 1,
+            date: dateOnly,
+            dateLabel,
+            hash: row.tx_hash ?? '',
+            type: row.is_split ? 'Swap' : 'Send',
+            to: (row.destination_wallet ?? '').toLowerCase(),
+            amount: USD_FMT.format(row.amount_usd ?? 0),
+            token,
+            chain: 'Base',
+            status: BE_TO_FE_STATUS[row.status] ?? 'pending',
+          }
+        })
+        setTxs(mapped)
+        setTotal(data.pagination?.total ?? 0)
+        setError(false)
+      } catch {
+        if (!cancelled) {
+          setError(true)
+          setTxs([])
+          setTotal(0)
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [address, getAuthHeaders, page, statusFilter, chainFilter, tokenFilter, dateFilter, searchFilter])
 
-  const visible = filtered.slice(0, PAGE_SIZE)
-  const total = anyFilterActive ? filtered.length : FAKE_TOTAL
-  const from = visible.length === 0 ? 0 : 1
-  const to = visible.length
+  const visible = txs
+  const from = total === 0 || visible.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
+  const to = (page - 1) * PAGE_SIZE + visible.length
 
   return (
     <main className="rp-app-page">
+      <style>{`@keyframes rsendsPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
       {/* Export buttons */}
       <div
         style={{
@@ -303,7 +386,15 @@ export default function TransactionsPage() {
               </tr>
             </thead>
             <tbody>
-              {visible.length === 0 ? (
+              {loading && visible.length === 0 ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={`skel-${i}`}>
+                    <td colSpan={7} style={{ padding: '12px 14px', borderBottom: `1px solid ${COLORS.border}` }}>
+                      <div style={{ height: 20, borderRadius: 6, background: '#e5e4e0', animation: 'rsendsPulse 1.5s ease-in-out infinite' }} />
+                    </td>
+                  </tr>
+                ))
+              ) : visible.length === 0 ? (
                 <tr>
                   <td
                     colSpan={7}
@@ -433,10 +524,20 @@ export default function TransactionsPage() {
             {t('pagination.showing', { from, to, total: total.toLocaleString() })}
           </span>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" style={pageBtnStyle(true)} disabled>
+            <button
+              type="button"
+              style={pageBtnStyle(page === 1 || loading)}
+              disabled={page === 1 || loading}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
               {t('pagination.prev')}
             </button>
-            <button type="button" style={pageBtnStyle(true)} disabled>
+            <button
+              type="button"
+              style={pageBtnStyle(page * PAGE_SIZE >= total || loading)}
+              disabled={page * PAGE_SIZE >= total || loading}
+              onClick={() => setPage((p) => p + 1)}
+            >
               {t('pagination.next')}
             </button>
           </div>
