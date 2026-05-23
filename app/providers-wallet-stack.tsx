@@ -58,11 +58,20 @@ function rpcFallback(
   return transports.length === 1 ? transports[0] : fallback(transports)
 }
 
+const isMetaMaskInstalled =
+  typeof window !== 'undefined' &&
+  Boolean((window as { ethereum?: { isMetaMask?: boolean } }).ethereum?.isMetaMask)
+
 const connectors = connectorsForWallets(
   [
+    ...(isMetaMaskInstalled
+      ? [{ groupName: 'Installed',    wallets: [metaMaskWallet] }]
+      : []),
     {
       groupName: 'Raccomandati',
-      wallets:   [metaMaskWallet, coinbaseWallet, rainbowWallet],
+      wallets:   isMetaMaskInstalled
+        ? [coinbaseWallet, rainbowWallet]
+        : [metaMaskWallet, coinbaseWallet, rainbowWallet],
     },
     {
       groupName: 'Altri',

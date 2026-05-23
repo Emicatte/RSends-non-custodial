@@ -94,7 +94,12 @@ export default function AppNav() {
           <div className="rp-chain-pills hidden md:flex">
             <ChainFamilySwitch
               active={activeFamily}
-              onSelect={(family) => wallet.setActiveFamily(family)}
+              onSelect={(family) => {
+                wallet.setActiveFamily(family)
+                if (family === 'tron' && !wallet.connections.tron.isConnected) {
+                  void tron.connect()
+                }
+              }}
               connections={wallet.connections}
             />
           </div>

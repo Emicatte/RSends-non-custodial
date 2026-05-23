@@ -77,33 +77,6 @@ export default function AppTopbar() {
       >
         <span
           style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '4px 10px',
-            borderRadius: 999,
-            background: COLORS.greenLight,
-            color: COLORS.green,
-            fontFamily: 'var(--font-display)',
-            fontSize: 11,
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '0.06em',
-          }}
-        >
-          <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              background: COLORS.green,
-              display: 'inline-block',
-            }}
-          />
-          {t('app.dashboard.mainnetBadge')}
-        </span>
-        <span
-          style={{
             fontFamily: 'var(--font-display)',
             fontSize: 13,
             fontWeight: 600,

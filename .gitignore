@@ -48,3 +48,8 @@ dev.db
 # TypeScript build cache
 tsconfig.tsbuildinfo
 *.tsbuildinfo
+backups/
+docs/runbooks/
+docs/superpowers/
+scripts/run_audit.sh
+rpagos-backend/scripts/manual/

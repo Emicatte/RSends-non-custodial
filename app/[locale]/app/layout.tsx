@@ -19,7 +19,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <AppSidebar />
       <AppBottomNav />
       <div
-        className="min-h-screen pt-[75px] md:pt-[90px] md:pl-[210px]"
+        className="min-h-screen pt-[55px] md:pt-[63px] md:pl-[210px]"
         style={{ background: '#f7f6f3' }}
       >
         <AppTopbar />
