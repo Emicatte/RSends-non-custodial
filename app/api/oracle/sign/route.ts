@@ -46,14 +46,19 @@ async function signingGuardCheck(params: {
   }
 }
 
-// ── Audit log — fire-and-forget to backend ────────────────────────────────
-function auditLog(params: Record<string, unknown>): void {
-  fetch(`${BACKEND_URL}/api/internal/signing/audit`, {
+// ── Audit log — returns Promise<void> so callers can handle failures ────
+// (errors propagate; callers decide whether to await or fire-and-forget
+// with an explicit .catch() — see usage at the two call sites below).
+async function auditLog(params: Record<string, unknown>): Promise<void> {
+  const res = await fetch(`${BACKEND_URL}/api/internal/signing/audit`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(params),
     signal: AbortSignal.timeout(5000),
-  }).catch(err => console.error('[oracle/sign] Audit log failed:', err))
+  })
+  if (!res.ok) {
+    throw new Error(`audit log HTTP ${res.status}`)
+  }
 }
 
 function routerForChain(chainId: number): `0x${string}` {
@@ -297,8 +302,10 @@ export async function POST(req: NextRequest) {
 
     if (!guard.allowed) {
       const account = ORACLE_PRIVATE_KEY ? privateKeyToAccount(ORACLE_PRIVATE_KEY) : null
-      // Audit denied attempt
-      auditLog({
+      // Audit denied attempt — fire-and-forget so we don't add latency
+      // to the rejection path, but .catch surfaces any failure to the
+      // logger so it can't be silently lost.
+      void auditLog({
         signer_address: account?.address ?? 'NOT_CONFIGURED',
         chain_id: Number(chainId),
         sender: senderN,
@@ -313,7 +320,7 @@ export async function POST(req: NextRequest) {
         risk_level: riskLevel,
         ip_address: clientIp,
         user_agent: req.headers.get('user-agent'),
-      })
+      }).catch(err => console.error('[oracle/sign] Audit log failed (denied):', err))
 
       console.warn(`[oracle/sign] BLOCKED: ${guard.reason}`)
       return NextResponse.json({
@@ -369,7 +376,10 @@ export async function POST(req: NextRequest) {
     console.log('[oracle/sign] ✅ self-verifica OK —', recovered)
 
     // ── Audit log: record approved signature ───────────
-    auditLog({
+    // Fire-and-forget to keep the signing response on its tight latency
+    // SLA. .catch ensures any backend failure surfaces to the logger
+    // instead of being silently lost.
+    void auditLog({
       signer_address: account.address,
       chain_id: Number(chainId),
       sender: senderN,
@@ -383,7 +393,7 @@ export async function POST(req: NextRequest) {
       risk_level: riskLevel,
       ip_address: clientIp,
       user_agent: req.headers.get('user-agent'),
-    })
+    }).catch(err => console.error('[oracle/sign] Audit log failed (approved):', err))
 
     return NextResponse.json({
       approved: true,
