@@ -6,6 +6,7 @@ import {
 import { privateKeyToAccount } from 'viem/accounts'
 import { randomBytes }         from 'crypto'
 import { requireEnv }          from '@/lib/env'
+import { getClientIp, checkRateLimit } from '@/lib/rateLimit'
 
 // ── Config ─────────────────────────────────────────────────────────────────
 const ORACLE_PRIVATE_KEY = process.env.ORACLE_PRIVATE_KEY as Hex | undefined
@@ -142,6 +143,33 @@ const BLACKLIST = new Set([
 // ── POST ────────────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
+    // Per-IP rate limit. Max 10 sign requests per IP per minute.
+    // Chosen because /api/oracle/sign is a heavy endpoint (calls backend
+    // signing guard + AML check + EIP-712 signing); legitimate UX needs
+    // are bounded by ~1 tx per 6s. 10/min gives ~6x headroom for retries
+    // and network blips while throttling abuse before it reaches the
+    // backend guard / AML stack.
+    const clientIp = getClientIp(req)
+    const rate = checkRateLimit(clientIp, {
+      max: 10,
+      windowMs: 60_000,
+      key: 'oracle-sign',
+    })
+    if (!rate.allowed) {
+      return NextResponse.json(
+        {
+          approved: false,
+          error: 'RATE_LIMIT_EXCEEDED',
+          rejectionReason: 'Too many signing requests. Try again later.',
+          retry_after: rate.retryAfter,
+        },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(rate.retryAfter ?? 60) },
+        },
+      )
+    }
+
     const body = await req.json().catch(() => null)
     if (!body) return NextResponse.json({ error: 'Body JSON non valido' }, { status: 400 })
 
@@ -253,11 +281,8 @@ export async function POST(req: NextRequest) {
       }, { status: 503 })
     }
 
-    // ── Signing Guard: rate limit + nonce + parameter validation ──
-    const clientIp = req.headers.get('x-real-ip')
-      || req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-      || null
-
+    // ── Signing Guard: backend nonce + parameter validation
+    // (per-IP rate limit already applied at the top of POST)
     const guard = await signingGuardCheck({
       wallet: senderN,
       recipient: recipientN,

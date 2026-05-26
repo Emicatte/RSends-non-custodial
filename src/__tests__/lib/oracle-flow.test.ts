@@ -5,7 +5,8 @@
  * (which requires a private key and is tested in integration).
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
+import { checkRateLimit, __resetRateLimits } from '@/lib/rateLimit'
 
 // ── Re-implement pure functions from oracle/sign/route.ts ──────────
 
@@ -176,5 +177,53 @@ describe('risk scoring', () => {
   it('EUR rate for ETH is 2200', () => {
     const eurValue = 1 * EUR_RATES['ETH']
     expect(eurValue).toBe(2200)
+  })
+})
+
+describe('per-IP rate limit (lib/rateLimit)', () => {
+  beforeEach(() => __resetRateLimits())
+
+  it('allows up to max requests within window', () => {
+    const ip = '1.2.3.4'
+    for (let i = 0; i < 10; i++) {
+      expect(
+        checkRateLimit(ip, { max: 10, windowMs: 60_000, key: 't1' }).allowed,
+      ).toBe(true)
+    }
+  })
+
+  it('blocks the (max+1)-th request from the same IP and returns retryAfter', () => {
+    const ip = '1.2.3.4'
+    for (let i = 0; i < 10; i++) {
+      checkRateLimit(ip, { max: 10, windowMs: 60_000, key: 't2' })
+    }
+    const r = checkRateLimit(ip, { max: 10, windowMs: 60_000, key: 't2' })
+    expect(r.allowed).toBe(false)
+    expect(r.retryAfter).toBeGreaterThanOrEqual(1)
+    expect(r.retryAfter).toBeLessThanOrEqual(60)
+  })
+
+  it('different IPs have independent quotas', () => {
+    for (let i = 0; i < 10; i++) {
+      checkRateLimit('1.1.1.1', { max: 10, windowMs: 60_000, key: 't3' })
+    }
+    expect(
+      checkRateLimit('1.1.1.1', { max: 10, windowMs: 60_000, key: 't3' }).allowed,
+    ).toBe(false)
+    expect(
+      checkRateLimit('2.2.2.2', { max: 10, windowMs: 60_000, key: 't3' }).allowed,
+    ).toBe(true)
+  })
+
+  it('namespaces (key) isolate limiters', () => {
+    for (let i = 0; i < 10; i++) {
+      checkRateLimit('1.1.1.1', { max: 10, windowMs: 60_000, key: 'ns-a' })
+    }
+    expect(
+      checkRateLimit('1.1.1.1', { max: 10, windowMs: 60_000, key: 'ns-a' }).allowed,
+    ).toBe(false)
+    expect(
+      checkRateLimit('1.1.1.1', { max: 10, windowMs: 60_000, key: 'ns-b' }).allowed,
+    ).toBe(true)
   })
 })
