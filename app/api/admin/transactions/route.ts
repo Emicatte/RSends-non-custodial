@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireEnv } from '@/lib/env'
 
 const COOKIE_NAME = 'admin_session'
 
 function getBackendUrl() {
-  return process.env.RPAGOS_BACKEND_URL || process.env.NEXT_PUBLIC_RPAGOS_BACKEND_URL || 'http://localhost:8000'
+  return requireEnv('RPAGOS_BACKEND_URL')
 }
 
 function getAdminSecret() {

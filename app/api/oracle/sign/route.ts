@@ -5,10 +5,11 @@ import {
 } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { randomBytes }         from 'crypto'
+import { requireEnv }          from '@/lib/env'
 
 // ── Config ─────────────────────────────────────────────────────────────────
 const ORACLE_PRIVATE_KEY = process.env.ORACLE_PRIVATE_KEY as Hex | undefined
-const BACKEND_URL = process.env.RPAGOS_BACKEND_URL || 'http://localhost:8000'
+const BACKEND_URL = requireEnv('RPAGOS_BACKEND_URL')
 // TEMP DEBUG — remove after verifying BACKEND_URL points to local in dev
 console.log('[oracle/sign] BACKEND_URL =', BACKEND_URL)
 
