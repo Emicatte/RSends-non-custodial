@@ -17,6 +17,21 @@ const analyzer = withBundleAnalyzer({
 const isDev = process.env.NODE_ENV === 'development'
 const devConnect = isDev ? ' ws://localhost:* http://localhost:*' : ''
 
+// CORS allowlist: comma-separated origins. In production an empty list
+// means "no cross-origin allowed" (safe default). In development we fall
+// back to http://localhost:3000 so local dev still works without setup.
+const corsAllowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean)
+const corsOrigins =
+  corsAllowedOrigins.length > 0
+    ? corsAllowedOrigins
+    : isDev
+      ? ['http://localhost:3000']
+      : []
+const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
 const nextConfig = {
   webpack: (config) => {
     config.resolve.fallback = {
@@ -54,14 +69,26 @@ const nextConfig = {
         { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
       ],
     },
-    {
+    // CORS: one header entry per allowlisted origin, gated by the request's
+    // Origin header. Requests from non-allowlisted origins receive no CORS
+    // headers → preflight fails → browser blocks the request. Wildcard '*'
+    // is intentionally absent: cross-origin access is explicit-only.
+    ...corsOrigins.map((origin) => ({
       source: '/api/:path*',
+      has: [
+        {
+          type: 'header',
+          key: 'origin',
+          value: `^${escapeRegex(origin)}$`,
+        },
+      ],
       headers: [
-        { key: 'Access-Control-Allow-Origin', value: '*' },
+        { key: 'Access-Control-Allow-Origin', value: origin },
+        { key: 'Vary', value: 'Origin' },
         { key: 'Access-Control-Allow-Methods', value: 'GET, POST, OPTIONS' },
         { key: 'Access-Control-Allow-Headers', value: 'Content-Type, Authorization' },
       ],
-    },
+    })),
     // ── Cache-Control ──────────────────────────────────────────
     // HTML pages: never cache, always revalidate
     {
