@@ -27,7 +27,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import get_settings, validate_settings
+from app.config import get_settings, validate_settings, validate_dev_flags
 from app.db.session import init_db, close_db, async_session, _is_sqlite, engine
 from app.api.routes import router
 from app.services.cache_service import close_redis
@@ -49,6 +49,9 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Startup/shutdown."""
     settings = get_settings()
+
+    # ── Block dev/bypass flags in non-dev environments ─────
+    validate_dev_flags(settings)
 
     # ── Structured JSON logging ─────────────────────
     setup_logging(debug=settings.debug)

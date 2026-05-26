@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     port: int = 8000
     debug: bool = False
 
+    # ── Dev/Debug Flags (must remain False/unset in production) ──
+    rsend_dev_auth_bypass: bool = False
+
     # ── CORS Origins (prod) ───────────────────────────────
     cors_origins: str = "https://fee-router-dapp.vercel.app,https://rpagos.io"
 
@@ -256,6 +259,31 @@ def validate_settings(settings: Settings) -> None:
         logger.critical("  Fix these in .env and restart. See .env.example for docs.")
         logger.critical("=" * 60)
         raise StartupValidationError(1)
+
+
+def validate_dev_flags(settings: Settings) -> None:
+    """Lifespan-level assertion: refuse startup when dev/debug flags are
+    enabled outside of ENVIRONMENT=development.
+
+    Defense-in-depth over validate_settings(): raises RuntimeError (not
+    SystemExit) so frameworks can surface it as a startup crash, and
+    explicitly covers RSEND_DEV_AUTH_BYPASS which validate_settings()
+    does not check.
+    """
+    env = os.getenv("ENVIRONMENT", "").lower()
+
+    if settings.rsend_dev_auth_bypass and env != "development":
+        raise RuntimeError(
+            "RSEND_DEV_AUTH_BYPASS is truthy but ENVIRONMENT="
+            f"{env or '<unset>'!r} (must be 'development'). "
+            "Refusing to start — this flag disables API authentication."
+        )
+
+    if settings.debug and env.startswith("prod"):
+        raise RuntimeError(
+            "DEBUG=True but ENVIRONMENT starts with 'prod'. "
+            "Refusing to start — DEBUG must be False in production."
+        )
 
 
 @lru_cache
