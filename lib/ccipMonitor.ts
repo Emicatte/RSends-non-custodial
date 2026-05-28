@@ -1,6 +1,11 @@
 /**
  * Monitor CCIP CrossChainSwapAndBridge events.
  * Registra ogni bridge per audit trail.
+ *
+ * Gated by NEXT_PUBLIC_FEATURE_CROSSCHAIN: when not "true", the monitor
+ * is a no-op and logs a single warning. The TODO paths below MUST be
+ * resolved (DB persistence + merchant webhook) before flipping the flag
+ * to "true" in production.
  */
 
 export interface CrossChainEvent {
@@ -19,7 +24,17 @@ export interface CrossChainEvent {
   timestamp: number
 }
 
+let disabledWarned = false
+
 export async function processCrossChainEvent(event: CrossChainEvent): Promise<void> {
+  if (process.env.NEXT_PUBLIC_FEATURE_CROSSCHAIN !== 'true') {
+    if (!disabledWarned) {
+      console.warn('[ccipMonitor] disabled: FEATURE_CROSSCHAIN=false')
+      disabledWarned = true
+    }
+    return
+  }
+
   console.log(
     `[CCIP] SwapAndBridge: ${event.sender.slice(0, 10)} → ${event.recipient.slice(0, 10)}, ` +
     `${event.tokenIn.slice(0, 10)} → ${event.tokenOut.slice(0, 10)}, ` +

@@ -5,6 +5,7 @@ import { useAccount, useChainId, usePublicClient, useWalletClient } from 'wagmi'
 import { parseUnits, formatUnits, encodeFunctionData, type Hex } from 'viem'
 import { CCIP_CHAINS, getCCIPConfig, isCCIPAvailable, getCCIPChainSelector, CCIP_SUPPORTED_TOKENS, type CCIPChainConfig } from '@/lib/ccipRegistry'
 import { C } from '@/app/designTokens'
+import FeatureDisabled from '@/components/FeatureDisabled'
 
 // ── ABI ──────────────────────────────────────────────────────────────────
 const CCIP_SENDER_ABI = [
@@ -124,6 +125,14 @@ interface Props {
 }
 
 export default function CrossChainForm({ noCard }: Props) {
+  // Feature flag: cross-chain UI is hidden until CCIP contract calls
+  // are fully wired and tested end-to-end. Toggle via
+  // NEXT_PUBLIC_FEATURE_CROSSCHAIN=true. Early-return is safe before
+  // hooks because the value is a build-time constant.
+  if (process.env.NEXT_PUBLIC_FEATURE_CROSSCHAIN !== 'true') {
+    return <FeatureDisabled message="Cross-chain transfers coming soon." />
+  }
+
   const { address, isConnected } = useAccount()
   const chainId = useChainId()
   const publicClient = usePublicClient()
