@@ -1354,7 +1354,7 @@ export default function TransferForm({ noCard, externalToken }: { noCard?: boole
         const cgId = cgIds[report.symbol.toUpperCase()]
         if (cgId) {
           const res = await fetch(
-            `https://api.coingecko.com/api/v3/simple/price?ids=${cgId}&vs_currencies=eur`,
+            `/api/market/simple/price?ids=${cgId}&vs_currencies=eur`,
             { signal: AbortSignal.timeout(5000) }
           )
           const data = await res.json()

@@ -87,13 +87,13 @@ export default function TokenClient({ id }: { id: string }) {
   const [range, setRange] = useState<ChartRange>('7');
 
   const { data: token, stale, loading } = useCoinGecko<TokenDetail>(
-    `https://api.coingecko.com/api/v3/coins/${id}?localization=false&tickers=false&community_data=false&developer_data=false`,
+    `/api/market/coins/${id}?localization=false&tickers=false&community_data=false&developer_data=false`,
     `token_${id}`,
     { ttlMs: 5 * 60_000, refreshIntervalMs: 60_000 }
   );
 
   const { data: history, loading: historyLoading } = useCoinGecko<{ prices: [number, number][] }>(
-    `https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=${range}`,
+    `/api/market/coins/${id}/market_chart?vs_currency=usd&days=${range}`,
     `history_${id}_${range}`,
     { ttlMs: 10 * 60_000 }
   );

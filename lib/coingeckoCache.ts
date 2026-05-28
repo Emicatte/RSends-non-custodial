@@ -1,5 +1,7 @@
 'use client';
 
+import { COINGECKO_UPSTREAM } from './coingeckoUpstream';
+
 type CacheEntry<T> = {
   data: T;
   timestamp: number;
@@ -91,7 +93,7 @@ export async function fetchWithDedup<T>(url: string, timeoutMs = 10_000): Promis
   // Route api.coingecko.com calls through the internal server proxy at
   // /api/market/* so the (now server-only) COINGECKO_API_KEY can be
   // injected without exposing it in the client bundle.
-  const COINGECKO_PREFIX = 'https://api.coingecko.com/api/v3/';
+  const COINGECKO_PREFIX = `${COINGECKO_UPSTREAM}/`;
   const fetchUrl = url.startsWith(COINGECKO_PREFIX)
     ? '/api/market/' + url.slice(COINGECKO_PREFIX.length)
     : url;

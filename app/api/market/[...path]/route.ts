@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { COINGECKO_UPSTREAM } from '@/lib/coingeckoUpstream'
 
 export const runtime = 'nodejs'
 
-const UPSTREAM_BASE = 'https://api.coingecko.com/api/v3/'
+const UPSTREAM_BASE = `${COINGECKO_UPSTREAM}/`
 
 export async function GET(
   req: NextRequest,

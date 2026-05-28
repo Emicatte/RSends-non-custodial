@@ -79,7 +79,7 @@ export default function MarketsClient() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   const perPage = 100;
-  const url = `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${perPage}&page=${page}&sparkline=true&price_change_percentage=24h,7d`;
+  const url = `/api/market/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${perPage}&page=${page}&sparkline=true&price_change_percentage=24h,7d`;
 
   const { data: tokens, error, stale, loading } = useCoinGecko<Token[]>(
     url,
