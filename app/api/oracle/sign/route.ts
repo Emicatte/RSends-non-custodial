@@ -7,12 +7,11 @@ import { privateKeyToAccount } from 'viem/accounts'
 import { randomBytes }         from 'crypto'
 import { requireEnv }          from '@/lib/env'
 import { getClientIp, checkRateLimit } from '@/lib/rateLimit'
+import { logger }              from '@/lib/logger'
 
 // ── Config ─────────────────────────────────────────────────────────────────
 const ORACLE_PRIVATE_KEY = process.env.ORACLE_PRIVATE_KEY as Hex | undefined
 const BACKEND_URL = requireEnv('RPAGOS_BACKEND_URL')
-// TEMP DEBUG — remove after verifying BACKEND_URL points to local in dev
-console.log('[oracle/sign] BACKEND_URL =', BACKEND_URL)
 
 // ── Signing Guard — pre-flight check via backend ───────────────────────────
 async function signingGuardCheck(params: {
@@ -41,7 +40,7 @@ async function signingGuardCheck(params: {
     return await resp.json()
   } catch (err) {
     // Fail-closed: if backend guard is unreachable, block the signature
-    console.error('[oracle/sign] Signing guard unreachable:', err)
+    logger.error('oracle/sign', 'Signing guard unreachable', { err: String(err) })
     return { allowed: false, reason: 'guard_unavailable (fail-closed)' }
   }
 }
@@ -243,7 +242,7 @@ export async function POST(req: NextRequest) {
       if (amlResp.ok) {
         const aml = await amlResp.json()
         if (!aml.approved) {
-          console.warn('[oracle/sign] AML BLOCKED:', aml.details)
+          logger.warn('oracle/sign', 'AML BLOCKED', { details: aml.details })
           return NextResponse.json({
             approved: false, oracleSignature: '0x',
             oracleNonce: ('0x' + '0'.repeat(64)) as Hex,
@@ -263,7 +262,7 @@ export async function POST(req: NextRequest) {
       }
     } catch (amlErr) {
       // AML service unreachable — log but don't block (local blacklist already checked)
-      console.warn('[oracle/sign] AML service unreachable:', amlErr)
+      logger.warn('oracle/sign', 'AML service unreachable', { err: String(amlErr) })
     }
 
     let amountWei: bigint
@@ -320,9 +319,9 @@ export async function POST(req: NextRequest) {
         risk_level: riskLevel,
         ip_address: clientIp,
         user_agent: req.headers.get('user-agent'),
-      }).catch(err => console.error('[oracle/sign] Audit log failed (denied):', err))
+      }).catch(err => logger.error('oracle/sign', 'Audit log failed (denied)', { err: String(err) }))
 
-      console.warn(`[oracle/sign] BLOCKED: ${guard.reason}`)
+      logger.warn('oracle/sign', 'BLOCKED', { reason: guard.reason })
       return NextResponse.json({
         approved: false, oracleSignature: '0x',
         oracleNonce: nonce, oracleDeadline: Number(deadline),
@@ -347,15 +346,6 @@ export async function POST(req: NextRequest) {
       ? { sender: senderN, recipient: recipientN, token: tokenInN, amount: amountWei, nonce, deadline }
       : { sender: senderN, recipient: recipientN, tokenIn: tokenInN, tokenOut: tokenOutN, amountIn: amountWei, nonce, deadline }
 
-    console.log('\n[oracle/sign] ═══ FIRMA ═══')
-    console.log('  domain:     ', JSON.stringify(domain))
-    console.log('  typehash:   ', isV3 ? 'V3 (token, amount)' : 'V4 (tokenIn, tokenOut, amountIn)')
-    console.log('  sender:     ', senderN)
-    console.log('  recipient:  ', recipientN)
-    console.log('  amountWei:  ', amountWei.toString())
-    console.log('  signerAddr: ', account.address)
-    console.log('[oracle/sign] ════════════\n')
-
     const signature = await account.signTypedData({
       domain, types, primaryType: 'OracleApproval', message,
     })
@@ -365,15 +355,13 @@ export async function POST(req: NextRequest) {
     })
 
     if (recovered.toLowerCase() !== account.address.toLowerCase()) {
-      console.error('[oracle/sign] ❌ SELF-VERIFICA FALLITA', { recovered, expected: account.address })
+      logger.error('oracle/sign', 'SELF-VERIFICA FALLITA', { recovered, expected: account.address })
       return NextResponse.json({
         approved: false, riskLevel: 'BLOCKED',
         rejectionReason: 'Errore interno: firma non verificabile.',
         _debug: { recovered, expected: account.address },
       }, { status: 500 })
     }
-
-    console.log('[oracle/sign] ✅ self-verifica OK —', recovered)
 
     // ── Audit log: record approved signature ───────────
     // Fire-and-forget to keep the signing response on its tight latency
@@ -393,7 +381,7 @@ export async function POST(req: NextRequest) {
       risk_level: riskLevel,
       ip_address: clientIp,
       user_agent: req.headers.get('user-agent'),
-    }).catch(err => console.error('[oracle/sign] Audit log failed (approved):', err))
+    }).catch(err => logger.error('oracle/sign', 'Audit log failed (approved)', { err: String(err) }))
 
     return NextResponse.json({
       approved: true,
@@ -424,7 +412,7 @@ export async function POST(req: NextRequest) {
 
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    console.error('[oracle/sign] ❌ error:', message)
+    logger.error('oracle/sign', 'unhandled error', { message })
     return NextResponse.json({
       approved: false, error: message, riskLevel: 'BLOCKED',
       rejectionReason: 'Errore interno Oracle: ' + message.slice(0, 100),
