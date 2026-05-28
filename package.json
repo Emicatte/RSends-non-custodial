@@ -2,6 +2,7 @@
   "name": "fee-router-dapp",
   "version": "0.1.0",
   "private": true,
+  "//install": "Use `npm install --legacy-peer-deps` because eslint-config-next@14 peer-requires eslint@7||8 while this project uses eslint@9 (flat config). The peer range is historical (eslint-config-next@14 was released before ESLint 9), the actual runtime is compatible. Upgrading eslint-config-next to 15+ would re-introduce the Next 14 vs Next 15 mismatch.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -43,7 +44,7 @@
   "devDependencies": {
     "@babel/core": "^7.29.0",
     "@eslint/eslintrc": "^3.3.5",
-    "@next/bundle-analyzer": "^16.2.2",
+    "@next/bundle-analyzer": "^14.2.35",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
@@ -60,7 +61,7 @@
     "@vitejs/plugin-react": "^6.0.1",
     "autoprefixer": "10.4.19",
     "eslint": "^9.39.4",
-    "eslint-config-next": "15.5.14",
+    "eslint-config-next": "^14.2.35",
     "identity-obj-proxy": "^3.0.0",
     "jest": "^30.3.0",
     "jest-environment-jsdom": "^30.3.0",
