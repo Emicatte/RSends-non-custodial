@@ -2,6 +2,7 @@ import type { NextAuthOptions } from 'next-auth'
 import GoogleProvider from 'next-auth/providers/google'
 import GitHubProvider from 'next-auth/providers/github'
 import CredentialsProvider from 'next-auth/providers/credentials'
+import { requireEnv } from '@/lib/env'
 
 /**
  * NextAuth v4 options shared between the route handler and any
@@ -21,11 +22,7 @@ import CredentialsProvider from 'next-auth/providers/credentials'
  * useSession().status === 'authenticated' work identically to Google.
  */
 
-const BACKEND_URL =
-  process.env.RPAGOS_BACKEND_URL ??
-  process.env.NEXT_PUBLIC_RPAGOS_BACKEND_URL ??
-  process.env.NEXT_PUBLIC_API_URL ??
-  'http://localhost:8000'
+const BACKEND_URL = requireEnv('RPAGOS_BACKEND_URL')
 
 export const authOptions: NextAuthOptions = {
   providers: [

@@ -1,8 +1,14 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { requireEnv } from '@/lib/env'
 
-const BACKEND = process.env.NEXT_PUBLIC_RPAGOS_BACKEND_URL || 'http://localhost:8000'
+// TODO: WebSocket calls go directly to the backend from the browser.
+// Next.js API routes don't proxy WebSockets natively, so this remains
+// direct-to-backend for now. Consider migrating to a server-side WS
+// proxy (e.g. a Node server or a Vercel Edge function) so the backend
+// URL can become server-only.
+const BACKEND = requireEnv('NEXT_PUBLIC_RPAGOS_BACKEND_URL')
 
 export interface SweepEvent {
   type: string
