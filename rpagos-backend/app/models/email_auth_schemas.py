@@ -1,7 +1,7 @@
 """Pydantic schemas for email+password auth endpoints."""
 
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 from uuid import UUID
 import re
 
@@ -16,6 +16,9 @@ class SignupRequest(BaseModel):
     password: str = Field(min_length=10, max_length=256)
     display_name: str = Field(min_length=1, max_length=100)
     terms_accepted: bool
+    # Required, no default — server-side validation rejects any other value
+    # with a 422. Mirrors the DB CHECK constraint ck_users_account_type.
+    account_type: Literal["individual", "merchant"]
 
     @field_validator("email")
     @classmethod
@@ -74,6 +77,7 @@ class SignupResponse(BaseModel):
     user_id: UUID
     email: str
     email_verified: bool
+    account_type: str
     display_name: Optional[str] = None
     created_at: datetime
 

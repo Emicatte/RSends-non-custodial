@@ -130,6 +130,7 @@ async def signup(
     email: str,
     password: str,
     display_name: str,
+    account_type: str,
     ip: Optional[str] = None,
 ) -> User:
     """Create a new user with email+password. Sends verification email."""
@@ -158,6 +159,9 @@ async def signup(
         password_set_at=now,
         email_verified=False,
         email_verified_at=None,
+        # TODO(account_type): post-verification onboarding diverges on this —
+        # 'individual' -> KYC, 'merchant' -> KYB. Only persisted here for now.
+        account_type=account_type,
     )
     db.add(user)
     await db.flush()

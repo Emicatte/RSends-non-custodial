@@ -4,7 +4,7 @@ import { useLocale, useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useEmailAuth, type EmailAuthErrorShape } from '@/hooks/useEmailAuth'
+import { useEmailAuth, type AccountType, type EmailAuthErrorShape } from '@/hooks/useEmailAuth'
 import { PasswordStrengthMeter, scorePassword } from './PasswordStrengthMeter'
 import { OAuthDivider } from './OAuthDivider'
 import { GoogleSignInButton } from './GoogleSignInButton'
@@ -33,6 +33,7 @@ export function SignupForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
+  const [accountType, setAccountType] = useState<AccountType | null>(null)
   const [terms, setTerms] = useState(false)
   const [linking, setLinking] = useState<{
     scenario: LinkingScenario
@@ -78,18 +79,21 @@ export function SignupForm() {
     email.length > 3 &&
     scorePassword(password) >= 2 &&
     displayName.trim().length >= 1 &&
+    accountType !== null &&
     terms &&
     !loading
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     clearError()
+    if (!accountType) return
     try {
       await signup({
         email: email.trim().toLowerCase(),
         password,
         display_name: displayName.trim(),
         terms_accepted: terms,
+        account_type: accountType,
       })
       router.push(
         `/${locale}/verify-email-sent?email=${encodeURIComponent(email.trim().toLowerCase())}`,
@@ -124,6 +128,33 @@ export function SignupForm() {
       </p>
 
       <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-3">
+        <div className="flex flex-col gap-1 text-sm">
+          <span style={{ color: '#2C2C2A' }}>{t('accountTypeLabel')}</span>
+          <div className="grid grid-cols-2 gap-2">
+            {(['individual', 'merchant'] as AccountType[]).map((opt) => {
+              const selected = accountType === opt
+              return (
+                <button
+                  key={opt}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => setAccountType(opt)}
+                  className="rounded-lg px-3 py-2 text-sm font-medium transition-colors"
+                  style={{
+                    border: selected
+                      ? '1px solid #C8512C'
+                      : '1px solid rgba(200,81,44,0.25)',
+                    background: selected ? 'rgba(200,81,44,0.08)' : '#fff',
+                    color: selected ? '#C8512C' : '#2C2C2A',
+                  }}
+                >
+                  {t(opt === 'individual' ? 'accountTypeIndividual' : 'accountTypeMerchant')}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
         <label className="flex flex-col gap-1 text-sm" style={{ color: '#2C2C2A' }}>
           {t('emailLabel')}
           <input

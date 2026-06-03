@@ -192,6 +192,9 @@
     "signup": {
       "title": "Crea tu cuenta",
       "subtitle": "Empieza a enviar y rastrear pagos crypto en minutos.",
+      "accountTypeLabel": "Me registro como",
+      "accountTypeIndividual": "Particular",
+      "accountTypeMerchant": "Empresa",
       "emailLabel": "Correo",
       "passwordLabel": "Contraseña",
       "nameLabel": "Tu nombre",

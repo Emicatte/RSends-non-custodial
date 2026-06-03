@@ -192,6 +192,9 @@
     "signup": {
       "title": "Créez votre compte",
       "subtitle": "Commencez à envoyer et suivre vos paiements crypto en quelques minutes.",
+      "accountTypeLabel": "Je m'inscris en tant que",
+      "accountTypeIndividual": "Particulier",
+      "accountTypeMerchant": "Entreprise",
       "emailLabel": "E-mail",
       "passwordLabel": "Mot de passe",
       "nameLabel": "Votre nom",

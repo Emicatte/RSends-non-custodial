@@ -100,6 +100,14 @@ class User(Base):
     last_login_ip = Column(_INET(), nullable=True)
 
     status = Column(Text, nullable=False, default="active")
+
+    # account_type: 'individual' | 'merchant'. Required, no default — set
+    # explicitly at signup (see email_auth_service.signup). DB CHECK constraint
+    # `ck_users_account_type` (migration 0037) enforces the allowed values.
+    # TODO(account_type): the post-verification onboarding path diverges here —
+    # 'individual' -> KYC, 'merchant' -> KYB. Not branched yet; only persisted.
+    account_type = Column(String(20), nullable=False)
+
     # NOTE: renamed from `metadata` to avoid clash with SQLAlchemy's
     # `Base.metadata` class attribute. Column stays `metadata_json`.
     metadata_json = Column(_JSONB(), nullable=False, default=dict)

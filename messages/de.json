@@ -192,6 +192,9 @@
     "signup": {
       "title": "Erstellen Sie Ihr Konto",
       "subtitle": "Senden und verfolgen Sie Krypto-Zahlungen in wenigen Minuten.",
+      "accountTypeLabel": "Ich registriere mich als",
+      "accountTypeIndividual": "Privatperson",
+      "accountTypeMerchant": "Unternehmen",
       "emailLabel": "E-Mail",
       "passwordLabel": "Passwort",
       "nameLabel": "Ihr Name",

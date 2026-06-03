@@ -9,17 +9,21 @@ export interface CheckEmailResult {
   has_github: boolean
 }
 
+export type AccountType = 'individual' | 'merchant'
+
 export interface SignupInput {
   email: string
   password: string
   display_name: string
   terms_accepted: boolean
+  account_type: AccountType
 }
 
 export interface SignupResult {
   user_id: string
   email: string
   email_verified: boolean
+  account_type: AccountType
   display_name: string | null
   created_at: string
 }

@@ -191,6 +191,9 @@
     "signup": {
       "title": "Create your account",
       "subtitle": "Start sending and tracking crypto payments in minutes.",
+      "accountTypeLabel": "I'm signing up as",
+      "accountTypeIndividual": "Individual",
+      "accountTypeMerchant": "Business",
       "emailLabel": "Email",
       "passwordLabel": "Password",
       "nameLabel": "Your name",
