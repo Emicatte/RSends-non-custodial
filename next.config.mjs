@@ -33,6 +33,15 @@ const corsOrigins =
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 const nextConfig = {
+  // Lint is run as a separate step (`npm run lint`), not as a build gate.
+  // `next build` previously did not lint (no eslintrc existed), so it never
+  // enforced ESLint. Adding .eslintrc.json (so `next lint` works) would
+  // otherwise make `next build` fail on a large body of PRE-EXISTING lint debt
+  // in the dapp code (unused-vars + react-hooks/rules-of-hooks). Keep build and
+  // lint decoupled; address the debt separately via `npm run lint`.
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   webpack: (config) => {
     config.resolve.fallback = {
       ...config.resolve.fallback,

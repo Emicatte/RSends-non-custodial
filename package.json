@@ -2,7 +2,7 @@
   "name": "fee-router-dapp",
   "version": "0.1.0",
   "private": true,
-  "//install": "Use `npm install --legacy-peer-deps` because eslint-config-next@14 peer-requires eslint@7||8 while this project uses eslint@9 (flat config). The peer range is historical (eslint-config-next@14 was released before ESLint 9), the actual runtime is compatible. Upgrading eslint-config-next to 15+ would re-introduce the Next 14 vs Next 15 mismatch.",
+  "//eslint": "ESLint is pinned to 8.x to match Next 14's lint stack (eslint-config-next@14 + @next/eslint-plugin-next@14). Those plugins use ESLint-8 APIs (context.getScope/getAncestors) that ESLint 9 removed, so ESLint 9 crashes; the only ESLint-9-compatible @next/eslint-plugin-next is the Next-15 build, which would mismatch the Next 14 app. Config is .eslintrc.json (eslintrc) so `next lint` works natively. Plain `npm install` — no --legacy-peer-deps needed (eslint 8 satisfies eslint-config-next@14's peer range).",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -43,7 +43,6 @@
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",
-    "@eslint/eslintrc": "^3.3.5",
     "@next/bundle-analyzer": "^14.2.35",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
@@ -60,7 +59,7 @@
     "@typescript-eslint/typescript-estree": "^8.58.0",
     "@vitejs/plugin-react": "^6.0.1",
     "autoprefixer": "10.4.19",
-    "eslint": "^9.39.4",
+    "eslint": "^8.57.1",
     "eslint-config-next": "^14.2.35",
     "identity-obj-proxy": "^3.0.0",
     "jest": "^30.3.0",
