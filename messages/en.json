@@ -225,6 +225,11 @@
       "resendSent": "Email sent",
       "resendEmailLabel": "Your email"
     },
+    "verifyBanner": {
+      "message": "Verify your email to unlock all features. Check your inbox for the link.",
+      "resend": "Resend email",
+      "sent": "Email sent"
+    },
     "forgotPassword": {
       "title": "Reset your password",
       "subtitle": "Enter your email and we'll send you a reset link.",

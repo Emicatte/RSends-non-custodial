@@ -226,6 +226,11 @@
       "resendSent": "E-mail envoyé",
       "resendEmailLabel": "Votre e-mail"
     },
+    "verifyBanner": {
+      "message": "Vérifiez votre e-mail pour débloquer toutes les fonctionnalités. Consultez votre boîte de réception.",
+      "resend": "Renvoyer l'e-mail",
+      "sent": "E-mail envoyé"
+    },
     "forgotPassword": {
       "title": "Réinitialisez votre mot de passe",
       "subtitle": "Entrez votre e-mail et nous vous enverrons un lien de réinitialisation.",

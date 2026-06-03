@@ -17,6 +17,7 @@ export interface SignupInput {
   display_name: string
   terms_accepted: boolean
   account_type: AccountType
+  locale?: string
 }
 
 export interface SignupResult {

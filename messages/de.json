@@ -226,6 +226,11 @@
       "resendSent": "E-Mail gesendet",
       "resendEmailLabel": "Ihre E-Mail"
     },
+    "verifyBanner": {
+      "message": "Bestätigen Sie Ihre E-Mail, um alle Funktionen freizuschalten. Prüfen Sie Ihren Posteingang.",
+      "resend": "Erneut senden",
+      "sent": "E-Mail gesendet"
+    },
     "forgotPassword": {
       "title": "Passwort zurücksetzen",
       "subtitle": "Geben Sie Ihre E-Mail ein, und wir senden Ihnen einen Reset-Link.",

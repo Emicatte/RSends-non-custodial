@@ -65,13 +65,21 @@ export const authOptions: NextAuthOptions = {
             id?: string
             email?: string
             display_name?: string | null
+            email_verified?: boolean
           }
           return {
             id: user.id ?? credentials.user_id ?? 'unknown',
             email: user.email ?? credentials.email ?? '',
             name: user.display_name ?? user.email ?? credentials.email ?? null,
             access_token: credentials.access_token,
-          } as unknown as { id: string; email: string; name: string | null; access_token: string }
+            email_verified: user.email_verified ?? false,
+          } as unknown as {
+            id: string
+            email: string
+            name: string | null
+            access_token: string
+            email_verified: boolean
+          }
         } catch {
           return null
         }
@@ -93,6 +101,7 @@ export const authOptions: NextAuthOptions = {
         (user as unknown as Record<string, unknown>).access_token
       ) {
         ;(token as Record<string, unknown>).access_token = (user as unknown as Record<string, unknown>).access_token
+        ;(token as Record<string, unknown>).email_verified = (user as unknown as Record<string, unknown>).email_verified
         ;(token as Record<string, unknown>).id_token = undefined
         ;(token as Record<string, unknown>).github_access_token = undefined
       }
@@ -107,6 +116,7 @@ export const authOptions: NextAuthOptions = {
       ;(session as unknown as Record<string, unknown>).id_token = (token as Record<string, unknown>).id_token
       ;(session as unknown as Record<string, unknown>).github_access_token = (token as Record<string, unknown>).github_access_token
       ;(session as unknown as Record<string, unknown>).access_token = (token as Record<string, unknown>).access_token
+      ;(session as unknown as Record<string, unknown>).email_verified = (token as Record<string, unknown>).email_verified
       return session
     },
   },

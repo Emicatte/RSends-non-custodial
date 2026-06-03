@@ -19,6 +19,9 @@ class SignupRequest(BaseModel):
     # Required, no default — server-side validation rejects any other value
     # with a 422. Mirrors the DB CHECK constraint ck_users_account_type.
     account_type: Literal["individual", "merchant"]
+    # UI locale for building the verification link; clamped server-side to a
+    # supported locale (default 'en'). Optional.
+    locale: Optional[str] = Field(default=None, max_length=10)
 
     @field_validator("email")
     @classmethod

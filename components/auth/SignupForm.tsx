@@ -94,6 +94,7 @@ export function SignupForm() {
         display_name: displayName.trim(),
         terms_accepted: terms,
         account_type: accountType,
+        locale,
       })
       router.push(
         `/${locale}/verify-email-sent?email=${encodeURIComponent(email.trim().toLowerCase())}`,

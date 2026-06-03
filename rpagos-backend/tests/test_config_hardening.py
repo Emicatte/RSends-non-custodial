@@ -43,6 +43,8 @@ def _prod_settings(**over):
         google_oauth_client_id="gid",
         auth_jwt_secret="a" * 64,
         internal_proxy_secret="ips",  # required in prod since H3
+        email_dev_mode=False,  # prod sends real email
+        app_url="https://app.rsends.io",  # required for verification links in prod
     )
     base.update(over)
     return SimpleNamespace(**base)

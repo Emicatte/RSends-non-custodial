@@ -134,6 +134,14 @@ class Settings(BaseSettings):
     email_dev_mode: bool = True               # If True: log and skip send. Safer default; prod must set False.
     frontend_url: str = "http://localhost:3000"  # Used for email CTAs (e.g. settings links)
 
+    # ── App base URL (email verification links) ──────────
+    # Public app origin (e.g. https://app.rsends.io) used to build the
+    # email-verification link {APP_URL}/{locale}/verify-email?token=... . No
+    # localhost fallback: the link must be clickable from the recipient's inbox.
+    # Required whenever emails are actually sent (email_dev_mode=False) or in
+    # production — enforced in validate_settings().
+    app_url: str = ""
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
 
@@ -288,6 +296,22 @@ def validate_settings(settings: Settings) -> None:
                 "INTERNAL_PROXY_SECRET is empty in production. "
                 "The /api/internal/* endpoints require it (X-Internal-Secret); "
                 "set the SAME value on the Next.js side (INTERNAL_PROXY_SECRET)."
+            )
+
+    # ── APP_URL (email verification links) ───────────────
+    # Required whenever emails actually go out (email_dev_mode=False) or in
+    # production. No localhost fallback — the verification link must be a public
+    # origin reachable from the recipient's inbox.
+    if is_prod or not settings.email_dev_mode:
+        if not settings.app_url:
+            errors.append(
+                "APP_URL is empty. Email verification links cannot be built. "
+                "Set APP_URL to the public app origin (e.g. https://app.rsends.io)."
+            )
+        elif "localhost" in settings.app_url or "127.0.0.1" in settings.app_url:
+            errors.append(
+                "APP_URL points to localhost. Verification links must use a public "
+                "origin reachable from the recipient's inbox (no localhost fallback)."
             )
 
     # ── Print results ─────────────────────────────────────

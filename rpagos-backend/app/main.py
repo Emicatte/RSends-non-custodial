@@ -244,6 +244,13 @@ app.add_middleware(InputSanitizationMiddleware)
 from app.middleware.rate_limit import RateLimitMiddleware
 app.add_middleware(RateLimitMiddleware)
 
+# ── Email Verification Gate (deny-by-default for JWT-session routes) ──
+# Blocks email_verified=False users from Bearer-authed routes except an
+# explicit allowlist (/auth/me, account self-management, auth lifecycle).
+# Fail-open; never touches wallet-signature or merchant API-key routes.
+from app.middleware.email_verified_gate import EmailVerifiedGateMiddleware
+app.add_middleware(EmailVerifiedGateMiddleware)
+
 # ── Idempotency Middleware ──────────────────────────────
 from app.middleware.idempotency import IdempotencyMiddleware
 app.add_middleware(IdempotencyMiddleware)

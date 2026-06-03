@@ -123,6 +123,7 @@ async def signup_route(
             password=payload.password,
             display_name=payload.display_name,
             account_type=payload.account_type,
+            locale=payload.locale,
             ip=get_real_client_ip(request),
         )
     except EmailAuthError as e:

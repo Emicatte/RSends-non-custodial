@@ -74,6 +74,18 @@ def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+# Supported UI locales (mirrors i18n/routing.ts on the frontend).
+_SUPPORTED_LOCALES = {"en", "it", "es", "fr", "de"}
+
+
+def _safe_locale(locale: Optional[str]) -> str:
+    """Clamp to a supported locale, default 'en'. Guards the verification URL
+    path segment against injection / unknown locales."""
+    if locale and locale in _SUPPORTED_LOCALES:
+        return locale
+    return "en"
+
+
 async def _rate_limit_check(key: str, max_count: int, window_seconds: int) -> None:
     """Fixed-window Redis rate limit. Raises EmailAuthError on hit.
     Fail-open on Redis errors (auth_service treats Redis outage as fail-closed;
@@ -131,6 +143,7 @@ async def signup(
     password: str,
     display_name: str,
     account_type: str,
+    locale: Optional[str] = None,
     ip: Optional[str] = None,
 ) -> User:
     """Create a new user with email+password. Sends verification email."""
@@ -150,6 +163,7 @@ async def signup(
     except PasswordPolicyError as e:
         raise EmailAuthError(e.code, e.detail)
 
+    loc = _safe_locale(locale)
     now = datetime.now(timezone.utc)
     user = User(
         id=str(uuid4()),
@@ -159,6 +173,7 @@ async def signup(
         password_set_at=now,
         email_verified=False,
         email_verified_at=None,
+        locale=loc,
         # TODO(account_type): post-verification onboarding diverges on this —
         # 'individual' -> KYC, 'merchant' -> KYB. Only persisted here for now.
         account_type=account_type,
@@ -179,7 +194,7 @@ async def signup(
     db.add(verification)
 
     settings = get_settings()
-    verify_url = f"{settings.frontend_url}/en/verify-email?token={token}"
+    verify_url = f"{settings.app_url}/{loc}/verify-email?token={token}"
 
     await send_email(
         to=email,
@@ -249,11 +264,12 @@ async def login(
         )
         raise EmailAuthError("invalid_credentials")
 
-    if not user.email_verified:
-        raise EmailAuthError(
-            "email_not_verified",
-            "please verify your email before logging in",
-        )
+    # NOTE: unverified users ARE allowed to log in and get a session. Access to
+    # fund-touching / JWT-session routes is gated separately (deny-by-default)
+    # by the email_verified_gate middleware, which returns email_not_verified
+    # until the email is confirmed. Login itself must not be blocked so the
+    # frontend can show a "verify your email" state. LoginResponse carries
+    # email_verified so the client knows immediately.
 
     if user.status != "active":
         raise EmailAuthError("account_suspended")
@@ -384,7 +400,7 @@ async def resend_verification(
     db.add(vt)
 
     settings = get_settings()
-    verify_url = f"{settings.frontend_url}/en/verify-email?token={token}"
+    verify_url = f"{settings.app_url}/{_safe_locale(user.locale)}/verify-email?token={token}"
 
     await send_email(
         to=email,

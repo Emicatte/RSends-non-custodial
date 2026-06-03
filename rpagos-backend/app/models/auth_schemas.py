@@ -16,6 +16,7 @@ class GitHubLoginRequest(BaseModel):
 class UserMeResponse(BaseModel):
     id: str
     email: str
+    email_verified: bool = False
     display_name: Optional[str] = None
     avatar_url: Optional[str] = None
     locale: Optional[str] = None

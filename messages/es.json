@@ -226,6 +226,11 @@
       "resendSent": "Email enviado",
       "resendEmailLabel": "Tu correo"
     },
+    "verifyBanner": {
+      "message": "Verifica tu correo para desbloquear todas las funciones. Revisa tu bandeja de entrada.",
+      "resend": "Reenviar correo",
+      "sent": "Correo enviado"
+    },
     "forgotPassword": {
       "title": "Restablece tu contraseña",
       "subtitle": "Introduce tu correo y te enviaremos un enlace de restablecimiento.",
