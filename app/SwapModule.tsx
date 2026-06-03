@@ -13,6 +13,7 @@ import {
   erc20Abi, type Abi,
 } from 'viem'
 import { getRegistry, type TokenConfig } from '../lib/contractRegistry'
+import { FEE_ROUTER_V6_ABI } from '../lib/feeRouterAbi'
 import { useSwapQuote } from '../lib/useSwapQuote'
 import { mutationHeaders } from '../lib/rsendFetch'
 import { useIsMobile } from '../hooks/useIsMobile'
@@ -326,6 +327,13 @@ export default function SwapModule({ onSwapComplete, portfolioAssets, noCard }: 
         setPhase('error'); return
       }
 
+      // M1 slice B: V5/V6 take a threshold bytes[] (oracleSignatures); V4 a single bytes.
+      const isV6 = reg.version === 'v6'
+      const routerAbi = isV6 ? FEE_ROUTER_V6_ABI : FEE_ROUTER_ABI
+      const oracleSigArg = isV6
+        ? (oracle.oracleSignatures as `0x${string}`[])
+        : (oracle.oracleSignature as `0x${string}`)
+
       // 2. Approve (ERC-20 only)
       if (!tokenIn.isNative) {
         setPhase('approving')
@@ -345,16 +353,16 @@ export default function SwapModule({ onSwapComplete, portfolioAssets, noCard }: 
       let hash: `0x${string}`
       if (tokenIn.isNative) {
         hash = await writeContractAsync({
-          address: reg.feeRouter, abi: FEE_ROUTER_ABI,
+          address: reg.feeRouter, abi: routerAbi,
           functionName: 'swapETHAndSend',
-          args: [tokenOut.address!, minOut, address, oracle.oracleNonce as `0x${string}`, BigInt(oracle.oracleDeadline), oracle.oracleSignature as `0x${string}`],
+          args: [tokenOut.address!, minOut, address, oracle.oracleNonce as `0x${string}`, BigInt(oracle.oracleDeadline), oracleSigArg],
           value: parsedAmount,
         })
       } else {
         hash = await writeContractAsync({
-          address: reg.feeRouter, abi: FEE_ROUTER_ABI,
+          address: reg.feeRouter, abi: routerAbi,
           functionName: 'swapAndSend',
-          args: [tokenIn.address!, tokenOut.address!, parsedAmount, minOut, address, oracle.oracleNonce as `0x${string}`, BigInt(oracle.oracleDeadline), oracle.oracleSignature as `0x${string}`],
+          args: [tokenIn.address!, tokenOut.address!, parsedAmount, minOut, address, oracle.oracleNonce as `0x${string}`, BigInt(oracle.oracleDeadline), oracleSigArg],
         })
       }
       setTxHash(hash)

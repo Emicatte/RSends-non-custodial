@@ -184,4 +184,11 @@ class SplitExecution(Base):
     __table_args__ = (
         Index("ix_split_execution_contract_status", "contract_id", "status"),
         Index("ix_split_execution_source_tx", "source_tx_hash"),
+        # Idempotency gate (C1a): one execution per (contract, source TX).
+        # Enforces atomically — under concurrent webhook deliveries the 2nd
+        # INSERT fails with IntegrityError BEFORE any on-chain TX is sent,
+        # preventing a double split payout.
+        UniqueConstraint(
+            "contract_id", "source_tx_hash", name="uq_split_exec_contract_srctx"
+        ),
     )

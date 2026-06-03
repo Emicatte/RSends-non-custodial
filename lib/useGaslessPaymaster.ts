@@ -34,15 +34,16 @@ export function useGaslessPaymaster() {
   const [estimate, setEstimate] = useState<PaymasterEstimate | null>(null)
   const [error,    setError]    = useState('')
 
-  const apiKey      = process.env.NEXT_PUBLIC_PIMLICO_API_KEY
+  // L3 — the Pimlico API key now lives server-side. The client only knows
+  // whether gasless is enabled (a non-secret flag) and talks to our same-origin
+  // proxy (/api/paymaster/<network>), which attaches the key.
+  const enabled     = process.env.NEXT_PUBLIC_PAYMASTER_ENABLED === '1'
   const chainId     = publicClient?.chain?.id ?? base.id
   const isTestnet   = chainId === baseSepolia.id
   const networkSlug = isTestnet ? 'base-sepolia' : 'base'
 
-  // Pimlico bundler URL
-  const bundlerUrl = apiKey
-    ? `https://api.pimlico.io/v2/${networkSlug}/rpc?apikey=${apiKey}`
-    : null
+  // Same-origin proxy to the Pimlico bundler (no key in the URL).
+  const bundlerUrl = enabled ? `/api/paymaster/${networkSlug}` : null
 
   // ── Controlla se il token è idoneo per gasless ─────────────────────────
   const isGaslessEligible = useCallback((tokenSymbol: string): boolean => {
@@ -62,7 +63,7 @@ export function useGaslessPaymaster() {
         parseFloat((estimatedGasUnits * gp).toString()) * 1e-18 * ethPrice
       ).toFixed(4)
 
-      if (!apiKey || !isGaslessEligible(tokenSymbol)) {
+      if (!enabled || !isGaslessEligible(tokenSymbol)) {
         const est: PaymasterEstimate = {
           mode: 'unavailable',
           gasSponsored: false,
@@ -94,7 +95,7 @@ export function useGaslessPaymaster() {
       setEstimate(fallback)
       return fallback
     }
-  }, [publicClient, apiKey, bundlerUrl, isGaslessEligible])
+  }, [publicClient, enabled, bundlerUrl, isGaslessEligible])
 
   
   const buildSponsoredTx = useCallback(async (params: {
@@ -152,6 +153,6 @@ export function useGaslessPaymaster() {
     mode, estimate, error,
     isGaslessEligible, estimateGas, buildSponsoredTx, reset,
     isSponsored: mode === 'sponsored',
-    paymasterConfigured: !!apiKey,
+    paymasterConfigured: enabled,
   }
 }

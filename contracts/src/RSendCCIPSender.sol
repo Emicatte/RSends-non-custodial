@@ -135,6 +135,8 @@ contract RSendCCIPSender is Ownable, ReentrancyGuard {
     );
 
     event ReceiverSet(uint64 chainSelector, address receiver);
+    event EmergencyETHWithdrawn(address indexed to, uint256 amount);
+    event EmergencyTokenWithdrawn(address indexed token, address indexed to, uint256 amount);
 
     // ── Constructor ───────────────────────────────────────────────────────
     constructor(
@@ -268,10 +270,11 @@ contract RSendCCIPSender is Ownable, ReentrancyGuard {
         uint256 netAmount = amountOut - fee;
         IERC20(tokenOut).safeTransfer(TREASURY_VAULT, fee);
 
-        // 4. Bridge via CCIP
-        bytes32 messageId = _sendViaCCIP(
+        // 4. Bridge via CCIP. M3: scope the refund to this call's leftover
+        // (msg.value - ccipFee) so a dust swap can't drain stranded ETH.
+        bytes32 messageId = _sendViaCCIPWithValue(
             destinationChainSelector, receiverOnDest,
-            recipient, tokenOut, netAmount
+            recipient, tokenOut, netAmount, msg.value
         );
 
         emit CrossChainSwapAndBridge(
@@ -409,6 +412,24 @@ contract RSendCCIPSender is Ownable, ReentrancyGuard {
         defaultPoolFee = _fee;
     }
 
+    // ── Emergency rescue (M3) ─────────────────────────────────────────────
+    function rescueETH(address payable to) external onlyOwner {
+        if (to == address(0)) revert ZeroAddress();
+        uint256 balance = address(this).balance;
+        require(balance > 0, "No ETH to rescue");
+        (bool ok, ) = to.call{value: balance}("");
+        require(ok, "ETH rescue failed");
+        emit EmergencyETHWithdrawn(to, balance);
+    }
+
+    function rescueToken(address token, address to) external onlyOwner {
+        if (to == address(0)) revert ZeroAddress();
+        uint256 balance = IERC20(token).balanceOf(address(this));
+        require(balance > 0, "No token to rescue");
+        IERC20(token).safeTransfer(to, balance);
+        emit EmergencyTokenWithdrawn(token, to, balance);
+    }
+
     // ── Internal: Uniswap V3 swap ─────────────────────────────────────────
     function _swapExact(
         address tokenIn,
@@ -437,49 +458,9 @@ contract RSendCCIPSender is Ownable, ReentrancyGuard {
         IERC20(tokenIn).forceApprove(address(SWAP_ROUTER), 0);
     }
 
-    // ── Internal: manda via CCIP (fee pagata in ETH da msg.value) ─────────
-    function _sendViaCCIP(
-        uint64  destinationChainSelector,
-        address receiverOnDest,
-        address recipient,
-        address token,
-        uint256 amount
-    ) internal returns (bytes32) {
-        IERC20(token).forceApprove(address(CCIP_ROUTER), amount);
-
-        IRouterClient.EVMTokenAmount[] memory tokenAmounts =
-            new IRouterClient.EVMTokenAmount[](1);
-        tokenAmounts[0] = IRouterClient.EVMTokenAmount({
-            token: token,
-            amount: amount
-        });
-
-        IRouterClient.EVM2AnyMessage memory message = IRouterClient.EVM2AnyMessage({
-            receiver: abi.encode(receiverOnDest),
-            data: abi.encode(recipient),
-            tokenAmounts: tokenAmounts,
-            feeToken: address(0),
-            extraArgs: ""
-        });
-
-        uint256 ccipFee = CCIP_ROUTER.getFee(destinationChainSelector, message);
-        require(address(this).balance >= ccipFee, "Insufficient ETH for CCIP fee");
-
-        bytes32 messageId = CCIP_ROUTER.ccipSend{value: ccipFee}(
-            destinationChainSelector, message
-        );
-
-        IERC20(token).forceApprove(address(CCIP_ROUTER), 0);
-
-        // Refund ETH in eccesso al sender
-        uint256 remaining = address(this).balance;
-        if (remaining > 0) {
-            (bool ok,) = msg.sender.call{value: remaining}("");
-            require(ok, "ETH refund failed");
-        }
-
-        return messageId;
-    }
+    // (M3: the old _sendViaCCIP — which refunded address(this).balance and let a
+    // dust swap drain stranded ETH — was removed; both swap*AndBridge entrypoints
+    // now use the call-scoped _sendViaCCIPWithValue below.)
 
     // ── Internal: variante con budget ETH specifico per CCIP ──────────────
     function _sendViaCCIPWithValue(

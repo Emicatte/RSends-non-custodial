@@ -24,7 +24,7 @@ if not os.getenv("RENDER"):
 
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings, validate_settings, validate_dev_flags
@@ -301,6 +301,10 @@ from app.api.health_routes import health_router
 app.include_router(health_router)
 from app.api.signing_routes import signing_router
 app.include_router(signing_router)
+from app.api.ratelimit_routes import ratelimit_router
+app.include_router(ratelimit_router)
+from app.api.oracle_signer_routes import oracle_signer_router
+app.include_router(oracle_signer_router)
 from app.api.aml_routes import aml_router
 app.include_router(aml_router)
 from app.api.api_key_routes import api_key_router
@@ -309,6 +313,8 @@ from app.api.auth_routes import router as auth_router
 app.include_router(auth_router)
 from app.api.auth_email_routes import router as auth_email_router
 app.include_router(auth_email_router)
+from app.api.wallet_session_routes import router as wallet_session_router
+app.include_router(wallet_session_router)
 from app.api.user_routes import router as user_routes_router
 app.include_router(user_routes_router)
 from app.api.user_tx_routes import router as user_tx_routes_router
@@ -405,8 +411,14 @@ async def health_rpc():
     }
 
 
+# Detailed health endpoints below leak deploy fingerprint / hot-wallet balance /
+# Celery+Redis topology — gate them behind the admin token (M7). Basic liveness
+# (/health, /health/live, /health/ready) stays open for orchestrator probes.
+from app.api.audit_routes import require_admin
+
+
 @app.get("/health/sweep")
-async def health_sweep():
+async def health_sweep(_admin: str = Depends(require_admin)):
     """Full system health check for sweep pipeline.
 
     Validates: DB, Redis, Celery workers, circuit breakers,
@@ -523,7 +535,7 @@ async def health_sweep():
 
 
 @app.get("/health/config")
-async def health_config():
+async def health_config(_admin: str = Depends(require_admin)):
     """Configuration status: which env vars are set (values never exposed)."""
     settings = get_settings()
     is_prod = not settings.debug

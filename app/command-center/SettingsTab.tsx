@@ -9,6 +9,7 @@ import type { DistributionEntry } from '../../lib/useDistributionList'
 import { getRegistry } from '../../lib/contractRegistry'
 import { FEE_ROUTER_ABI } from '../../lib/feeRouterAbi'
 import { mutationHeaders, parseRSendError } from '../../lib/rsendFetch'
+import { useWalletAuth } from '../../lib/walletAuth'
 import { logger } from '../../lib/logger'
 
 type SettingsSection = 'security' | 'notifications' | 'distribution' | 'apikeys' | 'export' | 'danger'
@@ -30,6 +31,10 @@ function SettingsTab({
   onInitialSectionConsumed?: () => void
 }) {
   const t = useTranslations('commandCenter.settings')
+  // Wallet-signature auth (EIP-191) for the API-key management endpoints.
+  // The backend now derives the key owner from the verified signature, so
+  // these calls must carry X-Wallet-* headers (see api_key_routes.py).
+  const { getAuthHeaders, clearCache: clearAuthCache } = useWalletAuth(address)
   const [expanded, setExpanded] = useState<SettingsSection | null>(initialSection ?? 'security')
 
   useEffect(() => {
@@ -81,28 +86,45 @@ function SettingsTab({
   const emergencyRef = useRef(false)
   const [emergencyResult, setEmergencyResult] = useState<string | null>(null)
 
-  // Fetch spending limits
+  // Fetch spending limits (wallet-auth — own address only, M9)
   useEffect(() => {
     if (expanded !== 'security') return
+    let cancelled = false
     setLimitsLoading(true)
-    fetch(`${BACKEND}/api/v1/forwarding/spending-limits?source_address=${address.toLowerCase()}&chain_id=${chainId}`, {
-      signal: AbortSignal.timeout(10000),
-    })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => setLimits(d))
-      .catch(() => {})
-      .finally(() => setLimitsLoading(false))
-  }, [expanded, address, chainId])
+    const url = `${BACKEND}/api/v1/forwarding/spending-limits?source_address=${address.toLowerCase()}&chain_id=${chainId}`
+    ;(async () => {
+      try {
+        const doFetch = async () =>
+          fetch(url, { headers: await getAuthHeaders(), signal: AbortSignal.timeout(10000) })
+        let res = await doFetch()
+        // 401 → cached signature may be stale. Refresh once.
+        if (res.status === 401) { clearAuthCache(); res = await doFetch() }
+        const d = res.ok ? await res.json() : null
+        if (!cancelled) setLimits(d)
+      } catch {
+        if (!cancelled) setLimits(null)
+      } finally {
+        if (!cancelled) setLimitsLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [expanded, address, chainId, getAuthHeaders, clearAuthCache])
 
   // ── API Keys: fetch / generate / revoke ──
   const fetchApiKeys = useCallback(async () => {
+    if (!address) return
     setApiKeysLoading(true)
     try {
-      const res = await fetch(`${BACKEND}/api/v1/keys?owner_address=${address}`, { signal: AbortSignal.timeout(10000) })
+      const url = `${BACKEND}/api/v1/keys`
+      const doFetch = async () =>
+        fetch(url, { headers: await getAuthHeaders(), signal: AbortSignal.timeout(10000) })
+      let res = await doFetch()
+      // 401 → cached signature may be stale (clock skew). Refresh once.
+      if (res.status === 401) { clearAuthCache(); res = await doFetch() }
       if (res.ok) setApiKeys(await res.json())
     } catch {}
     finally { setApiKeysLoading(false) }
-  }, [address])
+  }, [address, getAuthHeaders, clearAuthCache])
 
   useEffect(() => {
     if (expanded === 'apikeys') fetchApiKeys()
@@ -115,7 +137,7 @@ function SettingsTab({
     try {
       const res = await fetch(`${BACKEND}/api/v1/keys/generate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: mutationHeaders(await getAuthHeaders()),
         body: JSON.stringify({ owner_address: address, label: newKeyLabel.trim(), scope: newKeyScope, environment: newKeyEnv }),
       })
       if (!res.ok) {
@@ -136,7 +158,7 @@ function SettingsTab({
     try {
       await fetch(`${BACKEND}/api/v1/keys/${keyId}/revoke`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: mutationHeaders(await getAuthHeaders()),
         body: JSON.stringify({ owner_address: address }),
       })
       fetchApiKeys()

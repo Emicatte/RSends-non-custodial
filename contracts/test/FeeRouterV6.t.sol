@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import "forge-std/Test.sol";
 import "../src/FeeRouterV6.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 
 // ═══════════════════════════════════════════════════════════════════
 //  Mocks — same minimal-IERC20 pattern as V5 tests, with configurable
@@ -420,5 +421,104 @@ contract FeeRouterV6Test is Test {
         // Atomic revert: nothing moved
         assertEq(usdc.balanceOf(recipient), recipientUsdcBefore, "recipient unchanged");
         assertEq(usdt.balanceOf(treasury),  treasuryUsdtBefore,  "treasury unchanged");
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  M10 — circuit breaker (Pausable) + two-step ownership (Ownable2Step)
+    // ═══════════════════════════════════════════════════════════════════
+
+    // Builds valid 2-of-3 oracle sigs for a standard 1000 USDC transferWithOracle.
+    function _validUsdcTransfer(bytes32 nonce)
+        internal
+        view
+        returns (uint256 amount, uint256 deadline, bytes[] memory sigs)
+    {
+        amount   = 1000e6;
+        deadline = block.timestamp + 1 hours;
+        sigs = _sign2of3(sender_, recipient, address(usdc), address(usdc), amount, nonce, deadline);
+    }
+
+    function test_M10_pauseBlocksTransfer() public {
+        bytes32 nonce = keccak256("m10-pause");
+        (uint256 amount, uint256 deadline, bytes[] memory sigs) = _validUsdcTransfer(nonce);
+
+        vm.prank(owner);
+        router.pause();
+
+        // whenNotPaused reverts BEFORE the (otherwise-valid) body runs.
+        vm.prank(sender_);
+        vm.expectRevert(Pausable.EnforcedPause.selector);
+        router.transferWithOracle(address(usdc), amount, recipient, nonce, deadline, sigs);
+    }
+
+    function test_M10_unpauseRestoresTransfer() public {
+        bytes32 nonce = keccak256("m10-unpause");
+        (uint256 amount, uint256 deadline, bytes[] memory sigs) = _validUsdcTransfer(nonce);
+
+        vm.prank(owner);
+        router.pause();
+        vm.prank(owner);
+        router.unpause();
+
+        uint256 recipientBefore = usdc.balanceOf(recipient);
+
+        vm.prank(sender_);
+        router.transferWithOracle(address(usdc), amount, recipient, nonce, deadline, sigs);
+
+        // Unpause fully restores the rail: the otherwise-identical transfer goes through.
+        assertEq(usdc.balanceOf(recipient) - recipientBefore, amount, "transfer works after unpause");
+        assertFalse(router.paused(), "router unpaused");
+    }
+
+    function test_M10_pausedStateToggles() public {
+        assertFalse(router.paused(), "starts unpaused");
+        vm.prank(owner);
+        router.pause();
+        assertTrue(router.paused(), "paused after pause()");
+        vm.prank(owner);
+        router.unpause();
+        assertFalse(router.paused(), "unpaused after unpause()");
+    }
+
+    function test_M10_pauseOnlyOwner() public {
+        vm.prank(sender_);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, sender_));
+        router.pause();
+    }
+
+    function test_M10_unpauseOnlyOwner() public {
+        vm.prank(owner);
+        router.pause();
+
+        vm.prank(sender_);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, sender_));
+        router.unpause();
+    }
+
+    function test_M10_ownable2Step_transfer() public {
+        address newOwner = makeAddr("newOwner");
+
+        // Step 1: transfer does NOT immediately change the owner.
+        vm.prank(owner);
+        router.transferOwnership(newOwner);
+        assertEq(router.owner(), owner, "owner unchanged until accept");
+        assertEq(router.pendingOwner(), newOwner, "pending owner set");
+
+        // Step 2: the pending owner accepts → ownership moves.
+        vm.prank(newOwner);
+        router.acceptOwnership();
+        assertEq(router.owner(), newOwner, "owner updated after accept");
+        assertEq(router.pendingOwner(), address(0), "pending cleared");
+    }
+
+    function test_M10_ownable2Step_onlyPendingAccepts() public {
+        address newOwner = makeAddr("newOwner");
+        vm.prank(owner);
+        router.transferOwnership(newOwner);
+
+        // A non-pending address cannot hijack the handover.
+        vm.prank(sender_);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, sender_));
+        router.acceptOwnership();
     }
 }

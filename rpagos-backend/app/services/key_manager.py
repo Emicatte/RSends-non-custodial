@@ -645,3 +645,56 @@ def get_signer(mode: Optional[str] = None) -> AbstractSigner:
 
     logger.info("Signer backend: %s (%s)", mode, type(_signer).__name__)
     return _signer
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Oracle signer factory (M1) — dedicated, separate from the sweep signer
+# ═══════════════════════════════════════════════════════════════
+
+_oracle_signers: Optional[list[AbstractSigner]] = None
+
+
+def _split_csv(value: str) -> list[str]:
+    return [item.strip() for item in (value or "").split(",") if item.strip()]
+
+
+def get_oracle_signers() -> list[AbstractSigner]:
+    """Get or create the ORACLE signer SET (singleton).
+
+    Returns one signer for a single-signer oracle (V4), or N for an M-of-N
+    multisig (V5/V6 threshold). Reads the comma-separated multi-key vars,
+    falling back to the single-key vars when unset. Signs EIP-712 oracle
+    approvals with the oracle key(s) — NEVER the sweep hot wallet.
+
+    In prod set ``ORACLE_SIGNER_MODE=kms`` so keys stay in the HSM and never
+    enter the web tier (M1).
+    """
+    global _oracle_signers
+
+    if _oracle_signers is not None:
+        return _oracle_signers
+
+    settings = get_settings()
+    mode = (settings.oracle_signer_mode or "local").lower()
+
+    if mode == "kms":
+        ids = _split_csv(settings.oracle_kms_key_ids) or _split_csv(settings.oracle_kms_key_id)
+        if not ids:
+            raise SignerError("oracle_signer_mode=kms requires ORACLE_KMS_KEY_ID(S)")
+        signers: list[AbstractSigner] = [KMSSigner(key_id=kid) for kid in ids]
+    else:
+        keys = _split_csv(settings.oracle_signer_private_keys) or _split_csv(
+            settings.oracle_signer_private_key
+        )
+        if not keys:
+            raise SignerError("oracle_signer_mode=local requires ORACLE_SIGNER_PRIVATE_KEY(S)")
+        signers = [LocalSigner(private_key=pk) for pk in keys]
+
+    _oracle_signers = signers
+    logger.info("Oracle signer set: %s × %d", mode, len(signers))
+    return _oracle_signers
+
+
+def get_oracle_signer() -> AbstractSigner:
+    """The primary oracle signer (first of the set) — single-signer V4 path."""
+    return get_oracle_signers()[0]

@@ -49,6 +49,11 @@ const nextConfig = {
           key: 'Content-Security-Policy',
           value: [
             "default-src 'self'",
+            // L2 (residual): 'unsafe-inline' is still required by Next.js inline
+            // hydration scripts. Removing it safely needs a NONCE-based CSP
+            // (per-request nonce from middleware injected into Next's scripts +
+            // script-src 'nonce-…' 'strict-dynamic'). Tracked as a follow-up;
+            // do NOT drop 'unsafe-inline' without that, it breaks the app.
             "script-src 'self' 'unsafe-inline'",
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://api.fontshare.com",
             "font-src 'self' data: https://fonts.gstatic.com https://cdn.fontshare.com",

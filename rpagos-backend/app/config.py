@@ -23,6 +23,23 @@ class Settings(BaseSettings):
     # ── Sicurezza ─────────────────────────────────────────
     hmac_secret: str = "MUST_BE_SET_VIA_ENV_32_CHARS_MIN"
 
+    # Shared secret for Next.js → backend internal endpoints (/api/internal/*).
+    # MUST match INTERNAL_PROXY_SECRET on the Next.js side (H3).
+    internal_proxy_secret: str = ""
+
+    # H4 transition flag: accept the legacy replayable wallet-signature bearer
+    # (RSends:{address}:{timestamp}) IN ADDITION to the new session-HMAC scheme.
+    # Set to false once both backend and frontend are deployed, to fully close
+    # the replay window.
+    wallet_auth_allow_legacy: bool = True
+
+    # M8 — deny-by-default for unauthenticated GET requests. When True, a GET to
+    # a non-exempt path with no valid API key is rejected (401) unless the path
+    # is in GET_PUBLIC_PREFIXES (genuinely public, or self-authenticating via its
+    # own route dependency). Set False to restore the legacy "GET = public read"
+    # fallback (kill-switch).
+    api_get_deny_by_default: bool = True
+
     # ── Alchemy ───────────────────────────────────────────
     alchemy_api_key: str = ""
     alchemy_webhook_secret: str = ""
@@ -38,6 +55,20 @@ class Settings(BaseSettings):
     signer_mode: str = "local"          # "local" (env key) | "kms" (AWS KMS) | "vault" (HashiCorp Vault)
     kms_key_id: str = ""                # AWS KMS key ID (ECC_SECG_P256K1)
     aws_region: str = "eu-west-1"       # AWS region for KMS
+
+    # ── Oracle signer (M1) — signs EIP-712 oracle approvals with a DEDICATED
+    # key, separate from the sweep hot wallet. In prod use "kms" so the oracle
+    # key never lives in the web tier (the Next oracle delegates digest signing
+    # to /api/internal/oracle/sign-digest). "local" (dev/testnet) uses
+    # ORACLE_SIGNER_PRIVATE_KEY. NB: the resulting signer address must be the
+    # on-chain oracleSigner (set it via the contract before switching).
+    oracle_signer_mode: str = "local"       # "local" | "kms"
+    oracle_kms_key_id: str = ""             # dedicated KMS key for the oracle (mode=kms)
+    oracle_signer_private_key: str = ""     # dev/testnet only (mode=local)
+    # Multisig (M1 slice B) — comma-separated lists for an M-of-N oracle (V5/V6
+    # threshold). Fall back to the single-key vars above when unset (N=1).
+    oracle_kms_key_ids: str = ""            # comma-separated KMS key ids (mode=kms)
+    oracle_signer_private_keys: str = ""    # comma-separated keys (mode=local, dev)
     vault_addr: str = ""                # HashiCorp Vault server URL
     vault_token: str = ""               # Vault authentication token
     vault_key_name: str = "rsend-signer"  # Vault Transit key name
@@ -129,7 +160,11 @@ def validate_settings(settings: Settings) -> None:
     errors: list[str] = []
     warnings: list[str] = []
 
-    is_prod = not settings.debug
+    # Production posture. The documented deploy sets DEBUG=false but NOT
+    # ENVIRONMENT, so derive `is_prod` from not-DEBUG (the strong-tier checks
+    # below previously gated ONLY on ENVIRONMENT=prod and never ran in prod — H6).
+    env = os.getenv("ENVIRONMENT", "").lower()
+    is_prod = (not settings.debug) or env.startswith("prod")
 
     # ── SWEEP_PRIVATE_KEY ─────────────────────────────────
     if settings.signer_mode == "local":
@@ -219,9 +254,11 @@ def validate_settings(settings: Settings) -> None:
             "TELEGRAM_BOT_TOKEN is empty. Sweep notifications are disabled."
         )
 
-    # ── Production-only hardening (F-BE-09, F-BE-13, F-BE-01) ──
-    env = os.getenv("ENVIRONMENT", "").lower()
-    if env.startswith("prod"):
+    # ── Production hardening (F-BE-09, F-BE-13, F-BE-01) ──
+    # Gated on the unified is_prod (not-DEBUG or ENVIRONMENT=prod) so these
+    # actually run on the documented deploy path (DEBUG=false), not only when
+    # ENVIRONMENT=production (which is never set) — H6.
+    if is_prod:
         if settings.redis_url.startswith("redis://") and not settings.redis_url.startswith("rediss://"):
             errors.append("Redis URL must use TLS (rediss://) in production")
         if settings.celery_broker_url.startswith("redis://") and not settings.celery_broker_url.startswith("rediss://"):
@@ -243,6 +280,14 @@ def validate_settings(settings: Settings) -> None:
             errors.append(
                 f"AUTH_JWT_SECRET is too short ({len(settings.auth_jwt_secret)} chars). "
                 "Must be >= 64 characters (hex-encoded 32 random bytes) in production."
+            )
+
+        # ── Internal endpoint secret (H3) ──
+        if not settings.internal_proxy_secret:
+            errors.append(
+                "INTERNAL_PROXY_SECRET is empty in production. "
+                "The /api/internal/* endpoints require it (X-Internal-Secret); "
+                "set the SAME value on the Next.js side (INTERNAL_PROXY_SECRET)."
             )
 
     # ── Print results ─────────────────────────────────────

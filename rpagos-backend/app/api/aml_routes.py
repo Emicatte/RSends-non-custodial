@@ -17,10 +17,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select, func, update
 
+from app.api.audit_routes import require_admin  # admin-token (X-Admin-Token) gate
 from app.db.session import async_session
 from app.models.aml_models import (
     AMLAlert,
@@ -108,6 +109,7 @@ async def list_alerts(
     sender: Optional[str] = Query(None, description="Filter by sender address"),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
+    _admin: str = Depends(require_admin),
 ):
     """List AML alerts with optional filters."""
     async with async_session() as db:
@@ -166,7 +168,9 @@ async def list_alerts(
 # ═══════════════════════════════════════════════════════════════
 
 @aml_router.post("/admin/aml/alerts/{alert_id}/review")
-async def review_alert(alert_id: int, body: ReviewRequest):
+async def review_alert(
+    alert_id: int, body: ReviewRequest, _admin: str = Depends(require_admin)
+):
     """Mark an AML alert as reviewed/escalated/dismissed."""
     try:
         new_status = AlertStatus(body.status)
@@ -199,7 +203,9 @@ async def review_alert(alert_id: int, body: ReviewRequest):
 # ═══════════════════════════════════════════════════════════════
 
 @aml_router.post("/admin/aml/sanctions/update")
-async def update_sanctions(body: Optional[dict] = None):
+async def update_sanctions(
+    body: Optional[dict] = None, _admin: str = Depends(require_admin)
+):
     """Update sanctions list from JSON payload or built-in OFAC file.
 
     If no body is provided, loads from data/sanctions/ofac_sdn.json.
@@ -230,7 +236,7 @@ async def update_sanctions(body: Optional[dict] = None):
 # ═══════════════════════════════════════════════════════════════
 
 @aml_router.get("/admin/aml/stats")
-async def aml_stats():
+async def aml_stats(_admin: str = Depends(require_admin)):
     """AML statistics for the last 24 hours."""
     since = datetime.now(timezone.utc) - timedelta(hours=24)
 

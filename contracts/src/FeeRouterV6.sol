@@ -26,10 +26,11 @@ pragma solidity ^0.8.24;
  * USDT Mainnet: 0xdAC17F958D2ee523a2206206994597C13D831ec7
  */
 
-import {Ownable}          from "@openzeppelin/contracts/access/Ownable.sol";
+import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {IERC20}           from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20}        from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard}  from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {Pausable}         from "@openzeppelin/contracts/utils/Pausable.sol";
 import {ECDSA}            from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
@@ -86,7 +87,7 @@ error ThresholdTooHigh();
 error DuplicateSigner();
 error USDTAllowanceInsufficient();
 
-contract FeeRouterV6 is Ownable, ReentrancyGuard {
+contract FeeRouterV6 is Ownable2Step, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using ECDSA for bytes32;
     using MessageHashUtils for bytes32;
@@ -202,7 +203,7 @@ contract FeeRouterV6 is Ownable, ReentrancyGuard {
         bytes32 nonce,
         uint256 deadline,
         bytes[] calldata oracleSignatures
-    ) external nonReentrant {
+    ) external nonReentrant whenNotPaused {
         if (tokenIn   == address(0)) revert ZeroAddress();
         if (tokenOut  == address(0)) revert ZeroAddress();
         if (recipient == address(0)) revert ZeroAddress();
@@ -241,7 +242,7 @@ contract FeeRouterV6 is Ownable, ReentrancyGuard {
         bytes32 nonce,
         uint256 deadline,
         bytes[] calldata oracleSignatures
-    ) external payable nonReentrant {
+    ) external payable nonReentrant whenNotPaused {
         if (tokenOut  == address(0)) revert ZeroAddress();
         if (recipient == address(0)) revert ZeroAddress();
         if (msg.value == 0)          revert ZeroAmount();
@@ -278,7 +279,7 @@ contract FeeRouterV6 is Ownable, ReentrancyGuard {
         bytes32 _nonce,
         uint256 _deadline,
         bytes[] calldata _oracleSignatures
-    ) external nonReentrant {
+    ) external nonReentrant whenNotPaused {
         if (_token     == address(0)) revert ZeroAddress();
         if (_recipient == address(0)) revert ZeroAddress();
         if (_amount    == 0)          revert ZeroAmount();
@@ -304,7 +305,7 @@ contract FeeRouterV6 is Ownable, ReentrancyGuard {
         bytes32 _nonce,
         uint256 _deadline,
         bytes[] calldata _oracleSignatures
-    ) external payable nonReentrant {
+    ) external payable nonReentrant whenNotPaused {
         if (_recipient == address(0)) revert ZeroAddress();
         if (msg.value  == 0)          revert ZeroAmount();
         if (block.timestamp > _deadline) revert DeadlineExpired();
@@ -364,6 +365,16 @@ contract FeeRouterV6 is Ownable, ReentrancyGuard {
 
     function setBlacklisted(address _addr, bool _status) external onlyOwner {
         blacklisted[_addr] = _status;
+    }
+
+    // ── Circuit breaker (M10) — halt the rail on an incident (e.g. oracle-key
+    // compromise). Money entrypoints carry whenNotPaused.
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    function unpause() external onlyOwner {
+        _unpause();
     }
 
     function setDefaultPoolFee(uint24 _fee) external onlyOwner {

@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useWriteContract } from 'wagmi'
 import { parseEther, parseUnits, formatUnits, getAddress } from 'viem'
 import { getRegistry } from '../../lib/contractRegistry'
-import { FEE_ROUTER_ABI } from '../../lib/feeRouterAbi'
+import { FEE_ROUTER_ABI, FEE_ROUTER_V6_ABI } from '../../lib/feeRouterAbi'
 import type { CreateRulePayload } from '../../lib/useForwardingRules'
 import type {
   CreateSplitContractPayload,
@@ -267,6 +267,13 @@ function RouteWizard({
       const oracle = await oracleRes.json()
       if (!oracle.approved) throw new Error(oracle.rejectionReason || t('oracleDenied'))
 
+      // M1 slice B: V5/V6 take a threshold bytes[]; V4 a single bytes.
+      const isV6 = registry.version === 'v6'
+      const routerAbi = isV6 ? FEE_ROUTER_V6_ABI : FEE_ROUTER_ABI
+      const oracleSigArg = isV6
+        ? (oracle.oracleSignatures as `0x${string}`[])
+        : (oracle.oracleSignature as `0x${string}`)
+
       // ── Step 2: On-chain tx via MetaMask ──────────────────
       const recipientAddr = getAddress(primaryDest.address) as `0x${string}`
       let txHash: `0x${string}`
@@ -274,20 +281,20 @@ function RouteWizard({
       if (isNative) {
         txHash = await writeContractAsync({
           address: registry.feeRouter,
-          abi: FEE_ROUTER_ABI,
+          abi: routerAbi,
           functionName: 'transferETHWithOracle',
           args: [
             recipientAddr,
             oracle.oracleNonce as `0x${string}`,
             BigInt(oracle.oracleDeadline),
-            oracle.oracleSignature as `0x${string}`,
+            oracleSigArg,
           ],
           value: amountWei,
         })
       } else {
         txHash = await writeContractAsync({
           address: registry.feeRouter,
-          abi: FEE_ROUTER_ABI,
+          abi: routerAbi,
           functionName: 'transferWithOracle',
           args: [
             tokenAddr as `0x${string}`,
@@ -295,7 +302,7 @@ function RouteWizard({
             recipientAddr,
             oracle.oracleNonce as `0x${string}`,
             BigInt(oracle.oracleDeadline),
-            oracle.oracleSignature as `0x${string}`,
+            oracleSigArg,
           ],
         })
       }

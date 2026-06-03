@@ -165,8 +165,10 @@ export async function POST(req: NextRequest) {
     requiresSetup = true
   }
 
-  // Generate session token and set httpOnly cookie
-  const token = generateToken()
+  // Generate session token and set httpOnly cookie. In bootstrap mode
+  // (requiresSetup) the session is SETUP-ONLY — it can only enroll TOTP, not
+  // perform admin actions (M11). A full session needs the verified TOTP above.
+  const token = generateToken(requiresSetup)
   const isSecure = process.env.NODE_ENV === 'production'
 
   const res = NextResponse.json({ status: 'ok', requiresSetup })

@@ -1,0 +1,78 @@
+name: CI
+
+# M12 — lint/type/test gate. Runs the smart-contract suite, the backend
+# audit-remediation regression tests, and the frontend type-check on every
+# push/PR so drifts (like the H3 validate_settings change that silently broke
+# test_config_hardening) are caught automatically.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  contracts:
+    name: Contracts (forge)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+      - run: forge --version
+      - run: forge build --sizes
+      - run: forge test -vvv
+
+  backend:
+    name: Backend (pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rpagos-backend
+    env:
+      DATABASE_URL: "sqlite+aiosqlite://"
+      DEBUG: "true"
+      ENVIRONMENT: "test"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies (pinned)
+        run: pip install -r requirements.txt
+      - name: Audit-remediation regression tests
+        # Curated green set (the C/H/M fix regression tests). The legacy
+        # tests/audit/ suite has no sources (M12 backlog) and some older
+        # tests/test_*.py predate the model-registration fixture fix.
+        run: >
+          pytest -q
+          tests/test_ratelimit_internal.py
+          tests/test_forwarding_authz.py
+          tests/test_ws_ticket.py
+          tests/test_get_deny_by_default.py
+          tests/test_oracle_signer.py
+          tests/test_signing_guard_aml.py
+          tests/test_admin_auth_required.py
+          tests/test_config_hardening.py
+          tests/test_internal_secret.py
+          tests/test_wallet_session_auth.py
+          tests/test_webhook_dedup_atomic.py
+          tests/test_split_idempotency.py
+          tests/test_distribution_idempotency.py
+
+  frontend:
+    name: Frontend (tsc)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - run: npm ci
+      - name: Type-check
+        run: npx tsc --noEmit

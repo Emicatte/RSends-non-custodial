@@ -1,174 +1,201 @@
 'use client'
 
 /**
- * lib/walletAuth.ts — EIP-191 wallet signature helper for RSends backend auth.
+ * lib/walletAuth.ts — Session-HMAC wallet auth for the RSends backend (H4).
  *
- * Centralizes signOnce + getAuthHeaders previously duplicated across
- * useForwardingRules.ts and useSplitContracts.ts. Used by:
- *  - mutation calls (POST/PUT/DELETE) → pair with mutationHeaders({...auth})
- *  - GET calls under C1 IDOR fix → ownership-checked endpoints
+ * Anti-replay scheme (replaces the old replayable `RSends:{address}:{timestamp}`
+ * bearer signature):
+ *  1. The wallet signs ONCE `RSends:session:{nonce}:{timestamp}` (one popup) and
+ *     exchanges it at POST /api/v1/auth/wallet-session for a short-lived
+ *     `session_secret` (Redis-backed, 15 min TTL).
+ *  2. Every request carries a SINGLE-USE HMAC over `{nonce}:{timestamp}` keyed by
+ *     the session secret. The secret is never transmitted again; a captured MAC
+ *     cannot be reused (nonce is single-use server-side) or forged.
  *
- * Cache: signature reused across calls within a ~4m30s window
- * (5 min backend tolerance - 30 s safety buffer). Cache invalidates
- * automatically when `address` changes (wallet switch / disconnect).
+ * `signOnce` is unchanged — it signs arbitrary operation-specific messages used
+ * by callers (e.g. forwarding/split mutations) and is NOT the request credential.
  *
- * Cache + dedupe scope: GLOBAL SINGLETON via globalThis + Symbol.for.
- * Multiple components calling useWalletAuth(address) for the same wallet
- * see ONE signature popup, not N. Two independent dedupe layers:
- *  - inflightAuthMap: getAuthHeaders waiters share the full
- *    {signature, timestamp} tuple. Prevents sig/ts mismatch when
- *    concurrent callers build their own timestamps.
- *  - signingPromiseMap: signOnce-level dedupe for direct mutation
- *    callers. Concurrent mutations on the same address share one
- *    signature instead of queueing two MetaMask popups.
- *
- * Why globalThis (and not plain module-level const)? Next.js dynamic
- * imports cause this module to be inlined into multiple bundler chunks
- * (e.g. one copy in the AutoForward chunk, another in the command-center
- * chunk). Each chunk gets its own module instance with its own const
- * Maps, so plain module-level state is NOT a singleton at runtime. By
- * stashing the state on `globalThis[Symbol.for('rsends.walletAuth.state.v1')]`
- * we share the Maps across every chunk that loads this file in the same
- * JS realm (the browser tab). The Symbol.for key is stable across calls
- * and namespaced to avoid collisions on the global object.
+ * Cache + dedupe scope: GLOBAL SINGLETON via globalThis + Symbol.for (Next.js
+ * dynamic imports inline this module into multiple chunks; see the original
+ * rationale). The cached unit is now the session (secret + imported HMAC key),
+ * not a reusable signature.
  */
 
 import { useCallback, useEffect, useRef } from 'react'
 import { useSignMessage } from 'wagmi'
 
-const SIGNATURE_TTL_MS = 4 * 60_000 + 30_000 // 4 min 30 sec
+const SESSION_SAFETY_MS = 30_000 // refresh ~30 s before the backend TTL (900 s)
 const SIGN_TIMEOUT_MS = 60_000
+const BACKEND = '/api/backend' // same-origin proxy → backend
 
 export interface WalletAuthHeaders {
   'X-Wallet-Address': string
-  'X-Wallet-Signature': string
+  'X-Wallet-Session': string
+  'X-Wallet-Nonce': string
   'X-Timestamp': string
+  'X-Wallet-MAC': string
   // Index signature required to satisfy `HeadersInit` (fetch overload).
   [key: string]: string
 }
 
-interface CachedAuth {
-  signature: string
-  timestamp: string
+interface WalletSession {
+  sessionId: string
+  key: CryptoKey // imported HMAC-SHA256 key (the secret never leaves here)
+  address: string
   expiresAt: number
 }
 
 // ── Global singleton state (shared across bundler chunks) ──────
-// Keyed by address.toLowerCase() so different casings of the same
-// wallet share entries. Not exported — encapsulated state.
-// See module JSDoc above for why globalThis is required (Next.js
-// dynamic imports duplicate this module into multiple chunks).
-const GLOBAL_STATE_KEY = Symbol.for('rsends.walletAuth.state.v1')
+const GLOBAL_STATE_KEY = Symbol.for('rsends.walletAuth.state.v2')
 type GlobalAuthState = {
-  cacheMap: Map<string, CachedAuth>
-  inflightAuthMap: Map<string, Promise<CachedAuth>>
+  sessionMap: Map<string, WalletSession>
+  inflightSessionMap: Map<string, Promise<WalletSession>>
   signingPromiseMap: Map<string, Promise<string>>
 }
 const _g = globalThis as unknown as Record<symbol, GlobalAuthState>
 if (!_g[GLOBAL_STATE_KEY]) {
   _g[GLOBAL_STATE_KEY] = {
-    cacheMap: new Map(),
-    inflightAuthMap: new Map(),
+    sessionMap: new Map(),
+    inflightSessionMap: new Map(),
     signingPromiseMap: new Map(),
   }
 }
-const { cacheMap, inflightAuthMap, signingPromiseMap } = _g[GLOBAL_STATE_KEY]
+const { sessionMap, inflightSessionMap, signingPromiseMap } = _g[GLOBAL_STATE_KEY]
 
-function toHeaders(address: string, auth: CachedAuth): WalletAuthHeaders {
-  return {
-    'X-Wallet-Address': address,
-    'X-Wallet-Signature': auth.signature,
-    'X-Timestamp': auth.timestamp,
-  }
+function _hex(buf: ArrayBuffer): string {
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+async function _importHmacKey(secret: string): Promise<CryptoKey> {
+  return crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  )
 }
 
 export function useWalletAuth(address: string | undefined) {
   const { signMessageAsync } = useSignMessage()
-
-  // Track previous address so we can drop its cache on switch/disconnect.
   const prevAddressRef = useRef<string | undefined>(undefined)
 
   const clearCache = useCallback(() => {
     if (!address) return
-    cacheMap.delete(address.toLowerCase())
+    const key = address.toLowerCase()
+    sessionMap.delete(key)
+    inflightSessionMap.delete(key)
   }, [address])
 
-  // Drop OLD address state on switch/disconnect.
-  // Idempotent across hooks: if hook A already deleted, hook B
-  // detecting the same change later just no-ops.
+  // Drop OLD address state on switch/disconnect (idempotent across hooks).
   useEffect(() => {
     const prev = prevAddressRef.current
     if (prev !== undefined && prev !== address) {
       const prevKey = prev.toLowerCase()
-      cacheMap.delete(prevKey)
-      inflightAuthMap.delete(prevKey)
+      sessionMap.delete(prevKey)
+      inflightSessionMap.delete(prevKey)
       signingPromiseMap.delete(prevKey)
     }
     prevAddressRef.current = address
   }, [address])
 
-  const signOnce = useCallback(async (message: string): Promise<string> => {
+  // signOnce — UNCHANGED. Signs an arbitrary message once (cross-hook dedupe),
+  // used by callers for operation-specific signatures (not the auth credential).
+  const signOnce = useCallback(
+    async (message: string): Promise<string> => {
+      if (!address) throw new Error('Wallet not connected')
+      const key = address.toLowerCase()
+      const inflight = signingPromiseMap.get(key)
+      if (inflight) return inflight
+
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                'Signature timed out — open your wallet and approve the pending request',
+              ),
+            ),
+          SIGN_TIMEOUT_MS,
+        ),
+      )
+      const promise = Promise.race([signMessageAsync({ message }), timeout])
+      signingPromiseMap.set(key, promise)
+      try {
+        return await promise
+      } finally {
+        signingPromiseMap.delete(key)
+      }
+    },
+    [address, signMessageAsync],
+  )
+
+  // ensureSession — sign ONCE to obtain an HMAC session secret from the backend.
+  // Cross-hook dedupe so concurrent callers share ONE signature popup + session.
+  const ensureSession = useCallback(async (): Promise<WalletSession> => {
     if (!address) throw new Error('Wallet not connected')
     const key = address.toLowerCase()
 
-    // Cross-hook dedupe: if another caller is already signing for this
-    // address, return the same promise. Note: dedupe ignores message
-    // content — concurrent callers with different messages all receive
-    // the first signature. Acceptable here because every caller signs
-    // `RSends:{address}:{...}` for the same connected wallet.
-    const inflight = signingPromiseMap.get(key)
+    const cached = sessionMap.get(key)
+    if (cached && Date.now() < cached.expiresAt) return cached
+
+    const inflight = inflightSessionMap.get(key)
     if (inflight) return inflight
 
-    const timeout = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(
-        'Signature timed out — open your wallet and approve the pending request'
-      )), SIGN_TIMEOUT_MS)
-    )
-    const promise = Promise.race([signMessageAsync({ message }), timeout])
-    signingPromiseMap.set(key, promise)
+    const promise: Promise<WalletSession> = (async () => {
+      const nonce = crypto.randomUUID()
+      const ts = new Date().toISOString()
+      const signature = await signOnce(`RSends:session:${nonce}:${ts}`)
+      const res = await fetch(`${BACKEND}/api/v1/auth/wallet-session`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Wallet-Address': address,
+          'X-Wallet-Signature': signature,
+          'X-Timestamp': ts,
+        },
+        body: JSON.stringify({ nonce }),
+        signal: AbortSignal.timeout(15000),
+      })
+      if (!res.ok) throw new Error(`wallet-session HTTP ${res.status}`)
+      const data = await res.json()
+      const session: WalletSession = {
+        sessionId: data.session_id,
+        key: await _importHmacKey(data.session_secret),
+        address: key,
+        expiresAt: Date.now() + (data.expires_in ?? 900) * 1000 - SESSION_SAFETY_MS,
+      }
+      sessionMap.set(key, session)
+      return session
+    })()
+    inflightSessionMap.set(key, promise)
     try {
       return await promise
     } finally {
-      signingPromiseMap.delete(key)
-    }
-  }, [address, signMessageAsync])
-
-  const getAuthHeaders = useCallback(async (): Promise<WalletAuthHeaders> => {
-    if (!address) throw new Error('Wallet not connected')
-    const key = address.toLowerCase()
-
-    // Cache hit
-    const cached = cacheMap.get(key)
-    if (cached && Date.now() < cached.expiresAt) {
-      return toHeaders(address, cached)
-    }
-
-    // In-flight dedupe (cross-hook, cross-call): waiters share the full
-    // {signature, timestamp} tuple, so all consumers get a CONSISTENT
-    // pair (avoids backend 401 from sig/ts mismatch on a naive design).
-    const inflight = inflightAuthMap.get(key)
-    if (inflight) return toHeaders(address, await inflight)
-
-    // Cold path: build timestamp + sign + populate cache
-    const promise: Promise<CachedAuth> = (async () => {
-      const timestamp = new Date().toISOString()
-      const message = `RSends:${address}:${timestamp}`
-      const signature = await signOnce(message)
-      const auth: CachedAuth = {
-        signature,
-        timestamp,
-        expiresAt: Date.now() + SIGNATURE_TTL_MS,
-      }
-      cacheMap.set(key, auth)
-      return auth
-    })()
-    inflightAuthMap.set(key, promise)
-    try {
-      return toHeaders(address, await promise)
-    } finally {
-      inflightAuthMap.delete(key)
+      inflightSessionMap.delete(key)
     }
   }, [address, signOnce])
+
+  // getAuthHeaders — UNCHANGED call signature. Returns a FRESH single-use
+  // HMAC credential per call (no wallet popup; the HMAC is computed locally).
+  const getAuthHeaders = useCallback(async (): Promise<WalletAuthHeaders> => {
+    if (!address) throw new Error('Wallet not connected')
+    const session = await ensureSession()
+    const nonce = crypto.randomUUID()
+    const ts = new Date().toISOString()
+    const mac = _hex(
+      await crypto.subtle.sign('HMAC', session.key, new TextEncoder().encode(`${nonce}:${ts}`)),
+    )
+    return {
+      'X-Wallet-Address': address,
+      'X-Wallet-Session': session.sessionId,
+      'X-Wallet-Nonce': nonce,
+      'X-Timestamp': ts,
+      'X-Wallet-MAC': mac,
+    }
+  }, [address, ensureSession])
 
   return { signOnce, getAuthHeaders, clearCache }
 }
