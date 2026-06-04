@@ -467,11 +467,13 @@ async def _process_alchemy_activity(activity: list, network: str = "") -> None:
         if not to_addr or value <= 0:
             continue
 
-        # Per-TX dedup: protects against Alchemy retrying with different webhook_id
+        # Per-TX dedup (M6 — atomic): a single SETNX claim wins; concurrent
+        # deliveries of the same tx_hash skip. Fail-closed on Redis down.
         if tx_hash:
-            from app.services.idempotency_service import is_tx_processed, mark_tx_processed
-            if await is_tx_processed(tx_hash):
-                logger.info("[webhook] TX %s already processed, skipping", tx_hash[:16])
+            from app.services.idempotency_service import claim_tx_processed
+            claimed, reason = await claim_tx_processed(tx_hash)
+            if not claimed:
+                logger.info("[webhook] TX %s not claimed (%s), skipping", tx_hash[:16], reason)
                 continue
 
         # ERC-20: extract contract address and decimals from rawContract
@@ -544,9 +546,7 @@ async def _process_alchemy_activity(activity: list, network: str = "") -> None:
                 split_result.get("status"),
                 " (duplicate)" if split_result.get("duplicate") else "",
             )
-            if tx_hash:
-                await mark_tx_processed(tx_hash)
-            continue  # Skip forwarding rules for this TX
+            continue  # Skip forwarding rules for this TX (already claimed atomically)
 
         # Fast path: Celery via thread pool (non-blocking, 2s timeout)
         # Only dispatch if Redis is up AND at least one Celery worker is running
@@ -572,9 +572,8 @@ async def _process_alchemy_activity(activity: list, network: str = "") -> None:
                     "[webhook] process_incoming_tx failed for TX %s: %s",
                     tx_hash[:16] if tx_hash else "?", e,
                 )
-
-        if tx_hash:
-            await mark_tx_processed(tx_hash)
+        # NB: the tx_hash was already claimed atomically at the top of the loop
+        # (M6) — no end-of-loop mark needed.
 
 
 # ═══════════════════════════════════════════════════════════
@@ -1485,14 +1484,50 @@ async def list_batches(
 #  14. GET /forwarding/spending-limits — Spending limits status
 # ═══════════════════════════════════════════════════════════
 
+@sweeper_router.post("/forwarding/sweep-ticket")
+@require_wallet_auth
+async def sweep_feed_ticket(
+    request: Request,
+    wallet_address: Optional[str] = None,
+):
+    """Mint a single-use ticket authorizing this wallet's sweep-feed WS (M4).
+
+    Browser WebSockets can't send auth headers, so the client mints a ticket
+    here (wallet-authed → owner is the verified wallet) and passes it to
+    /ws/sweep-feed/{address}?ticket=.
+    """
+    if not wallet_address:
+        raise HTTPException(
+            status_code=500,
+            detail="wallet_address not injected by @require_wallet_auth",
+        )
+    from app.services.ws_ticket import TICKET_TTL_SECONDS, mint_sweep_ticket
+
+    ticket = await mint_sweep_ticket(wallet_address)
+    if not ticket:
+        raise HTTPException(status_code=503, detail="ticket service unavailable")
+    return _response({"ticket": ticket, "expires_in": TICKET_TTL_SECONDS})
+
+
 @sweeper_router.get("/forwarding/spending-limits")
+@require_wallet_auth
 async def spending_limits_status(
+    request: Request,
     source_address: str = Query(..., description="Source wallet address"),
     chain_id: int = Query(8453),
+    wallet_address: Optional[str] = None,
 ):
-    source = source_address.lower()
+    if not wallet_address:
+        raise HTTPException(
+            status_code=500,
+            detail="wallet_address not injected by @require_wallet_auth",
+        )
     if not ETH_ADDR_RE.match(source_address):
         raise HTTPException(status_code=422, detail="Invalid source_address format")
+    source = source_address.lower()
+    # Ownership (M9): callers may only read their OWN spending limits.
+    if source != wallet_address.lower():
+        raise HTTPException(status_code=403, detail="forbidden: source_address mismatch")
 
     try:
         from app.services.spending_policy import SpendingPolicy
@@ -1534,15 +1569,26 @@ async def spending_limits_status(
 # ═══════════════════════════════════════════════════════════
 
 @sweeper_router.get("/forwarding/estimate-gas")
+@require_wallet_auth
 async def estimate_gas(
+    request: Request,
     recipients: int = Query(ge=1, le=1000, description="Number of recipients"),
     chain_id: int = Query(default=8453, description="Chain ID"),
+    wallet_address: Optional[str] = None,
 ):
     """Estimate total gas cost for a distribution (L2 execution + L1 data fee).
 
     Returns fee breakdown so the frontend can show accurate cost estimates,
     especially on OP Stack chains where L1 data fee can be 50-90% of total.
+
+    Requires wallet auth (M9): no per-address data, but an authenticated wallet
+    gates the RPC-backed estimator against anonymous abuse.
     """
+    if not wallet_address:
+        raise HTTPException(
+            status_code=500,
+            detail="wallet_address not injected by @require_wallet_auth",
+        )
     from app.services.gas_estimator import estimate_distribution_cost
 
     try:

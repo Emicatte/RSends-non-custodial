@@ -52,7 +52,7 @@ from app.models.split_models import (
     SplitRecipient,  # noqa: F401 — imported for relationship materialization
 )
 from app.services.split_engine import compute_split
-from app.services.split_executor import SplitExecutor
+from app.services.split_executor import SplitExecutor, DuplicateSplitExecution
 
 logger = logging.getLogger("rsend.split_bridge")
 
@@ -409,6 +409,25 @@ async def maybe_execute_split(
 
         try:
             execution = await executor.execute(plan, source_tx_hash=source_tx_hash)
+        except DuplicateSplitExecution:
+            # Concurrent/duplicate delivery already created the execution (DB
+            # unique constraint uq_split_exec_contract_srctx). NO TX was sent on
+            # this path — re-read the winning execution and return an idempotent
+            # duplicate result (fail-closed: handled=True skips forwarding).
+            existing = await _find_existing_execution(db, contract.id, source_tx_hash)
+            logger.info(
+                "[split_bridge] Duplicate split prevented by DB constraint: "
+                "contract=%d tx=%s execution=%s",
+                contract.id, source_tx_hash[:16],
+                existing.id if existing else None,
+            )
+            return {
+                "handled": True,
+                "contract_id": contract.id,
+                "execution_id": existing.id if existing else None,
+                "status": existing.status if existing else "duplicate",
+                "duplicate": True,
+            }
         except Exception as exec_err:
             logger.exception(
                 "[split_bridge] Execution raised for contract #%d tx=%s: %s",

@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import QRCodeLib from 'qrcode'
+import { requireEnv } from '@/lib/env'
 
 // ═══════════════════════════════════════════════════════════════
 //  Types
@@ -192,7 +193,9 @@ function usePaymentWebSocket(
     function connect() {
       if (!mountedRef.current) return
 
-      const backendUrl = process.env.NEXT_PUBLIC_RPAGOS_BACKEND_URL || 'http://localhost:8000'
+      // TODO: WebSocket call is direct-to-backend; consider an edge/Node
+      // proxy so NEXT_PUBLIC_RPAGOS_BACKEND_URL can become server-only.
+      const backendUrl = requireEnv('NEXT_PUBLIC_RPAGOS_BACKEND_URL')
       const wsUrl = backendUrl.replace(/^http/, 'ws') + `/ws/payment/${intentId}`
 
       const ws = new WebSocket(wsUrl)

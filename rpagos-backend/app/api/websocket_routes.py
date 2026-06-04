@@ -46,6 +46,7 @@ from sqlalchemy import case, func, select
 from app.db.session import async_session
 from app.models.forwarding_models import ForwardingRule, SweepLog, SweepStatus
 from app.services.cache_service import get_redis
+from app.services.ws_ticket import consume_sweep_ticket
 
 logger = logging.getLogger(__name__)
 
@@ -590,6 +591,16 @@ async def sweep_feed(websocket: WebSocket, owner_address: str):
     # Valida indirizzo
     if not ETH_ADDR_RE.match(owner_address):
         await websocket.close(code=4001, reason="invalid_address")
+        return
+
+    # ── Authorization (M4): single-use ticket proving ownership ──
+    # Browser WS can't send auth headers, so the client mints a ticket via the
+    # wallet-authed POST /api/v1/forwarding/sweep-ticket and passes ?ticket=.
+    # The ticket is single-use, 30s TTL, and bound to the verified owner.
+    ticket = websocket.query_params.get("ticket")
+    ticket_owner = await consume_sweep_ticket(ticket)
+    if ticket_owner is None or ticket_owner != owner:
+        await websocket.close(code=4003, reason="unauthorized")
         return
 
     # Limite connessioni

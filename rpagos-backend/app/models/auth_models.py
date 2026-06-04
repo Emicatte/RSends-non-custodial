@@ -10,7 +10,7 @@ Three tables:
 
 from datetime import datetime, timezone
 from sqlalchemy import (
-    Column, String, Text, Boolean, BigInteger, DateTime, TIMESTAMP, ForeignKey, Index,
+    Column, String, Text, Boolean, BigInteger, Date, DateTime, TIMESTAMP, ForeignKey, Index,
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB, INET
 from sqlalchemy.types import TypeDecorator, CHAR, JSON
@@ -100,6 +100,24 @@ class User(Base):
     last_login_ip = Column(_INET(), nullable=True)
 
     status = Column(Text, nullable=False, default="active")
+
+    # account_type: 'individual' | 'merchant'. Required, no default — set
+    # explicitly at signup (see email_auth_service.signup). DB CHECK constraint
+    # `ck_users_account_type` (migration 0037) enforces the allowed values.
+    # TODO(account_type): the post-verification onboarding path diverges here —
+    # 'individual' -> KYC, 'merchant' -> KYB. Not branched yet; only persisted.
+    account_type = Column(String(20), nullable=False)
+
+    # Signup profile fields (migration 0038). NULLABLE — existing accounts
+    # predate these and have NULL; new email/password signups set them
+    # (required at the SignupRequest layer, not the DB). display_name is derived
+    # from first_name + last_name for new signups; existing display_name kept.
+    first_name = Column(String(100), nullable=True)
+    last_name = Column(String(100), nullable=True)
+    date_of_birth = Column(Date, nullable=True)            # age >= 18 enforced at signup
+    country_of_residence = Column(String(2), nullable=True)  # ISO 3166-1 alpha-2
+    newsletter_opt_in = Column(Boolean, nullable=True)      # optional opt-in
+
     # NOTE: renamed from `metadata` to avoid clash with SQLAlchemy's
     # `Base.metadata` class attribute. Column stays `metadata_json`.
     metadata_json = Column(_JSONB(), nullable=False, default=dict)

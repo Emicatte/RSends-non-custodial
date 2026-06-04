@@ -17,7 +17,31 @@ const analyzer = withBundleAnalyzer({
 const isDev = process.env.NODE_ENV === 'development'
 const devConnect = isDev ? ' ws://localhost:* http://localhost:*' : ''
 
+// CORS allowlist: comma-separated origins. In production an empty list
+// means "no cross-origin allowed" (safe default). In development we fall
+// back to http://localhost:3000 so local dev still works without setup.
+const corsAllowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean)
+const corsOrigins =
+  corsAllowedOrigins.length > 0
+    ? corsAllowedOrigins
+    : isDev
+      ? ['http://localhost:3000']
+      : []
+const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
 const nextConfig = {
+  // Lint is run as a separate step (`npm run lint`), not as a build gate.
+  // `next build` previously did not lint (no eslintrc existed), so it never
+  // enforced ESLint. Adding .eslintrc.json (so `next lint` works) would
+  // otherwise make `next build` fail on a large body of PRE-EXISTING lint debt
+  // in the dapp code (unused-vars + react-hooks/rules-of-hooks). Keep build and
+  // lint decoupled; address the debt separately via `npm run lint`.
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   webpack: (config) => {
     config.resolve.fallback = {
       ...config.resolve.fallback,
@@ -34,7 +58,12 @@ const nextConfig = {
           key: 'Content-Security-Policy',
           value: [
             "default-src 'self'",
-            "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+            // L2 (residual): 'unsafe-inline' is still required by Next.js inline
+            // hydration scripts. Removing it safely needs a NONCE-based CSP
+            // (per-request nonce from middleware injected into Next's scripts +
+            // script-src 'nonce-…' 'strict-dynamic'). Tracked as a follow-up;
+            // do NOT drop 'unsafe-inline' without that, it breaks the app.
+            "script-src 'self' 'unsafe-inline'",
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://api.fontshare.com",
             "font-src 'self' data: https://fonts.gstatic.com https://cdn.fontshare.com",
             "img-src 'self' data: blob: https:",
@@ -54,14 +83,26 @@ const nextConfig = {
         { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
       ],
     },
-    {
+    // CORS: one header entry per allowlisted origin, gated by the request's
+    // Origin header. Requests from non-allowlisted origins receive no CORS
+    // headers → preflight fails → browser blocks the request. Wildcard '*'
+    // is intentionally absent: cross-origin access is explicit-only.
+    ...corsOrigins.map((origin) => ({
       source: '/api/:path*',
+      has: [
+        {
+          type: 'header',
+          key: 'origin',
+          value: `^${escapeRegex(origin)}$`,
+        },
+      ],
       headers: [
-        { key: 'Access-Control-Allow-Origin', value: '*' },
+        { key: 'Access-Control-Allow-Origin', value: origin },
+        { key: 'Vary', value: 'Origin' },
         { key: 'Access-Control-Allow-Methods', value: 'GET, POST, OPTIONS' },
         { key: 'Access-Control-Allow-Headers', value: 'Content-Type, Authorization' },
       ],
-    },
+    })),
     // ── Cache-Control ──────────────────────────────────────────
     // HTML pages: never cache, always revalidate
     {

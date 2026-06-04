@@ -2,6 +2,7 @@ import type { NextAuthOptions } from 'next-auth'
 import GoogleProvider from 'next-auth/providers/google'
 import GitHubProvider from 'next-auth/providers/github'
 import CredentialsProvider from 'next-auth/providers/credentials'
+import { requireEnv } from '@/lib/env'
 
 /**
  * NextAuth v4 options shared between the route handler and any
@@ -20,12 +21,6 @@ import CredentialsProvider from 'next-auth/providers/credentials'
  * and seeds the JWT with access_token so downstream hooks that gate on
  * useSession().status === 'authenticated' work identically to Google.
  */
-
-const BACKEND_URL =
-  process.env.RPAGOS_BACKEND_URL ??
-  process.env.NEXT_PUBLIC_RPAGOS_BACKEND_URL ??
-  process.env.NEXT_PUBLIC_API_URL ??
-  'http://localhost:8000'
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -58,6 +53,9 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.access_token) return null
+        // Lazy: resolve the backend URL here (not at module load) so a missing
+        // RPAGOS_BACKEND_URL can't throw at import and break the auth subsystem.
+        const BACKEND_URL = requireEnv('RPAGOS_BACKEND_URL')
         try {
           const res = await fetch(`${BACKEND_URL}/api/v1/auth/me`, {
             headers: { Authorization: `Bearer ${credentials.access_token}` },
@@ -68,13 +66,21 @@ export const authOptions: NextAuthOptions = {
             id?: string
             email?: string
             display_name?: string | null
+            email_verified?: boolean
           }
           return {
             id: user.id ?? credentials.user_id ?? 'unknown',
             email: user.email ?? credentials.email ?? '',
             name: user.display_name ?? user.email ?? credentials.email ?? null,
             access_token: credentials.access_token,
-          } as unknown as { id: string; email: string; name: string | null; access_token: string }
+            email_verified: user.email_verified ?? false,
+          } as unknown as {
+            id: string
+            email: string
+            name: string | null
+            access_token: string
+            email_verified: boolean
+          }
         } catch {
           return null
         }
@@ -96,6 +102,7 @@ export const authOptions: NextAuthOptions = {
         (user as unknown as Record<string, unknown>).access_token
       ) {
         ;(token as Record<string, unknown>).access_token = (user as unknown as Record<string, unknown>).access_token
+        ;(token as Record<string, unknown>).email_verified = (user as unknown as Record<string, unknown>).email_verified
         ;(token as Record<string, unknown>).id_token = undefined
         ;(token as Record<string, unknown>).github_access_token = undefined
       }
@@ -110,6 +117,7 @@ export const authOptions: NextAuthOptions = {
       ;(session as unknown as Record<string, unknown>).id_token = (token as Record<string, unknown>).id_token
       ;(session as unknown as Record<string, unknown>).github_access_token = (token as Record<string, unknown>).github_access_token
       ;(session as unknown as Record<string, unknown>).access_token = (token as Record<string, unknown>).access_token
+      ;(session as unknown as Record<string, unknown>).email_verified = (token as Record<string, unknown>).email_verified
       return session
     },
   },

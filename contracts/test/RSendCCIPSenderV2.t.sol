@@ -187,4 +187,72 @@ contract RSendCCIPSenderV2Test is Test {
         uint256 spent = balBefore - user.balance;
         assertEq(spent, 0.01 ether, "user should only pay the CCIP fee");
     }
+
+    // ── M3: swapAndBridge refund is call-scoped (no stranded-ETH drain) ────
+
+    function _setupTokenOut() internal returns (MockERC20CCIP tokenOut) {
+        tokenOut = new MockERC20CCIP("OUT", "OUT");
+        vm.prank(owner);
+        sender.setTokenAllowed(address(tokenOut), true);
+        swapRouter.setTokenOut(address(tokenOut));
+        tokenOut.mint(address(swapRouter), 1_000_000e18); // swap pays out tokenOut
+    }
+
+    function test_M3_swapAndBridgeDoesNotDrainStrandedETH() public {
+        MockERC20CCIP tokenOut = _setupTokenOut();
+
+        // ETH stranded in the contract (refund dust / mistaken sends / overpay).
+        uint256 stranded = 5 ether;
+        vm.deal(address(sender), stranded);
+
+        uint256 ccipFee = 0.01 ether;   // MockCCIPRouter fee (non-empty extraArgs)
+        uint256 leftover = 0.5 ether;
+        uint256 userBefore = user.balance;
+
+        vm.prank(user);
+        sender.swapAndBridge{value: ccipFee + leftover}(
+            address(usdc), address(tokenOut), 1000e18, 1, DEST_CHAIN, recipient
+        );
+
+        // User is refunded ONLY their own leftover (pays just the CCIP fee).
+        assertEq(userBefore - user.balance, ccipFee, "user pays only the CCIP fee");
+        // The stranded ETH is UNTOUCHED — pre-fix it was drained to the caller.
+        assertEq(address(sender).balance, stranded, "stranded ETH must stay in contract");
+    }
+
+    function test_M3_rescueETH() public {
+        uint256 stranded = 3 ether;
+        vm.deal(address(sender), stranded);
+        uint256 ownerBefore = owner.balance;
+
+        vm.prank(owner);
+        sender.rescueETH(payable(owner));
+
+        assertEq(owner.balance - ownerBefore, stranded, "owner recovers stranded ETH");
+        assertEq(address(sender).balance, 0, "contract emptied by rescue");
+    }
+
+    function test_M3_rescueETH_onlyOwner() public {
+        vm.deal(address(sender), 1 ether);
+        vm.prank(user);
+        vm.expectRevert(); // Ownable: caller is not the owner
+        sender.rescueETH(payable(user));
+    }
+
+    function test_M3_rescueToken() public {
+        usdc.mint(address(sender), 500e18);
+        uint256 ownerBefore = usdc.balanceOf(owner);
+
+        vm.prank(owner);
+        sender.rescueToken(address(usdc), owner);
+
+        assertEq(usdc.balanceOf(owner) - ownerBefore, 500e18, "owner recovers stranded token");
+    }
+
+    function test_M3_rescueToken_onlyOwner() public {
+        usdc.mint(address(sender), 100e18);
+        vm.prank(user);
+        vm.expectRevert();
+        sender.rescueToken(address(usdc), user);
+    }
 }

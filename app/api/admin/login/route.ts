@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
+import { verifySync } from 'otplib'
 import { generateToken, TOKEN_TTL_SECONDS } from '@/lib/auth/adminTokens'
 
 // ── Config ──────────────────────────────────────────────────
@@ -88,9 +89,6 @@ function recordFailure(ip: string): void {
 
 // ── POST /api/admin/login ───────────────────────────────────
 
-// TODO: Add TOTP-based 2FA here — after password verification,
-// require a second factor before issuing the session token.
-
 export async function POST(req: NextRequest) {
   const secret = getAdminSecret()
   if (!secret) {
@@ -109,7 +107,7 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  let body: { password?: string }
+  let body: { password?: string; totp_code?: string }
   try {
     body = await req.json()
   } catch {
@@ -140,11 +138,40 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // Generate session token and set httpOnly cookie
-  const token = generateToken()
+  // ── TOTP 2FA ─────────────────────────────────────────────
+  // If ADMIN_TOTP_SECRET is set, the second factor is enforced.
+  // Otherwise we enter bootstrap mode: the response includes
+  // requiresSetup=true so the frontend can redirect to the setup flow.
+  const totpSecret = process.env.ADMIN_TOTP_SECRET || ''
+  let requiresSetup = false
+  if (totpSecret) {
+    const totpCode = body.totp_code?.trim()
+    if (!totpCode) {
+      recordFailure(ip)
+      return NextResponse.json(
+        { error: 'MFA_REQUIRED', message: 'TOTP code is required.' },
+        { status: 401 },
+      )
+    }
+    const result = verifySync({ token: totpCode, secret: totpSecret })
+    if (!result.valid) {
+      recordFailure(ip)
+      return NextResponse.json(
+        { error: 'MFA_INVALID', message: 'Invalid TOTP code.' },
+        { status: 401 },
+      )
+    }
+  } else {
+    requiresSetup = true
+  }
+
+  // Generate session token and set httpOnly cookie. In bootstrap mode
+  // (requiresSetup) the session is SETUP-ONLY — it can only enroll TOTP, not
+  // perform admin actions (M11). A full session needs the verified TOTP above.
+  const token = generateToken(requiresSetup)
   const isSecure = process.env.NODE_ENV === 'production'
 
-  const res = NextResponse.json({ status: 'ok' })
+  const res = NextResponse.json({ status: 'ok', requiresSetup })
   res.cookies.set(COOKIE_NAME, token, {
     httpOnly: true,
     secure: isSecure,

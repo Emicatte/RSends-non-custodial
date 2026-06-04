@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireEnv } from '@/lib/env'
 
 export const maxDuration = 30
 
@@ -18,11 +19,7 @@ export const maxDuration = 30
  */
 
 function getBackendUrl(): string {
-  return (
-    process.env.RPAGOS_BACKEND_URL ||
-    process.env.NEXT_PUBLIC_RPAGOS_BACKEND_URL ||
-    'http://localhost:8000'
-  )
+  return requireEnv('RPAGOS_BACKEND_URL')
 }
 
 const FORWARD_HEADERS = [

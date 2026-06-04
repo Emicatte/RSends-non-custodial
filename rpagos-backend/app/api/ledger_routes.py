@@ -16,10 +16,11 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import select, func, case, cast, Date
 
+from app.api.audit_routes import require_admin  # admin-token (X-Admin-Token) gate
 from app.db.session import async_session
 from app.models.ledger_models import LedgerEntry, Account
 
@@ -34,6 +35,7 @@ async def ledger_export_csv(
     currency: Optional[str] = Query(None, description="Filtra per valuta (es. USDC)"),
     date_from: Optional[date] = Query(None, description="Data inizio (YYYY-MM-DD)"),
     date_to: Optional[date] = Query(None, description="Data fine (YYYY-MM-DD)"),
+    _admin: str = Depends(require_admin),
 ):
     """Export ledger entries in CSV per compliance/audit."""
     async with async_session() as db:
@@ -78,6 +80,7 @@ async def ledger_export_json(
     account_id: Optional[str] = Query(None, description="UUID dell'account"),
     currency: Optional[str] = Query(None, description="Filtra per valuta"),
     limit: int = Query(100, ge=1, le=1000),
+    _admin: str = Depends(require_admin),
 ):
     """Export ledger entries in JSON."""
     async with async_session() as db:
@@ -107,7 +110,7 @@ async def ledger_export_json(
 
 
 @ledger_router.get("/integrity")
-async def ledger_integrity():
+async def ledger_integrity(_admin: str = Depends(require_admin)):
     """Verifica che sum(DEBIT) == sum(CREDIT) globalmente. Deve essere 0."""
     async with async_session() as db:
         result = await db.execute(
@@ -131,7 +134,11 @@ async def ledger_integrity():
 
 
 @ledger_router.get("/balance/{account_id}")
-async def ledger_balance(account_id: str, currency: str = Query("USDC")):
+async def ledger_balance(
+    account_id: str,
+    currency: str = Query("USDC"),
+    _admin: str = Depends(require_admin),
+):
     """Saldo di un account calcolato dal ledger: sum(CREDIT) - sum(DEBIT)."""
     from app.services.ledger_service import get_balance
 
@@ -146,7 +153,10 @@ async def ledger_balance(account_id: str, currency: str = Query("USDC")):
 
 
 @ledger_router.get("/accounts")
-async def list_accounts(active_only: bool = Query(True)):
+async def list_accounts(
+    active_only: bool = Query(True),
+    _admin: str = Depends(require_admin),
+):
     """Lista account contabili."""
     async with async_session() as db:
         q = select(Account).order_by(Account.created_at)

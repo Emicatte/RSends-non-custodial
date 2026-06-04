@@ -53,7 +53,13 @@ export async function apiCall<T>(
       code?: string
       detail?: { code?: string }
     }
-    throw new Error(err.code || err.detail?.code || `HTTP ${res.status}`)
+    const code = err.code || err.detail?.code || `HTTP ${res.status}`
+    // A gated route was hit by an unverified user. Surface it globally so the
+    // "verify your email" banner can show even if the session looked verified.
+    if (res.status === 403 && code === 'email_not_verified' && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('rsends:email-unverified'))
+    }
+    throw new Error(code)
   }
   return res.json() as Promise<T>
 }

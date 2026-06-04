@@ -5,7 +5,7 @@ import { getAllCoingeckoIds } from '../tokens/tokenRegistry'
 
 // Same-origin proxy → see app/api/backend/[...path]/route.ts
 const BACKEND = '/api/backend'
-const COINGECKO_API = 'https://api.coingecko.com/api/v3'
+const COINGECKO_API = '/api/market'
 const REFRESH_INTERVAL = 30_000 // 30 secondi — prezzi più reattivi
 
 export interface TokenPrices {

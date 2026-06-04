@@ -26,8 +26,10 @@ lxml==5.3.0
 
 # ── Security ──────────────────────────────────
 python-dotenv==1.0.1
-eth-utils>=4.0.0
-cryptography>=42.0.0
+# M12 — pin security-sensitive deps (were >=) to the resolved versions for
+# reproducible builds. Bump deliberately, not implicitly.
+eth-utils==6.0.0
+cryptography==46.0.7
 bcrypt>=4.0,<5
 
 # ── User Auth (Google OAuth + JWT) ───────────

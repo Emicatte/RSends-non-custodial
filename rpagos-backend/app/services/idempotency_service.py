@@ -107,6 +107,32 @@ async def mark_tx_processed(tx_hash: str) -> None:
         pass
 
 
+async def claim_tx_processed(tx_hash: str) -> tuple[bool, str]:
+    """Atomically claim a TX hash for processing (poll-fallback dedup).
+
+    Replaces the non-atomic is_tx_processed()+mark_tx_processed() pair, whose
+    read-then-write left a TOCTOU window where two concurrent deliveries of the
+    same tx_hash could both proceed. A single SETNX makes exactly one caller win.
+
+    Returns (claimed, reason):
+      (True,  "new")               → first to claim — proceed.
+      (False, "duplicate")         → already claimed/processed — skip.
+      (False, "redis_unavailable") → Redis down — skip (fail-closed; the
+                                     webhook is re-delivered / re-polled later).
+    """
+    from app.services.cache_service import get_redis
+
+    r = await get_redis()
+    if r is None:
+        return False, "redis_unavailable"
+    try:
+        is_new = await r.set(f"wh:idem:poll:{tx_hash}", "1", nx=True, ex=WEBHOOK_DEDUP_TTL)
+        return (True, "new") if is_new else (False, "duplicate")
+    except Exception as e:
+        logger.error("claim_tx_processed failed: %s — skipping for safety", e)
+        return False, "redis_error"
+
+
 # ═══════════════════════════════════════════════════════════════
 #  2. Transaction Dedup (DB)
 # ═══════════════════════════════════════════════════════════════

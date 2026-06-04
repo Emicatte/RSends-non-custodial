@@ -10,7 +10,7 @@ DELETE /api/v1/keys/{id}       — Delete a key permanently
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.models.api_key_models import ApiKey
 from app.security.api_keys import generate_api_key
+from app.security.auth import require_wallet_auth
 
 api_key_router = APIRouter(prefix="/api/v1/keys", tags=["api-keys"])
 
@@ -73,9 +74,25 @@ class RevokeRequest(BaseModel):
 
 
 @api_key_router.post("/generate", response_model=GenerateKeyResponse)
-async def generate_key(req: GenerateKeyRequest, db: AsyncSession = Depends(get_db)):
-    """Generate a new API key. Returns plaintext ONCE — store it safely."""
-    owner = req.owner_address.lower()
+@require_wallet_auth
+async def generate_key(
+    request: Request,
+    req: GenerateKeyRequest,
+    db: AsyncSession = Depends(get_db),
+    wallet_address: str = "",
+):
+    """Generate a new API key. Returns plaintext ONCE — store it safely.
+
+    Auth: wallet signature obbligatoria (EIP-191). L'owner della key è il
+    wallet del firmatario verificato — il campo `owner_address` del body è
+    IGNORATO (previene il mint anonimo di key per indirizzi arbitrari).
+    """
+    owner = wallet_address.lower()
+
+    # L'admin scope non è self-provisionabile: una key admin va creata
+    # out-of-band (gate ADMIN_PATHS), non da chi possiede solo un wallet.
+    if req.scope == "admin":
+        raise HTTPException(403, "admin scope cannot be self-provisioned")
 
     count_q = select(ApiKey).where(
         ApiKey.owner_address == owner,
@@ -111,11 +128,18 @@ async def generate_key(req: GenerateKeyRequest, db: AsyncSession = Depends(get_d
 
 
 @api_key_router.get("/", response_model=list[ApiKeyListItem])
+@require_wallet_auth
 async def list_keys(
-    owner_address: str = Query(...), db: AsyncSession = Depends(get_db)
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    wallet_address: str = "",
 ):
-    """List all API keys for an owner. Never returns the full key."""
-    owner = owner_address.lower()
+    """List all API keys for the authenticated wallet. Never returns the full key.
+
+    Auth: wallet signature obbligatoria. L'owner è il firmatario verificato
+    (niente lettura cross-owner via query param).
+    """
+    owner = wallet_address.lower()
     q = (
         select(ApiKey)
         .where(ApiKey.owner_address == owner)
@@ -143,15 +167,17 @@ async def list_keys(
 
 
 @api_key_router.get("/{key_id}/usage")
+@require_wallet_auth
 async def get_key_usage(
+    request: Request,
     key_id: int,
-    owner_address: str = Query(...),
     db: AsyncSession = Depends(get_db),
+    wallet_address: str = "",
 ):
-    """Get usage stats for a specific API key."""
+    """Get usage stats for a specific API key (owned by the authenticated wallet)."""
     q = select(ApiKey).where(
         ApiKey.id == key_id,
-        ApiKey.owner_address == owner_address.lower(),
+        ApiKey.owner_address == wallet_address.lower(),
     )
     result = await db.execute(q)
     key = result.scalar_one_or_none()
@@ -179,13 +205,17 @@ async def get_key_usage(
 
 
 @api_key_router.post("/{key_id}/revoke")
+@require_wallet_auth
 async def revoke_key(
-    key_id: int, req: RevokeRequest, db: AsyncSession = Depends(get_db)
+    request: Request,
+    key_id: int,
+    db: AsyncSession = Depends(get_db),
+    wallet_address: str = "",
 ):
-    """Revoke an API key (soft delete — keeps record)."""
+    """Revoke an API key (soft delete — keeps record). Owner = authenticated wallet."""
     q = select(ApiKey).where(
         ApiKey.id == key_id,
-        ApiKey.owner_address == req.owner_address.lower(),
+        ApiKey.owner_address == wallet_address.lower(),
     )
     result = await db.execute(q)
     key = result.scalar_one_or_none()
@@ -199,15 +229,17 @@ async def revoke_key(
 
 
 @api_key_router.delete("/{key_id}")
+@require_wallet_auth
 async def delete_key(
+    request: Request,
     key_id: int,
-    owner_address: str = Query(...),
     db: AsyncSession = Depends(get_db),
+    wallet_address: str = "",
 ):
-    """Permanently delete an API key."""
+    """Permanently delete an API key (owned by the authenticated wallet)."""
     q = select(ApiKey).where(
         ApiKey.id == key_id,
-        ApiKey.owner_address == owner_address.lower(),
+        ApiKey.owner_address == wallet_address.lower(),
     )
     result = await db.execute(q)
     key = result.scalar_one_or_none()

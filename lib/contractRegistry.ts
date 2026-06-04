@@ -42,6 +42,10 @@ export interface NetworkRegistry {
   chainName:     string
   isL2:          boolean
   feeRouter:     `0x${string}`
+  // FeeRouter ABI generation (M1 slice B). 'v4' (default) = single-signer
+  // oracle (bytes); 'v6' = threshold multisig (bytes[]). A chain opts into the
+  // multisig by setting version: 'v6' once a V5/V6 router is deployed there.
+  version?:      'v4' | 'v6'
   permit2:       `0x${string}`
   weth:          `0x${string}`
   swapRouter:    `0x${string}`

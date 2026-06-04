@@ -6,6 +6,7 @@ import AppTopbar from '@/components/app/AppTopbar'
 import { TransactionPersistence } from '@/components/TransactionPersistence'
 import { ContactsPersistence } from '@/components/ContactsPersistence'
 import { PostLoginMerge } from '@/components/auth/PostLoginMerge'
+import { EmailVerifyBanner } from '@/components/auth/EmailVerifyBanner'
 
 export const metadata: Metadata = {
   title: 'RSends — App',
@@ -23,6 +24,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         style={{ background: '#f7f6f3' }}
       >
         <AppTopbar />
+        <EmailVerifyBanner />
         {children}
       </div>
       <TransactionPersistence />

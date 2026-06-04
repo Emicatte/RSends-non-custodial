@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createHmac } from 'crypto'
+import { requireEnv } from '@/lib/env'
 
 /**
  * POST /api/tx/callback — Server-side HMAC proxy.
@@ -36,7 +37,7 @@ function getSecret() {
 }
 
 function getBackendUrl() {
-  return process.env.RPAGOS_BACKEND_URL || process.env.NEXT_PUBLIC_RPAGOS_BACKEND_URL || 'http://localhost:8000'
+  return requireEnv('RPAGOS_BACKEND_URL')
 }
 
 function computeHmac(message: string): string {

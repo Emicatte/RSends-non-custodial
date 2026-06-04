@@ -13,15 +13,37 @@ Endpoints:
     → Record a signing event to the immutable audit log
 """
 
+import hmac
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
+
+from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
 signing_router = APIRouter(prefix="/api/internal/signing", tags=["signing"])
+
+
+# ── Internal-secret gate (H3) ─────────────────────────────────────
+# /api/internal/* is exempt from API-key auth and reachable via the public
+# Next.js catch-all proxy. Require a shared secret (sent by the Next oracle as
+# X-Internal-Secret) so only the server-side oracle can reach these endpoints
+# — closing audit-log poisoning even on the directly-exposed backend.
+async def require_internal_secret(request: Request) -> None:
+    settings = get_settings()
+    secret = settings.internal_proxy_secret
+    if not secret:
+        # Not configured: allowed only in dev/debug; in prod it is required
+        # (validate_settings fails startup) and we fail-closed as a backstop.
+        if settings.debug:
+            return
+        raise HTTPException(status_code=503, detail="internal endpoint not configured")
+    provided = request.headers.get("X-Internal-Secret", "")
+    if not hmac.compare_digest(provided, secret):
+        raise HTTPException(status_code=403, detail="forbidden")
 
 # ── Supported chains ──────────────────────────────────────
 SUPPORTED_CHAINS = {1, 10, 56, 137, 8453, 42161, 43114, 84532, 728126428}
@@ -109,7 +131,11 @@ async def _record_signing_denied(body: "SigningCheckRequest", *, reason: str) ->
 # ═══════════════════════════════════════════════════════════════
 
 @signing_router.post("/check", response_model=SigningCheckResponse)
-async def signing_check(body: SigningCheckRequest, request: Request):
+async def signing_check(
+    body: SigningCheckRequest,
+    request: Request,
+    _internal: None = Depends(require_internal_secret),
+):
     """Pre-signing validation: rate limit + nonce + parameter bounds.
 
     Called by the Next.js oracle BEFORE signing.
@@ -179,6 +205,9 @@ async def signing_check(body: SigningCheckRequest, request: Request):
     # ── 5. AML screening (fail-closed) ─────────────────────
     from app.services.aml_service import is_blacklisted, full_aml_check
     from app.services.aml_exceptions import AMLBlockedError
+    from app.tokens.registry import get_token
+    from app.services.price_service import get_eur_value
+    from decimal import Decimal
 
     try:
         blocked, block_reason = await is_blacklisted(body.recipient)
@@ -207,25 +236,65 @@ async def signing_check(body: SigningCheckRequest, request: Request):
                 details=sender_reason,
             )
 
+        # ── C2: derive the EUR value from the SIGNED amount (amount_in_wei),
+        # NOT from any client-supplied fiat field. token_in == ZERO ⇒ native.
+        _is_native = (body.token_in or ZERO_ADDRESS).lower() == ZERO_ADDRESS
+        tok = get_token(body.chain_id, None if _is_native else body.token_in)
+        if tok is None:
+            # Unknown token ⇒ cannot value the transfer ⇒ fail-closed.
+            await _record_signing_denied(body, reason="aml_amount_unavailable")
+            return SigningCheckResponse(
+                allowed=False,
+                reason="aml_amount_unavailable",
+                details="Unknown token — cannot value transfer for AML",
+            )
+        human = float(Decimal(amount) / (Decimal(10) ** tok.decimals))
+        amount_eur = await get_eur_value(tok.coingecko_id, human)
+        if amount_eur is None:
+            # Price oracle unavailable ⇒ cannot value ⇒ fail-closed.
+            await _record_signing_denied(body, reason="aml_amount_unavailable")
+            return SigningCheckResponse(
+                allowed=False,
+                reason="aml_amount_unavailable",
+                details="Price unavailable — cannot value transfer for AML",
+            )
+
         aml_result = await full_aml_check(
             sender=body.wallet,
             recipient=body.recipient,
-            amount_eur=0.0,
+            amount_eur=amount_eur,
             chain_id=body.chain_id,
             tx_hash=None,
-            token_symbol=body.token_in or "ETH",
+            token_symbol=tok.symbol,
         )
 
-        if not aml_result.approved or aml_result.risk_level == "high":
+        # ── C2 hybrid AML gate ─────────────────────────────────
+        # Block on: sanctions/screening (not approved); DAC8 KYC (requires_kyc,
+        # monthly >€15k); or AML data unavailable (risk 'high' with NO threshold
+        # alert ⇒ counters down ⇒ fail-closed). Sub-DAC8 thresholds
+        # (daily/velocity/structuring) are ALERT-ONLY — already persisted by
+        # monitor_transaction for SAR review — and do NOT block signing.
+        block_reason = None
+        if not aml_result.approved:
+            block_reason = "aml_high_risk"            # sanctions / screening
+        elif aml_result.requires_kyc:
+            block_reason = "aml_kyc_required"         # DAC8 monthly >€15k
+        elif aml_result.risk_level == "high" and not aml_result.alerts:
+            block_reason = "aml_data_unavailable"     # AML counters down (fail-closed)
+
+        if block_reason:
             logger.warning(
-                "Signing rejected: AML high risk. sender=%s recipient=%s alerts=%s",
-                body.wallet, body.recipient, aml_result.alerts,
+                "Signing rejected: %s. sender=%s recipient=%s alerts=%s",
+                block_reason, body.wallet, body.recipient, aml_result.alerts,
             )
-            await _record_signing_denied(body, reason="aml_high_risk")
+            await _record_signing_denied(body, reason=block_reason)
             return SigningCheckResponse(
                 allowed=False,
-                reason="aml_high_risk",
-                details=f"Alerts: {','.join(aml_result.alerts)}",
+                reason=block_reason,
+                details=(
+                    f"Alerts: {','.join(aml_result.alerts)}"
+                    if aml_result.alerts else block_reason
+                ),
             )
 
     except AMLBlockedError as e:
@@ -273,7 +342,10 @@ async def signing_check(body: SigningCheckRequest, request: Request):
 # ═══════════════════════════════════════════════════════════════
 
 @signing_router.post("/audit")
-async def signing_audit(body: SigningAuditRequest):
+async def signing_audit(
+    body: SigningAuditRequest,
+    _internal: None = Depends(require_internal_secret),
+):
     """Record a signing event to the immutable audit log.
 
     Called by the Next.js oracle AFTER signing decision (approved or denied).

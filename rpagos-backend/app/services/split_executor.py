@@ -16,11 +16,31 @@ import asyncio
 import json
 import logging
 
+from sqlalchemy.exc import IntegrityError
+
 from app.services.split_engine import SplitPlan, SplitOutput
 from app.services.aml_exceptions import AMLBlockedError
 from app.models.split_models import SplitExecution
 
 logger = logging.getLogger("rsend.split_exec")
+
+
+class DuplicateSplitExecution(Exception):
+    """Raised when a SplitExecution already exists for (contract_id, source_tx_hash).
+
+    Triggered by the DB unique constraint `uq_split_exec_contract_srctx` when a
+    concurrent/duplicate webhook delivery tries to execute the same split.
+    The INSERT is rejected BEFORE any on-chain transfer is sent, so no funds
+    move on the duplicate path — the caller should treat it as idempotent.
+    """
+
+    def __init__(self, contract_id: int, source_tx_hash: str):
+        self.contract_id = contract_id
+        self.source_tx_hash = source_tx_hash
+        super().__init__(
+            f"duplicate split execution: contract={contract_id} "
+            f"tx={source_tx_hash[:16]}"
+        )
 
 # ──────────────────────────────────────────────────────────────
 # Rough EUR conversion for AML thresholds.
@@ -100,7 +120,17 @@ class SplitExecutor:
                 started_at=datetime.utcnow(),
             )
             self.db.add(execution)
-            await self.db.flush()
+            # Idempotency gate (C1a): the unique constraint on
+            # (contract_id, source_tx_hash) makes this flush the atomic,
+            # cross-worker point of no return. If a concurrent/previous
+            # delivery already inserted this execution, the flush raises
+            # IntegrityError HERE — before any _send_single — so the
+            # duplicate path sends ZERO transactions.
+            try:
+                await self.db.flush()
+            except IntegrityError:
+                await self.db.rollback()
+                raise DuplicateSplitExecution(plan.contract_id, source_tx_hash)
 
             # ── Esegui tutte le TX ──────────────────────────
             results = []

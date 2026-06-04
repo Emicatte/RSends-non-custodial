@@ -401,11 +401,13 @@ async def _execute_distribution_async(task, batch_id: str) -> dict:
             logger.info("Batch %s already in status %s, skipping", batch_id, batch.status)
             return {"status": "skipped", "reason": f"status={batch.status}"}
 
-        # Load items
+        # Load items. C1b: include SIGNING (items that were assigned a nonce
+        # before a crash) so a retry reprocesses them reusing the SAME nonce
+        # instead of re-broadcasting on a fresh nonce (which double-pays).
         items_result = await session.execute(
             select(SweepBatchItem)
             .where(SweepBatchItem.batch_id == batch_uuid)
-            .where(SweepBatchItem.status == "PENDING")
+            .where(SweepBatchItem.status.in_(("PENDING", "SIGNING")))
         )
         items = items_result.scalars().all()
 
@@ -553,16 +555,33 @@ async def _execute_distribution_async(task, batch_id: str) -> dict:
         signer = get_signer()
         hot_address = await signer.get_address()
 
-        # Reserve nonce range for all items
-        start_nonce, end_nonce = await nm.reserve_range(len(items))
+        # ── Nonce assignment (C1b: idempotent against crash/retry) ──────
+        # Reserve nonces ONLY for items that don't already have one, then
+        # persist nonce + status='SIGNING' in ONE commit BEFORE broadcasting.
+        # On a retry, items keep their original nonce (no fresh reserve), so a
+        # re-broadcast reuses the SAME nonce and the chain rejects it (nonce
+        # too low / already known) instead of sending a second distinct TX.
+        items_without_nonce = [it for it in items if it.nonce is None]
+        if items_without_nonce:
+            start_nonce, _ = await nm.reserve_range(len(items_without_nonce))
+            async with async_session() as session:
+                async with session.begin():
+                    for offset, it in enumerate(items_without_nonce):
+                        assigned = start_nonce + offset
+                        await session.execute(
+                            update(SweepBatchItem)
+                            .where(SweepBatchItem.id == it.id)
+                            .values(status="SIGNING", nonce=assigned)
+                        )
+                        it.nonce = assigned  # reflect on the in-memory object
 
         completed_items = []
         failed_items = []
         tx_hashes = []
         retry_queue = []  # items to retry after the loop
 
-        for i, item in enumerate(items):
-            nonce = start_nonce + i
+        for item in items:
+            nonce = item.nonce  # persisted nonce (assigned above or on a prior run)
             try:
                 tx_hash = await _execute_single_transfer(
                     signer=signer,
@@ -603,6 +622,40 @@ async def _execute_distribution_async(task, batch_id: str) -> dict:
                     "(action=%s pattern=%s)",
                     item.id, batch_id, error_msg[:100], action, pattern,
                 )
+
+                # C1b: a consumed nonce on an item we already assigned means
+                # OUR transfer at that nonce already went through — the hot
+                # wallet's nonces are reserved exclusively by us. Treat it as
+                # already-sent: mark SUBMITTED, do NOT re-broadcast (a fresh
+                # nonce here would double-pay). Worst case is a missing tx_hash
+                # attribution (recoverable by reconciliation), never a 2nd TX.
+                nonce_consumed = any(
+                    s in error_msg.lower()
+                    for s in (
+                        "nonce too low",
+                        "nonce has already been used",
+                        "already known",
+                    )
+                )
+                if nonce_consumed and item.nonce is not None:
+                    logger.warning(
+                        "Item %s nonce %s already consumed on-chain — marking "
+                        "SUBMITTED (idempotent, no re-broadcast)",
+                        item.id, nonce,
+                    )
+                    async with async_session() as session:
+                        async with session.begin():
+                            await session.execute(
+                                update(SweepBatchItem)
+                                .where(SweepBatchItem.id == item.id)
+                                .values(
+                                    status="SUBMITTED",
+                                    nonce=nonce,
+                                    executed_at=datetime.now(timezone.utc),
+                                )
+                            )
+                    completed_items.append(item)
+                    continue
 
                 if action != "fail":
                     # Retryable — mark RETRYING, will be dispatched after loop

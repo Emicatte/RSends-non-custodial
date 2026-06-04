@@ -125,8 +125,6 @@ async def authenticate_request(request: Request) -> str:
     from eth_utils import to_checksum_address
 
     address = request.headers.get("X-Wallet-Address", "").strip()
-    signature = request.headers.get("X-Wallet-Signature", "").strip()
-    timestamp = request.headers.get("X-Timestamp", "").strip()
 
     # ── Debug bypass (testnet only) ────────────────────────
     if settings.debug and address:
@@ -138,28 +136,83 @@ async def authenticate_request(request: Request) -> str:
             )
             return to_checksum_address(address)
 
-    # ── Validate presence ──────────────────────────────────
     if not address:
         raise AuthError("Missing X-Wallet-Address header")
+    if not _ETH_ADDR_RE.match(address):
+        raise AuthError("Invalid wallet address format")
+
+    # ── Session-HMAC scheme (H4, preferred — single-use, non-replayable) ──
+    if request.headers.get("X-Wallet-Session", "").strip():
+        return await _authenticate_session_hmac(request, address)
+
+    # ── Legacy bearer-signature scheme (transitional) ──────
+    # The legacy signature is a replayable bearer; only accepted while
+    # WALLET_AUTH_ALLOW_LEGACY is true (rollout transition).
+    if not settings.wallet_auth_allow_legacy:
+        raise AuthError("Wallet session required (legacy auth disabled)")
+
+    signature = request.headers.get("X-Wallet-Signature", "").strip()
+    timestamp = request.headers.get("X-Timestamp", "").strip()
     if not signature:
         raise AuthError("Missing X-Wallet-Signature header")
     if not timestamp:
         raise AuthError("Missing X-Timestamp header")
-
-    # ── Validate format ────────────────────────────────────
-    if not _ETH_ADDR_RE.match(address):
-        raise AuthError("Invalid wallet address format")
-
-    # ── Timestamp freshness ────────────────────────────────
     if not _check_timestamp_freshness(timestamp):
         raise AuthError("Timestamp expired or invalid (max 5 min)")
-
-    # ── Signature verification ─────────────────────────────
     if not verify_wallet_signature(address, signature, timestamp):
         raise AuthError("Invalid wallet signature")
 
     verified = to_checksum_address(address)
-    logger.info("Wallet authenticated: %s", verified)
+    logger.info("Wallet authenticated (legacy): %s", verified)
+    return verified
+
+
+async def _authenticate_session_hmac(request: Request, address: str) -> str:
+    """Verify the H4 single-use session-HMAC credential.
+
+    Headers: X-Wallet-Session, X-Wallet-MAC, X-Wallet-Nonce, X-Timestamp.
+    MAC = HMAC-SHA256(session_secret, f"{nonce}:{timestamp}") (hex). The nonce is
+    consumed (single-use) so a captured MAC cannot be replayed.
+    """
+    import hashlib
+    import hmac as _hmac
+
+    from eth_utils import to_checksum_address
+
+    from app.services.signing_rate_limit import check_nonce_uniqueness
+    from app.services.wallet_session import get_wallet_session
+
+    session_id = request.headers.get("X-Wallet-Session", "").strip()
+    mac = request.headers.get("X-Wallet-MAC", "").strip()
+    nonce = request.headers.get("X-Wallet-Nonce", "").strip()
+    timestamp = request.headers.get("X-Timestamp", "").strip()
+
+    if not mac or not nonce or not timestamp:
+        raise AuthError("Missing session auth headers")
+    if not _check_timestamp_freshness(timestamp):
+        raise AuthError("Timestamp expired or invalid (max 5 min)")
+
+    session = await get_wallet_session(session_id)
+    if not session:
+        raise AuthError("Session not found or expired")
+    if (session.get("address") or "").lower() != address.lower():
+        raise AuthError("Session/address mismatch")
+
+    expected = _hmac.new(
+        (session.get("secret") or "").encode(),
+        f"{nonce}:{timestamp}".encode(),
+        hashlib.sha256,
+    ).hexdigest()
+    if not _hmac.compare_digest(mac, expected):
+        raise AuthError("Invalid request MAC")
+
+    # Single-use: consume the nonce so a captured MAC cannot be replayed.
+    unique, reason = await check_nonce_uniqueness(f"wmac:{nonce}")
+    if not unique:
+        raise AuthError(f"Replay detected: {reason}")
+
+    verified = to_checksum_address(address)
+    logger.info("Wallet authenticated (session-HMAC): %s", verified)
     return verified
 
 

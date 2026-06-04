@@ -6,7 +6,7 @@ import { parseEther, getAddress } from 'viem'
 import { motion } from 'framer-motion'
 import type { ForwardingRule } from '../lib/useForwardingRules'
 import { getRegistry } from '../lib/contractRegistry'
-import { FEE_ROUTER_ABI } from '../lib/feeRouterAbi'
+import { FEE_ROUTER_ABI, FEE_ROUTER_V6_ABI } from '../lib/feeRouterAbi'
 import { mutationHeaders } from '../lib/rsendFetch'
 import { C } from '@/app/designTokens'
 
@@ -78,26 +78,34 @@ export default function RuleCard({ rule, onToggle, onPause, onResume, onDelete }
       const oracle = await oracleRes.json()
       if (!oracle.approved) throw new Error(oracle.rejectionReason || 'Oracle denied')
 
+      // M1 slice B: V5/V6 routers take a threshold bytes[] (oracleSignatures);
+      // V4 takes a single bytes (oracleSignature).
+      const isV6 = registry.version === 'v6'
+      const routerAbi = isV6 ? FEE_ROUTER_V6_ABI : FEE_ROUTER_ABI
+      const oracleSigArg = isV6
+        ? (oracle.oracleSignatures as `0x${string}`[])
+        : (oracle.oracleSignature as `0x${string}`)
+
       // Step 2: On-chain tx via MetaMask
       const recipientAddr = getAddress(rule.destination_wallet) as `0x${string}`
 
       if (isNative) {
         await writeContractAsync({
           address: registry.feeRouter,
-          abi: FEE_ROUTER_ABI,
+          abi: routerAbi,
           functionName: 'transferETHWithOracle',
           args: [
             recipientAddr,
             oracle.oracleNonce as `0x${string}`,
             BigInt(oracle.oracleDeadline),
-            oracle.oracleSignature as `0x${string}`,
+            oracleSigArg,
           ],
           value: amountWei,
         })
       } else {
         await writeContractAsync({
           address: registry.feeRouter,
-          abi: FEE_ROUTER_ABI,
+          abi: routerAbi,
           functionName: 'transferWithOracle',
           args: [
             tokenAddr as `0x${string}`,
@@ -105,7 +113,7 @@ export default function RuleCard({ rule, onToggle, onPause, onResume, onDelete }
             recipientAddr,
             oracle.oracleNonce as `0x${string}`,
             BigInt(oracle.oracleDeadline),
-            oracle.oracleSignature as `0x${string}`,
+            oracleSigArg,
           ],
         })
       }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireEnv } from '@/lib/env'
 
 export const maxDuration = 30
 
@@ -24,11 +25,7 @@ export const maxDuration = 30
  */
 
 function getBackendUrl(): string {
-  return (
-    process.env.RPAGOS_BACKEND_URL ||
-    process.env.NEXT_PUBLIC_RPAGOS_BACKEND_URL ||
-    'http://localhost:8000'
-  )
+  return requireEnv('RPAGOS_BACKEND_URL')
 }
 
 // Headers forwarded from browser → backend.
@@ -39,6 +36,9 @@ const FORWARD_HEADERS = [
   'accept',
   'x-wallet-address',
   'x-wallet-signature',
+  'x-wallet-session',
+  'x-wallet-nonce',
+  'x-wallet-mac',
   'x-timestamp',
   'x-idempotency-key',
   'x-chain-id',
@@ -51,6 +51,18 @@ async function proxyRequest(
 ): Promise<NextResponse> {
   const { path } = await params
   const subPath = (path ?? []).join('/')
+
+  // Deny-list (H3): sensitive backend prefixes must NOT be reachable from the
+  // browser through this proxy — internal/admin/keys/audit/ledger and the
+  // oracle's AML check are server-only. (The oracle calls the backend directly,
+  // not through this proxy, so it is unaffected.)
+  const DENY = [
+    'api/internal', 'admin/aml', 'api/v1/keys',
+    'api/v1/audit', 'api/v1/ledger', 'api/v1/aml/check',
+  ]
+  if (DENY.some((p) => subPath === p || subPath.startsWith(p + '/'))) {
+    return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 })
+  }
 
   const backend = getBackendUrl()
   const queryString = req.nextUrl.search // preserves ?owner_address=...&foo=bar

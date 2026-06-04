@@ -75,7 +75,7 @@ async function fetchFiatRate(symbol: string): Promise<number | null> {
     const id = symbol === 'ETH' ? 'ethereum' : symbol === 'USDC' ? 'usd-coin'
       : symbol === 'DEGEN' ? 'degen-base' : symbol === 'cbBTC' ? 'coinbase-wrapped-btc' : null
     if (!id) return null
-    const res  = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=eur`)
+    const res  = await fetch(`/api/market/simple/price?ids=${id}&vs_currencies=eur`)
     const data = await res.json()
     return data?.[id]?.eur ?? null
   } catch { return null }

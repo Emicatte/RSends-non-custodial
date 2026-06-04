@@ -23,7 +23,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional, Tuple
 from uuid import uuid4
 
@@ -72,6 +72,18 @@ class EmailAuthError(Exception):
 
 def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+# Supported UI locales (mirrors i18n/routing.ts on the frontend).
+_SUPPORTED_LOCALES = {"en", "it", "es", "fr", "de"}
+
+
+def _safe_locale(locale: Optional[str]) -> str:
+    """Clamp to a supported locale, default 'en'. Guards the verification URL
+    path segment against injection / unknown locales."""
+    if locale and locale in _SUPPORTED_LOCALES:
+        return locale
+    return "en"
 
 
 async def _rate_limit_check(key: str, max_count: int, window_seconds: int) -> None:
@@ -129,10 +141,21 @@ async def signup(
     *,
     email: str,
     password: str,
-    display_name: str,
+    first_name: str,
+    last_name: str,
+    date_of_birth: date,
+    country_of_residence: str,
+    account_type: str,
+    newsletter_opt_in: bool = False,
+    display_name: Optional[str] = None,
+    locale: Optional[str] = None,
     ip: Optional[str] = None,
 ) -> User:
-    """Create a new user with email+password. Sends verification email."""
+    """Create a new user with email+password. Sends verification email.
+
+    display_name is derived from first/last name when not supplied. Age (>=18)
+    and country validity are enforced upstream by SignupRequest (422).
+    """
     if ip:
         await _rate_limit_check(
             f"auth_rl:signup:ip:{ip}", SIGNUP_RL_IP_MAX, SIGNUP_RL_IP_WINDOW
@@ -149,15 +172,26 @@ async def signup(
     except PasswordPolicyError as e:
         raise EmailAuthError(e.code, e.detail)
 
+    loc = _safe_locale(locale)
     now = datetime.now(timezone.utc)
+    derived_name = (display_name or f"{first_name} {last_name}").strip()[:100]
     user = User(
         id=str(uuid4()),
         email=email,
-        display_name=display_name[:100],
+        first_name=first_name,
+        last_name=last_name,
+        date_of_birth=date_of_birth,
+        country_of_residence=country_of_residence,
+        newsletter_opt_in=newsletter_opt_in,
+        display_name=derived_name,
         password_hash=hash_password(password),
         password_set_at=now,
         email_verified=False,
         email_verified_at=None,
+        locale=loc,
+        # TODO(account_type): post-verification onboarding diverges on this —
+        # 'individual' -> KYC, 'merchant' -> KYB. Only persisted here for now.
+        account_type=account_type,
     )
     db.add(user)
     await db.flush()
@@ -175,14 +209,14 @@ async def signup(
     db.add(verification)
 
     settings = get_settings()
-    verify_url = f"{settings.frontend_url}/en/verify-email?token={token}"
+    verify_url = f"{settings.app_url}/{loc}/verify-email?token={token}"
 
     await send_email(
         to=email,
         template_name="verify_email",
         subject="Verify your rsend account",
         context={
-            "display_name": display_name,
+            "display_name": derived_name,
             "verify_url": verify_url,
             "expires_hours": VERIFICATION_TTL_HOURS,
         },
@@ -192,7 +226,7 @@ async def signup(
         event_type="email_signup",
         user_id=str(user.id),
         ip_address=ip,
-        details={"email": email, "display_name": display_name},
+        details={"email": email, "display_name": derived_name},
     )
 
     return user
@@ -245,11 +279,12 @@ async def login(
         )
         raise EmailAuthError("invalid_credentials")
 
-    if not user.email_verified:
-        raise EmailAuthError(
-            "email_not_verified",
-            "please verify your email before logging in",
-        )
+    # NOTE: unverified users ARE allowed to log in and get a session. Access to
+    # fund-touching / JWT-session routes is gated separately (deny-by-default)
+    # by the email_verified_gate middleware, which returns email_not_verified
+    # until the email is confirmed. Login itself must not be blocked so the
+    # frontend can show a "verify your email" state. LoginResponse carries
+    # email_verified so the client knows immediately.
 
     if user.status != "active":
         raise EmailAuthError("account_suspended")
@@ -380,7 +415,7 @@ async def resend_verification(
     db.add(vt)
 
     settings = get_settings()
-    verify_url = f"{settings.frontend_url}/en/verify-email?token={token}"
+    verify_url = f"{settings.app_url}/{_safe_locale(user.locale)}/verify-email?token={token}"
 
     await send_email(
         to=email,

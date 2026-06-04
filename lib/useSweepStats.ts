@@ -41,23 +41,22 @@ export function useSweepStats(address: string | undefined) {
     try {
       const statsUrl = `${BACKEND}/api/v1/forwarding/stats?period=30d`
       const dailyUrl = `${BACKEND}/api/v1/forwarding/stats/daily?days=30`
-      const doFetch = (url: string, headers: Record<string, string>) =>
-        fetch(url, { headers, signal: AbortSignal.timeout(15000) })
+      // Each request gets its OWN single-use credential (H4 session-HMAC);
+      // credentials can no longer be reused across requests.
+      const doFetch = async (url: string) =>
+        fetch(url, { headers: await getAuthHeaders(), signal: AbortSignal.timeout(15000) })
 
-      // Sign once → reuse the same headers for both parallel fetches.
-      // If either returns 401 (stale cache / clock skew), drop cache and
-      // retry both with a fresh signature.
-      const headers = await getAuthHeaders()
+      // If either returns 401 (session expired / clock skew), drop the session
+      // and retry both (re-bootstraps a fresh session).
       let [statsRes, dailyRes] = await Promise.all([
-        doFetch(statsUrl, headers),
-        doFetch(dailyUrl, headers),
+        doFetch(statsUrl),
+        doFetch(dailyUrl),
       ])
       if (statsRes.status === 401 || dailyRes.status === 401) {
         clearCache()
-        const fresh = await getAuthHeaders()
         ;[statsRes, dailyRes] = await Promise.all([
-          doFetch(statsUrl, fresh),
-          doFetch(dailyUrl, fresh),
+          doFetch(statsUrl),
+          doFetch(dailyUrl),
         ])
       }
       if (statsRes.ok) setStats(await statsRes.json())

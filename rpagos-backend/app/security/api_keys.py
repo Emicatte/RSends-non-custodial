@@ -51,6 +51,8 @@ EXEMPT_PATHS = {
     # ── Admin token / internal ──
     "/api/v1/audit",           # X-Admin-Token
     "/api/internal/signing",   # called by Next.js oracle, internal-only
+    "/api/internal/ratelimit", # called by Next.js oracle, internal-only (M5)
+    "/api/internal/oracle",    # oracle digest signer, internal-only (M1)
     # ── HMAC-signed ingestion ──
     "/api/v1/tx/callback",     # verify_signature() (HMAC)
 }
@@ -59,6 +61,36 @@ def is_exempt(path: str) -> bool:
     """Check if path is exempt from API key auth."""
     for exempt in EXEMPT_PATHS:
         if path.startswith(exempt):
+            return True
+    return False
+
+
+# ── M8: GET deny-by-default allowlist ─────────────────────────────
+# Non-exempt GET paths that may be reached WITHOUT an API key under
+# deny-by-default. Two kinds:
+#   - self-authenticating: the handler enforces its own auth via a route
+#     dependency or @require_wallet_auth (X-Admin-Token / wallet signature),
+#     which runs INSIDE the handler — the middleware must let the GET through.
+#   - genuinely public: open reads by design (price feed, public checkout
+#     status, health probe, account-header recent tx).
+GET_PUBLIC_PREFIXES = {
+    # self-authenticating (own dependency runs in the handler)
+    "/api/v1/ledger",                   # require_admin
+    "/admin/aml",                       # require_admin
+    "/api/v1/splits",                   # @require_wallet_auth
+    "/api/v1/dashboard",                # @require_wallet_auth
+    # genuinely public
+    "/api/v1/prices",                   # public price feed
+    "/api/v1/health/sweep",             # public health probe (sweeper router)
+    "/api/v1/merchant/payment-intent",  # public checkout status (X-Checkout-Public)
+    "/api/v1/tx/recent",                # account-header recent tx (public read)
+}
+
+
+def is_get_public(path: str) -> bool:
+    """True if a GET to `path` may proceed without an API key (M8 allowlist)."""
+    for prefix in GET_PUBLIC_PREFIXES:
+        if path.startswith(prefix):
             return True
     return False
 

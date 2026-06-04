@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getAllCoingeckoIds } from '../../tokens/tokenRegistry'
+import { COINGECKO_UPSTREAM } from '@/lib/coingeckoUpstream'
 
 /**
  * Bulk market data for ExploreTokens: one upstream request covers every
@@ -34,7 +35,7 @@ export async function GET() {
     }
 
     const res = await fetch(
-      `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${encodeURIComponent(ids)}&sparkline=true&price_change_percentage=24h`,
+      `${COINGECKO_UPSTREAM}/coins/markets?vs_currency=usd&ids=${encodeURIComponent(ids)}&sparkline=true&price_change_percentage=24h`,
       { signal: AbortSignal.timeout(10000), cache: 'no-store', headers },
     )
     if (!res.ok) throw new Error(`CoinGecko ${res.status}`)

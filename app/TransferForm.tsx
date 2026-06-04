@@ -40,6 +40,7 @@ import { useIdempotencyKey } from '../lib/useIdempotencyKey'
 import { useKeyboardShortcuts } from '../lib/useKeyboardShortcuts'
 import { useClipboardDetection } from '../lib/useClipboardDetection'
 import { logger } from '../lib/logger'
+import { FEE_ROUTER_V6_ABI } from '../lib/feeRouterAbi'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { useTranslations } from 'next-intl'
 import { useLocale } from 'next-intl'
@@ -154,7 +155,7 @@ type SelectingToken = 'in' | 'out' | null
 
 interface OracleResponse {
   approved: boolean
-  oracleSignature: string; oracleNonce: string; oracleDeadline: number
+  oracleSignature: string; oracleSignatures?: string[]; oracleNonce: string; oracleDeadline: number
   paymentRef: string; fiscalRef: string
   riskScore: number; riskLevel: string
   eurValue?: number; isEurc?: boolean; isSwap?: boolean
@@ -780,13 +781,19 @@ export default function TransferForm({ noCard, externalToken }: { noCard?: boole
     if (minOut === 0n) { setTxError('MEV Guard: slippage non configurato.'); setPhase('error'); return }
     setPhase('signing')
     try {
+      // M1 slice B: V5/V6 take a threshold bytes[]; V4 a single bytes.
+      const isV6 = registry.version === 'v6'
+      const routerAbi = isV6 ? FEE_ROUTER_V6_ABI : FEE_ROUTER_ABI
+      const oracleSigArg = isV6
+        ? (oracle.oracleSignatures as `0x${string}`[])
+        : (oracle.oracleSignature as `0x${string}`)
       const args = tokenIn.isNative
-        ? [tokenOut.address!, minOut, getAddress(recipient) as `0x${string}`, oracle.oracleNonce as `0x${string}`, BigInt(oracle.oracleDeadline), oracle.oracleSignature as `0x${string}`]
-        : [tokenIn.address!, tokenOut.address!, r, minOut, getAddress(recipient) as `0x${string}`, oracle.oracleNonce as `0x${string}`, BigInt(oracle.oracleDeadline), oracle.oracleSignature as `0x${string}`]
+        ? [tokenOut.address!, minOut, getAddress(recipient) as `0x${string}`, oracle.oracleNonce as `0x${string}`, BigInt(oracle.oracleDeadline), oracleSigArg]
+        : [tokenIn.address!, tokenOut.address!, r, minOut, getAddress(recipient) as `0x${string}`, oracle.oracleNonce as `0x${string}`, BigInt(oracle.oracleDeadline), oracleSigArg]
       logger.debug('TransferForm', 'execSwap args', { tokenIn: tokenIn.symbol, tokenOut: tokenOut?.symbol, isNative: tokenIn.isNative, chainId: String(chainId) })
       logger.debug('TransferForm', 'execSwap oracle', { deadline: String(oracle.oracleDeadline) })
       const hash = await writeContractAsync({
-        address: registry.feeRouter, abi: FEE_ROUTER_ABI,
+        address: registry.feeRouter, abi: routerAbi,
         functionName: tokenIn.isNative ? 'swapETHAndSend' : 'swapAndSend',
         args, ...(tokenIn.isNative ? { value: r } : {}),
       })
@@ -843,19 +850,25 @@ export default function TransferForm({ noCard, externalToken }: { noCard?: boole
       if (isFeeRouterAvailable(chainId)) {
         // ── FeeRouter path (Base, Base Sepolia) ─────────────────────
         logger.debug('TransferForm', 'execDirect FeeRouter path', { token: tokenIn.symbol, isNative: tokenIn.isNative, fn: tokenIn.isNative ? 'transferETHWithOracle' : 'transferWithOracle', chainId: String(chainId) })
+        // M1 slice B: V5/V6 take a threshold bytes[]; V4 a single bytes.
+        const isV6 = registry.version === 'v6'
+        const routerAbi = isV6 ? FEE_ROUTER_V6_ABI : FEE_ROUTER_ABI
+        const oracleSigArg = isV6
+          ? (oracle.oracleSignatures as `0x${string}`[])
+          : (oracle.oracleSignature as `0x${string}`)
         if (tokenIn.isNative) {
           logger.debug('TransferForm', 'transferETHWithOracle', { chainId: String(chainId), deadline: String(oracle.oracleDeadline) })
           hash = await writeContractAsync({
-            address: registry.feeRouter, abi: FEE_ROUTER_ABI,
+            address: registry.feeRouter, abi: routerAbi,
             functionName: 'transferETHWithOracle',
-            args: [getAddress(recipient) as `0x${string}`, oracle.oracleNonce as `0x${string}`, BigInt(oracle.oracleDeadline), oracle.oracleSignature as `0x${string}`],
+            args: [getAddress(recipient) as `0x${string}`, oracle.oracleNonce as `0x${string}`, BigInt(oracle.oracleDeadline), oracleSigArg],
             value: r,
           })
         } else {
           hash = await writeContractAsync({
-            address: registry.feeRouter, abi: FEE_ROUTER_ABI,
+            address: registry.feeRouter, abi: routerAbi,
             functionName: 'transferWithOracle',
-            args: [tokenIn.address!, r, getAddress(recipient) as `0x${string}`, oracle.oracleNonce as `0x${string}`, BigInt(oracle.oracleDeadline), oracle.oracleSignature as `0x${string}`],
+            args: [tokenIn.address!, r, getAddress(recipient) as `0x${string}`, oracle.oracleNonce as `0x${string}`, BigInt(oracle.oracleDeadline), oracleSigArg],
           })
         }
       } else {
@@ -1354,7 +1367,7 @@ export default function TransferForm({ noCard, externalToken }: { noCard?: boole
         const cgId = cgIds[report.symbol.toUpperCase()]
         if (cgId) {
           const res = await fetch(
-            `https://api.coingecko.com/api/v3/simple/price?ids=${cgId}&vs_currencies=eur`,
+            `/api/market/simple/price?ids=${cgId}&vs_currencies=eur`,
             { signal: AbortSignal.timeout(5000) }
           )
           const data = await res.json()

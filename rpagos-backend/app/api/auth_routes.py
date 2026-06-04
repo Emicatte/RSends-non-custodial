@@ -98,6 +98,7 @@ def _user_to_response(user: User) -> UserMeResponse:
     return UserMeResponse(
         id=str(user.id),
         email=user.email,
+        email_verified=bool(user.email_verified),
         display_name=user.display_name,
         avatar_url=user.avatar_url,
         locale=user.locale,

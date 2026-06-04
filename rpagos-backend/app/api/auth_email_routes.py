@@ -121,7 +121,14 @@ async def signup_route(
             db,
             email=payload.email,
             password=payload.password,
+            first_name=payload.first_name,
+            last_name=payload.last_name,
+            date_of_birth=payload.date_of_birth,
+            country_of_residence=payload.country_of_residence,
+            account_type=payload.account_type,
+            newsletter_opt_in=payload.newsletter_opt_in,
             display_name=payload.display_name,
+            locale=payload.locale,
             ip=get_real_client_ip(request),
         )
     except EmailAuthError as e:
@@ -134,6 +141,7 @@ async def signup_route(
         user_id=user.id,
         email=user.email,
         email_verified=user.email_verified,
+        account_type=user.account_type,
         display_name=user.display_name,
         created_at=user.created_at,
     )

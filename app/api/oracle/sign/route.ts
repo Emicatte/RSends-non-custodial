@@ -1,16 +1,31 @@
 import { NextRequest, NextResponse }  from 'next/server'
 import {
   keccak256, toHex, type Hex,
-  recoverTypedDataAddress,
+  recoverTypedDataAddress, hashTypedData,
+  createPublicClient, http, encodeFunctionData, encodeAbiParameters, toBytes,
 } from 'viem'
+import { getRegistry } from '@/lib/contractRegistry'
 import { privateKeyToAccount } from 'viem/accounts'
 import { randomBytes }         from 'crypto'
+import { requireEnv }          from '@/lib/env'
+import { getClientIp, checkRateLimit } from '@/lib/rateLimit'
+import { logger }              from '@/lib/logger'
 
 // ── Config ─────────────────────────────────────────────────────────────────
 const ORACLE_PRIVATE_KEY = process.env.ORACLE_PRIVATE_KEY as Hex | undefined
-const BACKEND_URL = process.env.RPAGOS_BACKEND_URL || 'http://localhost:8000'
-// TEMP DEBUG — remove after verifying BACKEND_URL points to local in dev
-console.log('[oracle/sign] BACKEND_URL =', BACKEND_URL)
+// M1 — when 'remote', the EIP-712 digest is signed by the backend's dedicated
+// oracle signer (KMS in prod) instead of a local ORACLE_PRIVATE_KEY, so the key
+// never lives in this web tier. Default 'local' = unchanged behaviour.
+const ORACLE_SIGNER_MODE = (process.env.ORACLE_SIGNER_MODE ?? 'local').toLowerCase()
+// L1 — never expose oracle internals (signer address, router/domain config, env
+// flags) in production. Set ORACLE_DEBUG=1 to re-enable for diagnostics.
+const ORACLE_DEBUG = process.env.NODE_ENV !== 'production' || process.env.ORACLE_DEBUG === '1'
+// Lazy getter: resolve the backend URL at call time, not module load, so a missing
+// RPAGOS_BACKEND_URL throws only when this route actually runs (never at import).
+function getBackendUrl(): string { return requireEnv('RPAGOS_BACKEND_URL') }
+// Shared secret authenticating this server-side oracle to the backend
+// /api/internal/* endpoints (H3). Must match INTERNAL_PROXY_SECRET on backend.
+const INTERNAL_SECRET = process.env.INTERNAL_PROXY_SECRET ?? ''
 
 // ── Signing Guard — pre-flight check via backend ───────────────────────────
 async function signingGuardCheck(params: {
@@ -19,9 +34,9 @@ async function signingGuardCheck(params: {
   chainId: number; ipAddress: string | null; contractAddress: string;
 }): Promise<{ allowed: boolean; reason?: string }> {
   try {
-    const resp = await fetch(`${BACKEND_URL}/api/internal/signing/check`, {
+    const resp = await fetch(`${getBackendUrl()}/api/internal/signing/check`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': INTERNAL_SECRET },
       body: JSON.stringify({
         wallet: params.wallet,
         recipient: params.recipient,
@@ -39,19 +54,75 @@ async function signingGuardCheck(params: {
     return await resp.json()
   } catch (err) {
     // Fail-closed: if backend guard is unreachable, block the signature
-    console.error('[oracle/sign] Signing guard unreachable:', err)
+    logger.error('oracle/sign', 'Signing guard unreachable', { err: String(err) })
     return { allowed: false, reason: 'guard_unavailable (fail-closed)' }
   }
 }
 
-// ── Audit log — fire-and-forget to backend ────────────────────────────────
-function auditLog(params: Record<string, unknown>): void {
-  fetch(`${BACKEND_URL}/api/internal/signing/audit`, {
+// ── Shared rate-limit — Redis-backed early gate via backend (M5) ───────────
+// The in-memory limiter in the handler is a per-process fast-path; this makes
+// the throttle shared + atomic across all instances and keys on the (now
+// trusted) client IP. Fail-closed: a backend/Redis blip blocks signing,
+// consistent with the rest of the signing path (signingGuardCheck).
+async function sharedRateLimit(p: {
+  bucket: string; key: string; max: number; windowSeconds: number
+}): Promise<{ allowed: boolean; retryAfter?: number }> {
+  try {
+    const resp = await fetch(`${getBackendUrl()}/api/internal/ratelimit/check`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': INTERNAL_SECRET },
+      body: JSON.stringify({
+        bucket: p.bucket, key: p.key, max: p.max, window_seconds: p.windowSeconds,
+      }),
+      signal: AbortSignal.timeout(2000),
+    })
+    if (!resp.ok) return { allowed: false }
+    const j = await resp.json()
+    return { allowed: !!j.allowed, retryAfter: j.retry_after }
+  } catch (err) {
+    logger.error('oracle/sign', 'shared rate-limit unreachable', { err: String(err) })
+    return { allowed: false }
+  }
+}
+
+// ── Remote oracle signer (M1) — sign the EIP-712 digest via backend KMS ────
+// Delegates digest signing to the backend's dedicated oracle signer so the key
+// never lives in this web tier. Gated by the H3 internal secret. Throws on any
+// failure → the route's outer try/catch fail-closes (no signature emitted).
+async function remoteSignDigest(
+  digest: Hex,
+): Promise<{ signature: Hex; signerAddress: string; signatures: Hex[]; signerAddresses: string[] }> {
+  const resp = await fetch(`${getBackendUrl()}/api/internal/oracle/sign-digest`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': INTERNAL_SECRET },
+    body: JSON.stringify({ digest }),
+    signal: AbortSignal.timeout(3000),
+  })
+  if (!resp.ok) throw new Error(`remote oracle signer HTTP ${resp.status}`)
+  const j = await resp.json()
+  return {
+    signature: j.signature as Hex,
+    signerAddress: j.signer_address as string,
+    // V5/V6 multisig: signatures ascending by signer address. Fall back to the
+    // single primary signature when the backend predates the multi field.
+    signatures: (j.signatures ?? [j.signature]) as Hex[],
+    signerAddresses: (j.signer_addresses ?? [j.signer_address]) as string[],
+  }
+}
+
+// ── Audit log — returns Promise<void> so callers can handle failures ────
+// (errors propagate; callers decide whether to await or fire-and-forget
+// with an explicit .catch() — see usage at the two call sites below).
+async function auditLog(params: Record<string, unknown>): Promise<void> {
+  const res = await fetch(`${getBackendUrl()}/api/internal/signing/audit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': INTERNAL_SECRET },
     body: JSON.stringify(params),
     signal: AbortSignal.timeout(5000),
-  }).catch(err => console.error('[oracle/sign] Audit log failed:', err))
+  })
+  if (!res.ok) {
+    throw new Error(`audit log HTTP ${res.status}`)
+  }
 }
 
 function routerForChain(chainId: number): `0x${string}` {
@@ -120,7 +191,67 @@ function getDomainConfig(chainId: number) {
   if (chainId === 84532) {
     return { name: 'FeeRouterV3' as const, version: '3' as const, isV3: true }
   }
+  // M2/M1-B: a chain whose registry declares a V5/V6 router uses the bumped
+  // EIP-712 domain (name="FeeRouterV6", version="6"). Same OracleApproval
+  // struct as V4 — only the domain name/version (and bytes[] arity) differ.
+  if (getRegistry(chainId)?.version === 'v6') {
+    return { name: 'FeeRouterV6' as const, version: '6' as const, isV3: false }
+  }
   return { name: 'FeeRouterV4' as const, version: '4' as const, isV3: false }
+}
+
+// ── M2: EIP-712 domain self-check ──────────────────────────────────────────
+// Guards against an oracle↔contract version/arity drift (e.g. signing the V4
+// domain for a freshly-deployed V6 router) that would otherwise brick 100% of
+// payments silently. We compute the EIP-712 domain separator the oracle is
+// signing under and compare it to the contract's on-chain domainSeparator().
+const DOMAIN_SEP_ABI = [{
+  name: 'domainSeparator', type: 'function', stateMutability: 'view',
+  inputs: [], outputs: [{ name: '', type: 'bytes32' }],
+}] as const
+
+const EIP712_DOMAIN_TYPEHASH = keccak256(
+  toBytes('EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)'),
+)
+
+function localDomainSeparator(
+  name: string, version: string, chainId: number, verifyingContract: `0x${string}`,
+): `0x${string}` {
+  return keccak256(encodeAbiParameters(
+    [{ type: 'bytes32' }, { type: 'bytes32' }, { type: 'bytes32' }, { type: 'uint256' }, { type: 'address' }],
+    [EIP712_DOMAIN_TYPEHASH, keccak256(toBytes(name)), keccak256(toBytes(version)), BigInt(chainId), verifyingContract],
+  ))
+}
+
+const _domainCache = new Map<string, { ok: boolean; expiresAt: number }>()
+const DOMAIN_CACHE_TTL_MS = 5 * 60_000
+
+// Returns null when OK (or undeterminable — fail-OPEN on RPC error to preserve
+// availability), or an error string on a CONFIRMED mismatch (fail-CLOSED).
+async function checkDomainBinding(
+  chainId: number, contractAddr: `0x${string}`, name: string, version: string,
+): Promise<string | null> {
+  const localSep = localDomainSeparator(name, version, chainId, contractAddr).toLowerCase()
+  const key = `${chainId}:${contractAddr.toLowerCase()}:${localSep}`
+  const cached = _domainCache.get(key)
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.ok ? null : `EIP-712 domain mismatch for ${name}/${version} (cached)`
+  }
+  const rpcUrl = getRegistry(chainId)?.rpcUrl
+  if (!rpcUrl) return null // cannot determine → do not block
+  try {
+    const client = createPublicClient({ transport: http(rpcUrl) })
+    const data = encodeFunctionData({ abi: DOMAIN_SEP_ABI, functionName: 'domainSeparator' })
+    const res = await client.call({ to: contractAddr, data })
+    const onchain = (res.data ?? '0x').toLowerCase()
+    const ok = onchain === localSep
+    _domainCache.set(key, { ok, expiresAt: Date.now() + DOMAIN_CACHE_TTL_MS })
+    return ok ? null
+      : `EIP-712 domain mismatch: oracle signs ${name}/${version} but the deployed contract domainSeparator differs (version/arity drift)`
+  } catch (err) {
+    logger.warn('oracle/sign', 'domain self-check RPC failed (fail-open)', { err: String(err) })
+    return null
+  }
 }
 
 const EUR_RATES: Record<string, number> = {
@@ -141,6 +272,53 @@ const BLACKLIST = new Set([
 // ── POST ────────────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
+    // Per-IP rate limit. Max 10 sign requests per IP per minute.
+    // Chosen because /api/oracle/sign is a heavy endpoint (calls backend
+    // signing guard + AML check + EIP-712 signing); legitimate UX needs
+    // are bounded by ~1 tx per 6s. 10/min gives ~6x headroom for retries
+    // and network blips while throttling abuse before it reaches the
+    // backend guard / AML stack.
+    const clientIp = getClientIp(req)
+    const rate = checkRateLimit(clientIp, {
+      max: 10,
+      windowMs: 60_000,
+      key: 'oracle-sign',
+    })
+    if (!rate.allowed) {
+      return NextResponse.json(
+        {
+          approved: false,
+          error: 'RATE_LIMIT_EXCEEDED',
+          rejectionReason: 'Too many signing requests. Try again later.',
+          retry_after: rate.retryAfter,
+        },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(rate.retryAfter ?? 60) },
+        },
+      )
+    }
+
+    // Shared Redis early gate (M5) — authoritative across instances, keyed on
+    // the trusted client IP; runs before the heavy AML + EIP-712 signing work.
+    const shared = await sharedRateLimit({
+      bucket: 'oracle-sign', key: clientIp, max: 10, windowSeconds: 60,
+    })
+    if (!shared.allowed) {
+      return NextResponse.json(
+        {
+          approved: false,
+          error: 'RATE_LIMIT_EXCEEDED',
+          rejectionReason: 'Too many signing requests. Try again later.',
+          retry_after: shared.retryAfter,
+        },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(shared.retryAfter ?? 60) },
+        },
+      )
+    }
+
     const body = await req.json().catch(() => null)
     if (!body) return NextResponse.json({ error: 'Body JSON non valido' }, { status: 400 })
 
@@ -161,7 +339,7 @@ export async function POST(req: NextRequest) {
     if (!amountInWei || amountInWei === '0') {
       return NextResponse.json({ error: 'amountInWei obbligatorio e > 0' }, { status: 400 })
     }
-    if (!ORACLE_PRIVATE_KEY) {
+    if (ORACLE_SIGNER_MODE !== 'remote' && !ORACLE_PRIVATE_KEY) {
       return NextResponse.json({
         approved: false, riskLevel: 'BLOCKED',
         rejectionReason: 'Servizio Oracle non configurato. Aggiungi ORACLE_PRIVATE_KEY.',
@@ -194,7 +372,7 @@ export async function POST(req: NextRequest) {
 
     // ── Backend AML check (screening + monitoring) ────────
     try {
-      const amlResp = await fetch(`${BACKEND_URL}/api/v1/aml/check`, {
+      const amlResp = await fetch(`${getBackendUrl()}/api/v1/aml/check`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -209,7 +387,7 @@ export async function POST(req: NextRequest) {
       if (amlResp.ok) {
         const aml = await amlResp.json()
         if (!aml.approved) {
-          console.warn('[oracle/sign] AML BLOCKED:', aml.details)
+          logger.warn('oracle/sign', 'AML BLOCKED', { details: aml.details })
           return NextResponse.json({
             approved: false, oracleSignature: '0x',
             oracleNonce: ('0x' + '0'.repeat(64)) as Hex,
@@ -229,7 +407,7 @@ export async function POST(req: NextRequest) {
       }
     } catch (amlErr) {
       // AML service unreachable — log but don't block (local blacklist already checked)
-      console.warn('[oracle/sign] AML service unreachable:', amlErr)
+      logger.warn('oracle/sign', 'AML service unreachable', { err: String(amlErr) })
     }
 
     let amountWei: bigint
@@ -248,15 +426,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         approved: false, riskLevel: 'BLOCKED',
         rejectionReason: `Contratto FeeRouter non configurato su chainId=${chainId}.`,
-        _debug: { chainId, contractAddr },
+        ...(ORACLE_DEBUG ? { _debug: { chainId, contractAddr } } : {}),
       }, { status: 503 })
     }
 
-    // ── Signing Guard: rate limit + nonce + parameter validation ──
-    const clientIp = req.headers.get('x-real-ip')
-      || req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-      || null
-
+    // ── Signing Guard: backend nonce + parameter validation
+    // (per-IP rate limit already applied at the top of POST)
     const guard = await signingGuardCheck({
       wallet: senderN,
       recipient: recipientN,
@@ -271,8 +446,10 @@ export async function POST(req: NextRequest) {
 
     if (!guard.allowed) {
       const account = ORACLE_PRIVATE_KEY ? privateKeyToAccount(ORACLE_PRIVATE_KEY) : null
-      // Audit denied attempt
-      auditLog({
+      // Audit denied attempt — fire-and-forget so we don't add latency
+      // to the rejection path, but .catch surfaces any failure to the
+      // logger so it can't be silently lost.
+      void auditLog({
         signer_address: account?.address ?? 'NOT_CONFIGURED',
         chain_id: Number(chainId),
         sender: senderN,
@@ -287,9 +464,9 @@ export async function POST(req: NextRequest) {
         risk_level: riskLevel,
         ip_address: clientIp,
         user_agent: req.headers.get('user-agent'),
-      })
+      }).catch(err => logger.error('oracle/sign', 'Audit log failed (denied)', { err: String(err) }))
 
-      console.warn(`[oracle/sign] BLOCKED: ${guard.reason}`)
+      logger.warn('oracle/sign', 'BLOCKED', { reason: guard.reason })
       return NextResponse.json({
         approved: false, oracleSignature: '0x',
         oracleNonce: nonce, oracleDeadline: Number(deadline),
@@ -299,7 +476,6 @@ export async function POST(req: NextRequest) {
       }, { status: 429 })
     }
 
-    const account = privateKeyToAccount(ORACLE_PRIVATE_KEY)
     const { name, version, isV3 } = getDomainConfig(Number(chainId))
 
     const domain = {
@@ -309,42 +485,63 @@ export async function POST(req: NextRequest) {
       verifyingContract: contractAddr,
     }
 
+    // M2: refuse to sign if the oracle's EIP-712 domain doesn't match the
+    // deployed contract (version/arity drift) — fail-closed instead of emitting
+    // a signature every payment would reject.
+    const domainErr = await checkDomainBinding(Number(chainId), contractAddr, name, version)
+    if (domainErr) {
+      logger.error('oracle/sign', 'DOMAIN BINDING MISMATCH', { domainErr, chainId: Number(chainId), contractAddr })
+      return NextResponse.json({
+        approved: false, riskLevel: 'BLOCKED',
+        rejectionReason: `Errore di configurazione oracle: ${domainErr}`,
+      }, { status: 503 })
+    }
+
     const types   = isV3 ? ORACLE_TYPES_V3 : ORACLE_TYPES_V4
     const message = isV3
       ? { sender: senderN, recipient: recipientN, token: tokenInN, amount: amountWei, nonce, deadline }
       : { sender: senderN, recipient: recipientN, tokenIn: tokenInN, tokenOut: tokenOutN, amountIn: amountWei, nonce, deadline }
 
-    console.log('\n[oracle/sign] ═══ FIRMA ═══')
-    console.log('  domain:     ', JSON.stringify(domain))
-    console.log('  typehash:   ', isV3 ? 'V3 (token, amount)' : 'V4 (tokenIn, tokenOut, amountIn)')
-    console.log('  sender:     ', senderN)
-    console.log('  recipient:  ', recipientN)
-    console.log('  amountWei:  ', amountWei.toString())
-    console.log('  signerAddr: ', account.address)
-    console.log('[oracle/sign] ════════════\n')
-
-    const signature = await account.signTypedData({
-      domain, types, primaryType: 'OracleApproval', message,
-    })
+    // M1: sign via the backend KMS oracle signer (remote) or a local key.
+    // `signatures` is the V5/V6 multisig array (ascending by signer); for a
+    // single-signer oracle (V4) it is just [signature].
+    let signature: Hex
+    let signerAddress: string
+    let signatures: Hex[]
+    if (ORACLE_SIGNER_MODE === 'remote') {
+      const digest = hashTypedData({ domain, types, primaryType: 'OracleApproval', message })
+      const remote = await remoteSignDigest(digest)
+      signature = remote.signature
+      signerAddress = remote.signerAddress
+      signatures = remote.signatures
+    } else {
+      const account = privateKeyToAccount(ORACLE_PRIVATE_KEY as Hex)
+      signature = await account.signTypedData({
+        domain, types, primaryType: 'OracleApproval', message,
+      })
+      signerAddress = account.address
+      signatures = [signature]
+    }
 
     const recovered = await recoverTypedDataAddress({
       domain, types, primaryType: 'OracleApproval', message, signature,
     })
 
-    if (recovered.toLowerCase() !== account.address.toLowerCase()) {
-      console.error('[oracle/sign] ❌ SELF-VERIFICA FALLITA', { recovered, expected: account.address })
+    if (recovered.toLowerCase() !== signerAddress.toLowerCase()) {
+      logger.error('oracle/sign', 'SELF-VERIFICA FALLITA', { recovered, expected: signerAddress })
       return NextResponse.json({
         approved: false, riskLevel: 'BLOCKED',
         rejectionReason: 'Errore interno: firma non verificabile.',
-        _debug: { recovered, expected: account.address },
+        ...(ORACLE_DEBUG ? { _debug: { recovered, expected: signerAddress } } : {}),
       }, { status: 500 })
     }
 
-    console.log('[oracle/sign] ✅ self-verifica OK —', recovered)
-
     // ── Audit log: record approved signature ───────────
-    auditLog({
-      signer_address: account.address,
+    // Fire-and-forget to keep the signing response on its tight latency
+    // SLA. .catch ensures any backend failure surfaces to the logger
+    // instead of being silently lost.
+    void auditLog({
+      signer_address: signerAddress,
       chain_id: Number(chainId),
       sender: senderN,
       recipient: recipientN,
@@ -357,11 +554,12 @@ export async function POST(req: NextRequest) {
       risk_level: riskLevel,
       ip_address: clientIp,
       user_agent: req.headers.get('user-agent'),
-    })
+    }).catch(err => logger.error('oracle/sign', 'Audit log failed (approved)', { err: String(err) }))
 
     return NextResponse.json({
       approved: true,
       oracleSignature: signature,
+      oracleSignatures: signatures,   // V5/V6 multisig (bytes[]); [signature] for V4
       oracleNonce:     nonce,
       oracleDeadline:  Number(deadline),
       paymentRef,
@@ -374,21 +572,21 @@ export async function POST(req: NextRequest) {
       isSwap:          tokenInN !== tokenOutN,
       sourceChain:     chainName(Number(chainId)),
       gasless:         Number(chainId) !== 1,
-      _debug: {
+      ...(ORACLE_DEBUG ? { _debug: {
         contractAddr,
         domainName:  name,
         domainVer:   version,
         typehash:    isV3 ? 'V3' : 'V4',
         amountWei:   amountWei.toString(),
-        signer:      account.address,
+        signer:      signerAddress,
         recovered,
         chainId:     Number(chainId),
-      },
+      } } : {}),
     })
 
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    console.error('[oracle/sign] ❌ error:', message)
+    logger.error('oracle/sign', 'unhandled error', { message })
     return NextResponse.json({
       approved: false, error: message, riskLevel: 'BLOCKED',
       rejectionReason: 'Errore interno Oracle: ' + message.slice(0, 100),
@@ -398,6 +596,13 @@ export async function POST(req: NextRequest) {
 
 // ── GET — health check ──────────────────────────────────────────────────────
 export async function GET() {
+  // L1 — in production this endpoint leaked signer address, all router
+  // addresses, domain config and env flags. Return only a liveness ping unless
+  // ORACLE_DEBUG=1.
+  if (!ORACLE_DEBUG) {
+    return NextResponse.json({ status: 'online' })
+  }
+
   const account = ORACLE_PRIVATE_KEY
     ? privateKeyToAccount(ORACLE_PRIVATE_KEY as Hex)
     : null

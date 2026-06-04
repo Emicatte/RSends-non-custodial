@@ -1,5 +1,7 @@
 'use client';
 
+import { COINGECKO_UPSTREAM } from './coingeckoUpstream';
+
 type CacheEntry<T> = {
   data: T;
   timestamp: number;
@@ -87,17 +89,16 @@ export async function fetchWithDedup<T>(url: string, timeoutMs = 10_000): Promis
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   const headers: HeadersInit = { Accept: 'application/json' };
-  const apiKey = process.env.NEXT_PUBLIC_COINGECKO_API_KEY;
-  if (apiKey && url.includes('api.coingecko.com')) {
-    headers['x-cg-demo-api-key'] = apiKey;
-  } else if (!apiKey && typeof window !== 'undefined' && url.includes('api.coingecko.com')) {
-    if (!(window as any).__coingeckoKeyWarned) {
-      console.warn('[CoinGecko] NEXT_PUBLIC_COINGECKO_API_KEY not set — using public tier');
-      (window as any).__coingeckoKeyWarned = true;
-    }
-  }
 
-  const p = fetch(url, { signal: controller.signal, headers })
+  // Route api.coingecko.com calls through the internal server proxy at
+  // /api/market/* so the (now server-only) COINGECKO_API_KEY can be
+  // injected without exposing it in the client bundle.
+  const COINGECKO_PREFIX = `${COINGECKO_UPSTREAM}/`;
+  const fetchUrl = url.startsWith(COINGECKO_PREFIX)
+    ? '/api/market/' + url.slice(COINGECKO_PREFIX.length)
+    : url;
+
+  const p = fetch(fetchUrl, { signal: controller.signal, headers })
     .then(async (r) => {
       clearTimeout(timeoutId);
       if (!r.ok) {

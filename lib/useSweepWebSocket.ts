@@ -1,8 +1,14 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { requireEnv } from '@/lib/env'
+import { useWalletAuth } from '@/lib/walletAuth'
 
-const BACKEND = process.env.NEXT_PUBLIC_RPAGOS_BACKEND_URL || 'http://localhost:8000'
+// TODO: WebSocket calls go directly to the backend from the browser.
+// Next.js API routes don't proxy WebSockets natively, so this remains
+// direct-to-backend for now. Consider migrating to a server-side WS
+// proxy (e.g. a Node server or a Vercel Edge function) so the backend
+// URL can become server-only.
 
 export interface SweepEvent {
   type: string
@@ -24,23 +30,72 @@ export function useSweepWebSocket(address: string | undefined) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [backendOffline, setBackendOffline] = useState(false)
   const errorLoggedRef = useRef(false)
+  const { getAuthHeaders, clearCache } = useWalletAuth(address)
 
   const connect = useCallback(() => {
     if (!address) return
-    const wsUrl = BACKEND.replace(/^http/, 'ws') + `/ws/sweep-feed/${address}`
 
-    try {
-      const ws = new WebSocket(wsUrl)
-      wsRef.current = ws
+    // Lazy: read the backend URL only when we actually attempt to connect, so a
+    // missing NEXT_PUBLIC_RPAGOS_BACKEND_URL never throws at module import (which
+    // would crash every page importing this hook — e.g. the landing).
+    const BACKEND = requireEnv('NEXT_PUBLIC_RPAGOS_BACKEND_URL')
 
-      ws.onopen = () => {
-        setConnected(true)
-        setBackendOffline(false)
-        retryRef.current = 0
-        errorLoggedRef.current = false
+    const scheduleRetry = () => {
+      const attempt = retryRef.current
+      retryRef.current++
+      if (attempt >= 10) {
+        if (!errorLoggedRef.current) {
+          console.error('[useSweepWebSocket] Backend offline after 10 attempts')
+          errorLoggedRef.current = true
+        } else {
+          console.debug('[useSweepWebSocket] Still offline, heartbeat retry')
+        }
+        setBackendOffline(true)
+        timerRef.current = setTimeout(connect, 30000)
+        return
+      }
+      const delay = Math.min(2000 * Math.pow(2, attempt), 30000)
+      timerRef.current = setTimeout(connect, delay)
+    }
+
+    void (async () => {
+      // M4: mint a single-use, wallet-authed ticket before connecting. Browser
+      // WebSockets can't send auth headers, so ownership is proven by this
+      // ticket (bound to the verified wallet, 30s TTL, consumed on connect).
+      let ticket: string
+      try {
+        const doMint = async () =>
+          fetch(`${BACKEND}/api/v1/forwarding/sweep-ticket`, {
+            method: 'POST',
+            headers: await getAuthHeaders(),
+            signal: AbortSignal.timeout(10000),
+          })
+        let res = await doMint()
+        if (res.status === 401) { clearCache(); res = await doMint() }
+        if (!res.ok) { scheduleRetry(); return }
+        ticket = (await res.json()).ticket
+        if (!ticket) { scheduleRetry(); return }
+      } catch {
+        scheduleRetry()
+        return
       }
 
-      ws.onmessage = (e) => {
+      const wsUrl =
+        BACKEND.replace(/^http/, 'ws') +
+        `/ws/sweep-feed/${address}?ticket=${encodeURIComponent(ticket)}`
+
+      try {
+        const ws = new WebSocket(wsUrl)
+        wsRef.current = ws
+
+        ws.onopen = () => {
+          setConnected(true)
+          setBackendOffline(false)
+          retryRef.current = 0
+          errorLoggedRef.current = false
+        }
+
+        ws.onmessage = (e) => {
         try {
           const msg = JSON.parse(e.data)
           if (msg.type === 'heartbeat' || msg.type === 'stats') return
@@ -51,48 +106,19 @@ export function useSweepWebSocket(address: string | undefined) {
         } catch { /* malformed message */ }
       }
 
-      ws.onclose = () => {
-        setConnected(false)
-        wsRef.current = null
-        setWsStats(prev => ({ ...prev, reconnects: prev.reconnects + 1 }))
-        const attempt = retryRef.current
-        retryRef.current++
-
-        if (attempt >= 10) {
-          if (!errorLoggedRef.current) {
-            console.error('[useSweepWebSocket] Backend offline after 10 attempts')
-            errorLoggedRef.current = true
-          } else {
-            console.debug('[useSweepWebSocket] Still offline, heartbeat retry')
-          }
-          setBackendOffline(true)
-          timerRef.current = setTimeout(connect, 30000)
-          return
+        ws.onclose = () => {
+          setConnected(false)
+          wsRef.current = null
+          setWsStats(prev => ({ ...prev, reconnects: prev.reconnects + 1 }))
+          scheduleRetry()
         }
 
-        const delay = Math.min(2000 * Math.pow(2, attempt), 30000)
-        timerRef.current = setTimeout(connect, delay)
+        ws.onerror = () => ws.close()
+      } catch {
+        scheduleRetry()
       }
-
-      ws.onerror = () => ws.close()
-    } catch {
-      const attempt = retryRef.current
-      retryRef.current++
-
-      if (attempt >= 10) {
-        if (!errorLoggedRef.current) {
-          console.error('[useSweepWebSocket] Backend offline after 10 attempts')
-          errorLoggedRef.current = true
-        }
-        setBackendOffline(true)
-        timerRef.current = setTimeout(connect, 30000)
-        return
-      }
-
-      const delay = Math.min(2000 * Math.pow(2, attempt), 30000)
-      timerRef.current = setTimeout(connect, delay)
-    }
-  }, [address])
+    })()
+  }, [address, getAuthHeaders, clearCache])
 
   useEffect(() => {
     connect()
