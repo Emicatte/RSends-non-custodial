@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { verifySync } from 'otplib'
 import { generateToken, TOKEN_TTL_SECONDS } from '@/lib/auth/adminTokens'
+import { logger } from '@/lib/logger'
 
 // ── Config ──────────────────────────────────────────────────
 
@@ -163,6 +164,7 @@ export async function POST(req: NextRequest) {
     }
   } else {
     requiresSetup = true
+    logger.warn('admin/login', 'TOTP not configured for admin — login allowed in bootstrap (setup-only) mode')
   }
 
   // Generate session token and set httpOnly cookie. In bootstrap mode
