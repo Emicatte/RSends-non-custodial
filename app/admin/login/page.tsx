@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation'
 export default function AdminLoginPage() {
   const router = useRouter()
   const [password, setPassword] = useState('')
+  const [totp, setTotp] = useState('')
+  const [mfaRequired, setMfaRequired] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -14,25 +16,40 @@ export default function AdminLoginPage() {
     setError('')
     const pw = password.trim()
     if (!pw) { setError('Inserisci il token di accesso.'); return }
+    const code = totp.trim()
+    if (mfaRequired && !code) { setError('Inserisci il codice a 6 cifre.'); return }
 
     setLoading(true)
     try {
       const res = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: pw }),
+        body: JSON.stringify(mfaRequired ? { password: pw, totp_code: code } : { password: pw }),
       })
-
-      if (res.status === 401) {
-        setError('Token non valido.')
-        setLoading(false)
-        return
-      }
 
       if (res.status === 429) {
         const body = await res.json().catch(() => ({}))
         const retryAfter = body.retry_after ?? 60
         setError(`Troppi tentativi. Riprova tra ${retryAfter}s.`)
+        setLoading(false)
+        return
+      }
+
+      if (res.status === 401) {
+        const body = await res.json().catch(() => ({}))
+        if (body.error === 'MFA_REQUIRED') {
+          // Password accepted — reveal the second-factor field and ask for the code.
+          setMfaRequired(true)
+          setError('')
+          setLoading(false)
+          return
+        }
+        if (body.error === 'MFA_INVALID') {
+          setError('Codice 2FA non valido.')
+          setLoading(false)
+          return
+        }
+        setError('Token non valido.')
         setLoading(false)
         return
       }
@@ -43,7 +60,14 @@ export default function AdminLoginPage() {
         return
       }
 
-      // Cookie is set by server (httpOnly) — no JS access needed
+      // Cookie is set by server (httpOnly). A bootstrap (no-2FA) login returns
+      // requiresSetup=true — that session can ONLY enroll TOTP, so send the admin
+      // to the 2FA setup page instead of the (full-scope) transactions panel.
+      const body = await res.json().catch(() => ({}))
+      if (body.requiresSetup) {
+        router.push('/admin/2fa-setup')
+        return
+      }
       router.push('/admin/transactions')
     } catch {
       setError('Errore di rete. Riprova.')
@@ -94,6 +118,30 @@ export default function AdminLoginPage() {
               />
             </div>
 
+            {mfaRequired && (
+              <div className="mb-5">
+                <label htmlFor="admin-totp" className="block text-[11px] font-semibold uppercase tracking-widest mb-2" style={{ color: 'rgba(10,10,10,0.55)' }}>
+                  Codice 2FA
+                </label>
+                <input
+                  id="admin-totp"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  autoFocus
+                  placeholder="000000"
+                  value={totp}
+                  onChange={e => setTotp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className="w-full rounded-xl border border-black/[0.08] bg-black/[0.03] px-4 py-3 text-sm text-[#0A0A0A] placeholder-black/30 text-center font-mono tracking-[0.4em] transition-all focus:border-[#C8512C]/40 focus:outline-none focus:ring-2 focus:ring-[#C8512C]/10"
+                />
+                <p className="mt-2 text-[11px]" style={{ color: 'rgba(10,10,10,0.45)' }}>
+                  Password corretta. Inserisci il codice a 6 cifre dell&apos;app authenticator.
+                </p>
+              </div>
+            )}
+
             {error && (
               <div className="mb-4 flex items-center gap-2 rounded-lg bg-red-500/[0.08] border border-red-500/10 px-3 py-2.5">
                 <svg className="h-3.5 w-3.5 flex-shrink-0 text-red-400" fill="currentColor" viewBox="0 0 20 20">
@@ -120,7 +168,7 @@ export default function AdminLoginPage() {
                   </svg>
                   Verifica in corso...
                 </span>
-              ) : 'Accedi'}
+              ) : (mfaRequired ? 'Verifica codice' : 'Accedi')}
             </button>
           </form>
 
