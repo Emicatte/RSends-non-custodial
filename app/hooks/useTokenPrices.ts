@@ -13,7 +13,10 @@ export interface TokenPrices {
 }
 
 /**
- * Fetch diretto da CoinGecko (fallback se il backend non risponde).
+ * Fetch prezzi via proxy CoinGecko interno `/api/market` (COINGECKO_API).
+ * Non chiama CoinGecko direttamente: il proxy server-side inietta
+ * COINGECKO_API_KEY e applica il rate-limit, così la key non finisce mai
+ * nel bundle client. Usato come fallback quando il backend RPagos non risponde.
  */
 async function fetchFromCoinGecko(): Promise<TokenPrices> {
   const ids = getAllCoingeckoIds().join(',')
@@ -59,7 +62,7 @@ async function fetchFromBackend(): Promise<TokenPrices> {
 
 /**
  * Hook che fetcha i prezzi real-time ogni 30 secondi.
- * Prova il backend prima, poi fallback diretto su CoinGecko.
+ * Prova il backend prima, poi fallback sul proxy CoinGecko interno (/api/market).
  */
 export function useTokenPrices() {
   const [prices, setPrices] = useState<TokenPrices>({})
