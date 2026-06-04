@@ -540,6 +540,10 @@ export default function TransferForm({ noCard, externalToken }: { noCard?: boole
   // ── Cross-chain state ──────────────────────────────────────────────────
   const [crossChainOut, setCrossChainOut] = useState<TokenInfo | null>(null)
 
+  // Cross-chain (CCIP) feature flag — build-time constant inlined by Next.
+  // Incomplete CCIP paths stay unreachable until contracts are wired + flag=true.
+  const CROSSCHAIN_ENABLED = process.env.NEXT_PUBLIC_FEATURE_CROSSCHAIN === 'true'
+
   // ── isSwapMode — auto-detection (niente useState) ─────────────────────
   // Direct se stesso token (stesso address) — Swap se token diversi
   const isSwapMode = !!(tokenIn && tokenOut && tokenIn.address !== tokenOut.address) && !crossChainOut
@@ -976,7 +980,7 @@ export default function TransferForm({ noCard, externalToken }: { noCard?: boole
   useEffect(() => {
     if (!approveOk || phase !== 'wait_approve') return
     // Cross-chain routes
-    if (isCrossChain && crossChainOut) {
+    if (CROSSCHAIN_ENABLED && isCrossChain && crossChainOut) {
       if (routeType === 'bridge') execBridge()
       else execSwapAndBridge()
       return
@@ -1143,7 +1147,7 @@ export default function TransferForm({ noCard, externalToken }: { noCard?: boole
     const txIdempotencyKey = generateIdempotencyKey()
 
     // ── Cross-chain routes: bridge or swapAndBridge ─────────────────────
-    if (isCrossChain && crossChainOut) {
+    if (CROSSCHAIN_ENABLED && isCrossChain && crossChainOut) {
       // AML check for cross-chain
       try {
         const checkRes = await fetch('/api/oracle/check-crosschain', {
@@ -1871,10 +1875,10 @@ export default function TransferForm({ noCard, externalToken }: { noCard?: boole
           onClose={() => setSelectingToken(null)}
           isMobile={isMobile}
           currentChainId={chainId}
-          multiChainTokens={selectingToken === 'out'
+          multiChainTokens={selectingToken === 'out' && CROSSCHAIN_ENABLED
             ? TOKEN_LIST.filter(t => t.chainId !== chainId)
             : undefined}
-          onSelectMultiChain={selectingToken === 'out'
+          onSelectMultiChain={selectingToken === 'out' && CROSSCHAIN_ENABLED
             ? (t: TokenInfo) => {
                 setCrossChainOut(t)
                 // Find matching local token for tokenOut display (same symbol on current chain)

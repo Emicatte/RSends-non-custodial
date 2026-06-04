@@ -112,6 +112,9 @@ function RowKV({ k, v, mono = false, color }: { k: string; v: React.ReactNode; m
 }
 
 export default function SwapModule({ onSwapComplete, portfolioAssets, noCard }: SwapModuleProps) {
+  // Cross-chain (CCIP) feature flag — build-time constant inlined by Next.
+  // Stub UI stays hidden until contracts are wired + flag=true.
+  const CROSSCHAIN_ENABLED = process.env.NEXT_PUBLIC_FEATURE_CROSSCHAIN === 'true'
   const { address, isConnected } = useAccount()
   const chainId = useChainId()
   const publicClient = usePublicClient()
@@ -548,14 +551,16 @@ export default function SwapModule({ onSwapComplete, portfolioAssets, noCard }: 
           <div className="rounded-2xl border border-[rgba(200,81,44,0.35)] bg-white px-5 py-4">
             <div className="flex items-center justify-between mb-3.5">
               <span className="text-[12px] font-medium text-[#C8512C] tracking-[0.3px]">{t('receive') ?? 'Receive'}</span>
-              {/* Cross-chain stub chip — disabled */}
-              <div
-                className="inline-flex items-center gap-1 px-2 py-1 text-[10px] text-[#888780] bg-[rgba(136,135,128,0.08)] border border-[rgba(136,135,128,0.2)] rounded-md cursor-not-allowed"
-                title="Cross-chain swap coming soon"
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-[#1D9E75]" />
-                <span>{chainLabel}</span>
-              </div>
+              {/* Cross-chain stub chip — disabled, gated behind feature flag */}
+              {CROSSCHAIN_ENABLED && (
+                <div
+                  className="inline-flex items-center gap-1 px-2 py-1 text-[10px] text-[#888780] bg-[rgba(136,135,128,0.08)] border border-[rgba(136,135,128,0.2)] rounded-md cursor-not-allowed"
+                  title="Cross-chain swap coming soon"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#1D9E75]" />
+                  <span>{chainLabel}</span>
+                </div>
+              )}
               {/* TODO(crosschain): wire to NetworkSelector state; when enabled, show dropdown to pick destination chain. Requires CCIPSender integration. */}
             </div>
             <div className="flex items-center justify-between gap-3">
