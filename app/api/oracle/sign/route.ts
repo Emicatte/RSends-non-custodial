@@ -20,7 +20,9 @@ const ORACLE_SIGNER_MODE = (process.env.ORACLE_SIGNER_MODE ?? 'local').toLowerCa
 // L1 — never expose oracle internals (signer address, router/domain config, env
 // flags) in production. Set ORACLE_DEBUG=1 to re-enable for diagnostics.
 const ORACLE_DEBUG = process.env.NODE_ENV !== 'production' || process.env.ORACLE_DEBUG === '1'
-const BACKEND_URL = requireEnv('RPAGOS_BACKEND_URL')
+// Lazy getter: resolve the backend URL at call time, not module load, so a missing
+// RPAGOS_BACKEND_URL throws only when this route actually runs (never at import).
+function getBackendUrl(): string { return requireEnv('RPAGOS_BACKEND_URL') }
 // Shared secret authenticating this server-side oracle to the backend
 // /api/internal/* endpoints (H3). Must match INTERNAL_PROXY_SECRET on backend.
 const INTERNAL_SECRET = process.env.INTERNAL_PROXY_SECRET ?? ''
@@ -32,7 +34,7 @@ async function signingGuardCheck(params: {
   chainId: number; ipAddress: string | null; contractAddress: string;
 }): Promise<{ allowed: boolean; reason?: string }> {
   try {
-    const resp = await fetch(`${BACKEND_URL}/api/internal/signing/check`, {
+    const resp = await fetch(`${getBackendUrl()}/api/internal/signing/check`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': INTERNAL_SECRET },
       body: JSON.stringify({
@@ -66,7 +68,7 @@ async function sharedRateLimit(p: {
   bucket: string; key: string; max: number; windowSeconds: number
 }): Promise<{ allowed: boolean; retryAfter?: number }> {
   try {
-    const resp = await fetch(`${BACKEND_URL}/api/internal/ratelimit/check`, {
+    const resp = await fetch(`${getBackendUrl()}/api/internal/ratelimit/check`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': INTERNAL_SECRET },
       body: JSON.stringify({
@@ -90,7 +92,7 @@ async function sharedRateLimit(p: {
 async function remoteSignDigest(
   digest: Hex,
 ): Promise<{ signature: Hex; signerAddress: string; signatures: Hex[]; signerAddresses: string[] }> {
-  const resp = await fetch(`${BACKEND_URL}/api/internal/oracle/sign-digest`, {
+  const resp = await fetch(`${getBackendUrl()}/api/internal/oracle/sign-digest`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': INTERNAL_SECRET },
     body: JSON.stringify({ digest }),
@@ -112,7 +114,7 @@ async function remoteSignDigest(
 // (errors propagate; callers decide whether to await or fire-and-forget
 // with an explicit .catch() — see usage at the two call sites below).
 async function auditLog(params: Record<string, unknown>): Promise<void> {
-  const res = await fetch(`${BACKEND_URL}/api/internal/signing/audit`, {
+  const res = await fetch(`${getBackendUrl()}/api/internal/signing/audit`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': INTERNAL_SECRET },
     body: JSON.stringify(params),
@@ -370,7 +372,7 @@ export async function POST(req: NextRequest) {
 
     // ── Backend AML check (screening + monitoring) ────────
     try {
-      const amlResp = await fetch(`${BACKEND_URL}/api/v1/aml/check`, {
+      const amlResp = await fetch(`${getBackendUrl()}/api/v1/aml/check`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

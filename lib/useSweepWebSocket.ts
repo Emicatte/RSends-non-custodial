@@ -9,7 +9,6 @@ import { useWalletAuth } from '@/lib/walletAuth'
 // direct-to-backend for now. Consider migrating to a server-side WS
 // proxy (e.g. a Node server or a Vercel Edge function) so the backend
 // URL can become server-only.
-const BACKEND = requireEnv('NEXT_PUBLIC_RPAGOS_BACKEND_URL')
 
 export interface SweepEvent {
   type: string
@@ -35,6 +34,11 @@ export function useSweepWebSocket(address: string | undefined) {
 
   const connect = useCallback(() => {
     if (!address) return
+
+    // Lazy: read the backend URL only when we actually attempt to connect, so a
+    // missing NEXT_PUBLIC_RPAGOS_BACKEND_URL never throws at module import (which
+    // would crash every page importing this hook — e.g. the landing).
+    const BACKEND = requireEnv('NEXT_PUBLIC_RPAGOS_BACKEND_URL')
 
     const scheduleRetry = () => {
       const attempt = retryRef.current

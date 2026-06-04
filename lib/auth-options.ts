@@ -22,8 +22,6 @@ import { requireEnv } from '@/lib/env'
  * useSession().status === 'authenticated' work identically to Google.
  */
 
-const BACKEND_URL = requireEnv('RPAGOS_BACKEND_URL')
-
 export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
@@ -55,6 +53,9 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.access_token) return null
+        // Lazy: resolve the backend URL here (not at module load) so a missing
+        // RPAGOS_BACKEND_URL can't throw at import and break the auth subsystem.
+        const BACKEND_URL = requireEnv('RPAGOS_BACKEND_URL')
         try {
           const res = await fetch(`${BACKEND_URL}/api/v1/auth/me`, {
             headers: { Authorization: `Bearer ${credentials.access_token}` },
