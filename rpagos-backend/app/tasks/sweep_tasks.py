@@ -366,7 +366,50 @@ def execute_distribution(self, batch_id: str) -> dict:
 
     Retry: 3 attempts with 10s/30s/90s backoff.
     """
-    return _run_async(_execute_distribution_async(self, batch_id))
+    return _run_async(_execute_distribution_locked(self, batch_id))
+
+
+async def _execute_distribution_locked(task, batch_id: str) -> dict:
+    """C1 concurrency guard: serialize execution of a batch with a fail-closed
+    Redis lock so two concurrent tasks can never both broadcast the same batch.
+
+    The C1b nonce-reuse fix makes a SINGLE task's crash-retry idempotent, but it
+    does NOT stop two CONCURRENT runs of the same batch (Celery visibility-timeout
+    redelivery, or a webhook + periodic double-fire): each loads items with
+    nonce=NULL, each reserves a DISJOINT nonce range, and both broadcast — paying
+    every recipient twice. This lock makes only one task own a batch at a time.
+
+    Mirrors the sweep execution-lock pattern
+    (sweep_service.acquire_sweep_lock / release_sweep_lock).
+    """
+    from app.services.sweep_service import (
+        acquire_sweep_lock,
+        release_sweep_lock,
+        start_sweep_heartbeat,
+        stop_sweep_heartbeat,
+    )
+
+    lock_key = f"distrib_batch:{batch_id}"
+    if not await acquire_sweep_lock(lock_key):
+        # Concurrent run holds the lock, OR Redis is unreachable (fail-closed):
+        # refuse to broadcast. A legitimate retry re-acquires once the holder
+        # finishes (release) or the lock TTL expires after a hard crash.
+        logger.warning(
+            "Batch %s locked or Redis unavailable — skipping execution (fail-closed)",
+            batch_id,
+        )
+        return {"status": "skipped", "reason": "locked"}
+    # Renew the lock TTL every 60s while we run: a batch can carry up to
+    # MAX_RECIPIENTS (500) items, each a slow on-chain broadcast, so the loop can
+    # outlast the 300s TTL — without renewal the lock would lapse mid-loop and admit
+    # a second concurrent run. On a hard crash the heartbeat task dies with the
+    # process, so the lock still auto-expires within the TTL (never blocks forever).
+    heartbeat = start_sweep_heartbeat(lock_key)
+    try:
+        return await _execute_distribution_async(task, batch_id)
+    finally:
+        await stop_sweep_heartbeat(heartbeat)
+        await release_sweep_lock(lock_key)
 
 
 async def _execute_distribution_async(task, batch_id: str) -> dict:

@@ -184,3 +184,96 @@ async def test_retry_reuses_nonce_and_does_not_double_send():
     by_nonce = {r.nonce: r.status for r in rows}
     assert by_nonce[100] == "SUBMITTED"                # idempotent: already-sent
     assert by_nonce[101] == "SUBMITTED"                # real send
+
+
+# ──────────────────────────────────────────────────────────────────────────
+#  C1 concurrency guard (_execute_distribution_locked): the fail-closed Redis
+#  lock prevents TWO concurrent runs of the same batch from both broadcasting
+#  (which C1b's per-task nonce-reuse does NOT cover — concurrent runs reserve
+#  DISJOINT nonce ranges and pay every recipient twice).
+# ──────────────────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_concurrent_execution_single_broadcast():
+    """Two concurrent execute_distribution runs for the SAME batch: only one
+    acquires the lock and broadcasts; the other is locked out. Each item is
+    broadcast exactly once (never twice)."""
+    import asyncio
+
+    batch_id = await _make_batch(
+        "PENDING", [("a0", None, "PENDING"), ("b1", None, "PENDING")]
+    )
+    calls: list[int] = []
+
+    def transfer(*_a, **k):
+        calls.append(k["nonce"])
+        return "0x" + f"{k['nonce']:064x}"
+
+    # Stateful in-memory SETNX: first acquire of a key wins, the rest get False
+    # until released. fake_acquire has no await before mutating `held`, so under
+    # asyncio.gather the first-scheduled run wins deterministically.
+    held: set[str] = set()
+
+    async def fake_acquire(key, ttl=300):
+        if key in held:
+            return False
+        held.add(key)
+        return True
+
+    async def fake_release(key):
+        held.discard(key)
+
+    stack, nm = _patch_deps(transfer, AsyncMock(return_value=(100, 101)))
+    with stack, \
+            patch("app.services.sweep_service.acquire_sweep_lock", new=fake_acquire), \
+            patch("app.services.sweep_service.release_sweep_lock", new=fake_release), \
+            patch("app.services.sweep_service.start_sweep_heartbeat",
+                  MagicMock(return_value=MagicMock())) as hb_start, \
+            patch("app.services.sweep_service.stop_sweep_heartbeat", AsyncMock()) as hb_stop:
+        results = await asyncio.gather(
+            st._execute_distribution_locked(MagicMock(), batch_id),
+            st._execute_distribution_locked(MagicMock(), batch_id),
+        )
+
+    # Each item broadcast exactly once — 2 sends total, NOT 4.
+    assert sorted(calls) == [100, 101]
+    assert nm.reserve_range.call_count == 1                 # only the winner reserved
+    skipped = [r for r in results if r.get("status") == "skipped"]
+    assert len(skipped) == 1 and skipped[0]["reason"] == "locked"
+    # Only the winner ran under a heartbeat, and it was stopped on exit.
+    assert hb_start.call_count == 1
+    assert hb_stop.await_count == 1
+
+    async with async_session() as db:
+        rows = (await db.execute(select(SweepBatchItem))).scalars().all()
+    assert all(r.status == "SUBMITTED" for r in rows)       # no duplicate/extra items
+
+
+@pytest.mark.asyncio
+async def test_lock_unavailable_fail_closed():
+    """Fail-closed: when the Redis lock cannot be acquired (e.g. Redis down,
+    acquire_sweep_lock returns False), execution is skipped and NOTHING is
+    broadcast — better to delay than to risk a double-spend."""
+    batch_id = await _make_batch("PENDING", [("a0", None, "PENDING")])
+    calls: list[int] = []
+
+    def transfer(*_a, **k):
+        calls.append(k["nonce"])
+        return "0x" + f"{k['nonce']:064x}"
+
+    async def deny(key, ttl=300):
+        return False  # Redis unavailable / already locked → fail-closed
+
+    stack, nm = _patch_deps(transfer, AsyncMock(return_value=(100, 100)))
+    with stack, \
+            patch("app.services.sweep_service.acquire_sweep_lock", new=deny), \
+            patch("app.services.sweep_service.release_sweep_lock", new=AsyncMock()), \
+            patch("app.services.sweep_service.start_sweep_heartbeat",
+                  MagicMock(return_value=MagicMock())) as hb_start, \
+            patch("app.services.sweep_service.stop_sweep_heartbeat", AsyncMock()):
+        result = await st._execute_distribution_locked(MagicMock(), batch_id)
+
+    assert result == {"status": "skipped", "reason": "locked"}
+    assert calls == []                                       # nothing broadcast
+    assert nm.reserve_range.call_count == 0
+    assert hb_start.call_count == 0                          # fail-closed: no heartbeat started
