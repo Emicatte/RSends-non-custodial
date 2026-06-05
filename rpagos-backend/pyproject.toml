@@ -1,6 +1,12 @@
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-asyncio_default_fixture_loop_scope = "session"
+# function scope: async fixtures (e.g. each module's autouse setup_db) run on
+# the SAME per-test event loop as the test body. With "session" the fixtures
+# ran on the session loop while tests ran on per-function loops, so asyncpg
+# connections opened in a fixture were used from a different loop in the test
+# ("attached to a different loop"). See tests/conftest.py for the matching
+# per-test engine-pool reset.
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 markers = [
     "slow: test that requires real wait time (>5 min)",
