@@ -63,7 +63,7 @@ async def setup_db():
 async def client():
     """Client HTTP asincrono."""
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=auth_headers()) as ac:
         yield ac
 
 

@@ -39,6 +39,19 @@ OWNER2 = "0x" + "bb" * 20
 # ── Fixtures ──────────────────────────────────────────────
 
 @pytest_asyncio.fixture(autouse=True)
+async def _bypass_ws_ticket():
+    """The /ws/sweep-feed endpoint requires a single-use ?ticket= (M4), minted
+    via Redis. Bypass ticket consumption in tests by returning the connecting
+    owner. The address-validation rejection test is unaffected (address check
+    runs before the ticket check)."""
+    with patch(
+        "app.api.websocket_routes.consume_sweep_ticket",
+        AsyncMock(return_value=OWNER.lower()),
+    ):
+        yield
+
+
+@pytest_asyncio.fixture(autouse=True)
 async def setup_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
