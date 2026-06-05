@@ -44,6 +44,25 @@ from app.services.sweep_service import (
 )
 
 
+# ── Helpers ───────────────────────────────────────────────
+
+from contextlib import contextmanager
+
+
+@contextmanager
+def patch_rpc():
+    """Patch the RPC layer used by sweep_service. The old module-level
+    _rpc_call(chain, method, params) was replaced by
+    get_rpc_manager(chain).call(method, params); this yields the manager's
+    `.call` AsyncMock so existing `mock_rpc.return_value/side_effect` usage
+    keeps working."""
+    mock_call = AsyncMock()
+    mgr = MagicMock()
+    mgr.call = mock_call
+    with patch("app.services.sweep_service.get_rpc_manager", return_value=mgr):
+        yield mock_call
+
+
 # ── Fixtures ──────────────────────────────────────────────
 
 @pytest_asyncio.fixture(autouse=True)
@@ -200,7 +219,7 @@ class TestTokenFilter:
         rule = _make_rule(token_filter=["USDC", "USDT"])
         ok, reason = _check_token_filter(rule, "ETH")
         assert ok is False
-        assert "not in allowed" in reason
+        assert "not in filter" in reason
 
 
 # ═══════════════════════════════════════════════════════════
@@ -214,7 +233,7 @@ class TestGasLimit:
     async def test_gas_below_limit(self):
         """Gas sotto il limite → OK."""
         # 10 gwei = 10 * 1e9 = 10000000000 = 0x2540be400
-        with patch("app.services.sweep_service._rpc_call", new_callable=AsyncMock) as mock_rpc:
+        with patch_rpc() as mock_rpc:
             mock_rpc.return_value = hex(int(10 * 1e9))
             ok, gas_gwei, reason = await _check_gas_limit(8453, 50)
             assert ok is True
@@ -223,7 +242,7 @@ class TestGasLimit:
     @pytest.mark.asyncio
     async def test_gas_above_limit(self):
         """Gas sopra il limite → FAIL."""
-        with patch("app.services.sweep_service._rpc_call", new_callable=AsyncMock) as mock_rpc:
+        with patch_rpc() as mock_rpc:
             mock_rpc.return_value = hex(int(100 * 1e9))
             ok, gas_gwei, reason = await _check_gas_limit(8453, 50)
             assert ok is False
@@ -232,7 +251,7 @@ class TestGasLimit:
     @pytest.mark.asyncio
     async def test_gas_rpc_failure(self):
         """RPC failure → fail-open (OK)."""
-        with patch("app.services.sweep_service._rpc_call", new_callable=AsyncMock) as mock_rpc:
+        with patch_rpc() as mock_rpc:
             mock_rpc.side_effect = Exception("RPC down")
             ok, gas_gwei, reason = await _check_gas_limit(8453, 50)
             assert ok is True  # fail-open
@@ -266,7 +285,7 @@ class TestCooldown:
 
         # Inserisci un sweep log recente
         # Nota: SQLite non gestisce tz-aware — usa naive UTC
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         async with async_session() as db:
             db.add(ForwardingRule(
                 id=1, user_id=rule.user_id,
@@ -302,7 +321,7 @@ class TestCooldown:
         """Sweep vecchio → cooldown elapsed."""
         rule = _make_rule(cooldown_sec=60)
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         old = now - timedelta(seconds=120)
 
         async with async_session() as db:
@@ -603,7 +622,7 @@ class TestValidateAll:
         """Tutte le condizioni soddisfatte → OK."""
         rule = _make_rule(cooldown_sec=0, schedule_json=None, max_daily_vol=None)
 
-        with patch("app.services.sweep_service._rpc_call", new_callable=AsyncMock) as mock_rpc:
+        with patch_rpc() as mock_rpc:
             mock_rpc.return_value = hex(int(5 * 1e9))  # 5 gwei gas
             ok, reason = await validate_all_conditions(rule, "ETH")
             assert ok is True
@@ -621,7 +640,7 @@ class TestValidateAll:
             schedule_json={"days": other_days, "timezone": "UTC"},
         )
 
-        with patch("app.services.sweep_service._rpc_call", new_callable=AsyncMock) as mock_rpc:
+        with patch_rpc() as mock_rpc:
             mock_rpc.return_value = hex(int(5 * 1e9))
             ok, reason = await validate_all_conditions(rule, "ETH")
             assert ok is False
@@ -635,18 +654,18 @@ class TestValidateAll:
             token_filter=["USDC"],
         )
 
-        with patch("app.services.sweep_service._rpc_call", new_callable=AsyncMock) as mock_rpc:
+        with patch_rpc() as mock_rpc:
             mock_rpc.return_value = hex(int(5 * 1e9))
             ok, reason = await validate_all_conditions(rule, "ETH")
             assert ok is False
-            assert "not in allowed" in reason
+            assert "not in filter" in reason
 
     @pytest.mark.asyncio
     async def test_gas_limit_blocks(self):
         """Gas troppo alto → FAIL."""
         rule = _make_rule(cooldown_sec=0, gas_limit_gwei=10)
 
-        with patch("app.services.sweep_service._rpc_call", new_callable=AsyncMock) as mock_rpc:
+        with patch_rpc() as mock_rpc:
             mock_rpc.return_value = hex(int(50 * 1e9))  # 50 gwei > limit 10
             ok, reason = await validate_all_conditions(rule, "ETH")
             assert ok is False
