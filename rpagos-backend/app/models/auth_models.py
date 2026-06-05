@@ -130,9 +130,15 @@ class User(Base):
     deletion_scheduled_for = Column(DateTime(timezone=True), nullable=True)
     deletion_reason = Column(Text, nullable=True)
 
+    # use_alter=True breaks the users<->organizations FK cycle
+    # (organizations.owner_user_id -> users.id and this column ->
+    # organizations.id): SQLAlchemy emits this FK via a separate ALTER after
+    # both tables exist, so create_all/drop_all can topo-sort the tables.
+    # Schema-equivalent (same column/target/ondelete); requires an explicit name.
     active_org_id = Column(
         _UUID(),
-        ForeignKey("organizations.id", ondelete="SET NULL"),
+        ForeignKey("organizations.id", ondelete="SET NULL",
+                   use_alter=True, name="fk_users_active_org"),
         nullable=True,
     )
 
