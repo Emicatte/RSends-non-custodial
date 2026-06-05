@@ -26,3 +26,24 @@ async def _isolate_engine_per_test():
     yield
     # Dispose after: leave a clean pool for the next test's loop.
     await engine.dispose()
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _flush_redis_between_tests():
+    """Circuit-breaker state (cb:*) and rate-limit counters (rl:*) are stored in
+    Redis when it's reachable, so they leak across tests and cause spurious
+    CircuitOpenError / RATE_LIMIT_EXCEEDED. Flush the test Redis db before each
+    test for isolation. No-op when Redis is down (code falls back to in-memory).
+    """
+    try:
+        import redis.asyncio as _redis
+        from app.config import get_settings
+
+        client = _redis.from_url(get_settings().redis_url)
+        try:
+            await client.flushdb()
+        finally:
+            await client.aclose()
+    except Exception:
+        pass
+    yield
