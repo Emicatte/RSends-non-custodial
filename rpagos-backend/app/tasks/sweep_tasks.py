@@ -548,7 +548,7 @@ async def _execute_distribution_async(task, batch_id: str) -> dict:
 
         # Detect if we're in replacement mode (nonce gap = pending TXes in mempool)
         from app.services.sweep_service import get_bumped_gas_params, _replacement_mode_active
-        is_replacement = _replacement_mode_active()
+        is_replacement = await _replacement_mode_active(chain_id)
         gas_params = await get_bumped_gas_params(
             chain_id, gas_price_wei, is_replacement=is_replacement,
         )

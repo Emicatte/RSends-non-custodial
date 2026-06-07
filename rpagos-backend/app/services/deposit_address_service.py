@@ -351,7 +351,16 @@ async def sweep_deposit(
 
         hot_wallet_addr = await km_signer.get_address()
 
-        hot_wallet_nonce = await asyncio.to_thread(w3.eth.get_transaction_count, hot_wallet_addr)
+        # Atomic nonce allocation for the SHARED hot wallet (cross-worker safe via
+        # Redis INCR) — avoids collisions when multiple sweeps fund gas concurrently.
+        from app.services.nonce_manager import get_nonce_manager, NonceError
+
+        nm = get_nonce_manager(chain_id)
+        try:
+            hot_wallet_nonce = await nm.get_next()
+        except NonceError:
+            await nm.initialize()
+            hot_wallet_nonce = await nm.get_next()
 
         gas_fund_tx = {
             "from": hot_wallet_addr,
@@ -364,8 +373,14 @@ async def sweep_deposit(
         }
 
         raw_signed = await km_signer.sign_transaction(gas_fund_tx)
-        gas_tx_hash = await asyncio.to_thread(w3.eth.send_raw_transaction, raw_signed)
-        await asyncio.to_thread(w3.eth.wait_for_transaction_receipt, gas_tx_hash, timeout=120)
+        try:
+            gas_tx_hash = await asyncio.to_thread(w3.eth.send_raw_transaction, raw_signed)
+            await asyncio.to_thread(w3.eth.wait_for_transaction_receipt, gas_tx_hash, timeout=120)
+        except Exception:
+            # Broadcast failed after the nonce was consumed → reconcile the Redis
+            # counter against the chain so the allocated nonce isn't left as a gap.
+            await nm.sync_from_chain()
+            raise
 
         logger.info(
             "Gas funded: hot_wallet=%s -> deposit=%s amount=%s wei tx=%s",

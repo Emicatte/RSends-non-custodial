@@ -379,22 +379,38 @@ GAS_BUMP_FACTOR = 1.15  # 15% bump — exceeds the 10% minimum required by most 
 MIN_PRIORITY_FEE_WEI = 100_000_000  # 0.1 gwei floor
 REPLACEMENT_MODE_DURATION = 300  # 5 minutes
 
-# Module-level replacement mode state
-_replacement_mode_until: float = 0.0  # monotonic timestamp
+# Replacement mode state — Redis-backed so it is shared across all Celery
+# workers (separate processes). Per-chain key with TTL = REPLACEMENT_MODE_DURATION.
+def _replacement_mode_key(chain_id: int) -> str:
+    return f"sweep:replacement_mode:{chain_id}"
 
 
-def _replacement_mode_active() -> bool:
-    """Return True if we are within the 5-min replacement window after startup gap detection."""
-    return _time.monotonic() < _replacement_mode_until
+async def _replacement_mode_active(chain_id: int) -> bool:
+    """Return True if we are within the replacement window for this chain.
+
+    Shared cross-worker via Redis. If Redis is unavailable, degrade to the
+    pre-existing no-replacement behaviour (return False) rather than raise.
+    """
+    from app.services.cache_service import get_redis
+    r = await get_redis()
+    if not r:
+        return False
+    return bool(await r.exists(_replacement_mode_key(chain_id)))
 
 
-def _activate_replacement_mode() -> None:
-    """Activate replacement mode for REPLACEMENT_MODE_DURATION seconds."""
-    global _replacement_mode_until
-    _replacement_mode_until = _time.monotonic() + REPLACEMENT_MODE_DURATION
+async def _activate_replacement_mode(chain_id: int) -> None:
+    """Activate replacement mode for REPLACEMENT_MODE_DURATION seconds (cross-worker)."""
+    from app.services.cache_service import get_redis
+    r = await get_redis()
+    if not r:
+        logger.warning(
+            "Replacement mode: Redis unavailable, cannot activate (chain=%d)", chain_id,
+        )
+        return
+    await r.set(_replacement_mode_key(chain_id), "1", ex=REPLACEMENT_MODE_DURATION)
     logger.warning(
-        "Replacement mode ACTIVATED for %ds — all TXes will use 15%% gas bump",
-        REPLACEMENT_MODE_DURATION,
+        "Replacement mode ACTIVATED for %ds (chain=%d) — all TXes will use 15%% gas bump",
+        REPLACEMENT_MODE_DURATION, chain_id,
     )
 
 
@@ -442,7 +458,7 @@ async def initialize_nonce_with_gap_detection(chain_id: int = 8453) -> dict:
             chain_id, state.get("redis_nonce"), state.get("chain_pending"),
             gap, REPLACEMENT_MODE_DURATION,
         )
-        _activate_replacement_mode()
+        await _activate_replacement_mode(chain_id)
 
         # Prometheus metric
         try:

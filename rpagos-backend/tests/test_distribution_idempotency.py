@@ -115,7 +115,7 @@ def _patch_deps(transfer_side_effect, reserve_range: AsyncMock):
     enter(patch("app.services.audit_service.log_event", AsyncMock()))
     enter(patch("app.services.cache_service.get_redis", AsyncMock(return_value=redis)))
     enter(patch("app.services.sweep_service.get_bumped_gas_params", AsyncMock(return_value={})))
-    enter(patch("app.services.sweep_service._replacement_mode_active", MagicMock(return_value=False)))
+    enter(patch("app.services.sweep_service._replacement_mode_active", AsyncMock(return_value=False)))
     enter(patch.object(st, "_execute_single_transfer", AsyncMock(side_effect=transfer_side_effect)))
     enter(patch.object(st, "_notify_websocket", AsyncMock()))
     enter(patch.object(st, "_notify_telegram", AsyncMock()))

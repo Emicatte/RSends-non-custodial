@@ -105,6 +105,10 @@ class _RpcSigner:
             from app.services.key_manager import get_signer
             self._signer = get_signer()
 
+        # Use the atomic Redis NonceManager only for the SHARED hot wallet
+        # (no explicit key). Deposit child keys are per-address (≈1 TX each),
+        # so their raw 'pending' read stays as-is.
+        self._managed_nonce = private_key is None
         self._rpc = get_rpc_manager(chain_id)
         self._chain_id = chain_id
         self._cached_address: Optional[str] = None
@@ -115,7 +119,20 @@ class _RpcSigner:
         return self._cached_address
 
     async def _next_nonce(self) -> int:
-        """Legge il nonce 'pending' del master wallet."""
+        """Next nonce for the signer.
+
+        Shared hot wallet → atomic Redis NonceManager (cross-worker safe).
+        Deposit child key → raw 'pending' read (per-address, single TX).
+        """
+        if self._managed_nonce:
+            from app.services.nonce_manager import get_nonce_manager, NonceError
+            nm = get_nonce_manager(self._chain_id)
+            try:
+                return await nm.get_next()
+            except NonceError:
+                await nm.initialize()
+                return await nm.get_next()
+
         addr = await self.get_address()
         raw = await self._rpc.consensus_call(
             "eth_getTransactionCount",
