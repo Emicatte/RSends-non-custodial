@@ -128,23 +128,34 @@ export function ApiDocs() {
   const [active, setActive] = useState<string>(SECTIONS[0].id)
   const observer = useRef<IntersectionObserver | null>(null)
 
-  // Disattiva il ripristino automatico di scroll del browser su questa pagina alta
-  // (causa: apertura già scrollata in basso + "flick" risalendo). Scoped ai soli /docs
-  // tramite cleanup, quindi non altera il comportamento delle altre pagine.
+  // 1) Disattiva il ripristino automatico di scroll del browser il prima possibile.
+  //    Scoped ai soli /docs tramite cleanup, quindi non altera le altre pagine.
   useEffect(() => {
     const prev = history.scrollRestoration
     if ('scrollRestoration' in history) history.scrollRestoration = 'manual'
-
-    const hash = window.location.hash
-    if (!hash) {
-      window.scrollTo(0, 0) // deep-link senza hash → parti dall'alto
-    } else {
-      // deep-link con hash (#webhooks…) → assicura il jump anche se il router resetta in cima
-      document.getElementById(hash.slice(1))?.scrollIntoView()
-    }
-
     return () => {
       if ('scrollRestoration' in history) history.scrollRestoration = prev
+    }
+  }, [])
+
+  // 2) Azzera lo scroll DOPO il paint, per vincere il restore asincrono del browser
+  //    (Next App Router) che altrimenti riapre la pagina a metà. Doppio rAF = eseguito
+  //    dopo che il browser ha già fatto il suo restore.
+  useEffect(() => {
+    const hash = window.location.hash
+    let raf2 = 0
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        if (hash) {
+          document.getElementById(hash.slice(1))?.scrollIntoView() // deep-link #section
+        } else {
+          window.scrollTo(0, 0) // nessun hash → parti dall'alto
+        }
+      })
+    })
+    return () => {
+      cancelAnimationFrame(raf1)
+      cancelAnimationFrame(raf2)
     }
   }, [])
 
