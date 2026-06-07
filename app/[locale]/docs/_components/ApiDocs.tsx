@@ -128,6 +128,26 @@ export function ApiDocs() {
   const [active, setActive] = useState<string>(SECTIONS[0].id)
   const observer = useRef<IntersectionObserver | null>(null)
 
+  // Disattiva il ripristino automatico di scroll del browser su questa pagina alta
+  // (causa: apertura già scrollata in basso + "flick" risalendo). Scoped ai soli /docs
+  // tramite cleanup, quindi non altera il comportamento delle altre pagine.
+  useEffect(() => {
+    const prev = history.scrollRestoration
+    if ('scrollRestoration' in history) history.scrollRestoration = 'manual'
+
+    const hash = window.location.hash
+    if (!hash) {
+      window.scrollTo(0, 0) // deep-link senza hash → parti dall'alto
+    } else {
+      // deep-link con hash (#webhooks…) → assicura il jump anche se il router resetta in cima
+      document.getElementById(hash.slice(1))?.scrollIntoView()
+    }
+
+    return () => {
+      if ('scrollRestoration' in history) history.scrollRestoration = prev
+    }
+  }, [])
+
   useEffect(() => {
     observer.current = new IntersectionObserver(
       (entries) => {
