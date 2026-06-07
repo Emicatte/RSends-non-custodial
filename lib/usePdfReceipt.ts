@@ -114,7 +114,7 @@ export async function generatePdfReceipt(p: PdfReceiptParams): Promise<void> {
   doc.setTextColor(...C.dim)
   doc.setFontSize(8)
   doc.setFont('helvetica', 'normal')
-  doc.text('Gateway di Pagamento B2B · Base Network', ml, 31)
+  doc.text('Gateway di Pagamento B2B Multi-chain', ml, 31)
 
   // ── Identità legale emittente ──
   const emi = p.emittente || {
@@ -246,7 +246,7 @@ export async function generatePdfReceipt(p: PdfReceiptParams): Promise<void> {
     doc.setFontSize(6)
     doc.setTextColor(...C.dim)
     doc.setFont('helvetica', 'normal')
-    doc.text('Valuta di Riferimento: EUR · EURC (Circle) su Base Network · Dir. 2013/34/UE', ml + 8, y + 34)
+    doc.text('Valuta di Riferimento: EUR · EURC (Circle) · Dir. 2013/34/UE', ml + 8, y + 34)
   }
 
   y += 44
@@ -398,7 +398,7 @@ export async function generatePdfReceipt(p: PdfReceiptParams): Promise<void> {
       ml + 6, y + 9,
     )
     doc.text(
-      'Valuta: EUR · Token: EURC (Circle) su Base Network · Nessuna conversione FX',
+      'Valuta: EUR · Token: EURC (Circle) · Nessuna conversione FX',
       ml + 6, y + 13,
     )
     y += 17

@@ -5,8 +5,8 @@
  *
  * Tema: Deep Dark + accenti #00ffa3 (successo) / #ff2d55 (errore)
  * Features:
- *   - Live Gas Tracker (Base L2)
- *   - Barra di progresso balistica (~2s Base finality)
+ *   - Live Gas Tracker (destination chain)
+ *   - Barra di progresso balistica (~2s finality, rete di destinazione)
  *   - Micro-stati animati
  *   - Address AML check (mock)
  */
@@ -119,7 +119,7 @@ export function BallisticProgress({ active, onComplete }: { active: boolean; onC
 
     const animate = () => {
       const elapsed = Date.now() - startRef.current
-      const duration = 2200 // ~2.2s Base finality
+      const duration = 2200 // ~2.2s finality (destination chain)
       // Curva balistica: accelera poi decelera
       const t = Math.min(elapsed / duration, 1)
       const eased = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t
@@ -178,7 +178,7 @@ export function MicroStateBadge({ phase, silent }: MicroStateProps): React.JSX.E
     approving:    { color: T.amber,   icon: '🔐', text: t('permit2Approving'), blink: true  },
     wait_approve: { color: T.amber,   icon: '⛓',  text: 'status: pending · On-chain confirm…'             },
     signing:      { color: T.purple,  icon: '✍',  text: 'status: order_scheduled · Firma EIP-712…', blink: true },
-    wait_send:    { color: T.blue,    icon: '⚡',  text: 'status: finalizing_on_base · Base L2 ~2s'         },
+    wait_send:    { color: T.blue,    icon: '⚡',  text: 'status: finalizing · ~2s on destination chain'      },
   }
 
   const s = states[phase]

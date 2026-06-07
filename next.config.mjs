@@ -63,7 +63,7 @@ const nextConfig = {
             // (per-request nonce from middleware injected into Next's scripts +
             // script-src 'nonce-…' 'strict-dynamic'). Tracked as a follow-up;
             // do NOT drop 'unsafe-inline' without that, it breaks the app.
-            "script-src 'self' 'unsafe-inline'",
+            `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : ''}`,
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://api.fontshare.com",
             "font-src 'self' data: https://fonts.gstatic.com https://cdn.fontshare.com",
             "img-src 'self' data: blob: https:",

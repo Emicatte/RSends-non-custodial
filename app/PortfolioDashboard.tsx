@@ -3,7 +3,7 @@
 /**
  * PortfolioDashboard.tsx V6 — Complete Rewrite
  *
- * Institutional-grade portfolio overlay for RSends (Base L2 payment gateway)
+ * Institutional-grade portfolio overlay for RSends (multi-chain payment gateway)
  * Design language: Uniswap/Stripe/Revolut dark theme
  *
  * Improvements over V5:
@@ -1544,7 +1544,7 @@ export default function PortfolioDashboard({ open, onClose, initialTab, override
               <EmptyState
                 icon="◇"
                 title="No tokens found"
-                subtitle="Connect a wallet with token balances on Base to see your portfolio here."
+                subtitle="Connect a wallet with token balances on a supported network to see your portfolio here."
               />
             ) : (
               <div>

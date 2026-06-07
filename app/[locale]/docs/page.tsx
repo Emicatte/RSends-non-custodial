@@ -1,24 +1,23 @@
 import type { Metadata } from 'next'
 import { Link } from '@/i18n/navigation'
+import { ApiDocs } from './_components/ApiDocs'
 
 export const metadata: Metadata = {
   title: 'API Documentation — RSends',
-  description: 'REST API reference, SDKs, and integration guides for RSends. Coming soon.',
+  description:
+    'REST API reference and integration guide for the RSends multi-chain B2B crypto payment gateway.',
 }
 
 export default function DocsPage() {
   return (
     <main style={{
       minHeight: '100dvh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
       fontFamily: 'var(--font-display)',
       color: '#0A0A0A',
       background: '#FAFAFA',
-      padding: '24px',
     }}>
-      <div style={{ maxWidth: 560, width: '100%' }}>
+      {/* ── Header (preserved 1:1 from the previous page) ── */}
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '64px 24px 0' }}>
 
         <nav style={{ marginBottom: 40, fontSize: 13 }} aria-label="Breadcrumb">
           <ol style={{ display: 'flex', alignItems: 'center', gap: 8, listStyle: 'none', padding: 0, margin: 0, color: 'rgba(10,10,10,0.55)' }}>
@@ -57,68 +56,16 @@ export default function DocsPage() {
           fontSize: 16,
           color: 'rgba(10,10,10,0.6)',
           lineHeight: 1.6,
-          margin: '0 0 40px',
+          margin: '0 0 8px',
+          maxWidth: 640,
         }}>
-          REST endpoints, SDKs, webhooks reference, and integration guides for RSends.
-          Full documentation coming soon.
+          REST reference for the RSends multi-chain B2B crypto payment gateway — transactions,
+          distributions, splits, execution and webhooks.
         </p>
-
-        <div style={{
-          background: '#FFFFFF',
-          border: '1px solid rgba(10,10,10,0.08)',
-          borderRadius: 16,
-          padding: '32px',
-        }}>
-          <h2 style={{ fontSize: 20, fontWeight: 600, margin: '0 0 12px' }}>
-            In the meantime
-          </h2>
-          <p style={{
-            fontSize: 14,
-            color: 'rgba(10,10,10,0.6)',
-            lineHeight: 1.6,
-            margin: '0 0 24px',
-          }}>
-            Early access to the API? Integration questions? Reach out directly.
-          </p>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <a
-              href="mailto:emiliocatteddu@gmail.com"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                background: '#0A0A0A',
-                color: '#fff',
-                padding: '10px 20px',
-                borderRadius: 10,
-                fontSize: 13,
-                fontWeight: 600,
-                textDecoration: 'none',
-              }}
-            >
-              Email us →
-            </a>
-            <Link
-              href="/app"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                border: '1px solid rgba(10,10,10,0.15)',
-                color: '#0A0A0A',
-                padding: '10px 20px',
-                borderRadius: 10,
-                fontSize: 13,
-                fontWeight: 600,
-                textDecoration: 'none',
-              }}
-            >
-              Try the dashboard
-            </Link>
-          </div>
-        </div>
-
       </div>
+
+      {/* ── Interactive docs body (sidebar + content) ── */}
+      <ApiDocs />
     </main>
   )
 }
