@@ -3,7 +3,7 @@
 /**
  * TransactionStatus_v3.tsx — Institutional Grade Dashboard
  *
- * Tema: Deep Dark + accenti #00ffa3 (successo) / #ff2d55 (errore)
+ * Tema: RSends — terracotta #C8512C (accento/azione) · verde sobrio #16A34A (success) · #ff2d55 (errore)
  * Features:
  *   - Live Gas Tracker (destination chain)
  *   - Barra di progresso balistica (~2s finality, rete di destinazione)
@@ -18,7 +18,7 @@ import { useTranslations } from 'next-intl'
 import type { ComplianceRecord } from '../lib/useComplianceEngine'
 // ── Theme ─────────────────────────────────────────────────────────────────
 import { C } from '@/app/designTokens'
-const T = { ...C, emerald: '#00ffa3', muted: C.sub, red: '#ff2d55', amber: '#ffb800', blue: '#4d96ff', mono: C.M, display: C.D }
+const T = { ...C, emerald: '#16A34A', terracotta: '#C8512C', muted: C.sub, red: '#ff2d55', amber: '#ffb800', blue: '#4d96ff', mono: C.M, display: C.D }
 
 // ── Live Gas Tracker ───────────────────────────────────────────────────────
 export function GasTracker(): React.JSX.Element {
@@ -148,17 +148,17 @@ export function BallisticProgress({ active, onComplete }: { active: boolean; onC
       <div style={{
         height: '100%',
         width: `${progress}%`,
-        background: progress >= 100 ? T.emerald : `linear-gradient(90deg, ${T.emerald}80, ${T.emerald})`,
+        background: progress >= 100 ? T.terracotta : `linear-gradient(90deg, ${T.terracotta}80, ${T.terracotta})`,
         borderRadius: 2,
         transition: progress >= 100 ? 'width 0.4s ease' : 'none',
-        boxShadow: `0 0 8px ${T.emerald}60`,
+        boxShadow: `0 0 8px ${T.terracotta}60`,
       }} />
       {/* Glow traveler */}
       {progress < 100 && active && (
         <div style={{
           position: 'absolute', top: -1, right: `${100 - progress}%`,
           width: 12, height: 5, borderRadius: '50%',
-          background: T.emerald, filter: 'blur(2px)',
+          background: T.terracotta, filter: 'blur(2px)',
           transform: 'translateX(50%)',
         }} />
       )}
@@ -202,7 +202,7 @@ export function MicroStateBadge({ phase, silent }: MicroStateProps): React.JSX.E
       <div>
         <div style={{ fontFamily: T.mono, fontSize: 12, color: s.color }}>{s.text}</div>
         {silent && phase === 'signing' && (
-          <div style={{ fontFamily: T.mono, fontSize: 10, color: T.emerald, marginTop: 2 }}>
+          <div style={{ fontFamily: T.mono, fontSize: 10, color: T.terracotta, marginTop: 2 }}>
             {t('permit2OneSig')}
           </div>
         )}
@@ -215,17 +215,17 @@ export function MicroStateBadge({ phase, silent }: MicroStateProps): React.JSX.E
 export function ComplianceBadge({ record }: { record: ComplianceRecord }): React.JSX.Element {
   return (
     <div style={{
-      borderRadius: 12, border: `1px solid ${T.emerald}30`,
-      background: T.emerald + '08', overflow: 'hidden',
+      borderRadius: 12, border: `1px solid ${T.terracotta}30`,
+      background: T.terracotta + '08', overflow: 'hidden',
     }}>
       {/* Header */}
       <div style={{
         padding: '8px 14px',
-        background: T.emerald + '12',
-        borderBottom: `1px solid ${T.emerald}20`,
+        background: T.terracotta + '12',
+        borderBottom: `1px solid ${T.terracotta}20`,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
-        <span style={{ fontFamily: T.mono, fontSize: 11, color: T.emerald, fontWeight: 700, letterSpacing: '0.08em' }}>
+        <span style={{ fontFamily: T.mono, fontSize: 11, color: T.terracotta, fontWeight: 700, letterSpacing: '0.08em' }}>
           MiCA · COMPLIANCE RECORD
         </span>
       </div>
@@ -244,7 +244,7 @@ export function ComplianceBadge({ record }: { record: ComplianceRecord }): React
           <div key={i} style={{
             display: 'flex', alignItems: 'flex-start',
             borderBottom: i < 6 ? `1px solid ${T.border}` : 'none',
-            borderLeft: `2px dashed ${T.emerald}20`,
+            borderLeft: `2px dashed ${T.terracotta}20`,
           }}>
             <div style={{ width: '38%', padding: '7px 8px 7px 12px', fontFamily: T.mono, fontSize: 10, color: T.muted, flexShrink: 0 }}>
               {r.l}
@@ -413,9 +413,9 @@ export function TransactionStatusUI({
             <button onClick={onDownloadPdf} style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
               padding: '12px', borderRadius: 12,
-              border: `1px solid ${T.emerald}30`,
-              background: T.emerald + '0a',
-              color: T.emerald, fontSize: 12, fontWeight: 700,
+              border: `1px solid ${T.terracotta}`,
+              background: T.terracotta,
+              color: '#FFFFFF', fontSize: 12, fontWeight: 700,
               cursor: 'pointer', fontFamily: T.mono, transition: 'all 0.2s',
             }}>
               {t('receiptPdf')}

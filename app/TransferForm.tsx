@@ -52,6 +52,7 @@ const T = {
   ...C,
   // Semantic status colors — mature, low-saturation palette coherent with terracotta brand
   emerald: '#16A34A',   // Success (deep forest green, non-fluo)
+  terracotta: '#C8512C',// Brand accent (default accent for non-success UI)
   red:     '#B84242',   // Danger (terracotta-adjacent, consistent with brand warmth)
   amber:   '#A07C11',   // Warning (ochre, sober)
   // Aliases
@@ -209,7 +210,7 @@ function TokenPill({ token, onClick, accentColor, busy }: {
   busy: boolean
 }) {
   const [hovered, setHovered] = useState(false)
-  const accent = accentColor ?? T.emerald
+  const accent = accentColor ?? T.terracotta
   return (
     <button
       type="button"
@@ -390,7 +391,7 @@ function TokenSelectorModal({ tokens, onSelect, onClose, title, isMobile, multiC
                         </span>
                       )}
                       {t.gasless && !t.isEurc && (
-                        <span style={{ fontFamily:T.D, fontSize:9, color:T.emerald, background:'rgba(0,255,163,0.1)', padding:'2px 6px', borderRadius:4 }}>
+                        <span style={{ fontFamily:T.D, fontSize:9, color:T.terracotta, background:'rgba(200,81,44,0.1)', padding:'2px 6px', borderRadius:4 }}>
                           Gasless
                         </span>
                       )}
@@ -565,7 +566,7 @@ export default function TransferForm({ noCard, externalToken }: { noCard?: boole
   })()
 
   const routeLabels: Record<RouteType, { label: string; icon: string; color: string }> = {
-    direct:        { label: t('routeDirect'), icon: '\u2192', color: T.emerald },
+    direct:        { label: t('routeDirect'), icon: '\u2192', color: T.terracotta },
     swap:          { label: t('routeSwap'), icon: '\u26A1', color: T.purple },
     bridge:        { label: t('routeBridge'), icon: '\u{1F309}', color: '#3B82F6' },
     swapAndBridge: { label: t('routeSwapAndBridge'), icon: '\u26A1\u{1F309}', color: T.amber },
@@ -1472,7 +1473,7 @@ export default function TransferForm({ noCard, externalToken }: { noCard?: boole
 
   const C = {
     card:  { borderRadius:20, background:'rgba(8,12,30,0.72)', border:'1px solid rgba(10,10,10,0.18)', overflow:'hidden' as const, boxShadow:'0 8px 48px rgba(0,0,0,0.55), inset 0 1px 0 rgba(10,10,10,0.15)' } satisfies React.CSSProperties,
-    box:   { borderRadius:14, background:focused?'rgba(10,10,10,0.08)':'rgba(10,10,10,0.04)', padding:'10px 14px', border:'1.5px solid', borderColor:focused?`${T.emerald}60`:'rgba(10,10,10,0.14)', transition:'all 0.2s ease', cursor:'text', boxShadow:focused?`0 0 0 3px ${T.emerald}12`:'inset 0 1px 0 rgba(10,10,10,0.08)' } satisfies React.CSSProperties,
+    box:   { borderRadius:14, background:focused?'rgba(10,10,10,0.08)':'rgba(10,10,10,0.04)', padding:'10px 14px', border:'1.5px solid', borderColor:focused?`${T.terracotta}60`:'rgba(10,10,10,0.14)', transition:'all 0.2s ease', cursor:'text', boxShadow:focused?`0 0 0 3px ${T.terracotta}12`:'inset 0 1px 0 rgba(10,10,10,0.08)' } satisfies React.CSSProperties,
     box2:  { borderRadius:14, background:'rgba(10,10,10,0.04)', padding:'10px 14px', border:'1.5px solid rgba(10,10,10,0.12)' } satisfies React.CSSProperties,
     row:   { display:'flex', alignItems:'center', justifyContent:'space-between' } satisfies React.CSSProperties,
     input: { width:'100%', background:'rgba(10,10,10,0.08)', border:'1px solid rgba(10,10,10,0.12)', borderRadius:10, padding:'10px 12px', color:T.text, fontSize:13, outline:'none', transition:'border-color 0.2s ease, box-shadow 0.2s ease', fontFamily:T.M, boxSizing:'border-box' as const, backdropFilter:'blur(8px)', WebkitBackdropFilter:'blur(8px)' } satisfies React.CSSProperties,
@@ -1481,7 +1482,7 @@ export default function TransferForm({ noCard, externalToken }: { noCard?: boole
   // ── SUCCESS ───────────────────────────────────────────────────────────
   if (phase === 'done' && report) return (
     <>
-      <div style={noCard ? {} : C.card} className={`rp-anim-0${noCard ? '' : ' bf-blur-32s'}`}>
+      <div style={noCard ? {} : C.card} className={`rp-anim-0 ${noCard ? 'max-w-[440px] mx-auto w-full' : 'bf-blur-32s'}`}>
         <div style={{ padding:'18px 20px 16px', borderBottom:`1px solid ${T.border}`, display:'flex', alignItems:'center', gap:10 }}>
           <div style={{ width:9, height:9, borderRadius:'50%', background:T.emerald, boxShadow:`0 0 12px ${T.emerald}` }} />
           <span style={{ fontFamily:T.D, color:T.emerald, fontSize:13, fontWeight:700, textTransform:'uppercase' as const, letterSpacing:'0.06em' }}>{t('paymentConfirmed')}</span>

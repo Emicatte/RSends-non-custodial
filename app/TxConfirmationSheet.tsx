@@ -8,7 +8,7 @@ import type { TokenInfo } from './tokens/tokenRegistry'
 
 // ── Theme (matches TransferForm T) ──────────────────────────────────────────
 import { C, SPRING as EASE } from '@/app/designTokens'
-const T = { ...C, emerald: '#00ffa3', muted: C.sub, pink: C.purple, red: '#ff2d55', amber: '#ffb800' }
+const T = { ...C, success: '#16A34A', terracotta: '#C8512C', muted: C.sub, pink: C.purple, red: '#ff2d55', amber: '#ffb800' }
 const GAS_EXPIRY_SEC = 60
 const HOLD_DURATION = 3000
 
@@ -375,7 +375,7 @@ export default function TxConfirmationSheet({
               border: `1px solid ${T.border}`,
               cursor: 'pointer', fontSize: 12,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: copied ? T.emerald : T.muted,
+              color: copied ? T.success : T.muted,
               transition: 'color 0.2s',
             }}
           >
@@ -430,7 +430,7 @@ export default function TxConfirmationSheet({
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <ConfChainIcon chain={chain} size={16} />
             <span style={{ fontFamily: T.D, fontSize: 13, fontWeight: 600, color: T.text }}>{chain.name}</span>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: T.green }} />
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: T.success }} />
           </div>
         </div>
 
@@ -445,7 +445,7 @@ export default function TxConfirmationSheet({
         {/* Netto dest. */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontFamily: T.M, fontSize: 11, color: T.muted }}>{t('netRecipient')}</span>
-          <span style={{ fontFamily: T.D, fontSize: 13, fontWeight: 700, color: T.emerald }}>
+          <span style={{ fontFamily: T.D, fontSize: 13, fontWeight: 700, color: T.text }}>
             {netAmount} {tokenInfo.symbol}
           </span>
         </div>
@@ -522,11 +522,11 @@ export default function TxConfirmationSheet({
           <div style={{
             position: 'absolute', top: 0, left: 0, bottom: 0,
             width: `${holdProgress}%`,
-            background: `linear-gradient(135deg, ${T.emerald}, #00cc80)`,
+            background: `linear-gradient(135deg, ${T.terracotta}, #A8421F)`,
             transition: holdProgress === 0 ? 'width 0.15s ease' : 'none',
             borderRadius: 14,
           }} />
-          <span style={{ position: 'relative', zIndex: 1, color: holdProgress > 50 ? '#000' : T.text }}>
+          <span style={{ position: 'relative', zIndex: 1, color: holdProgress > 50 ? '#FFFFFF' : T.text }}>
             {holdProgress > 0
               ? `${Math.round(holdProgress)}%`
               : t('holdToConfirm')
@@ -541,12 +541,12 @@ export default function TxConfirmationSheet({
             fontFamily: T.D, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em',
             background: expired
               ? `linear-gradient(135deg, ${T.purple}, #c084fc)`
-              : `linear-gradient(135deg, ${T.emerald}, #00cc80)`,
-            color: expired ? '#fff' : '#000',
+              : `linear-gradient(135deg, #C8512C, #A8421F)`,
+            color: expired ? '#fff' : '#FFFFFF',
             cursor: 'pointer',
             boxShadow: expired
               ? `0 4px 20px ${T.purple}25`
-              : `0 4px 20px ${T.emerald}25`,
+              : `0 4px 20px rgba(200,81,44,0.15)`,
             transition: 'all 0.2s ease',
           }}
         >

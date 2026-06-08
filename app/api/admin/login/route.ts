@@ -163,8 +163,18 @@ export async function POST(req: NextRequest) {
       )
     }
   } else {
+    // M11 fail-closed: in production, refuse to issue any session when
+    // ADMIN_TOTP_SECRET is unset. Bootstrap (password-only setup) is dev-only;
+    // in prod the secret is generated out-of-band and set before deploy.
+    if (process.env.NODE_ENV === 'production') {
+      logger.error('admin/login', 'ADMIN_TOTP_SECRET not configured in production — admin login blocked (fail-closed M11)')
+      return NextResponse.json(
+        { error: 'ADMIN_2FA_NOT_CONFIGURED', message: 'Admin 2FA is not initialized. Set ADMIN_TOTP_SECRET and redeploy.' },
+        { status: 503 },
+      )
+    }
     requiresSetup = true
-    logger.warn('admin/login', 'TOTP not configured for admin — login allowed in bootstrap (setup-only) mode')
+    logger.warn('admin/login', 'TOTP not configured for admin — bootstrap (setup-only) login allowed in dev')
   }
 
   // Generate session token and set httpOnly cookie. In bootstrap mode

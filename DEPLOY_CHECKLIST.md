@@ -1,5 +1,13 @@
 # RPagos Command Center — Deploy Checklist
 
+## Frontend (Vercel / Next) — Environment Variables
+
+- [ ] **M11** — `ADMIN_TOTP_SECRET` (base32) **set before go-live**. In production (`NODE_ENV=production`) an empty value makes admin login return **HTTP 503** (fail-closed — no password-only bootstrap). Generate out-of-band, set on Vercel, redeploy. Does NOT affect the backend.
+- [ ] `ADMIN_SECRET` — admin password (`openssl rand -hex 32`)
+- [ ] `ORACLE_SIGNER_MODE=remote` — Next delegates EIP-712 signing to the backend (which itself must be `kms`); keeps the oracle key out of the web tier.
+- [ ] `INTERNAL_PROXY_SECRET` — must match the backend value (else internal calls are rejected).
+- [ ] `HMAC_SECRET` — must match the backend value.
+
 ## Secrets & Environment Variables (Render)
 
 - [ ] `ALCHEMY_WEBHOOK_SECRET` — set on Render

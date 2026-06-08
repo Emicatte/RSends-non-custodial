@@ -23,10 +23,10 @@
 | H6 | `DEBUG=false` | — | strong-tier non attivo (Redis in chiaro, JWT corto, ecc.) |
 | M8 | `API_GET_DENY_BY_DEFAULT` | **True** ✅ | (già attivo) |
 | M5 | `RATELIMIT_TRUSTED_PROXY_HOPS` | `1` | IP spoofabile dietro >1 proxy |
-| H4 | deploy BE→FE, poi `WALLET_AUTH_ALLOW_LEGACY=false` | `true` | **firma wallet ancora replayabile** ⚠️ |
-| M1-A | `ORACLE_SIGNER_MODE=kms/remote` + `setOracleSigner` su V4 | `local` | **chiave oracle ancora nel web tier** ⚠️ |
+| H4 | deploy BE→FE, poi `WALLET_AUTH_ALLOW_LEGACY=false` | `true` | **backend NON parte in prod** se resta `true` (fail-closed allo startup) ✋ |
+| M1-A | backend `ORACLE_SIGNER_MODE=kms` + `ORACLE_KMS_KEY_ID(S)` + `setOracleSigner` su V4 | `local` | **backend NON parte in prod** se ≠ `kms` (`local`/`remote` → fail-closed) ✋ |
 | M1-B | deploy V5/V6 + `setOracleSigners` + `version:'v6'` | V4 single | single-point-of-forgery (chiave singola) |
-| M11 | `ADMIN_TOTP_SECRET` | vuoto | **admin senza 2FA** (solo password) ⚠️ |
+| M11 | `ADMIN_TOTP_SECRET` (frontend/Vercel) | vuoto | **login admin bloccato in prod (503)** se vuoto (fail-closed); bootstrap solo in dev ✋ |
 | — | `ADMIN_ALLOW_BEARER` vuoto in prod | vuoto ✅ | (Bearer no-2FA già disabilitato in prod) |
 
 ---
@@ -285,9 +285,12 @@ cast call <ROUTER_ADDR> "domainSeparator()" --rpc-url <CHAIN_RPC_URL>
 | Variabile | Valore di rollback | Effetto |
 |---|---|---|
 | `API_GET_DENY_BY_DEFAULT` | `false` | riapre il fallback GET pubblico (annulla M8) |
-| `WALLET_AUTH_ALLOW_LEGACY` | `true` | riaccetta le firme wallet legacy (annulla H4) |
+| `WALLET_AUTH_ALLOW_LEGACY` | `true` | riaccetta le firme wallet legacy (annulla H4) — ⚠️ **solo dev/staging**: sul **backend in prod** questo valore fail-closa lo startup (il backend non riparte) |
 | `ADMIN_ALLOW_BEARER` | `1` | riabilita `Bearer ADMIN_SECRET` (no-2FA) |
-| `ORACLE_SIGNER_MODE` | `local` (Next) | torna alla chiave oracle locale (annulla M1-A) |
+| `ORACLE_SIGNER_MODE` | `local` (**solo Next/frontend**) | rollback della delega di firma sul **frontend** (annulla M1-A lato Next). ⚠️ Il **backend** non accetta più `local`/`remote` in prod (fail-closed): per il backend l'unico rollback è ridistribuire una build senza il gate |
+
+⚠️ **Nota:** dopo il fail-closed hardening, H4 e M1-A **lato backend** non sono più reversibili via sola env in prod
+(il nuovo gate allo startup li blocca). Le righe sopra valgono per dev/staging o per la variabile **Next**, non per il backend in produzione.
 
 In emergenza on-chain, `pause()` (owner) su FeeRouterV6 / RSendBatchDistributor ferma il rail.
 

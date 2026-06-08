@@ -143,9 +143,10 @@ async def lifespan(app: FastAPI):
 
     # ── Price service: initial fetch + background loop ──
     import asyncio as _aio
+    _price_refresh_task = None
     try:
         await fetch_all_prices()
-        _aio.create_task(price_refresh_loop())
+        _price_refresh_task = _aio.create_task(price_refresh_loop())
         logger.info("Price service started (interval=%ds)", 60)
     except Exception as e:
         logger.warning("Price service init failed: %s — prices will be unavailable", e)
@@ -184,12 +185,31 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Cleanup
-    await close_db()
+    # ── Cleanup ──────────────────────────────────────────────
+    # Order: cancel background asyncio tasks → stop jobs/pollers/WS
+    # managers → close connections LAST (close_db / close_redis), so
+    # nothing still in flight touches a disposed engine / closed redis.
+    import asyncio as _aio  # local alias (matches startup section)
+
+    # 1) Cancel orphaned background tasks (mirror of stop_* helpers).
+    for _task in (_price_refresh_task, _webhook_delivery_task, _intent_expiration_task):
+        if _task is not None:
+            _task.cancel()
+            try:
+                await _task
+            except _aio.CancelledError:
+                pass
+            except Exception as _e:  # never let cleanup raise
+                logger.warning("Error awaiting cancelled task during shutdown: %s", _e)
+
+    # 2) Stop jobs / pollers / WS managers (these may use the DB/Redis).
     await stop_reconciliation_job()
     await stop_polling()
     await feed_manager.shutdown()
     await payment_manager.shutdown()
+
+    # 3) Close shared connections LAST.
+    await close_db()
     await close_redis()
 
 

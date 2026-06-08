@@ -18,6 +18,15 @@ Run through every section in order. Do not skip steps.
 - [ ] **Sentry DSN**: set `SENTRY_DSN` for error tracking
 - [ ] **KMS signer** (if applicable): `SIGNER_MODE=kms`, `KMS_KEY_ID` set, IAM role attached
 
+### Fail-closed startup gates (backend will NOT boot in prod if unset)
+
+These are validated by `validate_settings()` — with `DEBUG=false` the process **exits at startup** (StartupValidationError) until set:
+
+- [ ] **H4** — `WALLET_AUTH_ALLOW_LEGACY=false` (default `true` is rejected in prod; legacy wallet sigs are replayable). Flip BEFORE promoting this build.
+- [ ] **M1-A** — `ORACLE_SIGNER_MODE=kms` **and** `ORACLE_KMS_KEY_ID` (or `ORACLE_KMS_KEY_IDS` for multisig). Any non-`kms` value (`local`/`remote`) is rejected in prod — it would sign with a local key in the web tier.
+
+> Note: `ADMIN_TOTP_SECRET` is a **frontend (Vercel)** var, not a backend one — see the frontend deploy checklist. It does not affect backend startup.
+
 ---
 
 ## 2. Environment Variables
@@ -57,11 +66,24 @@ HOST=0.0.0.0
 PORT=8000
 DEBUG=false
 CORS_ORIGINS=https://rsends.io,https://www.rsends.io
+
+# Fail-closed startup gates (prod: backend exits if unset/wrong)
+WALLET_AUTH_ALLOW_LEGACY=false           # H4 — must be false in prod
+ORACLE_SIGNER_MODE=kms                    # M1-A — only 'kms' allowed in prod
+ORACLE_KMS_KEY_ID=<oracle-kms-key>        # or ORACLE_KMS_KEY_IDS=<k1,k2,k3> (multisig)
 ```
 
 ---
 
 ## 3. Database Migration
+
+> **On Render (production): migrations run as a Pre-Deploy Command, not at boot.**
+> Set Pre-Deploy Command = `alembic upgrade head` and env `RUN_MIGRATIONS_ON_BOOT=0` (see [MIGRATIONS.md](./MIGRATIONS.md)).
+> A failed pre-deploy migration aborts the deploy (old version keeps serving) — this is intended.
+> Every migration MUST be backward-compatible with the previous release — follow the Expand/Contract rule in [MIGRATIONS.md](./MIGRATIONS.md).
+
+The block below is the **manual / free-tier fallback** procedure (run from the Render Shell
+before promoting a schema-changing release):
 
 ```bash
 # 1. Backup current database

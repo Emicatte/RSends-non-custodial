@@ -314,6 +314,32 @@ def validate_settings(settings: Settings) -> None:
                 "origin reachable from the recipient's inbox (no localhost fallback)."
             )
 
+    # ── Wallet anti-replay (H4) ───────────────────────────
+    # Legacy wallet signatures are replayable bearers (security/auth.py L150-151).
+    # Allowed in dev/rollout, but forbidden in prod — fail closed at startup.
+    if is_prod and settings.wallet_auth_allow_legacy:
+        errors.append(
+            "WALLET_AUTH_ALLOW_LEGACY=true is forbidden in production: legacy "
+            "wallet signatures are replayable. Set WALLET_AUTH_ALLOW_LEGACY=false."
+        )
+
+    # ── Oracle signer (M1-A) ──────────────────────────────
+    # Mirror the sweep signer posture. In prod the oracle key must stay out of the
+    # web tier: only 'kms' does that. key_manager.py treats any non-'kms' mode
+    # (incl. 'remote') as LOCAL signing, so reject everything non-'kms' in prod.
+    if settings.oracle_signer_mode == "kms":
+        if not (settings.oracle_kms_key_id or settings.oracle_kms_key_ids):
+            errors.append(
+                "ORACLE_SIGNER_MODE=kms but ORACLE_KMS_KEY_ID(S) is empty. "
+                "Set ORACLE_KMS_KEY_ID (single) or ORACLE_KMS_KEY_IDS (CSV, multisig)."
+            )
+    elif is_prod:
+        errors.append(
+            f"ORACLE_SIGNER_MODE={settings.oracle_signer_mode!r} is forbidden in "
+            "production: only 'kms' keeps the oracle signing key out of the web tier "
+            "(forgery risk). Set ORACLE_SIGNER_MODE=kms and configure ORACLE_KMS_KEY_ID(S)."
+        )
+
     # ── Print results ─────────────────────────────────────
     for w in warnings:
         logger.warning("[CONFIG] %s", w)
