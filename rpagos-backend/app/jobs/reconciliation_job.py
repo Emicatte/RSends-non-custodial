@@ -49,6 +49,17 @@ def get_last_report() -> Optional[FullReconciliationReport]:
     return _last_report
 
 
+def _format_onchain_discrepancies(items: list[dict]) -> str:
+    lines = []
+    for d in items:
+        lines.append(
+            f"• {d['chain_id']}:{d['address'][:10]}… "
+            f"ledger={d['ledger_balance']} onchain={d['onchain_balance_eth']} "
+            f"Δ={d['discrepancy']}"
+        )
+    return "\n".join(lines)
+
+
 async def run_reconciliation() -> FullReconciliationReport:
     """Esegue tutte le verifiche di riconciliazione in una singola sessione.
 
@@ -156,6 +167,8 @@ async def run_reconciliation() -> FullReconciliationReport:
                     result = await session.execute(stmt)
                     accounts = result.scalars().all()
 
+                    onchain_discrepancies: list[dict] = []
+
                     for account in accounts:
                         try:
                             recon = await reconcile_onchain(
@@ -168,31 +181,51 @@ async def run_reconciliation() -> FullReconciliationReport:
                             if has_metrics and not recon.within_threshold:
                                 ONCHAIN_DISCREPANCY.inc()
                             if not recon.within_threshold:
-                                onchain_critical = (
-                                    abs(recon.discrepancy) >= RULE_DISCREPANCY_THRESHOLD_ETH
-                                )
-                                await fire_alert(
-                                    AlertType.ONCHAIN_DISCREPANCY_CRITICAL if onchain_critical
-                                    else AlertType.ONCHAIN_DISCREPANCY,
-                                    f"On-chain mismatch account={recon.account_id} "
-                                    f"chain={recon.chain_id}: ledger={recon.ledger_balance} "
-                                    f"onchain={recon.onchain_balance_eth} ETH "
-                                    f"diff={recon.discrepancy}",
-                                    {
-                                        "account_id": str(recon.account_id),
-                                        "chain_id": recon.chain_id,
-                                        "address": recon.address,
-                                        "ledger_balance": str(recon.ledger_balance),
-                                        "onchain_balance_eth": str(recon.onchain_balance_eth),
-                                        "discrepancy": str(recon.discrepancy),
-                                        "threshold_wei": ONCHAIN_DISCREPANCY_THRESHOLD_WEI,
-                                    },
-                                )
+                                onchain_discrepancies.append({
+                                    "account_id": str(recon.account_id),
+                                    "chain_id": recon.chain_id,
+                                    "address": recon.address,
+                                    "ledger_balance": recon.ledger_balance,
+                                    "onchain_balance_eth": recon.onchain_balance_eth,
+                                    "discrepancy": recon.discrepancy,
+                                    "critical": (
+                                        abs(recon.discrepancy) >= RULE_DISCREPANCY_THRESHOLD_ETH
+                                    ),
+                                })
                         except Exception as e:
                             logger.warning(
                                 "On-chain reconciliation failed for account %s: %s",
                                 account.id, e,
                             )
+
+                    # Aggregated alert: one outbound notification for all
+                    # discrepant accounts instead of one per account (avoids
+                    # rate-limit bans and blocking I/O inside the loop).
+                    if onchain_discrepancies:
+                        any_critical = any(d["critical"] for d in onchain_discrepancies)
+                        await fire_alert(
+                            AlertType.ONCHAIN_DISCREPANCY_CRITICAL if any_critical
+                            else AlertType.ONCHAIN_DISCREPANCY,
+                            f"On-chain balance mismatch — "
+                            f"{len(onchain_discrepancies)} account(s)\n"
+                            f"{_format_onchain_discrepancies(onchain_discrepancies)}",
+                            {
+                                "discrepancy_count": len(onchain_discrepancies),
+                                "critical": any_critical,
+                                "threshold_wei": ONCHAIN_DISCREPANCY_THRESHOLD_WEI,
+                                "accounts": [
+                                    {
+                                        "account_id": d["account_id"],
+                                        "chain_id": d["chain_id"],
+                                        "address": d["address"],
+                                        "ledger_balance": str(d["ledger_balance"]),
+                                        "onchain_balance_eth": str(d["onchain_balance_eth"]),
+                                        "discrepancy": str(d["discrepancy"]),
+                                    }
+                                    for d in onchain_discrepancies[:5]
+                                ],
+                            },
+                        )
                 except Exception as e:
                     logger.warning("On-chain reconciliation skipped: %s", e)
 
