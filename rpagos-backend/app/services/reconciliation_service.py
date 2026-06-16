@@ -1003,8 +1003,9 @@ async def reconcile_and_enforce(
 
             # Send critical alert (webhook + Telegram fallback)
             try:
-                from app.services.alert_service import critical_alert
-                await critical_alert(
+                from app.services.alert_service import fire_alert, AlertType
+                await fire_alert(
+                    AlertType.TREASURY_MISMATCH_CRITICAL,
                     f"TREASURY MISMATCH\n"
                     f"Chain: {chain_id}\n"
                     f"On-chain: {on_chain_eth:.6f} ETH\n"

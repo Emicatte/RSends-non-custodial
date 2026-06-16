@@ -15,12 +15,17 @@ import asyncio
 import logging
 import time
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Optional
 
 from app.config import get_settings
 from app.db.session import async_session
+from app.services.alert_service import fire_alert, AlertType
 from app.services.reconciliation_service import (
     FullReconciliationReport,
+    ONCHAIN_DISCREPANCY_THRESHOLD_WEI,
+    RULE_DISCREPANCY_THRESHOLD_ETH,
+    STALE_THRESHOLD_MINUTES,
     check_ledger_balance,
     check_stale_transactions,
     check_system_balance,
@@ -78,10 +83,41 @@ async def run_reconciliation() -> FullReconciliationReport:
             if has_metrics and discrepancies:
                 LEDGER_DISCREPANCIES.inc(len(discrepancies))
 
+            if discrepancies:
+                sample_ids = [str(d.transaction_id) for d in discrepancies[:5]]
+                max_diff = max((abs(d.difference) for d in discrepancies), default=Decimal(0))
+                ledger_critical = (
+                    len(discrepancies) >= 5 or max_diff >= RULE_DISCREPANCY_THRESHOLD_ETH
+                )
+                await fire_alert(
+                    AlertType.LEDGER_DISCREPANCY_CRITICAL if ledger_critical
+                    else AlertType.LEDGER_DISCREPANCY,
+                    f"Ledger discrepancy: {len(discrepancies)} unbalanced transaction(s); "
+                    f"max difference {max_diff}",
+                    {
+                        "discrepancy_count": len(discrepancies),
+                        "max_difference": str(max_diff),
+                        "sample_transaction_ids": sample_ids,
+                        "threshold_eth": str(RULE_DISCREPANCY_THRESHOLD_ETH),
+                    },
+                )
+
             # 2. System balance check (global)
             system_report = await check_system_balance(session)
             report.system_balance = system_report
             report.system_balanced = system_report.balanced
+
+            if not system_report.balanced:
+                await fire_alert(
+                    AlertType.SYSTEM_IMBALANCE,
+                    f"SYSTEM IMBALANCE: debits={system_report.total_debits} "
+                    f"credits={system_report.total_credits} diff={system_report.difference}",
+                    {
+                        "total_debits": str(system_report.total_debits),
+                        "total_credits": str(system_report.total_credits),
+                        "difference": str(system_report.difference),
+                    },
+                )
 
             # 3. Stale transactions check
             stale = await check_stale_transactions(session)
@@ -93,6 +129,18 @@ async def run_reconciliation() -> FullReconciliationReport:
 
             if has_metrics:
                 STALE_TRANSACTIONS_GAUGE.set(len(stale))
+
+            if stale:
+                await fire_alert(
+                    AlertType.STALE_TRANSACTIONS,
+                    f"{len(stale)} transaction(s) stale in PROCESSING "
+                    f"(> {STALE_THRESHOLD_MINUTES} min)",
+                    {
+                        "stale_count": len(stale),
+                        "threshold_minutes": STALE_THRESHOLD_MINUTES,
+                        "sample_transaction_ids": [str(t.id) for t in stale[:5]],
+                    },
+                )
 
             # 4. On-chain reconciliation (opzionale)
             settings = get_settings()
@@ -119,6 +167,27 @@ async def run_reconciliation() -> FullReconciliationReport:
                             report.onchain_results.append(recon)
                             if has_metrics and not recon.within_threshold:
                                 ONCHAIN_DISCREPANCY.inc()
+                            if not recon.within_threshold:
+                                onchain_critical = (
+                                    abs(recon.discrepancy) >= RULE_DISCREPANCY_THRESHOLD_ETH
+                                )
+                                await fire_alert(
+                                    AlertType.ONCHAIN_DISCREPANCY_CRITICAL if onchain_critical
+                                    else AlertType.ONCHAIN_DISCREPANCY,
+                                    f"On-chain mismatch account={recon.account_id} "
+                                    f"chain={recon.chain_id}: ledger={recon.ledger_balance} "
+                                    f"onchain={recon.onchain_balance_eth} ETH "
+                                    f"diff={recon.discrepancy}",
+                                    {
+                                        "account_id": str(recon.account_id),
+                                        "chain_id": recon.chain_id,
+                                        "address": recon.address,
+                                        "ledger_balance": str(recon.ledger_balance),
+                                        "onchain_balance_eth": str(recon.onchain_balance_eth),
+                                        "discrepancy": str(recon.discrepancy),
+                                        "threshold_wei": ONCHAIN_DISCREPANCY_THRESHOLD_WEI,
+                                    },
+                                )
                         except Exception as e:
                             logger.warning(
                                 "On-chain reconciliation failed for account %s: %s",
@@ -136,6 +205,26 @@ async def run_reconciliation() -> FullReconciliationReport:
                         logger.warning(
                             "Treasury reconciliation: %d/%d chains with mismatch",
                             alert_count, len(enforce_results),
+                        )
+                        mismatched = [r for r in enforce_results if r.get("alert")]
+                        await fire_alert(
+                            AlertType.TREASURY_MISMATCH,
+                            f"Treasury reconciliation: {alert_count}/{len(enforce_results)} "
+                            f"chain(s) with mismatch",
+                            {
+                                "mismatch_count": alert_count,
+                                "chains": [
+                                    {
+                                        "chain_id": r["chain_id"],
+                                        "treasury_address": r["treasury_address"],
+                                        "on_chain_balance": str(r["on_chain_balance"]),
+                                        "ledger_balance": str(r["ledger_balance"]),
+                                        "diff": str(r["diff"]),
+                                        "diff_pct": str(r["diff_pct"]),
+                                    }
+                                    for r in mismatched[:5]
+                                ],
+                            },
                         )
             except Exception as e:
                 logger.error("Treasury reconcile_and_enforce failed: %s", e)

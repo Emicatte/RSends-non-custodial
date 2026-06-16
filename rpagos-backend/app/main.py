@@ -364,6 +364,10 @@ from app.api.org_invites_public_routes import router as org_invites_public_route
 app.include_router(org_invites_public_router)
 from app.api.dashboard_routes import router as dashboard_router
 app.include_router(dashboard_router)
+from app.api.merchant_profile_routes import router as merchant_profile_router
+app.include_router(merchant_profile_router)
+from app.api.merchant_invoice_routes import router as merchant_invoice_router
+app.include_router(merchant_invoice_router)
 
 
 # ── Health checks ────────────────────────────────────────

@@ -54,6 +54,15 @@ class AlertType(Enum):
     SWEEP_FAILED = "sweep_failed"
     BALANCE_LOW = "balance_low"
     CB_RECOVERY = "cb_recovery"
+    # Reconciliation job alerts
+    SYSTEM_IMBALANCE = "system_imbalance"
+    LEDGER_DISCREPANCY = "ledger_discrepancy"
+    LEDGER_DISCREPANCY_CRITICAL = "ledger_discrepancy_critical"
+    ONCHAIN_DISCREPANCY = "onchain_discrepancy"
+    ONCHAIN_DISCREPANCY_CRITICAL = "onchain_discrepancy_critical"
+    STALE_TRANSACTIONS = "stale_transactions"
+    TREASURY_MISMATCH = "treasury_mismatch"
+    TREASURY_MISMATCH_CRITICAL = "treasury_mismatch_critical"
 
 
 SEVERITY_MAP: dict[AlertType, AlertSeverity] = {
@@ -66,6 +75,14 @@ SEVERITY_MAP: dict[AlertType, AlertSeverity] = {
     AlertType.SWEEP_FAILED: AlertSeverity.CRITICAL,
     AlertType.BALANCE_LOW: AlertSeverity.WARNING,
     AlertType.CB_RECOVERY: AlertSeverity.INFO,
+    AlertType.SYSTEM_IMBALANCE: AlertSeverity.EMERGENCY,
+    AlertType.LEDGER_DISCREPANCY: AlertSeverity.WARNING,
+    AlertType.LEDGER_DISCREPANCY_CRITICAL: AlertSeverity.EMERGENCY,
+    AlertType.ONCHAIN_DISCREPANCY: AlertSeverity.WARNING,
+    AlertType.ONCHAIN_DISCREPANCY_CRITICAL: AlertSeverity.EMERGENCY,
+    AlertType.STALE_TRANSACTIONS: AlertSeverity.WARNING,
+    AlertType.TREASURY_MISMATCH: AlertSeverity.WARNING,
+    AlertType.TREASURY_MISMATCH_CRITICAL: AlertSeverity.EMERGENCY,
 }
 
 
