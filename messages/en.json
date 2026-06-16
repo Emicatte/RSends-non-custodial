@@ -702,7 +702,9 @@
       "apiKeys": "API Keys",
       "security": "Security",
       "soon": "Soon",
-      "organization": "Organization"
+      "organization": "Organization",
+      "billing": "Billing",
+      "invoices": "Invoices"
     },
     "notifications": {
       "loading": "Loading your preferences…",
@@ -999,6 +1001,72 @@
         "invalid_email": "Invalid email address.",
         "no_token": "Sign in to continue.",
         "unknown": "Something went wrong. Please try again."
+      }
+    },
+    "billing": {
+      "title": "Billing",
+      "description": "The details RPagos uses to invoice your commission fees.",
+      "loading": "Loading…",
+      "saving": "Saving…",
+      "save": "Save",
+      "saved": "Billing details saved.",
+      "optional": "optional",
+      "readOnly": "Only admins and operators can edit these details.",
+      "infoBanner": "These are the details RPagos will use to issue invoices for the commission fees on your payments. Make sure they are correct and up to date.",
+      "noWallet": {
+        "title": "Link a wallet first",
+        "body": "Your billing profile is anchored to your organization's primary wallet. Link and verify a wallet to fill in these details.",
+        "cta": "Go to Wallets"
+      },
+      "fields": {
+        "legalName": "Legal name",
+        "vatNumber": "VAT / Tax ID",
+        "taxCode": "Tax code",
+        "addressLine": "Address",
+        "city": "City",
+        "postalCode": "Postal code",
+        "country": "Country",
+        "email": "Billing email",
+        "pec": "PEC"
+      },
+      "errors": {
+        "no_primary_wallet": "No primary wallet linked.",
+        "invalid_email": "Invalid email address.",
+        "session_not_ready": "Session not ready, please try again.",
+        "session_expired": "Session expired, please sign in again.",
+        "insufficient_role": "You don't have permission to edit these details.",
+        "generic": "Something went wrong. Please try again."
+      }
+    },
+    "invoices": {
+      "title": "Invoices",
+      "description": "Commission invoices RPagos issues for your activity.",
+      "loading": "Loading…",
+      "empty": "No invoices yet. Generate the first one by selecting a period.",
+      "infoBanner": "Generate and download commission invoices (€0.01 per transaction). The PDF uses the brand style; the VAT regime is parametric until defined.",
+      "periodLabel": "Period (month)",
+      "generate": "Generate invoice",
+      "generating": "Generating…",
+      "issue": "Issue",
+      "downloadPdf": "Download PDF",
+      "readOnly": "Only admins and operators can generate or issue invoices.",
+      "status": {
+        "draft": "Draft",
+        "issued": "Issued"
+      },
+      "noWallet": {
+        "title": "Link a wallet first",
+        "body": "Invoices are anchored to your organization's primary wallet. Link and verify a wallet to generate them.",
+        "cta": "Go to Wallets"
+      },
+      "errors": {
+        "no_primary_wallet": "No primary wallet linked.",
+        "invoice_exists": "An invoice already exists for this period.",
+        "client_incomplete": "Client profile incomplete (legal name and VAT are required to issue).",
+        "session_not_ready": "Session not ready, please try again.",
+        "session_expired": "Session expired, please sign in again.",
+        "insufficient_role": "You don't have permission for this action.",
+        "generic": "Something went wrong. Please try again."
       }
     }
   },
@@ -1395,6 +1463,187 @@
           ]
         }
       }
+    }
+  },
+  "features": {
+    "backToHome": "Back to home",
+    "signUp": "Sign up",
+    "howItWorks": "How it works",
+    "overview": "Overview",
+    "moreReasons": "More reasons to sign in",
+    "faqs": "Frequently asked questions",
+    "ctaBand": {
+      "title": "One account. All your chains. Everywhere.",
+      "sub": "Sign in to sync your routes, history, contacts, and alerts across every device.",
+      "button": "Sign up"
+    },
+    "savedRoutes": {
+      "metadata": {
+        "title": "Saved routes — RSends",
+        "description": "Build a cross-chain flow once, then run it in one click. Save your favorite payment routes and reuse them across chains."
+      },
+      "eyebrow": "SAVED ROUTES",
+      "title": "Saved routes",
+      "heroSub": "Build a cross-chain flow once, then run it in one click.",
+      "intro": "Rebuilding a cross-chain flow by hand every time is slow and easy to get wrong — wrong chain, wrong token, wrong split. Save the whole path once and reuse it.",
+      "howItWorks": [
+        {
+          "title": "Build the path once",
+          "body": "Pick source chain and token, the destination, an optional swap, and an optional split across multiple recipients."
+        },
+        {
+          "title": "Save it with a name",
+          "body": "Store it as 'Payroll USDC→Arbitrum' or 'Supplier split'. It lives in your account, not the browser."
+        },
+        {
+          "title": "Run it in one click",
+          "body": "Next time you only enter the amounts; the route does the rest. Edit it anytime."
+        }
+      ],
+      "example": {
+        "label": "Example",
+        "text": "You pay 6 suppliers in USDC on Arbitrum every month. Save the route once — each month you just type the amounts."
+      },
+      "faqs": [
+        {
+          "q": "Can I edit a saved route after creating it?",
+          "a": "Yes. Open any saved route, change the chains, tokens, swap or split, and save it again — the update applies the next time you run it."
+        },
+        {
+          "q": "Do my routes sync across devices?",
+          "a": "Yes. Routes are stored with your account, so they're available on any browser or device the moment you sign in."
+        },
+        {
+          "q": "Can a route split to multiple recipients?",
+          "a": "Yes. A route can fan a payment out to several recipients in a single run, with the split you define."
+        }
+      ]
+    },
+    "crossDeviceHistory": {
+      "metadata": {
+        "title": "Cross-device history — RSends",
+        "description": "Every transaction you've made, searchable and in sync on any device. Filter by token, chain, status or date and export to CSV."
+      },
+      "eyebrow": "CROSS-DEVICE HISTORY",
+      "title": "Cross-device history",
+      "heroSub": "Every transaction you've made, searchable and in sync on any device.",
+      "intro": "Browser history vanishes when you clear data or switch device. RSends keeps every transaction server-side, tied to your account — permanent, portable and reconcilable.",
+      "howItWorks": [
+        {
+          "title": "Everything is recorded",
+          "body": "Every send, swap, forward and cross-chain transaction, with status, chain, token, hash and timestamp."
+        },
+        {
+          "title": "Search and filter",
+          "body": "Narrow by token, chain, status, date range or recipient in seconds."
+        },
+        {
+          "title": "Export and reconcile",
+          "body": "Download CSV for accounting and open the exact same history on any device."
+        }
+      ],
+      "example": {
+        "label": "Example",
+        "text": "Find every USDT payment to one supplier in Q1 and export it to CSV for your accountant in two clicks."
+      },
+      "faqs": [
+        {
+          "q": "How far back does history go?",
+          "a": "All the way back. Your history covers every transaction since you created your account, with nothing dropped."
+        },
+        {
+          "q": "Can I export to CSV?",
+          "a": "Yes. Any filtered view exports to CSV, ready for your accounting or reconciliation workflow."
+        },
+        {
+          "q": "Is it identical on mobile and desktop?",
+          "a": "Yes. The history is served from your account, so you see exactly the same records on every device."
+        }
+      ]
+    },
+    "encryptedContacts": {
+      "metadata": {
+        "title": "Encrypted contacts — RSends",
+        "description": "An encrypted address book with labels, notes and safety warnings — so you never paste the wrong address again."
+      },
+      "eyebrow": "ENCRYPTED CONTACTS",
+      "title": "Encrypted contacts",
+      "heroSub": "An address book with labels, notes and safety warnings.",
+      "intro": "Pasting raw addresses is the most common way funds get lost. Named, reusable contacts plus pre-send warnings remove that whole class of mistake.",
+      "howItWorks": [
+        {
+          "title": "Save addresses with labels",
+          "body": "Names, notes and the chains each address is meant for."
+        },
+        {
+          "title": "Get warned before mistakes",
+          "body": "RSends flags a chain mismatch, an unknown address or a risky one before you confirm."
+        },
+        {
+          "title": "Stored encrypted",
+          "body": "Your address book is encrypted at rest and tied only to your account."
+        }
+      ],
+      "example": {
+        "label": "Example",
+        "text": "You go to send USDC, but the saved contact is a Tron address — RSends warns you before you sign."
+      },
+      "faqs": [
+        {
+          "q": "Is my address book private and encrypted?",
+          "a": "Yes. Contacts are encrypted at rest and tied only to your account — nobody else can read them."
+        },
+        {
+          "q": "Does it warn across different chains?",
+          "a": "Yes. If the address's chain doesn't match what you're sending, RSends flags it before you confirm."
+        },
+        {
+          "q": "Can I import existing contacts?",
+          "a": "Yes. You can add addresses one by one or import a list, each with its own label and notes."
+        }
+      ]
+    },
+    "smartNotifications": {
+      "metadata": {
+        "title": "Smart notifications — RSends",
+        "description": "Get alerted when transactions confirm, fail, or meet custom conditions — delivered by email or Telegram, no screen-watching required."
+      },
+      "eyebrow": "SMART NOTIFICATIONS",
+      "title": "Smart notifications",
+      "heroSub": "Get alerted on confirm, fail, or custom conditions, without watching the screen.",
+      "intro": "Cross-chain settlement takes time and you shouldn't babysit a tab. Set the conditions that matter and get pinged only when they happen.",
+      "howItWorks": [
+        {
+          "title": "Confirmation and failure alerts",
+          "body": "Know the instant a transaction settles or fails, with the reason."
+        },
+        {
+          "title": "Custom condition rules",
+          "body": "Define your own triggers: a balance threshold, a large incoming payment, a completed forward."
+        },
+        {
+          "title": "Delivered by email or Telegram",
+          "body": "Pick the channel; alerts reach you wherever you are."
+        }
+      ],
+      "example": {
+        "label": "Example",
+        "text": "Alert me on Telegram the moment any incoming payment over €5,000 confirms."
+      },
+      "faqs": [
+        {
+          "q": "Which channels are supported?",
+          "a": "Email and Telegram today, so alerts reach you in your inbox or on your phone."
+        },
+        {
+          "q": "Can I set fully custom rules?",
+          "a": "Yes. Beyond confirm and fail alerts, you can define your own conditions — thresholds, incoming payments, completed forwards."
+        },
+        {
+          "q": "Does it cost extra?",
+          "a": "No. Notifications are part of your account — set as many as you need."
+        }
+      ]
     }
   }
 }

@@ -702,7 +702,9 @@
       "apiKeys": "Chiavi API",
       "security": "Sicurezza",
       "soon": "Presto",
-      "organization": "Organizzazione"
+      "organization": "Organizzazione",
+      "billing": "Fatturazione",
+      "invoices": "Fatture"
     },
     "notifications": {
       "loading": "Caricamento delle preferenze…",
@@ -999,6 +1001,72 @@
         "invalid_email": "Indirizzo email non valido.",
         "no_token": "Accedi per continuare.",
         "unknown": "Qualcosa è andato storto. Riprova."
+      }
+    },
+    "billing": {
+      "title": "Fatturazione",
+      "description": "I dati con cui RPagos emette le fatture delle commissioni.",
+      "loading": "Caricamento…",
+      "saving": "Salvataggio…",
+      "save": "Salva",
+      "saved": "Dati di fatturazione salvati.",
+      "optional": "facoltativo",
+      "readOnly": "Solo gli amministratori e gli operatori possono modificare questi dati.",
+      "infoBanner": "Questi sono i dati con cui RPagos emetterà le fatture delle commissioni applicate ai tuoi pagamenti. Verifica che siano corretti e aggiornati.",
+      "noWallet": {
+        "title": "Collega prima un wallet",
+        "body": "L'anagrafica di fatturazione è ancorata al wallet primario della tua organizzazione. Collega e verifica un wallet per poter compilare questi dati.",
+        "cta": "Vai a Wallet"
+      },
+      "fields": {
+        "legalName": "Ragione sociale",
+        "vatNumber": "Partita IVA / VAT",
+        "taxCode": "Codice fiscale",
+        "addressLine": "Indirizzo",
+        "city": "Città",
+        "postalCode": "CAP",
+        "country": "Paese",
+        "email": "Email amministrativa",
+        "pec": "PEC"
+      },
+      "errors": {
+        "no_primary_wallet": "Nessun wallet primario collegato.",
+        "invalid_email": "Indirizzo email non valido.",
+        "session_not_ready": "Sessione non pronta, riprova tra un istante.",
+        "session_expired": "Sessione scaduta, accedi di nuovo.",
+        "insufficient_role": "Non hai i permessi per modificare questi dati.",
+        "generic": "Qualcosa è andato storto. Riprova."
+      }
+    },
+    "invoices": {
+      "title": "Fatture",
+      "description": "Fatture delle commissioni che RPagos emette per la tua attività.",
+      "loading": "Caricamento…",
+      "empty": "Nessuna fattura ancora. Genera la prima selezionando un periodo.",
+      "infoBanner": "Qui generi e scarichi le fatture delle commissioni (€0,01 per transazione). Il PDF usa lo stile brand; il regime IVA è parametrico finché non definito.",
+      "periodLabel": "Periodo (mese)",
+      "generate": "Genera fattura",
+      "generating": "Generazione…",
+      "issue": "Emetti",
+      "downloadPdf": "Scarica PDF",
+      "readOnly": "Solo gli amministratori e gli operatori possono generare o emettere fatture.",
+      "status": {
+        "draft": "Bozza",
+        "issued": "Emessa"
+      },
+      "noWallet": {
+        "title": "Collega prima un wallet",
+        "body": "Le fatture sono ancorate al wallet primario della tua organizzazione. Collega e verifica un wallet per generarle.",
+        "cta": "Vai a Wallet"
+      },
+      "errors": {
+        "no_primary_wallet": "Nessun wallet primario collegato.",
+        "invoice_exists": "Esiste già una fattura per questo periodo.",
+        "client_incomplete": "Anagrafica cliente incompleta (ragione sociale e VAT obbligatorie per emettere).",
+        "session_not_ready": "Sessione non pronta, riprova tra un istante.",
+        "session_expired": "Sessione scaduta, accedi di nuovo.",
+        "insufficient_role": "Non hai i permessi per questa azione.",
+        "generic": "Qualcosa è andato storto. Riprova."
       }
     }
   },
@@ -1395,6 +1463,187 @@
           ]
         }
       }
+    }
+  },
+  "features": {
+    "backToHome": "Torna alla home",
+    "signUp": "Registrati",
+    "howItWorks": "Come funziona",
+    "overview": "Panoramica",
+    "moreReasons": "Altri motivi per registrarti",
+    "faqs": "Domande frequenti",
+    "ctaBand": {
+      "title": "Un account. Tutte le chain. Ovunque.",
+      "sub": "Accedi per sincronizzare route, cronologia, contatti e alert su ogni dispositivo.",
+      "button": "Registrati"
+    },
+    "savedRoutes": {
+      "metadata": {
+        "title": "Route salvate — RSends",
+        "description": "Costruisci un flusso cross-chain una volta, poi lancialo con un click. Salva le tue route di pagamento preferite e riusale su tutte le chain."
+      },
+      "eyebrow": "ROUTE SALVATE",
+      "title": "Route salvate",
+      "heroSub": "Costruisci un flusso cross-chain una volta, poi lancialo con un solo click.",
+      "intro": "Ricostruire a mano un flusso cross-chain ogni volta è lento e facile da sbagliare — chain sbagliata, token sbagliato, split sbagliato. Salva l'intero percorso una volta e riusalo.",
+      "howItWorks": [
+        {
+          "title": "Costruisci il percorso una volta",
+          "body": "Scegli chain e token di partenza, la destinazione, uno swap opzionale e uno split opzionale tra più destinatari."
+        },
+        {
+          "title": "Salvalo con un nome",
+          "body": "Salvalo come 'Stipendi USDC→Arbitrum' o 'Split fornitori'. Vive nel tuo account, non nel browser."
+        },
+        {
+          "title": "Lancialo con un click",
+          "body": "La volta dopo inserisci solo gli importi; al resto pensa la route. Modificala quando vuoi."
+        }
+      ],
+      "example": {
+        "label": "Esempio",
+        "text": "Paghi 6 fornitori in USDC su Arbitrum ogni mese. Salva la route una volta — ogni mese digiti solo gli importi."
+      },
+      "faqs": [
+        {
+          "q": "Posso modificare una route dopo averla creata?",
+          "a": "Sì. Apri una route salvata, cambia chain, token, swap o split e salvala di nuovo — la modifica vale dalla prossima esecuzione."
+        },
+        {
+          "q": "Le mie route si sincronizzano tra dispositivi?",
+          "a": "Sì. Le route sono salvate con il tuo account, quindi sono disponibili su qualsiasi browser o dispositivo appena accedi."
+        },
+        {
+          "q": "Una route può fare lo split tra più destinatari?",
+          "a": "Sì. Una route può distribuire un pagamento a più destinatari in un'unica esecuzione, con lo split che definisci."
+        }
+      ]
+    },
+    "crossDeviceHistory": {
+      "metadata": {
+        "title": "Cronologia cross-device — RSends",
+        "description": "Ogni transazione che hai fatto, ricercabile e sincronizzata su qualsiasi dispositivo. Filtra per token, chain, stato o data ed esporta in CSV."
+      },
+      "eyebrow": "CRONOLOGIA CROSS-DEVICE",
+      "title": "Cronologia cross-device",
+      "heroSub": "Ogni transazione che hai fatto, ricercabile e sincronizzata su qualsiasi dispositivo.",
+      "intro": "La cronologia del browser sparisce quando cancelli i dati o cambi dispositivo. RSends conserva ogni transazione lato server, legata al tuo account — permanente, portabile e riconciliabile.",
+      "howItWorks": [
+        {
+          "title": "Tutto viene registrato",
+          "body": "Ogni invio, swap, forward e transazione cross-chain, con stato, chain, token, hash e timestamp."
+        },
+        {
+          "title": "Cerca e filtra",
+          "body": "Restringi per token, chain, stato, intervallo di date o destinatario in pochi secondi."
+        },
+        {
+          "title": "Esporta e riconcilia",
+          "body": "Scarica il CSV per la contabilità e apri la stessa identica cronologia su qualsiasi dispositivo."
+        }
+      ],
+      "example": {
+        "label": "Esempio",
+        "text": "Trova ogni pagamento in USDT a un fornitore nel primo trimestre ed esportalo in CSV per il commercialista in due click."
+      },
+      "faqs": [
+        {
+          "q": "Fino a quando arriva la cronologia?",
+          "a": "Fino all'inizio. La cronologia copre ogni transazione da quando hai creato l'account, senza perderne nessuna."
+        },
+        {
+          "q": "Posso esportare in CSV?",
+          "a": "Sì. Qualsiasi vista filtrata si esporta in CSV, pronta per la contabilità o la riconciliazione."
+        },
+        {
+          "q": "È identica su mobile e desktop?",
+          "a": "Sì. La cronologia arriva dal tuo account, quindi vedi gli stessi identici record su ogni dispositivo."
+        }
+      ]
+    },
+    "encryptedContacts": {
+      "metadata": {
+        "title": "Contatti cifrati — RSends",
+        "description": "Una rubrica con etichette, note e warning di sicurezza — così non incolli mai più l'indirizzo sbagliato."
+      },
+      "eyebrow": "CONTATTI CIFRATI",
+      "title": "Contatti cifrati",
+      "heroSub": "Una rubrica con etichette, note e warning di sicurezza.",
+      "intro": "Incollare indirizzi grezzi è il modo più comune per perdere fondi. Contatti salvati e riutilizzabili più i warning prima dell'invio eliminano tutta questa categoria di errori.",
+      "howItWorks": [
+        {
+          "title": "Salva gli indirizzi con etichette",
+          "body": "Nomi, note e le chain a cui ogni indirizzo è destinato."
+        },
+        {
+          "title": "Ricevi un warning prima degli errori",
+          "body": "RSends segnala un chain mismatch, un indirizzo sconosciuto o rischioso prima che confermi."
+        },
+        {
+          "title": "Archiviati cifrati",
+          "body": "La tua rubrica è cifrata a riposo e legata solo al tuo account."
+        }
+      ],
+      "example": {
+        "label": "Esempio",
+        "text": "Stai per inviare USDC, ma il contatto salvato è un indirizzo Tron — RSends ti avvisa prima che firmi."
+      },
+      "faqs": [
+        {
+          "q": "La mia rubrica è privata e cifrata?",
+          "a": "Sì. I contatti sono cifrati a riposo e legati solo al tuo account — nessun altro può leggerli."
+        },
+        {
+          "q": "Avvisa tra chain diverse?",
+          "a": "Sì. Se la chain dell'indirizzo non corrisponde a ciò che stai inviando, RSends lo segnala prima della conferma."
+        },
+        {
+          "q": "Posso importare contatti esistenti?",
+          "a": "Sì. Puoi aggiungere indirizzi singolarmente o importare una lista, ognuno con la sua etichetta e le sue note."
+        }
+      ]
+    },
+    "smartNotifications": {
+      "metadata": {
+        "title": "Notifiche intelligenti — RSends",
+        "description": "Ricevi un alert quando le transazioni si confermano, falliscono o soddisfano condizioni personalizzate — via email o Telegram, senza fissare lo schermo."
+      },
+      "eyebrow": "NOTIFICHE INTELLIGENTI",
+      "title": "Notifiche intelligenti",
+      "heroSub": "Ricevi un alert su conferma, errore o condizioni personalizzate, senza fissare lo schermo.",
+      "intro": "Il regolamento cross-chain richiede tempo e non dovresti restare a controllare una scheda. Imposta le condizioni che contano e ricevi una notifica solo quando si verificano.",
+      "howItWorks": [
+        {
+          "title": "Alert di conferma ed errore",
+          "body": "Sai nell'istante in cui una transazione si regola o fallisce, con il motivo."
+        },
+        {
+          "title": "Regole con condizioni personalizzate",
+          "body": "Definisci i tuoi trigger: una soglia di saldo, un grande pagamento in entrata, un forward completato."
+        },
+        {
+          "title": "Consegnati via email o Telegram",
+          "body": "Scegli il canale; gli alert ti raggiungono ovunque tu sia."
+        }
+      ],
+      "example": {
+        "label": "Esempio",
+        "text": "Avvisami su Telegram nell'istante in cui un pagamento in entrata oltre €5.000 si conferma."
+      },
+      "faqs": [
+        {
+          "q": "Quali canali sono supportati?",
+          "a": "Email e Telegram, così gli alert ti arrivano nella inbox o sul telefono."
+        },
+        {
+          "q": "Posso impostare regole completamente personalizzate?",
+          "a": "Sì. Oltre agli alert di conferma ed errore, puoi definire le tue condizioni — soglie, pagamenti in entrata, forward completati."
+        },
+        {
+          "q": "Ha un costo aggiuntivo?",
+          "a": "No. Le notifiche fanno parte del tuo account — impostane quante ne servono."
+        }
+      ]
     }
   }
 }

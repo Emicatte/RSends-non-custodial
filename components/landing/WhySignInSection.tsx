@@ -1,8 +1,10 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
 import { C } from "@/app/designTokens";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { slugForCardKey } from "@/lib/features";
 
 export function WhySignInSection() {
   const t = useTranslations("auth.whySignIn");
@@ -65,43 +67,49 @@ export function WhySignInSection() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {features.map((f) => (
-          <div
+          <Link
             key={f.key}
-            className="rounded-2xl bg-white p-6 transition-colors"
-            style={{ border: "1px solid rgba(200,81,44,0.15)" }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.borderColor = "rgba(200,81,44,0.35)")
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.borderColor = "rgba(200,81,44,0.15)")
-            }
+            href={`/${slugForCardKey(f.key)}`}
+            className="block rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C8512C]/40"
+            style={{ textDecoration: "none", color: "inherit" }}
           >
-            <div className="flex items-start gap-4">
-              <div
-                className="h-10 w-10 rounded-lg flex items-center justify-center flex-shrink-0"
-                style={{
-                  background: "rgba(200,81,44,0.08)",
-                  color: "#C8512C",
-                }}
-              >
-                {f.icon}
-              </div>
-              <div>
-                <h3
-                  className="text-lg font-semibold mb-1"
-                  style={{ color: "#2C2C2A" }}
+            <div
+              className="rounded-2xl bg-white p-6 transition-colors"
+              style={{ border: "1px solid rgba(200,81,44,0.15)" }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.borderColor = "rgba(200,81,44,0.35)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.borderColor = "rgba(200,81,44,0.15)")
+              }
+            >
+              <div className="flex items-start gap-4">
+                <div
+                  className="h-10 w-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{
+                    background: "rgba(200,81,44,0.08)",
+                    color: "#C8512C",
+                  }}
                 >
-                  {t(`${f.key}.title`)}
-                </h3>
-                <p
-                  className="text-sm leading-relaxed"
-                  style={{ color: "#888780" }}
-                >
-                  {t(`${f.key}.description`)}
-                </p>
+                  {f.icon}
+                </div>
+                <div>
+                  <h3
+                    className="text-lg font-semibold mb-1"
+                    style={{ color: "#2C2C2A" }}
+                  >
+                    {t(`${f.key}.title`)}
+                  </h3>
+                  <p
+                    className="text-sm leading-relaxed"
+                    style={{ color: "#888780" }}
+                  >
+                    {t(`${f.key}.description`)}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+          </Link>
         ))}
       </div>
     </section>

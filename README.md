@@ -1,6 +1,6 @@
 # RSends — Multi-Chain Payment Gateway
 
-Payment infrastructure for Web3: receive on any chain, auto-forward, swap, split, and distribute — with full compliance, double-entry ledger, and real-time monitoring.
+Payment infrastructure for Web3: receive on any chain, auto-forward, swap, split, and distribute — with full compliance, double-entry ledger, multi-method identity (email/OAuth/SIWE), organizations, merchant B2B billing, and real-time monitoring.
 
 ## Architecture
 
@@ -35,7 +35,7 @@ Oracle (Next.js API)           Security
                                Infrastructure
                                ├── Redis (cache + rate limit + nonce dedup)
                                ├── Celery (async tasks)
-                               ├── PostgreSQL (asyncpg, 15 migrations)
+                               ├── PostgreSQL (asyncpg, 41 migrations)
                                ├── AWS KMS (HSM signing + IAM policy)
                                ├── Sentry (errors)
                                ├── Prometheus (metrics)
@@ -81,7 +81,36 @@ Oracle (Next.js API)           Security
 - Idempotent delivery: same TX triggers one webhook per endpoint
 - Event filtering: `payment.completed`, `payment.expired`, `payment.cancelled`
 - Paginated transaction listing with status/currency filters
-- Bearer API key authentication per merchant
+- Bearer API key authentication per merchant (scoped keys, usage tracking, revoke)
+
+### Identity & Auth
+- **Multi-method sign-in** — email + password (bcrypt), Google OAuth, GitHub OAuth, SIWE wallet sessions (EIP-4361)
+- **JWT access/refresh** with server-side sessions and refresh rotation
+- **Account linking** — attach multiple sign-in methods to one account; add/remove password, link/unlink OAuth providers
+- **Email verification + password reset** via single-use tokens (Resend API; dev mode logs links locally)
+- **Session & device management** — device fingerprinting, list/revoke sessions, known-device tracking
+- **GDPR account deletion** — soft-delete with cancellation window
+- **Cloudflare Turnstile** anti-bot on signup/login forms
+- Account types: `individual` and `merchant` (divergent onboarding)
+
+### Organizations (Multi-tenancy)
+- Users belong to organizations via memberships with roles (**viewer < operator < admin**)
+- Active-org switching; API keys and linked wallets are **org-scoped**
+- Tokenized invite flow (public preview / accept / decline) + member role management
+- Server-gated writes via `require_org_role` dependency
+
+### Merchant Billing (B2B Invoicing)
+- **Billing profile** — per-merchant legal anagrafica (`billing_legal_name`, VAT, tax code, address, PEC) keyed to the org's primary EVM wallet
+- **Commission invoices** — aggregate gateway fees per period (N tx × €0,01 flat, Decimal-only, no FX)
+- **Atomic gap-free numbering** — `FAT-{year}-{seq:06d}` via per-year counter + `SELECT ... FOR UPDATE` in the same transaction as the insert
+- **Immutable snapshots** — issuer + client data frozen at creation; draft → issued guard requires complete client billing
+- **Parametric VAT** — tax regime/rate/amount left empty for the accountant (no fabricated fiscal values)
+- **Client-side PDF** — `lib/usePdfInvoice.ts` (jsPDF, light terracotta palette matching the receipt), downloaded from Settings → Invoices
+
+### Dashboard & Settings
+- Aggregated dashboard stats endpoint (`/api/v1/dashboard/stats`)
+- Full settings suite (`components/settings/`): API keys, billing, invoices, organization, members/invites, wallets, security (sessions/devices), sign-in methods, notifications, delete account
+- Persistent per-user data: saved routes, transaction history (bulk import), contacts/address book, linked wallets, notification preferences
 
 ### Smart Contracts
 - **FeeRouterV4** — Fee-splitting router with 0.5% protocol fee, multi-recipient support
@@ -185,17 +214,21 @@ Oracle (Next.js API)           Security
 | Framer Motion | 12.38 | Animations |
 | Recharts | 3.8 | Charts |
 | Tailwind CSS | 3.4 | Styling |
-| jsPDF | 4.2 | PDF receipts |
+| jsPDF | 4.2 | PDF receipts + commission invoices |
+| next-intl | — | i18n (en, it, es, fr, de) |
+| NextAuth | — | OAuth session bridge (Google/GitHub) |
 
 ### Backend
 | Dependency | Purpose |
 |---|---|
 | FastAPI + Uvicorn | API server (4 workers prod) |
 | SQLAlchemy 2.0 + asyncpg | Async ORM + PostgreSQL |
-| Alembic | Database migrations (15 versions) |
+| Alembic | Database migrations (41 versions, 0000–0040) |
 | Redis + hiredis | Cache, rate limiting, idempotency, nonce dedup |
 | Celery | Async task queue |
 | eth-account + eth-abi | EVM transaction signing |
+| PyJWT + bcrypt + google-auth | JWT auth, password hashing, OAuth ID-token verify |
+| Resend API | Verification + password-reset emails |
 | boto3 | AWS KMS signing + audit |
 | Sentry SDK | Error tracking |
 | Prometheus | Metrics + circuit breaker gauges |
@@ -233,11 +266,23 @@ fee-router-dapp/
 │       ├── oracle/sign/          # Compliance oracle
 │       ├── portfolio/[address]/  # Portfolio data
 │       └── tokens-market/        # CoinGecko bulk proxy (price + 24h + 7d sparkline + image, 5-min cache, stale-on-error)
-├── components/shared/
-│   └── ChainFamilySwitch.tsx     # EVM/Solana/Tron selector
+├── app/[locale]/                 # next-intl routes (en, it, es, fr, de)
+│   ├── page.tsx                  # Landing
+│   ├── app/page.tsx              # Dashboard entry
+│   ├── settings/page.tsx         # Account/org/billing settings
+│   ├── login · signup · forgot-password · reset-password · verify-email[-sent]
+│   └── markets · docs
+├── components/
+│   ├── auth/                     # LoginForm, SignupForm, OAuth buttons, Turnstile, linking
+│   ├── settings/                 # ApiKeys, Billing, Invoices, Organization, Wallets,
+│   │                             #   Security, SignInMethods, Notifications, OrgSwitcher
+│   └── shared/                   # ChainFamilySwitch (EVM/Solana/Tron selector), Toast, ...
 ├── hooks/
 │   ├── useUniversalWallet.ts     # Multi-chain wallet abstraction
-│   └── useTronWallet.ts          # Tron wallet hook
+│   ├── useTronWallet.ts          # Tron wallet hook
+│   ├── useEmailAuth · useOrganizations · useCurrentOrg · useOrgMembers
+│   ├── useMerchantProfile · useMerchantInvoices  # B2B billing
+│   └── useUserWallets · useUserContacts · useUserRoutes · useUserApiKeys · ...
 ├── lib/
 │   ├── chain-adapters/           # Chain abstraction layer
 │   │   ├── types.ts              # ChainFamily, UniversalAddress, adapters
@@ -271,31 +316,42 @@ fee-router-dapp/
 │   │   ├── main.py               # FastAPI app + health checks
 │   │   ├── config.py             # Settings (env vars)
 │   │   ├── celery_app.py         # Celery config
-│   │   ├── api/
+│   │   ├── api/                      # ~30 routers (highlights)
 │   │   │   ├── routes.py              # TX callback, anomalies, DAC8
-│   │   │   ├── merchant_routes.py     # B2B merchant API
+│   │   │   ├── merchant_routes.py     # B2B payment intents + webhooks
+│   │   │   ├── merchant_profile_routes.py  # B2B billing anagrafica (Step 1)
+│   │   │   ├── merchant_invoice_routes.py  # Commission invoices (Step 3)
+│   │   │   ├── api_key_routes.py      # Merchant API keys (scopes, usage)
 │   │   │   ├── sweeper_routes.py      # Sweep operations
-│   │   │   ├── distribution_routes.py
+│   │   │   ├── distribution_routes.py / split_routes.py
 │   │   │   ├── execution_routes.py    # Cross-chain engine
 │   │   │   ├── strategy_routes.py     # Conditional automation
-│   │   │   ├── signing_routes.py      # Signing guard + audit
+│   │   │   ├── signing_routes.py / oracle_signer_routes.py / ratelimit_routes.py
 │   │   │   ├── aml_routes.py          # AML check + admin panel
 │   │   │   ├── health_routes.py       # /health/deep (5-component)
-│   │   │   ├── ledger_routes.py
-│   │   │   ├── audit_routes.py
-│   │   │   ├── price_routes.py
-│   │   │   └── websocket_routes.py
+│   │   │   ├── ledger_routes.py / audit_routes.py / price_routes.py
+│   │   │   ├── dashboard_routes.py    # Aggregated stats
+│   │   │   ├── auth_routes.py / auth_email_routes.py / wallet_session_routes.py
+│   │   │   ├── account_settings_routes.py / user_account_routes.py
+│   │   │   ├── user_routes.py / user_tx_routes.py / user_contacts_routes.py
+│   │   │   ├── user_wallets_routes.py / user_api_keys_routes.py / notification_routes.py
+│   │   │   ├── organizations_routes.py / org_invites_public_routes.py
+│   │   │   └── websocket_routes.py / payment_ws.py
 │   │   ├── models/
 │   │   │   ├── db_models.py           # TransactionLog, ComplianceSnapshot
-│   │   │   ├── forwarding_models.py   # ForwardingRule, SweepLog
+│   │   │   ├── forwarding_models.py   # ForwardingRule (versioned), SweepLog
 │   │   │   ├── ledger_models.py       # Account, LedgerEntry (double-entry)
-│   │   │   ├── command_models.py      # DistributionList, SweepBatch
-│   │   │   ├── strategy_models.py     # Strategy (conditions + actions)
+│   │   │   ├── command_models.py / split_models.py / strategy_models.py
 │   │   │   ├── merchant_models.py     # PaymentIntent, MerchantWebhook, WebhookDelivery
-│   │   │   ├── aml_models.py          # SanctionEntry, AMLAlert, AMLConfig, BlacklistedWallet
-│   │   │   ├── signing_models.py     # SigningAuditLog (immutable)
-│   │   │   ├── kms_models.py         # KMSAuditLog (immutable)
-│   │   │   └── schemas.py            # Pydantic schemas
+│   │   │   ├── merchant_profile_models.py  # MerchantProfile (billing_*)
+│   │   │   ├── invoice_models.py      # Invoice + InvoiceCounter
+│   │   │   ├── aml_models.py          # SanctionEntry, AMLAlert, AMLConfig
+│   │   │   ├── signing_models.py / kms_models.py / api_key_models.py
+│   │   │   ├── auth_models.py / email_auth_models.py  # User, sessions, tokens
+│   │   │   ├── org_models.py          # Organization, Membership, OrgInvite
+│   │   │   ├── user_*_models.py       # routes, tx, contacts, wallets, api_keys
+│   │   │   ├── notification_models.py # Preferences + known devices
+│   │   │   └── *_schemas.py           # Pydantic schemas per domain
 │   │   ├── services/
 │   │   │   ├── execution_engine.py    # Cross-chain pipeline
 │   │   │   ├── strategy_engine.py     # Condition evaluator
@@ -320,7 +376,17 @@ fee-router-dapp/
 │   │   │   ├── gas_estimator.py
 │   │   │   ├── price_service.py
 │   │   │   ├── notification_service.py
-│   │   │   └── spending_policy.py     # Reserve/release
+│   │   │   ├── spending_policy.py     # Reserve/release
+│   │   │   ├── platform_fee_service.py # Platform fee accounting
+│   │   │   ├── deposit_address_service.py / deposit_sweep_service.py # HD deposit addrs
+│   │   │   ├── invoice_service.py      # Commission aggregation + atomic numbering
+│   │   │   ├── auth_service.py / email_auth_service.py / password_service.py # Identity
+│   │   │   ├── github_oauth_service.py / siwe_service.py / wallet_session.py # OAuth + SIWE
+│   │   │   ├── org_service.py / org_invite_service.py # Orgs + invites
+│   │   │   ├── account_deletion_service.py / account_linking_service.py # GDPR + linking
+│   │   │   ├── device_fingerprint.py / auth_audit.py # Devices + auth audit
+│   │   │   ├── kill_switch.py          # Global financial-ops halt
+│   │   │   └── user_api_key_service.py / key_usage_service.py # User keys + usage
 │   │   ├── middleware/
 │   │   │   ├── correlation.py         # X-Correlation-ID (contextvars)
 │   │   │   ├── structured_logging.py  # JSON formatter + TimedOperation
@@ -341,9 +407,10 @@ fee-router-dapp/
 │   │   │   └── notification_tasks.py
 │   │   └── jobs/
 │   │       └── reconciliation_job.py
-│   ├── alembic/                  # DB migrations (0001–0015)
+│   ├── alembic/                  # DB migrations (0000–0040, 41 versions)
 │   │   ├── env.py
 │   │   └── versions/
+│   ├── tests/                    # pytest async suite (SQLite)
 │   ├── infrastructure/
 │   │   └── kms_policy.json       # AWS KMS IAM policy (signing + admin)
 │   ├── data/
@@ -381,7 +448,8 @@ cd rpagos-backend
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-# Fill in: DATABASE_URL, REDIS_URL, ALCHEMY_API_KEY, SWEEP_PRIVATE_KEY, HMAC_SECRET
+# Fill in: DATABASE_URL, REDIS_URL, ALCHEMY_API_KEY, SWEEP_PRIVATE_KEY,
+#          HMAC_SECRET, AUTH_JWT_SECRET, GOOGLE_OAUTH_CLIENT_ID, RESEND_API_KEY
 alembic upgrade head
 uvicorn app.main:app --reload
 ```
@@ -449,6 +517,34 @@ docker-compose up -d  # PostgreSQL + Redis + Celery
 | POST | `/api/v1/merchant/webhook/register` | Register webhook URL |
 | POST | `/api/v1/merchant/webhook/test` | Send test event |
 | GET | `/api/v1/merchant/transactions` | List merchant transactions |
+| GET/PUT | `/api/v1/merchant/profile` | Read / upsert billing anagrafica (org-scoped) |
+| POST/GET | `/api/v1/merchant/invoices` | Create draft / list commission invoices |
+| GET | `/api/v1/merchant/invoices/{id}` | Get single invoice |
+| POST | `/api/v1/merchant/invoices/{id}/issue` | Draft → issued (requires complete client billing) |
+| POST/GET | `/api/v1/keys` (+ `/{id}/usage`, `/{id}/revoke`) | Merchant API keys (scopes, usage) |
+
+### Identity & Auth
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/v1/auth/google` · `/github` | OAuth ID-token login |
+| POST | `/api/v1/auth/signup` · `/login` | Email + password (bcrypt) |
+| POST | `/api/v1/auth/verify-email` · `/resend-verification` | Email verification |
+| POST | `/api/v1/auth/request-password-reset` · `/reset-password` | Password reset |
+| POST | `/api/v1/auth/wallet-session` | SIWE (EIP-4361) wallet login |
+| POST | `/api/v1/auth/refresh` · `/logout` | Token rotation / revoke |
+| GET | `/api/v1/auth/me` · `/check-email` | Current user / availability |
+
+### User Account & Organizations
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/v1/user/account/status` · `/sessions` · `/known-devices` | Account, session & device mgmt |
+| POST | `/api/v1/user/account/delete` · `/delete/cancel` | GDPR soft-delete + cancel |
+| GET/POST | `/api/v1/user/account/auth-methods` (+ link/unlink, add/remove password) | Sign-in methods |
+| GET/POST/PATCH/DELETE | `/api/v1/user/{routes,transactions,contacts,wallets,api-keys}` | Persistent user data |
+| GET/PATCH | `/api/v1/user/notifications/preferences` | Notification preferences |
+| GET/POST | `/api/v1/organizations` (+ `/switch`, `/{id}`, `/{id}/members`, `/{id}/invites`) | Orgs, roles, invites |
+| GET/POST | `/api/v1/invites/{token}/preview` · `/accept` · `/decline` | Public invite flow |
+| GET | `/api/v1/dashboard/stats` | Aggregated dashboard stats |
 
 ### Signing Guard (internal, called by oracle)
 | Method | Endpoint | Description |
@@ -507,14 +603,22 @@ docker-compose up -d  # PostgreSQL + Redis + Celery
 NEXT_PUBLIC_WC_PROJECT_ID=        # WalletConnect Cloud
 NEXT_PUBLIC_TREASURY_ADDRESS=     # Protocol fee wallet
 NEXT_PUBLIC_ALCHEMY_API_KEY=      # Alchemy RPC
+NEXT_PUBLIC_TURNSTILE_SITE_KEY=   # Cloudflare Turnstile (anti-bot on auth forms)
+NEXT_PUBLIC_PAYMASTER_ENABLED=    # Gasless paymaster toggle
 HMAC_SECRET=                      # HMAC-SHA256 secret (must match backend). Server-side only.
 RPAGOS_BACKEND_URL=               # Python backend URL (e.g. https://rpagos-backend.onrender.com)
 ADMIN_SECRET=                     # Admin dashboard access token. Min 32 random chars.
+ADMIN_TOTP_SECRET=                # Admin 2FA TOTP secret
+GOOGLE_CLIENT_ID=                 # Google OAuth (NextAuth bridge)
+GOOGLE_CLIENT_SECRET=             # Google OAuth
+GITHUB_CLIENT_ID=                 # GitHub OAuth
+GITHUB_CLIENT_SECRET=             # GitHub OAuth
+TURNSTILE_SECRET_KEY=             # Turnstile server-side verification
 ```
 
 ### Backend (.env)
 ```
-DATABASE_URL=                     # PostgreSQL async URL
+DATABASE_URL=                     # PostgreSQL async URL (sqlite+aiosqlite:// in tests)
 REDIS_URL=                        # Redis URL
 ALCHEMY_API_KEY=                  # Alchemy API
 ALCHEMY_WEBHOOK_SECRET=           # Webhook HMAC (optional, enables webhook mode)
@@ -523,7 +627,18 @@ SIGNER_MODE=local                 # local | kms | vault
 KMS_KEY_ID=                       # AWS KMS key (if signer_mode=kms)
 AWS_REGION=eu-west-1              # AWS region for KMS
 DEPOSIT_MASTER_KEY=               # Master key for deposit address derivation
+DEPOSIT_MASTER_SEED=              # Seed for HD deposit-address derivation
 HMAC_SECRET=                      # API HMAC secret (>= 32 chars in prod)
+AUTH_JWT_SECRET=                  # HS256 access-token secret (>= 64 chars in prod)
+GOOGLE_OAUTH_CLIENT_ID=           # Google OAuth client ID (aud claim verification)
+RESEND_API_KEY=                   # Resend API key for verification/reset emails
+EMAIL_FROM=                       # Sender address for transactional email
+EMAIL_DEV_MODE=false              # true = log email links locally (skip Resend)
+FRONTEND_URL=                     # Base URL for email links + CORS
+PLATFORM_FEE_ENABLED=false        # Enable platform fee accounting
+PLATFORM_FEE_BPS=                 # Platform fee in basis points
+PLATFORM_TREASURY_ADDRESS=        # Platform fee treasury wallet
+RUN_MIGRATIONS_ON_BOOT=false      # Run Alembic on startup (Render Pre-Deploy)
 TELEGRAM_BOT_TOKEN=               # Sweep notifications (optional)
 TELEGRAM_CHAT_ID=                 # Sweep notifications chat
 TELEGRAM_ALERT_CHAT_ID=           # Critical alerts chat (falls back to TELEGRAM_CHAT_ID)

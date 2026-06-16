@@ -703,7 +703,9 @@
       "apiKeys": "Clés API",
       "security": "Sécurité",
       "soon": "Bientôt",
-      "organization": "Organisation"
+      "organization": "Organisation",
+      "billing": "Facturation",
+      "invoices": "Factures"
     },
     "notifications": {
       "loading": "Chargement de vos préférences…",
@@ -1000,6 +1002,72 @@
         "invalid_email": "Adresse e-mail invalide.",
         "no_token": "Connectez-vous pour continuer.",
         "unknown": "Une erreur s'est produite. Veuillez réessayer."
+      }
+    },
+    "billing": {
+      "title": "Billing",
+      "description": "The details RPagos uses to invoice your commission fees.",
+      "loading": "Loading…",
+      "saving": "Saving…",
+      "save": "Save",
+      "saved": "Billing details saved.",
+      "optional": "optional",
+      "readOnly": "Only admins and operators can edit these details.",
+      "infoBanner": "These are the details RPagos will use to issue invoices for the commission fees on your payments. Make sure they are correct and up to date.",
+      "noWallet": {
+        "title": "Link a wallet first",
+        "body": "Your billing profile is anchored to your organization's primary wallet. Link and verify a wallet to fill in these details.",
+        "cta": "Go to Wallets"
+      },
+      "fields": {
+        "legalName": "Legal name",
+        "vatNumber": "VAT / Tax ID",
+        "taxCode": "Tax code",
+        "addressLine": "Address",
+        "city": "City",
+        "postalCode": "Postal code",
+        "country": "Country",
+        "email": "Billing email",
+        "pec": "PEC"
+      },
+      "errors": {
+        "no_primary_wallet": "No primary wallet linked.",
+        "invalid_email": "Invalid email address.",
+        "session_not_ready": "Session not ready, please try again.",
+        "session_expired": "Session expired, please sign in again.",
+        "insufficient_role": "You don't have permission to edit these details.",
+        "generic": "Something went wrong. Please try again."
+      }
+    },
+    "invoices": {
+      "title": "Invoices",
+      "description": "Commission invoices RPagos issues for your activity.",
+      "loading": "Loading…",
+      "empty": "No invoices yet. Generate the first one by selecting a period.",
+      "infoBanner": "Generate and download commission invoices (€0.01 per transaction). The PDF uses the brand style; the VAT regime is parametric until defined.",
+      "periodLabel": "Period (month)",
+      "generate": "Generate invoice",
+      "generating": "Generating…",
+      "issue": "Issue",
+      "downloadPdf": "Download PDF",
+      "readOnly": "Only admins and operators can generate or issue invoices.",
+      "status": {
+        "draft": "Draft",
+        "issued": "Issued"
+      },
+      "noWallet": {
+        "title": "Link a wallet first",
+        "body": "Invoices are anchored to your organization's primary wallet. Link and verify a wallet to generate them.",
+        "cta": "Go to Wallets"
+      },
+      "errors": {
+        "no_primary_wallet": "No primary wallet linked.",
+        "invoice_exists": "An invoice already exists for this period.",
+        "client_incomplete": "Client profile incomplete (legal name and VAT are required to issue).",
+        "session_not_ready": "Session not ready, please try again.",
+        "session_expired": "Session expired, please sign in again.",
+        "insufficient_role": "You don't have permission for this action.",
+        "generic": "Something went wrong. Please try again."
       }
     }
   },
@@ -1396,6 +1464,187 @@
           ]
         }
       }
+    }
+  },
+  "features": {
+    "backToHome": "Retour à l'accueil",
+    "signUp": "S'inscrire",
+    "howItWorks": "Comment ça marche",
+    "overview": "Aperçu",
+    "moreReasons": "Plus de raisons de s'inscrire",
+    "faqs": "Questions fréquentes",
+    "ctaBand": {
+      "title": "Un compte. Toutes vos chains. Partout.",
+      "sub": "Connectez-vous pour synchroniser vos routes, votre historique, vos contacts et vos alertes sur tous vos appareils.",
+      "button": "S'inscrire"
+    },
+    "savedRoutes": {
+      "metadata": {
+        "title": "Routes enregistrées — RSends",
+        "description": "Créez un flux cross-chain une fois, puis lancez-le en un clic. Enregistrez vos routes de paiement préférées et réutilisez-les sur toutes les chains."
+      },
+      "eyebrow": "ROUTES ENREGISTRÉES",
+      "title": "Routes enregistrées",
+      "heroSub": "Créez un flux cross-chain une fois, puis lancez-le en un seul clic.",
+      "intro": "Reconstruire un flux cross-chain à la main à chaque fois est lent et source d'erreurs — mauvaise chain, mauvais token, mauvais split. Enregistrez tout le parcours une fois et réutilisez-le.",
+      "howItWorks": [
+        {
+          "title": "Construisez le parcours une fois",
+          "body": "Choisissez la chain et le token source, la destination, un swap optionnel et un split optionnel entre plusieurs destinataires."
+        },
+        {
+          "title": "Enregistrez-le avec un nom",
+          "body": "Enregistrez-le comme « Paie USDC→Arbitrum » ou « Split fournisseurs ». Il vit dans votre compte, pas dans le navigateur."
+        },
+        {
+          "title": "Lancez-le en un clic",
+          "body": "La fois suivante, vous ne saisissez que les montants ; la route fait le reste. Modifiez-la à tout moment."
+        }
+      ],
+      "example": {
+        "label": "Exemple",
+        "text": "Vous payez 6 fournisseurs en USDC sur Arbitrum chaque mois. Enregistrez la route une fois — chaque mois vous ne tapez que les montants."
+      },
+      "faqs": [
+        {
+          "q": "Puis-je modifier une route après l'avoir créée ?",
+          "a": "Oui. Ouvrez une route enregistrée, changez les chains, les tokens, le swap ou le split, puis enregistrez de nouveau — la modification s'applique à la prochaine exécution."
+        },
+        {
+          "q": "Mes routes se synchronisent-elles entre appareils ?",
+          "a": "Oui. Les routes sont enregistrées avec votre compte, donc disponibles sur n'importe quel navigateur ou appareil dès que vous vous connectez."
+        },
+        {
+          "q": "Une route peut-elle se répartir entre plusieurs destinataires ?",
+          "a": "Oui. Une route peut répartir un paiement entre plusieurs destinataires en une seule exécution, avec le split que vous définissez."
+        }
+      ]
+    },
+    "crossDeviceHistory": {
+      "metadata": {
+        "title": "Historique cross-device — RSends",
+        "description": "Chaque transaction effectuée, recherchable et synchronisée sur tous vos appareils. Filtrez par token, chain, statut ou date et exportez en CSV."
+      },
+      "eyebrow": "HISTORIQUE CROSS-DEVICE",
+      "title": "Historique cross-device",
+      "heroSub": "Chaque transaction effectuée, recherchable et synchronisée sur tous vos appareils.",
+      "intro": "L'historique du navigateur disparaît quand vous effacez les données ou changez d'appareil. RSends conserve chaque transaction côté serveur, liée à votre compte — permanente, portable et réconciliable.",
+      "howItWorks": [
+        {
+          "title": "Tout est enregistré",
+          "body": "Chaque envoi, swap, forward et transaction cross-chain, avec statut, chain, token, hash et horodatage."
+        },
+        {
+          "title": "Recherchez et filtrez",
+          "body": "Affinez par token, chain, statut, plage de dates ou destinataire en quelques secondes."
+        },
+        {
+          "title": "Exportez et réconciliez",
+          "body": "Téléchargez le CSV pour la comptabilité et ouvrez le même historique sur n'importe quel appareil."
+        }
+      ],
+      "example": {
+        "label": "Exemple",
+        "text": "Trouvez chaque paiement en USDT à un fournisseur au premier trimestre et exportez-le en CSV pour votre comptable en deux clics."
+      },
+      "faqs": [
+        {
+          "q": "Jusqu'où remonte l'historique ?",
+          "a": "Jusqu'au début. L'historique couvre chaque transaction depuis la création de votre compte, sans en perdre aucune."
+        },
+        {
+          "q": "Puis-je exporter en CSV ?",
+          "a": "Oui. Toute vue filtrée s'exporte en CSV, prête pour votre comptabilité ou votre réconciliation."
+        },
+        {
+          "q": "Est-il identique sur mobile et ordinateur ?",
+          "a": "Oui. L'historique provient de votre compte, vous voyez donc exactement les mêmes enregistrements sur chaque appareil."
+        }
+      ]
+    },
+    "encryptedContacts": {
+      "metadata": {
+        "title": "Contacts chiffrés — RSends",
+        "description": "Un carnet d'adresses avec labels, notes et avertissements de sécurité — pour ne plus jamais coller la mauvaise adresse."
+      },
+      "eyebrow": "CONTACTS CHIFFRÉS",
+      "title": "Contacts chiffrés",
+      "heroSub": "Un carnet d'adresses avec labels, notes et avertissements de sécurité.",
+      "intro": "Coller des adresses brutes est la façon la plus courante de perdre des fonds. Des contacts nommés et réutilisables, plus des avertissements avant l'envoi, éliminent toute cette catégorie d'erreurs.",
+      "howItWorks": [
+        {
+          "title": "Enregistrez les adresses avec des labels",
+          "body": "Noms, notes et les chains auxquelles chaque adresse est destinée."
+        },
+        {
+          "title": "Soyez averti avant les erreurs",
+          "body": "RSends signale un chain mismatch, une adresse inconnue ou risquée avant que vous confirmiez."
+        },
+        {
+          "title": "Stockés chiffrés",
+          "body": "Votre carnet d'adresses est chiffré au repos et lié uniquement à votre compte."
+        }
+      ],
+      "example": {
+        "label": "Exemple",
+        "text": "Vous allez envoyer des USDC, mais le contact enregistré est une adresse Tron — RSends vous avertit avant que vous signiez."
+      },
+      "faqs": [
+        {
+          "q": "Mon carnet d'adresses est-il privé et chiffré ?",
+          "a": "Oui. Les contacts sont chiffrés au repos et liés uniquement à votre compte — personne d'autre ne peut les lire."
+        },
+        {
+          "q": "Avertit-il entre différentes chains ?",
+          "a": "Oui. Si la chain de l'adresse ne correspond pas à ce que vous envoyez, RSends le signale avant la confirmation."
+        },
+        {
+          "q": "Puis-je importer des contacts existants ?",
+          "a": "Oui. Vous pouvez ajouter des adresses une par une ou importer une liste, chacune avec son label et ses notes."
+        }
+      ]
+    },
+    "smartNotifications": {
+      "metadata": {
+        "title": "Notifications intelligentes — RSends",
+        "description": "Soyez alerté quand les transactions sont confirmées, échouent ou remplissent des conditions personnalisées — par e-mail ou Telegram, sans surveiller l'écran."
+      },
+      "eyebrow": "NOTIFICATIONS INTELLIGENTES",
+      "title": "Notifications intelligentes",
+      "heroSub": "Soyez alerté en cas de confirmation, d'échec ou de conditions personnalisées, sans surveiller l'écran.",
+      "intro": "Le règlement cross-chain prend du temps et vous ne devriez pas surveiller un onglet. Définissez les conditions qui comptent et soyez prévenu seulement quand elles se produisent.",
+      "howItWorks": [
+        {
+          "title": "Alertes de confirmation et d'échec",
+          "body": "Sachez à l'instant où une transaction est réglée ou échoue, avec la raison."
+        },
+        {
+          "title": "Règles à conditions personnalisées",
+          "body": "Définissez vos propres déclencheurs : un seuil de solde, un gros paiement entrant, un forward terminé."
+        },
+        {
+          "title": "Livrées par e-mail ou Telegram",
+          "body": "Choisissez le canal ; les alertes vous parviennent où que vous soyez."
+        }
+      ],
+      "example": {
+        "label": "Exemple",
+        "text": "Préviens-moi sur Telegram à l'instant où un paiement entrant de plus de 5 000 € est confirmé."
+      },
+      "faqs": [
+        {
+          "q": "Quels canaux sont pris en charge ?",
+          "a": "E-mail et Telegram, pour que les alertes vous parviennent dans votre boîte mail ou sur votre téléphone."
+        },
+        {
+          "q": "Puis-je définir des règles entièrement personnalisées ?",
+          "a": "Oui. Au-delà des alertes de confirmation et d'échec, vous pouvez définir vos propres conditions — seuils, paiements entrants, forwards terminés."
+        },
+        {
+          "q": "Y a-t-il un coût supplémentaire ?",
+          "a": "Non. Les notifications font partie de votre compte — configurez-en autant que nécessaire."
+        }
+      ]
     }
   }
 }

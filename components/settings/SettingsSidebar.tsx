@@ -9,7 +9,7 @@ interface SettingsSidebarProps {
 }
 
 type NavItem = {
-  key: 'organization' | 'notifications' | 'wallets' | 'apiKeys' | 'security'
+  key: 'organization' | 'notifications' | 'wallets' | 'apiKeys' | 'billing' | 'invoices' | 'security'
   enabled: boolean
   href?: string
 }
@@ -19,6 +19,8 @@ const ITEMS: NavItem[] = [
   { key: 'notifications', enabled: true },
   { key: 'wallets', enabled: true },
   { key: 'apiKeys', enabled: true, href: 'api-keys' },
+  { key: 'billing', enabled: true },
+  { key: 'invoices', enabled: true },
   { key: 'security', enabled: true },
 ]
 

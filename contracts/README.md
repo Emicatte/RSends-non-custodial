@@ -18,6 +18,23 @@ Solidity contracts for the RSend payment infrastructure. Built with Foundry.
 |---|---|
 | `RSendCCIPSender.sol` | Cross-chain sender: bridge tokens via CCIP, or atomic swap (Uniswap V3) + bridge in 1 TX |
 | `RSendCCIPReceiver.sol` | Cross-chain receiver: validates CCIP messages, forwards tokens to final recipient |
+| `RSendCCIPSenderV2.sol` | V1 + explicit 200k gas limit in CCIP `extraArgs` (no reliance on Chainlink defaults) |
+| `RSendCCIPReceiverV2.sol` | V1 + zero-recipient check after `abi.decode` to prevent token burns |
+| `RSendForwarderV2.sol` | Hardened per-user forwarder (ReentrancyGuard + Ownable) |
+
+### Router Evolution (FeeRouter line)
+
+`FeeRouterV4` is the production router on Base. Later revisions are kept in `src/`
+for staged rollout (see [`../ops/README.md`](../ops/README.md) for the live `setOracleSigner(s)` migration path):
+
+| Version | Change |
+|---|---|
+| `FeeRouterV4` | Swap-and-forward + single Oracle EIP-712 signer + Permit2 + Uniswap V3, 0.5% fee (**live**) |
+| `FeeRouterV4_1` | Adds owner-only `emergencyWithdrawETH/Token()` rescue |
+| `FeeRouterV5` | Replaces single signer with **threshold-of-N multi-sig oracle** (`bytes[]` signatures) + emergency rescue |
+| `FeeRouterV6` | **Flat fee model**: `feeBps`/`_calcSplit` removed — recipient receives the full token amount (fee charged out-of-band) |
+
+Earlier `FeeRouter.sol` / `FeeRouterV3.sol` and `Counter.sol` are legacy/reference and not deployed.
 
 ## RSendCCIPSender Features
 

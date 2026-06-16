@@ -703,7 +703,9 @@
       "apiKeys": "Claves API",
       "security": "Seguridad",
       "soon": "Pronto",
-      "organization": "Organización"
+      "organization": "Organización",
+      "billing": "Facturación",
+      "invoices": "Facturas"
     },
     "notifications": {
       "loading": "Cargando tus preferencias…",
@@ -1000,6 +1002,72 @@
         "invalid_email": "Dirección de email inválida.",
         "no_token": "Inicia sesión para continuar.",
         "unknown": "Algo salió mal. Inténtalo de nuevo."
+      }
+    },
+    "billing": {
+      "title": "Billing",
+      "description": "The details RPagos uses to invoice your commission fees.",
+      "loading": "Loading…",
+      "saving": "Saving…",
+      "save": "Save",
+      "saved": "Billing details saved.",
+      "optional": "optional",
+      "readOnly": "Only admins and operators can edit these details.",
+      "infoBanner": "These are the details RPagos will use to issue invoices for the commission fees on your payments. Make sure they are correct and up to date.",
+      "noWallet": {
+        "title": "Link a wallet first",
+        "body": "Your billing profile is anchored to your organization's primary wallet. Link and verify a wallet to fill in these details.",
+        "cta": "Go to Wallets"
+      },
+      "fields": {
+        "legalName": "Legal name",
+        "vatNumber": "VAT / Tax ID",
+        "taxCode": "Tax code",
+        "addressLine": "Address",
+        "city": "City",
+        "postalCode": "Postal code",
+        "country": "Country",
+        "email": "Billing email",
+        "pec": "PEC"
+      },
+      "errors": {
+        "no_primary_wallet": "No primary wallet linked.",
+        "invalid_email": "Invalid email address.",
+        "session_not_ready": "Session not ready, please try again.",
+        "session_expired": "Session expired, please sign in again.",
+        "insufficient_role": "You don't have permission to edit these details.",
+        "generic": "Something went wrong. Please try again."
+      }
+    },
+    "invoices": {
+      "title": "Invoices",
+      "description": "Commission invoices RPagos issues for your activity.",
+      "loading": "Loading…",
+      "empty": "No invoices yet. Generate the first one by selecting a period.",
+      "infoBanner": "Generate and download commission invoices (€0.01 per transaction). The PDF uses the brand style; the VAT regime is parametric until defined.",
+      "periodLabel": "Period (month)",
+      "generate": "Generate invoice",
+      "generating": "Generating…",
+      "issue": "Issue",
+      "downloadPdf": "Download PDF",
+      "readOnly": "Only admins and operators can generate or issue invoices.",
+      "status": {
+        "draft": "Draft",
+        "issued": "Issued"
+      },
+      "noWallet": {
+        "title": "Link a wallet first",
+        "body": "Invoices are anchored to your organization's primary wallet. Link and verify a wallet to generate them.",
+        "cta": "Go to Wallets"
+      },
+      "errors": {
+        "no_primary_wallet": "No primary wallet linked.",
+        "invoice_exists": "An invoice already exists for this period.",
+        "client_incomplete": "Client profile incomplete (legal name and VAT are required to issue).",
+        "session_not_ready": "Session not ready, please try again.",
+        "session_expired": "Session expired, please sign in again.",
+        "insufficient_role": "You don't have permission for this action.",
+        "generic": "Something went wrong. Please try again."
       }
     }
   },
@@ -1396,6 +1464,187 @@
           ]
         }
       }
+    }
+  },
+  "features": {
+    "backToHome": "Volver al inicio",
+    "signUp": "Regístrate",
+    "howItWorks": "Cómo funciona",
+    "overview": "Resumen",
+    "moreReasons": "Más razones para registrarte",
+    "faqs": "Preguntas frecuentes",
+    "ctaBand": {
+      "title": "Una cuenta. Todas tus chains. En todas partes.",
+      "sub": "Inicia sesión para sincronizar rutas, historial, contactos y alertas en todos tus dispositivos.",
+      "button": "Regístrate"
+    },
+    "savedRoutes": {
+      "metadata": {
+        "title": "Rutas guardadas — RSends",
+        "description": "Crea un flujo cross-chain una vez y ejecútalo con un clic. Guarda tus rutas de pago favoritas y reutilízalas en todas las chains."
+      },
+      "eyebrow": "RUTAS GUARDADAS",
+      "title": "Rutas guardadas",
+      "heroSub": "Crea un flujo cross-chain una vez y ejecútalo con un solo clic.",
+      "intro": "Reconstruir un flujo cross-chain a mano cada vez es lento y fácil de equivocar — chain equivocada, token equivocado, split equivocado. Guarda toda la ruta una vez y reutilízala.",
+      "howItWorks": [
+        {
+          "title": "Crea la ruta una vez",
+          "body": "Elige chain y token de origen, el destino, un swap opcional y un split opcional entre varios destinatarios."
+        },
+        {
+          "title": "Guárdala con un nombre",
+          "body": "Guárdala como 'Nómina USDC→Arbitrum' o 'Split proveedores'. Vive en tu cuenta, no en el navegador."
+        },
+        {
+          "title": "Ejecútala con un clic",
+          "body": "La próxima vez solo introduces los importes; la ruta hace el resto. Edítala cuando quieras."
+        }
+      ],
+      "example": {
+        "label": "Ejemplo",
+        "text": "Pagas a 6 proveedores en USDC en Arbitrum cada mes. Guarda la ruta una vez — cada mes solo escribes los importes."
+      },
+      "faqs": [
+        {
+          "q": "¿Puedo editar una ruta después de crearla?",
+          "a": "Sí. Abre una ruta guardada, cambia chains, tokens, swap o split y vuelve a guardarla — el cambio se aplica en la siguiente ejecución."
+        },
+        {
+          "q": "¿Mis rutas se sincronizan entre dispositivos?",
+          "a": "Sí. Las rutas se guardan con tu cuenta, así que están disponibles en cualquier navegador o dispositivo en cuanto inicias sesión."
+        },
+        {
+          "q": "¿Una ruta puede dividirse entre varios destinatarios?",
+          "a": "Sí. Una ruta puede repartir un pago entre varios destinatarios en una sola ejecución, con el split que definas."
+        }
+      ]
+    },
+    "crossDeviceHistory": {
+      "metadata": {
+        "title": "Historial cross-device — RSends",
+        "description": "Cada transacción que has hecho, buscable y sincronizada en cualquier dispositivo. Filtra por token, chain, estado o fecha y exporta a CSV."
+      },
+      "eyebrow": "HISTORIAL CROSS-DEVICE",
+      "title": "Historial cross-device",
+      "heroSub": "Cada transacción que has hecho, buscable y sincronizada en cualquier dispositivo.",
+      "intro": "El historial del navegador desaparece cuando borras datos o cambias de dispositivo. RSends guarda cada transacción en el servidor, ligada a tu cuenta — permanente, portátil y conciliable.",
+      "howItWorks": [
+        {
+          "title": "Todo queda registrado",
+          "body": "Cada envío, swap, forward y transacción cross-chain, con estado, chain, token, hash y marca de tiempo."
+        },
+        {
+          "title": "Busca y filtra",
+          "body": "Acota por token, chain, estado, rango de fechas o destinatario en segundos."
+        },
+        {
+          "title": "Exporta y concilia",
+          "body": "Descarga CSV para contabilidad y abre el mismo historial en cualquier dispositivo."
+        }
+      ],
+      "example": {
+        "label": "Ejemplo",
+        "text": "Encuentra cada pago en USDT a un proveedor en el primer trimestre y expórtalo a CSV para tu contable en dos clics."
+      },
+      "faqs": [
+        {
+          "q": "¿Hasta cuándo llega el historial?",
+          "a": "Hasta el principio. El historial cubre cada transacción desde que creaste tu cuenta, sin perder ninguna."
+        },
+        {
+          "q": "¿Puedo exportar a CSV?",
+          "a": "Sí. Cualquier vista filtrada se exporta a CSV, lista para tu contabilidad o conciliación."
+        },
+        {
+          "q": "¿Es idéntico en móvil y escritorio?",
+          "a": "Sí. El historial viene de tu cuenta, así que ves exactamente los mismos registros en cada dispositivo."
+        }
+      ]
+    },
+    "encryptedContacts": {
+      "metadata": {
+        "title": "Contactos cifrados — RSends",
+        "description": "Una agenda con etiquetas, notas y advertencias de seguridad — para que nunca más pegues una dirección equivocada."
+      },
+      "eyebrow": "CONTACTOS CIFRADOS",
+      "title": "Contactos cifrados",
+      "heroSub": "Una agenda con etiquetas, notas y advertencias de seguridad.",
+      "intro": "Pegar direcciones en bruto es la forma más común de perder fondos. Los contactos con nombre y reutilizables, más las advertencias previas al envío, eliminan toda esa clase de errores.",
+      "howItWorks": [
+        {
+          "title": "Guarda direcciones con etiquetas",
+          "body": "Nombres, notas y las chains a las que está destinada cada dirección."
+        },
+        {
+          "title": "Recibe avisos antes de los errores",
+          "body": "RSends señala un chain mismatch, una dirección desconocida o arriesgada antes de que confirmes."
+        },
+        {
+          "title": "Almacenados cifrados",
+          "body": "Tu agenda está cifrada en reposo y ligada solo a tu cuenta."
+        }
+      ],
+      "example": {
+        "label": "Ejemplo",
+        "text": "Vas a enviar USDC, pero el contacto guardado es una dirección Tron — RSends te avisa antes de firmar."
+      },
+      "faqs": [
+        {
+          "q": "¿Mi agenda es privada y está cifrada?",
+          "a": "Sí. Los contactos están cifrados en reposo y ligados solo a tu cuenta — nadie más puede leerlos."
+        },
+        {
+          "q": "¿Avisa entre chains diferentes?",
+          "a": "Sí. Si la chain de la dirección no coincide con lo que envías, RSends lo señala antes de confirmar."
+        },
+        {
+          "q": "¿Puedo importar contactos existentes?",
+          "a": "Sí. Puedes añadir direcciones de una en una o importar una lista, cada una con su etiqueta y sus notas."
+        }
+      ]
+    },
+    "smartNotifications": {
+      "metadata": {
+        "title": "Notificaciones inteligentes — RSends",
+        "description": "Recibe alertas cuando las transacciones se confirman, fallan o cumplen condiciones personalizadas — por email o Telegram, sin mirar la pantalla."
+      },
+      "eyebrow": "NOTIFICACIONES INTELIGENTES",
+      "title": "Notificaciones inteligentes",
+      "heroSub": "Recibe alertas al confirmar, fallar o cumplir condiciones personalizadas, sin mirar la pantalla.",
+      "intro": "El asentamiento cross-chain lleva tiempo y no deberías vigilar una pestaña. Define las condiciones que importan y recibe un aviso solo cuando ocurren.",
+      "howItWorks": [
+        {
+          "title": "Alertas de confirmación y de fallo",
+          "body": "Entérate al instante de cuándo una transacción se asienta o falla, con el motivo."
+        },
+        {
+          "title": "Reglas con condiciones personalizadas",
+          "body": "Define tus propios disparadores: un umbral de saldo, un pago entrante grande, un forward completado."
+        },
+        {
+          "title": "Entregadas por email o Telegram",
+          "body": "Elige el canal; las alertas te llegan dondequiera que estés."
+        }
+      ],
+      "example": {
+        "label": "Ejemplo",
+        "text": "Avísame por Telegram en el instante en que cualquier pago entrante de más de 5.000 € se confirme."
+      },
+      "faqs": [
+        {
+          "q": "¿Qué canales son compatibles?",
+          "a": "Email y Telegram, así las alertas te llegan a tu bandeja de entrada o al teléfono."
+        },
+        {
+          "q": "¿Puedo definir reglas totalmente personalizadas?",
+          "a": "Sí. Además de las alertas de confirmación y fallo, puedes definir tus propias condiciones — umbrales, pagos entrantes, forwards completados."
+        },
+        {
+          "q": "¿Tiene coste adicional?",
+          "a": "No. Las notificaciones forman parte de tu cuenta — configura tantas como necesites."
+        }
+      ]
     }
   }
 }
