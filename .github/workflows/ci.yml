@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: contracts
+        working-directory: packages/contracts
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: rpagos-backend
+        working-directory: services/backend
     env:
       DATABASE_URL: "sqlite+aiosqlite://"
       DEBUG: "true"
@@ -75,4 +75,5 @@ jobs:
           cache: "npm"
       - run: npm ci
       - name: Type-check
+        working-directory: apps/web
         run: npx tsc --noEmit

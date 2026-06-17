@@ -53,3 +53,10 @@ docs/runbooks/
 docs/superpowers/
 scripts/run_audit.sh
 rpagos-backend/scripts/manual/
+
+# --- Monorepo (Turborepo) restructure: additive paths for new locations ---
+.turbo/
+packages/contracts/cache/
+packages/contracts/out/
+apps/web/.next/
+services/backend/scripts/manual/
