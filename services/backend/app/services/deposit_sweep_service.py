@@ -159,6 +159,19 @@ async def _execute_sweep_inner(
                 intent.fee_amount = str(fee.fee_amount / 10 ** decimals)
                 intent.merchant_sweep_amount = str(fee.merchant_amount / 10 ** decimals)
 
+    # ── Deterministic nonce sequencing for the two legs ──
+    # Merchant = N, fee = N+1 from the deposit address. The base nonce is
+    # fetched ONCE (fresh run) and each leg's nonce is persisted on its own
+    # TxIntent row; on retry we reuse the persisted value (get_intent_nonce)
+    # so a crash between legs can never shift the base or leave a gap.
+    from app.services.deposit_address_service import read_deposit_nonce
+    from app.services.tx_intent_guard import get_intent_nonce
+
+    merchant_key = f"deposit_sweep:{intent_id}:merchant"
+    merchant_nonce = await get_intent_nonce(merchant_key)
+    if merchant_nonce is None:
+        merchant_nonce = await read_deposit_nonce(intent_id, chain)
+
     # ── Sweep 1: net amount to merchant (fail-closed) ───
     merchant_amount = fee.merchant_amount if fee.enabled else None
     try:
@@ -168,6 +181,8 @@ async def _execute_sweep_inner(
             currency=currency,
             chain=chain,
             amount=merchant_amount,
+            leg="merchant",
+            nonce=merchant_nonce,
         )
     except Exception:
         logger.exception("Merchant sweep failed for intent=%s", intent_id)
@@ -175,7 +190,22 @@ async def _execute_sweep_inner(
         return
 
     if not tx_hash:
-        await _revert_to_completed(intent_id, "sweep_returned_none")
+        # No hash → resolve the three-state outcome from the persisted row rather
+        # than blindly reverting (the happy/recovered-confirmed path returns a
+        # real hash above and is untouched).
+        from app.services.tx_intent_guard import get_intent_state, NEEDS_REVIEW_PREFIX
+        m_status, m_err, _ = await get_intent_state(merchant_key)
+        if m_status == "failed":
+            # Reverted on-chain (receipt status=0): burned nonce, do NOT settle
+            # and do NOT retry-loop. Hold for manual review + alert.
+            await _mark_intent_review(intent_id, f"merchant sweep reverted on-chain: {m_err}")
+            return
+        if m_status == "broadcasting" and (m_err or "").startswith(NEEDS_REVIEW_PREFIX):
+            # Ambiguous (nonce consumed, our tx hash absent) → hold for review.
+            await _mark_intent_review(intent_id, m_err or "needs_review")
+            return
+        # pending (tx in mempool) or no row → revert for a later retry (no resend).
+        await _revert_to_completed(intent_id, "sweep_pending_or_none")
         return
 
     # ── Mark as settled ─────────────────────────────────
@@ -212,6 +242,13 @@ async def _execute_sweep_inner(
     # ── Sweep 2: fee to RSends treasury (fail-open) ─────
     treasury = settings.platform_treasury_address
     if fee.enabled and fee.fee_amount > 0 and treasury:
+        # fee leg = merchant nonce + 1; reuse persisted value on retry. Computed
+        # INSIDE this conditional so no :fee TxIntent row is created when the fee
+        # is disabled or zero.
+        fee_key = f"deposit_sweep:{intent_id}:fee"
+        fee_nonce = await get_intent_nonce(fee_key)
+        if fee_nonce is None:
+            fee_nonce = merchant_nonce + 1
         try:
             fee_tx = await sweep_deposit(
                 intent_id=intent_id,
@@ -219,6 +256,8 @@ async def _execute_sweep_inner(
                 currency=currency,
                 chain=chain,
                 amount=fee.fee_amount,
+                leg="fee",
+                nonce=fee_nonce,
             )
             if fee_tx:
                 async with async_session() as db:
@@ -272,6 +311,30 @@ async def _execute_sweep_inner(
             "No PLATFORM_TREASURY_ADDRESS configured — fee not collected for %s",
             intent_id,
         )
+
+
+async def _mark_intent_review(intent_id: str, reason: str) -> None:
+    """Hold a settlement for manual reconciliation (status=review): no retry-loop,
+    audit, and a reconciliation alert. Used when a leg reverted on-chain or is
+    ambiguous (needs_review). Only transitions out of 'sweeping'."""
+    async with async_session() as db:
+        async with db.begin():
+            intent = (await db.execute(
+                select(PaymentIntent).where(PaymentIntent.intent_id == intent_id)
+            )).scalar_one_or_none()
+            if intent and intent.status == IntentStatus.sweeping:
+                intent.status = IntentStatus.review
+                await log_event(
+                    db, "DEPOSIT_SWEEP_REVIEW", "payment_intent", intent_id,
+                    actor_type="system", changes={"reason": str(reason)[:500]},
+                )
+    try:
+        from app.services.alert_service import critical_alert
+        await critical_alert(
+            f"Deposit sweep NEEDS REVIEW: intent={intent_id}\nReason: {reason}"
+        )
+    except Exception:
+        logger.warning("review alert failed for intent=%s", intent_id)
 
 
 async def _revert_to_completed(intent_id: str, reason: str) -> None:

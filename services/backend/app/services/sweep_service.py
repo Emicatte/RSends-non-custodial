@@ -895,11 +895,52 @@ async def execute_single_sweep(
         raw_tx = await signer.sign_transaction(tx)
         raw_hex = "0x" + raw_tx.hex()
 
-        # ── Send transaction (primary only — never duplicate) ──
-        result_raw = await rpc.send_raw_transaction(raw_hex)
+        # ── Broadcast-idempotency guard: claim BEFORE sending (crash-safe) ──
+        # Persists intent (nonce + key) atomically so a crash between broadcast
+        # and DB commit cannot cause a double broadcast on retry. The Redis lock
+        # above only guards concurrent entry; this survives a process restart.
+        from app.services.tx_intent_guard import (
+            claim_or_reconcile,
+            mark_confirmed,
+            reconcile_via_rpc,
+        )
 
-        # If send_raw_transaction didn't raise, result_raw is the tx hash
-        tx_hash = result_raw if isinstance(result_raw, str) else ""
+        _intent_key = f"standalone_sweep:{sweep_id}"
+        _decision, _verdict = await claim_or_reconcile(
+            _intent_key,
+            site="standalone_sweep",
+            chain_id=chain_id,
+            from_addr=source,
+            nonce=nonce,
+            reconcile_fn=lambda row: reconcile_via_rpc(rpc, source, row),
+        )
+
+        # ── Send transaction (primary only — never duplicate) ──
+        if _decision == "already":
+            if (_verdict or {}).get("status") != "completed":
+                # A concurrent attempt holds the broadcast claim and is still
+                # in-flight — back off WITHOUT broadcasting (never double-send).
+                logger.warning(
+                    "[sweep] #%d broadcast claim held by another run — skipping",
+                    sweep_id,
+                )
+                await _release_lock(f"exec:{sweep_id}")
+                SWEEP_TOTAL.labels(status="skipped", chain_id=str(chain_id)).inc()
+                SWEEP_LATENCY.observe(_time.monotonic() - _t0)
+                return {"status": "in_progress", "tx_hash": ""}
+            # Crash/retry: a prior attempt already broadcast this sweep and the
+            # chain confirms it — NEVER re-broadcast, just reconcile state.
+            tx_hash = (_verdict or {}).get("tx_hash") or ""
+            logger.warning(
+                "[sweep] #%d idempotent skip: broadcast already done, "
+                "reconciled against chain (tx=%s)",
+                sweep_id, tx_hash[:16] if tx_hash else "?",
+            )
+        else:
+            result_raw = await rpc.send_raw_transaction(raw_hex)
+            # If send_raw_transaction didn't raise, result_raw is the tx hash
+            tx_hash = result_raw if isinstance(result_raw, str) else ""
+            await mark_confirmed(_intent_key, tx_hash)
 
         await _update_sweep(
             status=SweepStatus.completed,

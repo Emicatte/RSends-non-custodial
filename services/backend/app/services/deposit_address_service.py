@@ -25,6 +25,15 @@ from app.config import get_settings
 logger = logging.getLogger(__name__)
 
 
+def _normalize_hash(h) -> str:
+    """Return a 0x-prefixed lowercase hex string for a tx hash given as HexBytes
+    or str. (hexbytes.hex() drops the 0x prefix; reconcile/RPC need it.)"""
+    if hasattr(h, "to_0x_hex"):
+        return h.to_0x_hex()
+    s = h.hex() if hasattr(h, "hex") else str(h)
+    return s if s.startswith("0x") else "0x" + s
+
+
 # ═══════════════════════════════════════════════════════════════
 #  Keccak-256 helper
 # ═══════════════════════════════════════════════════════════════
@@ -215,6 +224,8 @@ async def sweep_deposit(
     currency: str = "ETH",
     chain: str = "BASE",
     amount: Optional[int] = None,
+    leg: str = "primary",
+    nonce: Optional[int] = None,
 ) -> Optional[str]:
     """
     Sweeppa i fondi da un deposit address verso il destination address.
@@ -373,22 +384,54 @@ async def sweep_deposit(
         }
 
         raw_signed = await km_signer.sign_transaction(gas_fund_tx)
-        try:
-            gas_tx_hash = await asyncio.to_thread(w3.eth.send_raw_transaction, raw_signed)
-            await asyncio.to_thread(w3.eth.wait_for_transaction_receipt, gas_tx_hash, timeout=120)
-        except Exception:
-            # Broadcast failed after the nonce was consumed → reconcile the Redis
-            # counter against the chain so the allocated nonce isn't left as a gap.
-            await nm.sync_from_chain()
-            raise
 
-        logger.info(
-            "Gas funded: hot_wallet=%s -> deposit=%s amount=%s wei tx=%s",
-            hot_wallet_addr, deposit_addr, gas_to_send, gas_tx_hash.hex(),
+        # ── Broadcast-idempotency guard: claim gas-fund BEFORE sending ──
+        # A crash between broadcast and DB commit must not re-fund gas on retry.
+        from app.services.tx_intent_guard import (
+            claim_or_reconcile,
+            mark_confirmed,
+            reconcile_via_web3,
         )
 
+        _gas_key = f"deposit_gasfund:{intent_id}"
+        _gas_decision, _ = await claim_or_reconcile(
+            _gas_key,
+            site="deposit_gasfund",
+            chain_id=chain_id,
+            from_addr=hot_wallet_addr,
+            nonce=hot_wallet_nonce,
+            reconcile_fn=lambda row: reconcile_via_web3(w3, hot_wallet_addr, row),
+        )
+
+        if _gas_decision == "already":
+            # Crash/retry: gas already funded on a prior run — never re-broadcast.
+            logger.warning(
+                "Gas funding idempotent skip for intent=%s (reconciled on-chain)",
+                intent_id,
+            )
+        else:
+            try:
+                gas_tx_hash = await asyncio.to_thread(w3.eth.send_raw_transaction, raw_signed)
+                await asyncio.to_thread(w3.eth.wait_for_transaction_receipt, gas_tx_hash, timeout=120)
+                await mark_confirmed(_gas_key, gas_tx_hash.hex())
+            except Exception:
+                # Broadcast failed after the nonce was consumed → reconcile the Redis
+                # counter against the chain so the allocated nonce isn't left as a gap.
+                await nm.sync_from_chain()
+                raise
+
+            logger.info(
+                "Gas funded: hot_wallet=%s -> deposit=%s amount=%s wei tx=%s",
+                hot_wallet_addr, deposit_addr, gas_to_send, gas_tx_hash.hex(),
+            )
+
     # ── Build sweep TX ───────────────────────────────────────
-    nonce = await asyncio.to_thread(w3.eth.get_transaction_count, deposit_addr)
+    # The explicit `nonce` param sequences ONLY this deposit-address sweep tx.
+    # The gas-fund above signs from the HOT wallet with its own NonceManager
+    # nonce (`hot_wallet_nonce`) — a different address/nonce space — and is
+    # never touched by this value.
+    if nonce is None:
+        nonce = await asyncio.to_thread(w3.eth.get_transaction_count, deposit_addr)
 
     if is_native:
         # Sweep native ETH: specific amount or full balance minus gas
@@ -427,12 +470,81 @@ async def sweep_deposit(
 
     # ── Sign & send ──────────────────────────────────────────
     signed_tx = deposit_account.sign_transaction(sweep_tx)
+    # Hash of the tx we are about to broadcast — known BEFORE the send, so it can
+    # be persisted on the claim for hash-aware reconcile. Each (re)try re-signs,
+    # so this is always THIS attempt's hash (fresh gas ⇒ fresh hash on RBF).
+    _signed_hash = _normalize_hash(signed_tx.hash)
+
+    # ── Broadcast-idempotency guard: claim main sweep BEFORE sending ──
+    # The reserved nonce + signed hash are persisted atomically; a crash between
+    # broadcast and the caller's PaymentIntent commit cannot cause a second sweep.
+    from app.services.tx_intent_guard import (
+        claim_or_reconcile,
+        mark_confirmed,
+        reconcile_via_web3,
+    )
+
+    _sweep_key = f"deposit_sweep:{intent_id}:{leg}"
+    _sweep_decision, _sweep_verdict = await claim_or_reconcile(
+        _sweep_key,
+        site="deposit_sweep",
+        chain_id=chain_id,
+        from_addr=deposit_addr,
+        nonce=nonce,
+        reconcile_fn=lambda row: reconcile_via_web3(w3, deposit_addr, row),
+        tx_hash=_signed_hash,
+    )
+
+    if _sweep_decision == "already":
+        # Crash/retry: prior attempt already (maybe) broadcast. NEVER re-broadcast.
+        # Return the real hash ONLY when reconciled as completed; for reverted /
+        # pending / needs_review return None so the orchestrator inspects the row
+        # state (get_intent_state) and decides (no settle on a non-success leg).
+        _v = _sweep_verdict or {}
+        if _v.get("status") == "completed":
+            _known = _v.get("tx_hash")
+            logger.warning(
+                "Sweep idempotent skip for intent=%s (reconciled completed, tx=%s)",
+                intent_id, (_known or "?")[:16],
+            )
+            return _known
+        logger.warning(
+            "Sweep not completed for intent=%s leg=%s (verdict=%s) — no broadcast",
+            intent_id, leg, _v.get("status"),
+        )
+        return None
+
     tx_hash = await asyncio.to_thread(w3.eth.send_raw_transaction, signed_tx.raw_transaction)
+    _bcast_hash = _normalize_hash(tx_hash)
+    await mark_confirmed(_sweep_key, _bcast_hash)
 
     sent_amount = amount if amount is not None else balance
     logger.info(
         "Sweep sent: intent=%s deposit=%s -> %s amount=%s %s tx=%s",
-        intent_id, deposit_addr, destination, sent_amount, currency, tx_hash.hex(),
+        intent_id, deposit_addr, destination, sent_amount, currency, _bcast_hash[:18],
     )
 
-    return tx_hash.hex()
+    return _bcast_hash
+
+
+async def read_deposit_nonce(intent_id: str, chain: str = "BASE") -> int:
+    """Read the next usable ('pending') nonce of a per-intent deposit address.
+
+    Used by the sweep orchestrator to sequence the merchant (N) and fee (N+1)
+    legs deterministically. Read-only; touches no state.
+    """
+    from web3 import Web3
+
+    settings = get_settings()
+    rpc_urls = {
+        "BASE": f"https://base-mainnet.g.alchemy.com/v2/{settings.alchemy_api_key}",
+        "ETH": f"https://eth-mainnet.g.alchemy.com/v2/{settings.alchemy_api_key}",
+        "ARBITRUM": f"https://arb-mainnet.g.alchemy.com/v2/{settings.alchemy_api_key}",
+    }
+    rpc_url = rpc_urls.get(chain.upper())
+    if not rpc_url:
+        raise ValueError(f"Chain '{chain}' non supportata per sweep. Supportate: {list(rpc_urls.keys())}")
+
+    w3 = Web3(Web3.HTTPProvider(rpc_url))
+    deposit_addr = Account.from_key(get_private_key_for_intent(intent_id)).address
+    return await asyncio.to_thread(w3.eth.get_transaction_count, deposit_addr, "pending")
