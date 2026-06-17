@@ -115,6 +115,7 @@ celery.conf.update(
         "app.tasks.webhook_tasks",
         "app.tasks.matching_tasks",
         "app.tasks.deletion_tasks",
+        "app.tasks.fee_recovery_tasks",
     ],
 )
 
@@ -191,6 +192,10 @@ celery.conf.beat_schedule = {
     "expire-pending-intents": {
         "task": "app.tasks.webhook_tasks.expire_pending_intents",
         "schedule": 60.0,  # every 60 seconds
+    },
+    "recover-pending-fees": {
+        "task": "app.tasks.fee_recovery_tasks.recover_pending_fees",
+        "schedule": 600.0,  # every 10 minutes — collect fees whose leg crashed
     },
     "run-scheduled-account-deletions": {
         # GDPR art. 17 hard-delete cron — scans users past their 30-day
