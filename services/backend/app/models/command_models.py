@@ -343,3 +343,57 @@ class CircuitBreakerState(Base):
         CheckConstraint("failure_count >= 0", name="ck_cb_failures_gte0"),
         CheckConstraint("success_count >= 0", name="ck_cb_successes_gte0"),
     )
+
+
+# ═══════════════════════════════════════════════════════════════
+#  TxIntent — idempotenza a livello di broadcast on-chain
+# ═══════════════════════════════════════════════════════════════
+#
+#  Chiude la finestra crash-after-broadcast-before-commit: l'intent
+#  (idempotency_key + nonce) viene persistito ATOMICAMENTE prima di
+#  trasmettere la TX. Su retry, se esiste già un intent in stato
+#  broadcasting/confirmed per la stessa chiave, NON si ri-trasmette —
+#  si riconcilia contro la chain. Il vincolo UNIQUE su idempotency_key
+#  fornisce il claim atomico che il lock Redis (solo entry concorrente)
+#  non può garantire.
+#
+#  Usato da: execute_single_sweep (standalone_sweep), sweep_deposit
+#  (deposit_gasfund / deposit_sweep). Additivo: nessun flusso esistente
+#  ne dipende per funzionare.
+
+class TxIntent(Base):
+    __tablename__ = "tx_intents"
+
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Chiave deterministica derivabile dagli stessi input su retry,
+    # es. "standalone_sweep:{sweep_id}", "deposit_sweep:{intent_id}".
+    idempotency_key = Column(String(128), nullable=False)
+    site = Column(String(32), nullable=False)
+    chain_id = Column(Integer, nullable=False)
+    from_address = Column(String(42), nullable=False)
+    # Nonce pre-broadcast: àncora di riconciliazione contro la chain.
+    nonce = Column(Integer, nullable=True)
+    status = Column(String(16), nullable=False, default="broadcasting")
+    tx_hash = Column(String(66), nullable=True)
+    raw_tx = Column(Text, nullable=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=True,
+    )
+
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_tx_intent_key"),
+        CheckConstraint(
+            "status IN ('broadcasting','confirmed','failed')",
+            name="ck_tx_intent_status",
+        ),
+        Index("ix_tx_intent_status", "status", "created_at"),
+    )
