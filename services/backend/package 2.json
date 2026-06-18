@@ -1,0 +1,11 @@
+{
+  "name": "@feerouter/backend",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "uvicorn app.main:app --reload",
+    "build": "echo \"no build step (Python service)\"",
+    "test": "pytest",
+    "lint": "ruff check . || true"
+  }
+}

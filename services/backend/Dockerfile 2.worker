@@ -1,0 +1,41 @@
+# ═══════════════════════════════════════════════════════════
+#  RPagos Backend — Celery Worker Dockerfile
+#
+#  Usage:
+#    docker build -f Dockerfile.worker -t rpagos-worker .
+#
+#  Queues (run separate containers per queue for isolation):
+#    sweep:     celery -A app.celery_app:celery worker -Q sweep     -c 8
+#    confirm:   celery -A app.celery_app:celery worker -Q confirm   -c 4
+#    notify:    celery -A app.celery_app:celery worker -Q notify    -c 2
+#    analytics: celery -A app.celery_app:celery worker -Q analytics -c 1
+#
+#  Beat scheduler (single instance):
+#    celery -A app.celery_app:celery beat --loglevel=info
+# ═══════════════════════════════════════════════════════════
+
+FROM python:3.11-slim AS base
+
+# Security: non-root user
+RUN groupadd -r rpagos && useradd -r -g rpagos -d /app rpagos
+
+WORKDIR /app
+
+# Install dependencies first (cached layer)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy app code
+COPY . .
+
+RUN chown -R rpagos:rpagos /app
+
+USER rpagos
+
+# Default: sweep worker with 8 concurrency
+# Override CMD in docker-compose per queue
+CMD ["celery", "-A", "app.celery_app:celery", "worker", \
+     "--loglevel=info", \
+     "-Q", "sweep,default", \
+     "-c", "8", \
+     "-n", "sweep@%h"]

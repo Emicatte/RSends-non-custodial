@@ -1,0 +1,19 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<DAC8_CARF xmlns="urn:eu:taxud:dac8:v1" xmlns:carf="urn:oecd:ties:carf:v1" version="1.0">
+  <MessageSpec>
+    <SendingCountry>IT</SendingCountry>
+    <ReceivingCountry>IT</ReceivingCountry>
+    <MessageType>DAC8</MessageType>
+    <Warning></Warning>
+    <MessageRefId>RSends-DAC8-2025-20260403132841</MessageRefId>
+    <ReportingPeriod>2025-12-31</ReportingPeriod>
+    <Timestamp>2026-04-03T13:28:41.466057+00:00</Timestamp>
+  </MessageSpec>
+  <ReportingFI>
+    <Name>RSends S.r.l.</Name>
+    <TIN issuedBy="IT">IT12345678901</TIN>
+    <Address>
+      <CountryCode>IT</CountryCode>
+    </Address>
+  </ReportingFI>
+</DAC8_CARF>

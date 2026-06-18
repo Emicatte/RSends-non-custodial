@@ -1,0 +1,1202 @@
+[
+  {
+    "index": 0,
+    "address": "0x2b915f52f5DeE031190AF9e1528EacB681D72907",
+    "percent_bps": 34,
+    "expected_amount_wei": 338300000000000
+  },
+  {
+    "index": 1,
+    "address": "0xC757F5e1Ad95B3F1D433e66a52453B4994679BC6",
+    "percent_bps": 68,
+    "expected_amount_wei": 676600000000000
+  },
+  {
+    "index": 2,
+    "address": "0x60314a99D54015595bB0092eE426bc510778016a",
+    "percent_bps": 62,
+    "expected_amount_wei": 616900000000000
+  },
+  {
+    "index": 3,
+    "address": "0x10a858F70BA7924cDDddF85d2D01c747B621106c",
+    "percent_bps": 36,
+    "expected_amount_wei": 358200000000000
+  },
+  {
+    "index": 4,
+    "address": "0x1D71320B0384C25dC710EB9a8d1E3b2bBaa4e8cB",
+    "percent_bps": 44,
+    "expected_amount_wei": 437800000000000
+  },
+  {
+    "index": 5,
+    "address": "0xc1519051ecea40dA5019bD01f7976570deD045A6",
+    "percent_bps": 26,
+    "expected_amount_wei": 258700000000000
+  },
+  {
+    "index": 6,
+    "address": "0xe136EB838e97FF472d91A89Ace0B6e7A3bf14752",
+    "percent_bps": 53,
+    "expected_amount_wei": 527350000000000
+  },
+  {
+    "index": 7,
+    "address": "0x23EDb97467b9caD7490A949CBA1bd084EefC0Eb9",
+    "percent_bps": 95,
+    "expected_amount_wei": 945250000000000
+  },
+  {
+    "index": 8,
+    "address": "0x40447347F084F45282Fe2Aa2F889f98fF27d527A",
+    "percent_bps": 12,
+    "expected_amount_wei": 119400000000000
+  },
+  {
+    "index": 9,
+    "address": "0x0Bd96719FE79889a9096A275FD07dC4D1f4055A9",
+    "percent_bps": 46,
+    "expected_amount_wei": 457700000000000
+  },
+  {
+    "index": 10,
+    "address": "0xed282d6DE390b681Dc88f8CfBF1e272186Ba8e07",
+    "percent_bps": 15,
+    "expected_amount_wei": 149250000000000
+  },
+  {
+    "index": 11,
+    "address": "0xE54287f3Da15220B49CEbA941559e2cdc58F8B45",
+    "percent_bps": 41,
+    "expected_amount_wei": 407950000000000
+  },
+  {
+    "index": 12,
+    "address": "0x23D8a8Ab6cB732A7434974Cc9F999364b25c24BB",
+    "percent_bps": 71,
+    "expected_amount_wei": 706450000000000
+  },
+  {
+    "index": 13,
+    "address": "0xc00A321CF98E79C40558Ea4e5eFb473313988628",
+    "percent_bps": 79,
+    "expected_amount_wei": 786050000000000
+  },
+  {
+    "index": 14,
+    "address": "0x28C48bcaf85ba9e5182F9A863076fA403d534273",
+    "percent_bps": 75,
+    "expected_amount_wei": 746250000000000
+  },
+  {
+    "index": 15,
+    "address": "0x15d477C65482D67b90c9F173533fEe1f8C1D4d6b",
+    "percent_bps": 93,
+    "expected_amount_wei": 925350000000000
+  },
+  {
+    "index": 16,
+    "address": "0x45f401bf7eD39DD1cF621a706dBeD6Ec093b0A0e",
+    "percent_bps": 2,
+    "expected_amount_wei": 19900000000000
+  },
+  {
+    "index": 17,
+    "address": "0xDA7a85713A157Cf66F373bB6472eCD9094314d54",
+    "percent_bps": 93,
+    "expected_amount_wei": 925350000000000
+  },
+  {
+    "index": 18,
+    "address": "0xfc087BF409Cf23603979623C419B645d458d9F4E",
+    "percent_bps": 67,
+    "expected_amount_wei": 666650000000000
+  },
+  {
+    "index": 19,
+    "address": "0xC16D63730198383657D6c25b3AffE2eFb63EBE50",
+    "percent_bps": 80,
+    "expected_amount_wei": 796000000000000
+  },
+  {
+    "index": 20,
+    "address": "0xB2e8BdC21963ffa732c63452B0C528d08781Ce2C",
+    "percent_bps": 82,
+    "expected_amount_wei": 815900000000000
+  },
+  {
+    "index": 21,
+    "address": "0xDBfF6423676F39eDa0Fa209adf11E348cB9D9006",
+    "percent_bps": 55,
+    "expected_amount_wei": 547250000000000
+  },
+  {
+    "index": 22,
+    "address": "0xEaf0b55Ff2b736725206202946ebB3E4Fd6c0c37",
+    "percent_bps": 53,
+    "expected_amount_wei": 527350000000000
+  },
+  {
+    "index": 23,
+    "address": "0xcEd7f9eB0EE673568745E6788Be91298a2aC5CcA",
+    "percent_bps": 89,
+    "expected_amount_wei": 885550000000000
+  },
+  {
+    "index": 24,
+    "address": "0x6b3ACABC17c6410Fb7ac89Df452A926146556778",
+    "percent_bps": 75,
+    "expected_amount_wei": 746250000000000
+  },
+  {
+    "index": 25,
+    "address": "0x3925e636F8802AE126092c098cBDe5e3ED393Aa6",
+    "percent_bps": 38,
+    "expected_amount_wei": 378100000000000
+  },
+  {
+    "index": 26,
+    "address": "0x7006bF448444f323760Bb7e8eD66aC15Ca78878B",
+    "percent_bps": 60,
+    "expected_amount_wei": 597000000000000
+  },
+  {
+    "index": 27,
+    "address": "0x33cBB816B0fe3BA2733f569dCc423FD5e6851738",
+    "percent_bps": 4,
+    "expected_amount_wei": 39800000000000
+  },
+  {
+    "index": 28,
+    "address": "0x1A0B2085934817529E3c27Ff831defa39999BCF9",
+    "percent_bps": 51,
+    "expected_amount_wei": 507450000000000
+  },
+  {
+    "index": 29,
+    "address": "0xcA88700a9350894BEC8198946bA04d5a4713BAdc",
+    "percent_bps": 40,
+    "expected_amount_wei": 398000000000000
+  },
+  {
+    "index": 30,
+    "address": "0x3E0202cd7CE1d51F8700AE228cbC8c10aEaBAF1A",
+    "percent_bps": 80,
+    "expected_amount_wei": 796000000000000
+  },
+  {
+    "index": 31,
+    "address": "0x50A5D9c47CEB49765A0fA7C89aB97a95087Fb1eb",
+    "percent_bps": 95,
+    "expected_amount_wei": 945250000000000
+  },
+  {
+    "index": 32,
+    "address": "0x4f5441575599385A14A3d0B07F441E513113174A",
+    "percent_bps": 65,
+    "expected_amount_wei": 646750000000000
+  },
+  {
+    "index": 33,
+    "address": "0xc3c62AC00B02ea96f72647D32c62f2e29425D66b",
+    "percent_bps": 28,
+    "expected_amount_wei": 278600000000000
+  },
+  {
+    "index": 34,
+    "address": "0x20d972F0bfea984393f7149f088db273941B6474",
+    "percent_bps": 81,
+    "expected_amount_wei": 805950000000000
+  },
+  {
+    "index": 35,
+    "address": "0xC20d0939e8fE59BE9a0E34128FA5104c3Aa04fE1",
+    "percent_bps": 85,
+    "expected_amount_wei": 845750000000000
+  },
+  {
+    "index": 36,
+    "address": "0xd6af998D5E147937169E04392f545242CDed1330",
+    "percent_bps": 59,
+    "expected_amount_wei": 587050000000000
+  },
+  {
+    "index": 37,
+    "address": "0xA246B2B2c06a642BA6C921F51C9e751eE0eE0d06",
+    "percent_bps": 26,
+    "expected_amount_wei": 258700000000000
+  },
+  {
+    "index": 38,
+    "address": "0x9c6700BF769e4e531c679a65628Be911Ae286976",
+    "percent_bps": 61,
+    "expected_amount_wei": 606950000000000
+  },
+  {
+    "index": 39,
+    "address": "0xFA5Ec3E57731B77A66175AE86Ac4fCCC94867849",
+    "percent_bps": 17,
+    "expected_amount_wei": 169150000000000
+  },
+  {
+    "index": 40,
+    "address": "0x8C25999C0Ca1ab7a98697f9B5885fC25c6707c81",
+    "percent_bps": 1,
+    "expected_amount_wei": 9950000000000
+  },
+  {
+    "index": 41,
+    "address": "0xf57C9ebbD7515d22051cc665E05962c8E39B502A",
+    "percent_bps": 52,
+    "expected_amount_wei": 517400000000000
+  },
+  {
+    "index": 42,
+    "address": "0x003C0407c1cE6d335e1DCeA92e6CA867201510b0",
+    "percent_bps": 31,
+    "expected_amount_wei": 308450000000000
+  },
+  {
+    "index": 43,
+    "address": "0x89Fb11e101d9a6b56C7c3F1D5bD0659143a20B87",
+    "percent_bps": 18,
+    "expected_amount_wei": 179100000000000
+  },
+  {
+    "index": 44,
+    "address": "0xbed722E4c98053F7bC9ec7a1Af8Ecd73F2032Ea7",
+    "percent_bps": 35,
+    "expected_amount_wei": 348250000000000
+  },
+  {
+    "index": 45,
+    "address": "0xc7A88523ee48D5d295a6Bc21C8F367c59a4af6ee",
+    "percent_bps": 1,
+    "expected_amount_wei": 9950000000000
+  },
+  {
+    "index": 46,
+    "address": "0x14f472f878da4E249966141d171ad8a65FAC3C3d",
+    "percent_bps": 75,
+    "expected_amount_wei": 746250000000000
+  },
+  {
+    "index": 47,
+    "address": "0xB55560e43D60FE985f74da2a525f3c80f40C869E",
+    "percent_bps": 66,
+    "expected_amount_wei": 656700000000000
+  },
+  {
+    "index": 48,
+    "address": "0xba31ceF4B5BE81435297C729eAe0D01F8a86857D",
+    "percent_bps": 93,
+    "expected_amount_wei": 925350000000000
+  },
+  {
+    "index": 49,
+    "address": "0xBB56F30dB8b4F176d5763dF53B07659a773E8d2e",
+    "percent_bps": 20,
+    "expected_amount_wei": 199000000000000
+  },
+  {
+    "index": 50,
+    "address": "0xA2fa80E9Ca6c5e8D225073f072e56055F1EE2f7e",
+    "percent_bps": 71,
+    "expected_amount_wei": 706450000000000
+  },
+  {
+    "index": 51,
+    "address": "0xda7503168FdCd07F89e34851251cc915592aAa10",
+    "percent_bps": 7,
+    "expected_amount_wei": 69650000000000
+  },
+  {
+    "index": 52,
+    "address": "0x21663d220F83F370a0b688aBF15025E63B4413A8",
+    "percent_bps": 22,
+    "expected_amount_wei": 218900000000000
+  },
+  {
+    "index": 53,
+    "address": "0x69e18e1232658F020888D636478ea4D9FC95bB8b",
+    "percent_bps": 1,
+    "expected_amount_wei": 9950000000000
+  },
+  {
+    "index": 54,
+    "address": "0xd653b9D82544F828248dF3B2aBaEE650f5b66cB8",
+    "percent_bps": 13,
+    "expected_amount_wei": 129350000000000
+  },
+  {
+    "index": 55,
+    "address": "0xB0B01b377E3b698b0CEeB8f8D3253d895b31D2bA",
+    "percent_bps": 43,
+    "expected_amount_wei": 427850000000000
+  },
+  {
+    "index": 56,
+    "address": "0x59043DD6e7D71d3329121b720EE2Ae42a4DB9c91",
+    "percent_bps": 73,
+    "expected_amount_wei": 726350000000000
+  },
+  {
+    "index": 57,
+    "address": "0xcBda54f2bdE56B6172d89C6f8e389AB7ed50Cd9f",
+    "percent_bps": 82,
+    "expected_amount_wei": 815900000000000
+  },
+  {
+    "index": 58,
+    "address": "0xC97eD886F4d0586aB653DFec4806EA01d04FA061",
+    "percent_bps": 58,
+    "expected_amount_wei": 577100000000000
+  },
+  {
+    "index": 59,
+    "address": "0x02582657Af0d747D055926DC92174Aa51Ac39dD4",
+    "percent_bps": 36,
+    "expected_amount_wei": 358200000000000
+  },
+  {
+    "index": 60,
+    "address": "0x1E29Bc4DAEa5Ea2620817FDd373B8a6A09F2bF2a",
+    "percent_bps": 21,
+    "expected_amount_wei": 208950000000000
+  },
+  {
+    "index": 61,
+    "address": "0xf2665dbA705B5660533111F9D9ca72f3472E1a96",
+    "percent_bps": 75,
+    "expected_amount_wei": 746250000000000
+  },
+  {
+    "index": 62,
+    "address": "0xa8C1aaa7E7990B43Ef81d38844347bf1Dc3B7d89",
+    "percent_bps": 59,
+    "expected_amount_wei": 587050000000000
+  },
+  {
+    "index": 63,
+    "address": "0x180127EFd1f42c38e013516B73F9C4cd811830B8",
+    "percent_bps": 36,
+    "expected_amount_wei": 358200000000000
+  },
+  {
+    "index": 64,
+    "address": "0xA6c001571e90d32072312a638056cA3E15D1ab4D",
+    "percent_bps": 69,
+    "expected_amount_wei": 686550000000000
+  },
+  {
+    "index": 65,
+    "address": "0x31f38B815D8D6E0290cb9DeE5a34e371E8EBf726",
+    "percent_bps": 76,
+    "expected_amount_wei": 756200000000000
+  },
+  {
+    "index": 66,
+    "address": "0x8b8c9D3Fa0aBc877dDbDC759D4f8Ee39de6E5A63",
+    "percent_bps": 45,
+    "expected_amount_wei": 447750000000000
+  },
+  {
+    "index": 67,
+    "address": "0xD9ce420BF594F8bE18B306cB1893C2a6c929724c",
+    "percent_bps": 12,
+    "expected_amount_wei": 119400000000000
+  },
+  {
+    "index": 68,
+    "address": "0xA972Ad975Cf170fb3254E4Aab0A171e206e6E666",
+    "percent_bps": 18,
+    "expected_amount_wei": 179100000000000
+  },
+  {
+    "index": 69,
+    "address": "0xb122A7878854f90fff15771e7306f0f747615C48",
+    "percent_bps": 49,
+    "expected_amount_wei": 487550000000000
+  },
+  {
+    "index": 70,
+    "address": "0x8126821d9C6bE955063eeFe788B858eF7BAFF16D",
+    "percent_bps": 27,
+    "expected_amount_wei": 268650000000000
+  },
+  {
+    "index": 71,
+    "address": "0x99B8346D7f2A8A4fB12d370AB2F4e8fFB02F4687",
+    "percent_bps": 41,
+    "expected_amount_wei": 407950000000000
+  },
+  {
+    "index": 72,
+    "address": "0xd06cB19A1f808d2F05E28ce586CC7B89fAE18ee6",
+    "percent_bps": 16,
+    "expected_amount_wei": 159200000000000
+  },
+  {
+    "index": 73,
+    "address": "0x139e825fA96B6853c8C7aB3cF3Cd438271ba5aa7",
+    "percent_bps": 63,
+    "expected_amount_wei": 626850000000000
+  },
+  {
+    "index": 74,
+    "address": "0xDa7Fbd52eE5cDD1fa045f9B73A4FaB252c846977",
+    "percent_bps": 53,
+    "expected_amount_wei": 527350000000000
+  },
+  {
+    "index": 75,
+    "address": "0x355a3bE43EF2bfe0332F1F976D89233a6f469B77",
+    "percent_bps": 78,
+    "expected_amount_wei": 776100000000000
+  },
+  {
+    "index": 76,
+    "address": "0x747DCb030D18b3608AB6A7704B2aEf4B3649C487",
+    "percent_bps": 78,
+    "expected_amount_wei": 776100000000000
+  },
+  {
+    "index": 77,
+    "address": "0x6297eCdD2F70B41e3AdFc4E32C6826D91403f28e",
+    "percent_bps": 74,
+    "expected_amount_wei": 736300000000000
+  },
+  {
+    "index": 78,
+    "address": "0xF28e12e8AB32973E872230eB0044F1BF72F6F9B3",
+    "percent_bps": 97,
+    "expected_amount_wei": 965150000000000
+  },
+  {
+    "index": 79,
+    "address": "0x04dFEc6486edf74593de9f521E9B381B2F21A102",
+    "percent_bps": 5,
+    "expected_amount_wei": 49750000000000
+  },
+  {
+    "index": 80,
+    "address": "0xfb6f22Edb33eEccb460F8e782d3D2Be99E63d059",
+    "percent_bps": 19,
+    "expected_amount_wei": 189050000000000
+  },
+  {
+    "index": 81,
+    "address": "0x8279f878289DC2472c26bb3E36AA29D90aedcAaF",
+    "percent_bps": 16,
+    "expected_amount_wei": 159200000000000
+  },
+  {
+    "index": 82,
+    "address": "0x771a7D791ecC9bdaA70825c378d9a30bB9D3E069",
+    "percent_bps": 96,
+    "expected_amount_wei": 955200000000000
+  },
+  {
+    "index": 83,
+    "address": "0xA06c6E015e821c73F98163B2C2fbb4b43df5D292",
+    "percent_bps": 37,
+    "expected_amount_wei": 368150000000000
+  },
+  {
+    "index": 84,
+    "address": "0x33a885fBb053704B2B989d32D943068dEc9e2A5a",
+    "percent_bps": 10,
+    "expected_amount_wei": 99500000000000
+  },
+  {
+    "index": 85,
+    "address": "0x2d645a5fFeB0CaaCa105F68b4C437cBEd3DA6989",
+    "percent_bps": 33,
+    "expected_amount_wei": 328350000000000
+  },
+  {
+    "index": 86,
+    "address": "0x9C56C450d4FB81DD7DF676b0Fb9324288EfAF6cD",
+    "percent_bps": 38,
+    "expected_amount_wei": 378100000000000
+  },
+  {
+    "index": 87,
+    "address": "0xeA278D6B8B8154F41E746735AC635D0ca77e8AfC",
+    "percent_bps": 92,
+    "expected_amount_wei": 915400000000000
+  },
+  {
+    "index": 88,
+    "address": "0x6cD3D965d2CD3aECcDF7247b6a488b5881ae8A76",
+    "percent_bps": 76,
+    "expected_amount_wei": 756200000000000
+  },
+  {
+    "index": 89,
+    "address": "0x49308E06442Ab3665d4aD66227Cbf526F474c535",
+    "percent_bps": 4,
+    "expected_amount_wei": 39800000000000
+  },
+  {
+    "index": 90,
+    "address": "0x20d728251C30C45880a85B697a43B9CCdd5711Db",
+    "percent_bps": 43,
+    "expected_amount_wei": 427850000000000
+  },
+  {
+    "index": 91,
+    "address": "0x7a0eE8D70a81d8DBB0A57987aF06b96dB5dB22C2",
+    "percent_bps": 83,
+    "expected_amount_wei": 825850000000000
+  },
+  {
+    "index": 92,
+    "address": "0xE7D24F195F5720F57b6Fa3c71fd79BdA4e32A8cd",
+    "percent_bps": 48,
+    "expected_amount_wei": 477600000000000
+  },
+  {
+    "index": 93,
+    "address": "0xe343F2bEaf6FdcAb30e5f409f52c4cd67B52bcb2",
+    "percent_bps": 23,
+    "expected_amount_wei": 228850000000000
+  },
+  {
+    "index": 94,
+    "address": "0xc55843155E9e1C1e6257cB8D93DD94Fc112e608A",
+    "percent_bps": 45,
+    "expected_amount_wei": 447750000000000
+  },
+  {
+    "index": 95,
+    "address": "0x0C00EFDCc5ee6eB480CA8de0Fe34EdB4f49f74aD",
+    "percent_bps": 30,
+    "expected_amount_wei": 298500000000000
+  },
+  {
+    "index": 96,
+    "address": "0xcFE689b0BD42a54121371b8d89a925D50b402492",
+    "percent_bps": 26,
+    "expected_amount_wei": 258700000000000
+  },
+  {
+    "index": 97,
+    "address": "0xF801f308F2Cdf0aFF4d91Bd4952AD30F12c3389b",
+    "percent_bps": 29,
+    "expected_amount_wei": 288550000000000
+  },
+  {
+    "index": 98,
+    "address": "0x83F87dD67aF1b1C56d6e3731a524BCf7Ea102F3b",
+    "percent_bps": 83,
+    "expected_amount_wei": 825850000000000
+  },
+  {
+    "index": 99,
+    "address": "0x88415CDC2d8DFAEdd5976fC5ab39613235D719fb",
+    "percent_bps": 4,
+    "expected_amount_wei": 39800000000000
+  },
+  {
+    "index": 100,
+    "address": "0x8Fbfe88FEaFc9724D14465cf680B1494dC04B6Fc",
+    "percent_bps": 26,
+    "expected_amount_wei": 258700000000000
+  },
+  {
+    "index": 101,
+    "address": "0x55f04DCC070e27b080447B885b99dcd9090deA57",
+    "percent_bps": 94,
+    "expected_amount_wei": 935300000000000
+  },
+  {
+    "index": 102,
+    "address": "0xB012D004FAC948A7Be7bb14fB026B78771D54F9D",
+    "percent_bps": 82,
+    "expected_amount_wei": 815900000000000
+  },
+  {
+    "index": 103,
+    "address": "0x5e9985E5B7AA94307f5F4EBdb2180E3112ca786a",
+    "percent_bps": 13,
+    "expected_amount_wei": 129350000000000
+  },
+  {
+    "index": 104,
+    "address": "0x6277f0C1868614F312A1d72d0BfB2865721F4872",
+    "percent_bps": 95,
+    "expected_amount_wei": 945250000000000
+  },
+  {
+    "index": 105,
+    "address": "0x0551b40090e6A4EA21CC7851acaeDf29D99AFE61",
+    "percent_bps": 52,
+    "expected_amount_wei": 517400000000000
+  },
+  {
+    "index": 106,
+    "address": "0x0e3B4A1283A920d827e49F4529764583f35e8880",
+    "percent_bps": 25,
+    "expected_amount_wei": 248750000000000
+  },
+  {
+    "index": 107,
+    "address": "0x2c67B5E0Ab59D038dbB04b34eb757988b233E823",
+    "percent_bps": 54,
+    "expected_amount_wei": 537300000000000
+  },
+  {
+    "index": 108,
+    "address": "0x33BCc8393eEF4298Ae3d57C2928743393F24DB8e",
+    "percent_bps": 61,
+    "expected_amount_wei": 606950000000000
+  },
+  {
+    "index": 109,
+    "address": "0x3918a0B7AA1bfbe198601064D0746AEB5AF8d89a",
+    "percent_bps": 1,
+    "expected_amount_wei": 9950000000000
+  },
+  {
+    "index": 110,
+    "address": "0x84a0cFff24094c05cDa755d45beB64Fc787b23D1",
+    "percent_bps": 7,
+    "expected_amount_wei": 69650000000000
+  },
+  {
+    "index": 111,
+    "address": "0x57B0322feb5b232e4e539E20712F2E88FDF5CdB8",
+    "percent_bps": 18,
+    "expected_amount_wei": 179100000000000
+  },
+  {
+    "index": 112,
+    "address": "0xfE224451444b235Fd156bAb3938852a32c1edF11",
+    "percent_bps": 71,
+    "expected_amount_wei": 706450000000000
+  },
+  {
+    "index": 113,
+    "address": "0x9e75C6BeF8B7F1D34d0eEcFd159784679d52FFfc",
+    "percent_bps": 87,
+    "expected_amount_wei": 865650000000000
+  },
+  {
+    "index": 114,
+    "address": "0xa3599BD1368CD86288ef0a0976413B94AACE453e",
+    "percent_bps": 46,
+    "expected_amount_wei": 457700000000000
+  },
+  {
+    "index": 115,
+    "address": "0x42B9E4e3467db588DCb75e535e6D491A5eeD83cC",
+    "percent_bps": 36,
+    "expected_amount_wei": 358200000000000
+  },
+  {
+    "index": 116,
+    "address": "0x8A28fe5aba36c4F6140De5FaB22492f702f95e47",
+    "percent_bps": 91,
+    "expected_amount_wei": 905450000000000
+  },
+  {
+    "index": 117,
+    "address": "0x5f2fc797083c51AB4DA4D1f64B886EC81E4fc5AE",
+    "percent_bps": 48,
+    "expected_amount_wei": 477600000000000
+  },
+  {
+    "index": 118,
+    "address": "0x775b3DE31CAb23F0716c2035a1E6d60c5D176b0b",
+    "percent_bps": 68,
+    "expected_amount_wei": 676600000000000
+  },
+  {
+    "index": 119,
+    "address": "0x8f3F00171fcFa49E95dD9cB47856564090E12791",
+    "percent_bps": 23,
+    "expected_amount_wei": 228850000000000
+  },
+  {
+    "index": 120,
+    "address": "0x47daa425989813874e40b183d1F364Be5AA7512C",
+    "percent_bps": 71,
+    "expected_amount_wei": 706450000000000
+  },
+  {
+    "index": 121,
+    "address": "0xbCfA79411A88C7Bb76C8Aa2aA91B205C1699b282",
+    "percent_bps": 31,
+    "expected_amount_wei": 308450000000000
+  },
+  {
+    "index": 122,
+    "address": "0x260c98294D8A18525C4088F56d4891e31a543c87",
+    "percent_bps": 16,
+    "expected_amount_wei": 159200000000000
+  },
+  {
+    "index": 123,
+    "address": "0xd797229B80225bD7Fa0Ee52A9d498b261712ebb7",
+    "percent_bps": 34,
+    "expected_amount_wei": 338300000000000
+  },
+  {
+    "index": 124,
+    "address": "0xC1dfe05A2bd9802074c9930C05e95D5C727B1dAC",
+    "percent_bps": 40,
+    "expected_amount_wei": 398000000000000
+  },
+  {
+    "index": 125,
+    "address": "0xEF0ec9f02C4463a0898526F9A749d82019E19742",
+    "percent_bps": 60,
+    "expected_amount_wei": 597000000000000
+  },
+  {
+    "index": 126,
+    "address": "0xF270F673E6426432C234Bd4c2bf85A9931a234a2",
+    "percent_bps": 86,
+    "expected_amount_wei": 855700000000000
+  },
+  {
+    "index": 127,
+    "address": "0x4311536447aA6577004e6473A20C029cB9837d34",
+    "percent_bps": 27,
+    "expected_amount_wei": 268650000000000
+  },
+  {
+    "index": 128,
+    "address": "0x56B12532624EB5C95FC96374AA45F35BFd764e1b",
+    "percent_bps": 91,
+    "expected_amount_wei": 905450000000000
+  },
+  {
+    "index": 129,
+    "address": "0x6E31FF2Cf513f2bdb8BcbE7e03BE89b5B27Ff0b5",
+    "percent_bps": 35,
+    "expected_amount_wei": 348250000000000
+  },
+  {
+    "index": 130,
+    "address": "0x1c184D2e6291b678Ac049d93Fe9C4a5bf4193906",
+    "percent_bps": 65,
+    "expected_amount_wei": 646750000000000
+  },
+  {
+    "index": 131,
+    "address": "0x0dd928DD05A69C12dEFD9e4121eAD6746E69B20E",
+    "percent_bps": 79,
+    "expected_amount_wei": 786050000000000
+  },
+  {
+    "index": 132,
+    "address": "0x5D7ffbB5dA060a3FB470AA50DA0EF95abc9F9027",
+    "percent_bps": 72,
+    "expected_amount_wei": 716400000000000
+  },
+  {
+    "index": 133,
+    "address": "0x5209588AA75Df0CfB6Ad9D6630cad76af689FA91",
+    "percent_bps": 85,
+    "expected_amount_wei": 845750000000000
+  },
+  {
+    "index": 134,
+    "address": "0x494F7dA326d8Df0a809c4b02C3ccfdc19D171c19",
+    "percent_bps": 30,
+    "expected_amount_wei": 298500000000000
+  },
+  {
+    "index": 135,
+    "address": "0xC05aE5a14A1546Cf215bA94aCb60A61f334B79F0",
+    "percent_bps": 91,
+    "expected_amount_wei": 905450000000000
+  },
+  {
+    "index": 136,
+    "address": "0x4Db766176bC45aeca612a8C363ab000B6AA2d3Ae",
+    "percent_bps": 44,
+    "expected_amount_wei": 437800000000000
+  },
+  {
+    "index": 137,
+    "address": "0xB64E43bea7a1Dd772F119565DBA5334A30f03B4B",
+    "percent_bps": 29,
+    "expected_amount_wei": 288550000000000
+  },
+  {
+    "index": 138,
+    "address": "0xf4271a38F39A3bfA7f35DF08a9fD694961977DFC",
+    "percent_bps": 9,
+    "expected_amount_wei": 89550000000000
+  },
+  {
+    "index": 139,
+    "address": "0x19246f3d7CDc12000D1705d20D2c003c3B5617B0",
+    "percent_bps": 49,
+    "expected_amount_wei": 487550000000000
+  },
+  {
+    "index": 140,
+    "address": "0x897A329Db605263F9F5F6fEB8F1B6610DE7a1f06",
+    "percent_bps": 42,
+    "expected_amount_wei": 417900000000000
+  },
+  {
+    "index": 141,
+    "address": "0x004d3c4b0e793704EeF8AE5E036CE3391c95bb71",
+    "percent_bps": 91,
+    "expected_amount_wei": 905450000000000
+  },
+  {
+    "index": 142,
+    "address": "0x0b6B4B9940A9eF9D25C4EE8F6c9b1d5143661Ac9",
+    "percent_bps": 42,
+    "expected_amount_wei": 417900000000000
+  },
+  {
+    "index": 143,
+    "address": "0xdBb6ECFAfE0CeaC467348b7C5db808519938eD85",
+    "percent_bps": 87,
+    "expected_amount_wei": 865650000000000
+  },
+  {
+    "index": 144,
+    "address": "0xeFC99073Ed7aa05C46AA8997D101ad37b4652416",
+    "percent_bps": 94,
+    "expected_amount_wei": 935300000000000
+  },
+  {
+    "index": 145,
+    "address": "0xFCD619C9ffe8d376C9715ed8164865b1ef9021e1",
+    "percent_bps": 76,
+    "expected_amount_wei": 756200000000000
+  },
+  {
+    "index": 146,
+    "address": "0xeBC4E75546FF2Bcb536ac460bdB8b4BAC44284FC",
+    "percent_bps": 90,
+    "expected_amount_wei": 895500000000000
+  },
+  {
+    "index": 147,
+    "address": "0xfE4192F4653998285333818aAdd5EAD05Ee522e5",
+    "percent_bps": 21,
+    "expected_amount_wei": 208950000000000
+  },
+  {
+    "index": 148,
+    "address": "0xdbF3f16b34c9D771DCEe71386fC3548e41e40e6B",
+    "percent_bps": 19,
+    "expected_amount_wei": 189050000000000
+  },
+  {
+    "index": 149,
+    "address": "0x75Ea012d5076042072C33021b31f8c2FC8Cf01db",
+    "percent_bps": 80,
+    "expected_amount_wei": 796000000000000
+  },
+  {
+    "index": 150,
+    "address": "0x48F20430Fc90b14f5388E58A14AA58e9B06Fcc69",
+    "percent_bps": 88,
+    "expected_amount_wei": 875600000000000
+  },
+  {
+    "index": 151,
+    "address": "0x4df0Ef1D3e0808ebF1d1e4457a68BC4534BBFCE5",
+    "percent_bps": 59,
+    "expected_amount_wei": 587050000000000
+  },
+  {
+    "index": 152,
+    "address": "0xb9E81f3f131127a78209Bf94CCF910FD2c6A0834",
+    "percent_bps": 48,
+    "expected_amount_wei": 477600000000000
+  },
+  {
+    "index": 153,
+    "address": "0x53551925E00E1678Ddf1CfEF227514a2974580b8",
+    "percent_bps": 38,
+    "expected_amount_wei": 378100000000000
+  },
+  {
+    "index": 154,
+    "address": "0xcaB490dd2E49BCa13c00F20c49d8EB8c37139e21",
+    "percent_bps": 1,
+    "expected_amount_wei": 9950000000000
+  },
+  {
+    "index": 155,
+    "address": "0x9c01139Eddad731e4bB035B296B8ec3D3Eba76e6",
+    "percent_bps": 72,
+    "expected_amount_wei": 716400000000000
+  },
+  {
+    "index": 156,
+    "address": "0x9a00bCd735F6ccEF4237e5cAc3deb27cb709f2fA",
+    "percent_bps": 20,
+    "expected_amount_wei": 199000000000000
+  },
+  {
+    "index": 157,
+    "address": "0x87FdA43a741135CA720fA4fA7d7Fda978d6089a4",
+    "percent_bps": 71,
+    "expected_amount_wei": 706450000000000
+  },
+  {
+    "index": 158,
+    "address": "0x0aa929F813494c20d88399d082dCC0B9F316f7c3",
+    "percent_bps": 53,
+    "expected_amount_wei": 527350000000000
+  },
+  {
+    "index": 159,
+    "address": "0x4Cc524C119D6f31a0441Fea2f1e39f4120B46416",
+    "percent_bps": 22,
+    "expected_amount_wei": 218900000000000
+  },
+  {
+    "index": 160,
+    "address": "0xd11b967410d38403a0111FBed91CA0f8Cd26B5bA",
+    "percent_bps": 65,
+    "expected_amount_wei": 646750000000000
+  },
+  {
+    "index": 161,
+    "address": "0x03ac0967A08a493a30c7030025d0c092cd3CF1a9",
+    "percent_bps": 54,
+    "expected_amount_wei": 537300000000000
+  },
+  {
+    "index": 162,
+    "address": "0xD6159405f8d67b0Cea054328c3B11e52fe9aD6a8",
+    "percent_bps": 35,
+    "expected_amount_wei": 348250000000000
+  },
+  {
+    "index": 163,
+    "address": "0x5196e5A1F3Ac0B81A475a9C5f7032E12F0407D64",
+    "percent_bps": 58,
+    "expected_amount_wei": 577100000000000
+  },
+  {
+    "index": 164,
+    "address": "0x24c02CECb23232f6b584a1D0356ACF239bb7E8aF",
+    "percent_bps": 71,
+    "expected_amount_wei": 706450000000000
+  },
+  {
+    "index": 165,
+    "address": "0x1b9D82E250Ee47a3E930523435952Bd7BD7B22b8",
+    "percent_bps": 62,
+    "expected_amount_wei": 616900000000000
+  },
+  {
+    "index": 166,
+    "address": "0x3363BA0a5E7F3c15A94607D3B06372b4D9705C2F",
+    "percent_bps": 48,
+    "expected_amount_wei": 477600000000000
+  },
+  {
+    "index": 167,
+    "address": "0xe7825cc115920142e2DFB6cdD29ec0A326fEf66c",
+    "percent_bps": 30,
+    "expected_amount_wei": 298500000000000
+  },
+  {
+    "index": 168,
+    "address": "0x8C5D32179D15dD384D13EFF324a45d416124Ae3A",
+    "percent_bps": 34,
+    "expected_amount_wei": 338300000000000
+  },
+  {
+    "index": 169,
+    "address": "0xE7C2Bf4F5f2696Ab966a223baF261d36db391d81",
+    "percent_bps": 93,
+    "expected_amount_wei": 925350000000000
+  },
+  {
+    "index": 170,
+    "address": "0xCc09e3836044520258bd2e670b99183f00c3b81B",
+    "percent_bps": 50,
+    "expected_amount_wei": 497500000000000
+  },
+  {
+    "index": 171,
+    "address": "0x19069cC6674f895B6Eb88ea56db4947B7F06B92f",
+    "percent_bps": 13,
+    "expected_amount_wei": 129350000000000
+  },
+  {
+    "index": 172,
+    "address": "0x301F3C112e87c7622513Bb2bB7716cCde0447DeC",
+    "percent_bps": 27,
+    "expected_amount_wei": 268650000000000
+  },
+  {
+    "index": 173,
+    "address": "0x80C4716bfCd733e4D29DD5A35A9Ff2EFc243159a",
+    "percent_bps": 56,
+    "expected_amount_wei": 557200000000000
+  },
+  {
+    "index": 174,
+    "address": "0x396484D994aa6C9Ef588EaD9b694b695FadAf15E",
+    "percent_bps": 54,
+    "expected_amount_wei": 537300000000000
+  },
+  {
+    "index": 175,
+    "address": "0x0C8883214F38C58045929B346d67b1710bF59f2f",
+    "percent_bps": 45,
+    "expected_amount_wei": 447750000000000
+  },
+  {
+    "index": 176,
+    "address": "0xeD9c4B4B8da0f9C6bf8b685ef67D748927f6E4Bf",
+    "percent_bps": 25,
+    "expected_amount_wei": 248750000000000
+  },
+  {
+    "index": 177,
+    "address": "0x594AEc20Eb619189342E1335C823f55e3c228546",
+    "percent_bps": 13,
+    "expected_amount_wei": 129350000000000
+  },
+  {
+    "index": 178,
+    "address": "0x69bDfB6714610eEee835DA30075DcF6aDf4D53F5",
+    "percent_bps": 47,
+    "expected_amount_wei": 467650000000000
+  },
+  {
+    "index": 179,
+    "address": "0xe83e4D406bec6b2B3ddBBC8782741f44C455006e",
+    "percent_bps": 72,
+    "expected_amount_wei": 716400000000000
+  },
+  {
+    "index": 180,
+    "address": "0x93705FF2cf3a2807E5fCdd47Ac8C0d7FB0A78F2c",
+    "percent_bps": 63,
+    "expected_amount_wei": 626850000000000
+  },
+  {
+    "index": 181,
+    "address": "0x2e297dD6c6d5D88d5f4ab5a07bdB7eA0e54f6113",
+    "percent_bps": 14,
+    "expected_amount_wei": 139300000000000
+  },
+  {
+    "index": 182,
+    "address": "0x33Cc26dD85eb9ABf2d557E3590c2689e3AAFE93b",
+    "percent_bps": 18,
+    "expected_amount_wei": 179100000000000
+  },
+  {
+    "index": 183,
+    "address": "0x554c7F54Af5c2FCFD579c79bFC41D6E986F3De2b",
+    "percent_bps": 81,
+    "expected_amount_wei": 805950000000000
+  },
+  {
+    "index": 184,
+    "address": "0x398D2638Bf5b0980fC204fCD6ef0eE27c891B050",
+    "percent_bps": 9,
+    "expected_amount_wei": 89550000000000
+  },
+  {
+    "index": 185,
+    "address": "0x3133986B40236cD28E83BeF0b22c5F47765d5b37",
+    "percent_bps": 13,
+    "expected_amount_wei": 129350000000000
+  },
+  {
+    "index": 186,
+    "address": "0x90F808DB1Ed370EE99E2600c9b1e89D3Df91B0f3",
+    "percent_bps": 82,
+    "expected_amount_wei": 815900000000000
+  },
+  {
+    "index": 187,
+    "address": "0xfACf4D9a18d8a8eFC573580979313EF0E94C4873",
+    "percent_bps": 68,
+    "expected_amount_wei": 676600000000000
+  },
+  {
+    "index": 188,
+    "address": "0xB586673E2Dc7C3E8684B7BA2A3a02b630f2e3f2B",
+    "percent_bps": 24,
+    "expected_amount_wei": 238800000000000
+  },
+  {
+    "index": 189,
+    "address": "0xd67142a95d9E3f4F43942D9d54DEACE61806f85d",
+    "percent_bps": 55,
+    "expected_amount_wei": 547250000000000
+  },
+  {
+    "index": 190,
+    "address": "0x94cF3c254582a86903EDdA8698530dbC3a1AA684",
+    "percent_bps": 76,
+    "expected_amount_wei": 756200000000000
+  },
+  {
+    "index": 191,
+    "address": "0x22909744d637992572d540dfD84Cd21f581D5Ff2",
+    "percent_bps": 52,
+    "expected_amount_wei": 517400000000000
+  },
+  {
+    "index": 192,
+    "address": "0x4Db44Af3d3E0D2D992eb7202b0601b22f938296C",
+    "percent_bps": 56,
+    "expected_amount_wei": 557200000000000
+  },
+  {
+    "index": 193,
+    "address": "0x90095FE620d5eBA732033a5f29f11bbC7ffa8d4b",
+    "percent_bps": 54,
+    "expected_amount_wei": 537300000000000
+  },
+  {
+    "index": 194,
+    "address": "0x3e5F6fc9f9628475adb439Be71700A0D63c38c40",
+    "percent_bps": 60,
+    "expected_amount_wei": 597000000000000
+  },
+  {
+    "index": 195,
+    "address": "0x9Cb9227309Db8b2B5c661051c1E290138767fd3D",
+    "percent_bps": 94,
+    "expected_amount_wei": 935300000000000
+  },
+  {
+    "index": 196,
+    "address": "0xB5033ebF3b7F2613f78Eab673301aa5d52573AF9",
+    "percent_bps": 42,
+    "expected_amount_wei": 417900000000000
+  },
+  {
+    "index": 197,
+    "address": "0xF01A877F4c56B6E68E97e5f34Be5Ce9E344e4A8d",
+    "percent_bps": 75,
+    "expected_amount_wei": 746250000000000
+  },
+  {
+    "index": 198,
+    "address": "0xe3f716F9F92298D259757a540575f730012DBB0E",
+    "percent_bps": 61,
+    "expected_amount_wei": 606950000000000
+  },
+  {
+    "index": 199,
+    "address": "0xB7E766449F708330fc99a47b14fd5B915D8d1797",
+    "percent_bps": 34,
+    "expected_amount_wei": 338300000000000
+  }
+]

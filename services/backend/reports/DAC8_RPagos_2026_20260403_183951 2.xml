@@ -1,0 +1,50 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<DAC8_CARF xmlns="urn:eu:taxud:dac8:v1" xmlns:carf="urn:oecd:ties:carf:v1" version="1.0">
+  <MessageSpec>
+    <SendingCountry>IT</SendingCountry>
+    <ReceivingCountry>IT</ReceivingCountry>
+    <MessageType>DAC8</MessageType>
+    <Warning></Warning>
+    <MessageRefId>RPagos-DAC8-2026-20260403183951</MessageRefId>
+    <ReportingPeriod>2026-12-31</ReportingPeriod>
+    <Timestamp>2026-04-03T18:39:51.903941+00:00</Timestamp>
+  </MessageSpec>
+  <ReportingFI>
+    <Name>RPagos S.r.l.</Name>
+    <TIN issuedBy="IT">IT12345678901</TIN>
+    <Address>
+      <CountryCode>IT</CountryCode>
+    </Address>
+  </ReportingFI>
+  <AccountReport>
+    <AccountHolder>
+      <AccountHolderType>CRS801</AccountHolderType>
+    </AccountHolder>
+    <AccountNumber>0x1234567890abcdef1234567890abcdef12345678</AccountNumber>
+    <CryptoAsset>
+      <AssetCode>USDC</AssetCode>
+      <AssetName>USDC</AssetName>
+    </CryptoAsset>
+    <TransactionDetails>
+      <TransactionType>TRANSFER</TransactionType>
+      <TransactionHash>0xa1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4</TransactionHash>
+      <GrossAmount>100.00000000</GrossAmount>
+      <NetAmount>99.50000000</NetAmount>
+      <FeeAmount>0.50000000</FeeAmount>
+      <Currency>USDC</Currency>
+      <Network>BASE_MAINNET</Network>
+      <FiatEquivalent>
+        <Amount>92.00</Amount>
+        <Currency>EUR</Currency>
+        <ExchangeRate>0.920000</ExchangeRate>
+      </FiatEquivalent>
+      <TransactionTimestamp>2026-04-03T18:39:51.897101</TransactionTimestamp>
+      <FiscalReference>RP-2025-TEST-001</FiscalReference>
+      <ComplianceInfo>
+        <ComplianceId>CMP-RP-2025-TEST-001-000001</ComplianceId>
+        <Jurisdiction>IT</Jurisdiction>
+        <MiCAApplicable>true</MiCAApplicable>
+      </ComplianceInfo>
+    </TransactionDetails>
+  </AccountReport>
+</DAC8_CARF>

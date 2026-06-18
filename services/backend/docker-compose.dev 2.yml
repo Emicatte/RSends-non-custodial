@@ -1,0 +1,60 @@
+version: '3.8'
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: rsend
+      POSTGRES_PASSWORD: rsend_dev_password
+      POSTGRES_DB: rsend_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - rsend_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rsend"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql+asyncpg://rsend:rsend_dev_password@db:5432/rsend_dev
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      ALCHEMY_API_KEY: ${ALCHEMY_API_KEY:-}
+      SWEEP_PRIVATE_KEY: ${SWEEP_PRIVATE_KEY:-}
+      DEBUG: "true"
+      RSEND_DEV_AUTH_BYPASS: "1"
+      ENVIRONMENT: "development"
+    restart: unless-stopped
+
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    command: ["celery", "-A", "app.celery_app:celery", "beat", "--loglevel=info"]
+    depends_on:
+      - redis
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      DEBUG: "true"
+    restart: unless-stopped
+
+volumes:
+  rsend_pgdata:

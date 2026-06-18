@@ -1,0 +1,201 @@
+# ═══════════════════════════════════════════════════════════════
+#  RSends Backend — Prometheus Alerting Rules
+#
+#  Load in prometheus.yml via:
+#    rule_files:
+#      - /etc/prometheus/alertmanager_rules.yml
+# ═══════════════════════════════════════════════════════════════
+
+groups:
+  # ─────────────────────────────────────────────────────────
+  #  Circuit Breaker Alerts
+  # ─────────────────────────────────────────────────────────
+  - name: circuit_breaker
+    rules:
+      - alert: CircuitBreakerOpen
+        expr: circuit_breaker_state == 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Circuit breaker OPEN: {{ $labels.service }}"
+          description: >
+            Circuit breaker for {{ $labels.service }} has been OPEN
+            for more than 1 minute. Calls are being rejected.
+            Investigate the upstream dependency.
+
+      - alert: CircuitBreakerHalfOpen
+        expr: circuit_breaker_state == 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Circuit breaker HALF_OPEN: {{ $labels.service }}"
+          description: >
+            Circuit breaker for {{ $labels.service }} has been in
+            HALF_OPEN state for 5+ minutes without recovering.
+
+  # ─────────────────────────────────────────────────────────
+  #  Sweep Failure Rate
+  # ─────────────────────────────────────────────────────────
+  - name: sweep_pipeline
+    rules:
+      - alert: SweepFailureRateHigh
+        expr: >
+          (
+            sum(rate(rsend_sweep_batches_total{status="FAILED"}[10m]))
+            /
+            sum(rate(rsend_sweep_batches_total[10m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Sweep failure rate >5%"
+          description: >
+            More than 5% of sweep batches have failed in the last
+            10 minutes. Current failure rate: {{ $value | humanizePercentage }}.
+
+      - alert: NoSweepsWhenExpected
+        expr: >
+          sum(increase(rsend_sweep_batches_total[1h])) == 0
+          and
+          active_rules_total > 0
+        for: 2h
+        labels:
+          severity: warning
+        annotations:
+          summary: "No sweeps executed in 2+ hours with active rules"
+          description: >
+            There are {{ with query "active_rules_total" }}{{ . | first | value }}{{ end }}
+            active forwarding rules but no sweep batches have been created
+            in the last 2 hours. Check webhook delivery and polling service.
+
+  # ─────────────────────────────────────────────────────────
+  #  Hot Wallet Balance
+  # ─────────────────────────────────────────────────────────
+  - name: hot_wallet
+    rules:
+      - alert: HotWalletLow
+        expr: rsend_hot_wallet_balance_wei / 1e18 < 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Hot wallet balance low on chain {{ $labels.chain_id }}"
+          description: >
+            Hot wallet balance is {{ $value | humanize }} ETH on
+            chain {{ $labels.chain_id }}. Refill soon to avoid
+            sweep failures.
+
+      - alert: HotWalletCritical
+        expr: rsend_hot_wallet_balance_wei / 1e18 < 0.01
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Hot wallet CRITICAL on chain {{ $labels.chain_id }}"
+          description: >
+            Hot wallet balance is {{ $value | humanize }} ETH on
+            chain {{ $labels.chain_id }}. Sweeps will fail due to
+            insufficient gas. Immediate refill required.
+
+  # ─────────────────────────────────────────────────────────
+  #  Celery Queue Backlog
+  # ─────────────────────────────────────────────────────────
+  - name: celery_queue
+    rules:
+      - alert: CeleryQueueBacklog
+        expr: rsend_celery_queue_depth > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Celery queue backlog: {{ $labels.queue }}"
+          description: >
+            Queue {{ $labels.queue }} has {{ $value }} pending tasks.
+            This may indicate worker issues or a traffic spike.
+            Check worker health and consider scaling.
+
+      - alert: CelerySweepQueueStuck
+        expr: rsend_celery_queue_depth{queue="sweep"} > 50
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Sweep queue stuck with {{ $value }} tasks"
+          description: >
+            The sweep queue has had 50+ tasks for over 10 minutes.
+            Sweep workers may be down or deadlocked.
+
+  # ─────────────────────────────────────────────────────────
+  #  Webhook Rejections
+  # ─────────────────────────────────────────────────────────
+  - name: webhooks
+    rules:
+      - alert: WebhookRejectionRateHigh
+        expr: >
+          (
+            sum(rate(rsend_webhook_rejected_total[10m]))
+            /
+            (sum(rate(rsend_webhook_received_total[10m])) > 0)
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Webhook rejection rate >10%"
+          description: >
+            More than 10% of incoming webhooks are being rejected.
+            Check webhook secret configuration and source IP filters.
+            Rejection reasons: {{ with query "topk(3, sum by (reason) (rate(rsend_webhook_rejected_total[10m])))" }}{{ . }}{{ end }}
+
+  # ─────────────────────────────────────────────────────────
+  #  Spending Limits
+  # ─────────────────────────────────────────────────────────
+  - name: spending
+    rules:
+      - alert: SpendingLimitApproaching
+        expr: rsend_spending_usage_ratio > 0.8
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Spending limit >80% on tier {{ $labels.tier }}"
+          description: >
+            Spending usage for tier {{ $labels.tier }} on source
+            {{ $labels.source }} is at {{ $value | humanizePercentage }}.
+            Sweeps may be blocked soon.
+
+  # ─────────────────────────────────────────────────────────
+  #  Infrastructure
+  # ─────────────────────────────────────────────────────────
+  - name: infrastructure
+    rules:
+      - alert: DatabaseConnectionErrors
+        expr: >
+          sum(rate(http_requests_total{handler="/health/ready",status="503"}[5m])) > 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database or Redis connectivity issues"
+          description: >
+            The readiness probe is returning 503, indicating
+            database or Redis connectivity problems.
+
+      - alert: HighErrorRate
+        expr: >
+          (
+            sum(rate(http_requests_total{status=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API error rate >5%"
+          description: >
+            More than 5% of HTTP requests are returning 5xx errors.
+            Current rate: {{ $value | humanizePercentage }}.

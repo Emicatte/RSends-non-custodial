@@ -1,0 +1,6 @@
+# Tron deployer private key (hex, no 0x prefix)
+TRON_PRIVATE_KEY=
+
+# Contract addresses (filled after deploy)
+TRON_FEE_ROUTER_MAINNET=
+TRON_FEE_ROUTER_SHASTA=
