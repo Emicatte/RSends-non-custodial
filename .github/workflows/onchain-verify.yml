@@ -1,0 +1,36 @@
+name: On-chain registry verify
+
+# SCHEDULED / pre-deploy on-chain verification + parity. NOT a per-PR gate:
+# mainnet RPC is too flaky to block PRs. The RPC-free invariants run in the main
+# CI (backend job: tests/test_registry_invariants.py). This cross-checks the live
+# chain against token_registry.json (enabled tokens' symbol/decimals + enabled-set
+# parity) on a schedule and on demand. The deploy-script gate is the primary backstop.
+
+on:
+  schedule:
+    - cron: "17 6 * * *"   # daily 06:17 UTC
+  workflow_dispatch: {}
+
+jobs:
+  onchain-verify:
+    name: On-chain registry verify (scheduled)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/backend
+    env:
+      DATABASE_URL: "sqlite+aiosqlite://"
+      ENVIRONMENT: "test"
+      # Which chains to check + how to reach them (empty → script skips cleanly).
+      RSENDS_ROUTER_ADDRESSES_JSON: ${{ secrets.RSENDS_ROUTER_ADDRESSES_JSON }}
+      INDEXER_RPC_URLS_JSON: ${{ secrets.INDEXER_RPC_URLS_JSON }}
+      ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Verify on-chain registry (metadata + enabled parity)
+        run: python scripts/verify_onchain_registry.py

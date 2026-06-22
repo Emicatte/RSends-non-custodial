@@ -41,7 +41,7 @@ from app.services.webhook_service import (
 MERCHANT_ID = "test-merchant-wh-001"
 WEBHOOK_URL = "https://merchant.example.com/webhook"
 WEBHOOK_SECRET = "test-secret-hmac-key-256bit"
-DEPOSIT_ADDR = "0x" + "cd" * 20
+ONCHAIN_INVOICE_ID = "0x" + "cd" * 32
 
 
 # ── Fixtures ─────────────────────────────────────────────────
@@ -73,7 +73,7 @@ async def _create_intent(
             amount=50.0,
             currency="USDC",
             chain=chain,
-            deposit_address=DEPOSIT_ADDR,
+            onchain_invoice_id=ONCHAIN_INVOICE_ID,
             status=status,
             matched_tx_hash=matched_tx_hash or ("0x" + "aa" * 32),
             matched_at=datetime.now(timezone.utc) if status == IntentStatus.completed else None,
@@ -125,7 +125,7 @@ class TestPayloadStructure:
         assert payload["currency"] == "USDC"
         assert payload["chain"] == "BASE"
         assert payload["tx_hash"] is not None
-        assert payload["deposit_address"] == DEPOSIT_ADDR
+        assert payload["onchain_invoice_id"] == ONCHAIN_INVOICE_ID
         assert payload["metadata"] == {"order_id": "ORD-123", "customer": "alice"}
         assert "timestamp" in payload
         # Verifica che timestamp sia ISO 8601
@@ -151,19 +151,25 @@ class TestHMACSignature:
 
     def test_signature_deterministic(self):
         payload = b'{"event":"payment.completed","intent_id":"pi_test"}'
-        sig1 = compute_webhook_signature(WEBHOOK_SECRET, payload)
-        sig2 = compute_webhook_signature(WEBHOOK_SECRET, payload)
+        sig1 = compute_webhook_signature(WEBHOOK_SECRET, "1700000000", payload)
+        sig2 = compute_webhook_signature(WEBHOOK_SECRET, "1700000000", payload)
         assert sig1 == sig2
 
     def test_signature_changes_with_different_secret(self):
         payload = b'{"event":"payment.completed"}'
-        sig1 = compute_webhook_signature("secret-a", payload)
-        sig2 = compute_webhook_signature("secret-b", payload)
+        sig1 = compute_webhook_signature("secret-a", "1700000000", payload)
+        sig2 = compute_webhook_signature("secret-b", "1700000000", payload)
         assert sig1 != sig2
 
     def test_signature_changes_with_different_payload(self):
-        sig1 = compute_webhook_signature(WEBHOOK_SECRET, b'payload-a')
-        sig2 = compute_webhook_signature(WEBHOOK_SECRET, b'payload-b')
+        sig1 = compute_webhook_signature(WEBHOOK_SECRET, "1700000000", b'payload-a')
+        sig2 = compute_webhook_signature(WEBHOOK_SECRET, "1700000000", b'payload-b')
+        assert sig1 != sig2
+
+    def test_signature_changes_with_different_timestamp(self):
+        payload = b'{"event":"payment.completed"}'
+        sig1 = compute_webhook_signature(WEBHOOK_SECRET, "1700000000", payload)
+        sig2 = compute_webhook_signature(WEBHOOK_SECRET, "1700000001", payload)
         assert sig1 != sig2
 
 

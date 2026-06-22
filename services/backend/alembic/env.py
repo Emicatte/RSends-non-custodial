@@ -18,17 +18,24 @@ from alembic import context
 
 # ── Importa TUTTI i modelli in modo che Base.metadata li conosca ──────────
 # db_models deve essere importato per primo perché definisce Base.
+# NON-CUSTODIAL set: no ledger/forwarding/command/strategy/split (sweep custody).
 from app.models.db_models import Base  # noqa: F401 — definisce Base
-from app.models import forwarding_models as _fwd   # noqa: F401 — forwarding tables
-from app.models import ledger_models as _led       # noqa: F401 — ledger tables
-from app.models import command_models as _cmd      # noqa: F401 — command center tables
-from app.models import strategy_models as _strat   # noqa: F401 — strategy tables
-from app.models import merchant_models as _merch   # noqa: F401 — merchant B2B tables
+from app.models import audit_models as _audit       # noqa: F401 — tamper-evident audit_log
+from app.models import settlement_models as _settle # noqa: F401 — on-chain PaymentMade settlements
+from app.models import aml_models as _aml           # noqa: F401 — AML/OFAC tables
+from app.models import api_key_models as _apikey    # noqa: F401 — api keys
+from app.models import auth_models as _auth         # noqa: F401 — end-user auth tables
+from app.models import email_auth_models as _emauth # noqa: F401 — email auth tables
+from app.models import invoice_models as _inv       # noqa: F401 — commission invoices
+from app.models import merchant_models as _merch    # noqa: F401 — merchant B2B tables
 from app.models import merchant_profile_models as _mprof  # noqa: F401 — merchant billing profile
-from app.models import invoice_models as _inv          # noqa: F401 — commission invoices
-from app.models import split_models as _split      # noqa: F401 — multi-wallet split tables
-from app.models import auth_models as _auth        # noqa: F401 — end-user auth tables
-from app.models import user_routes_models as _ur   # noqa: F401 — user-owned saved routes
+from app.models import notification_models as _notif # noqa: F401 — notifications
+from app.models import org_models as _org           # noqa: F401 — organizations / memberships
+from app.models import user_api_keys_models as _uak # noqa: F401 — user-managed api keys
+from app.models import user_contacts_models as _uc  # noqa: F401 — user contacts
+from app.models import user_routes_models as _ur    # noqa: F401 — user-owned saved routes
+from app.models import user_tx_models as _utx       # noqa: F401 — user tx history
+from app.models import user_wallets_models as _uw   # noqa: F401 — user linked wallets
 
 from app.config import get_settings
 

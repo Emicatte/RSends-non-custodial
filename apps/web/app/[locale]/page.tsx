@@ -31,7 +31,7 @@ import { useWalletModal } from '@solana/wallet-adapter-react-ui'
 import { useTron } from '../providers-tron'
 import type { NonEvmWalletProps } from '../AccountHeader'
 import { ToastContainer } from '../../components/shared/Toast'
-import ExploreTokens from '../ExploreTokens'
+import PricingSection from '@/components/landing/PricingSection'
 import LandingSections from '../LandingSections'
 import { C, EASE } from '@/app/designTokens'
 import SplitText from '@/components/motion/SplitText'
@@ -554,30 +554,9 @@ function Navbar({
           </span>
         </div>
 
-        {/* Right: Stats + Language */}
+        {/* Right: Language + Auth */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <LanguageSwitcher />
-          {/* Live stats pills */}
-          {(sweeps24h > 0 || vol24h > 0) && (
-            <div className="navbar-right-stats" style={{
-              display: 'flex', alignItems: 'center', gap: 2,
-              padding: '4px 6px', borderRadius: 10,
-              background: 'rgba(10,10,10,0.03)',
-              border: `1px solid ${C.border}`,
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 6px', borderRight: `1px solid ${C.border}` }}>
-                <div style={{ width: 4, height: 4, borderRadius: '50%', background: C.blue, boxShadow: `0 0 4px ${C.blue}50` }} />
-                <span style={{ fontFamily: C.M, fontSize: 9, color: C.dim }}>Sweeps</span>
-                <span style={{ fontFamily: C.D, fontSize: 11, fontWeight: 700, color: C.text }}>{sweeps24h}</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 6px' }}>
-                <div style={{ width: 4, height: 4, borderRadius: '50%', background: C.purple, boxShadow: `0 0 4px ${C.purple}50` }} />
-                <span style={{ fontFamily: C.M, fontSize: 9, color: C.dim }}>Vol 24h</span>
-                <span style={{ fontFamily: C.D, fontSize: 11, fontWeight: 700, color: C.text }}>{vol24h.toFixed(4)}</span>
-                <span style={{ fontFamily: C.M, fontSize: 9, color: C.dim }}>ETH</span>
-              </div>
-            </div>
-          )}
           <LandingAuthButtons />
         </div>
     </nav>
@@ -623,25 +602,27 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
       padding: isMobile ? '0 20px' : '0 96px',
       textAlign: isMobile ? 'center' : 'left',
     }}>
-      {/* Eyebrow — 0.0s */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: HERO_EASE }}
-        style={{
-          fontFamily: C.M,
-          fontSize: 16,
-          fontWeight: 500,
-          color: C.purple,
-          letterSpacing: '0.18em',
-          marginBottom: 8,
-          textTransform: 'uppercase' as const,
-        }}
-      >
-        {t('eyebrow')}
-      </motion.div>
+      {/* Eyebrow — 0.0s (hidden when empty) */}
+      {t('eyebrow') && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: HERO_EASE }}
+          style={{
+            fontFamily: C.M,
+            fontSize: 16,
+            fontWeight: 500,
+            color: C.purple,
+            letterSpacing: '0.18em',
+            marginBottom: 8,
+            textTransform: 'uppercase' as const,
+          }}
+        >
+          {t('eyebrow')}
+        </motion.div>
+      )}
 
-      {/* Title — split reveal 0.15s / 0.55s */}
+      {/* Title — split reveal 0.15s / 0.45s / 0.75s */}
       <h1 style={{
         fontFamily: C.D,
         fontSize: isMobile ? 56 : 'clamp(74px, 8vw, 96px)',
@@ -654,7 +635,9 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
       }}>
         <SplitText text={t('titleLine1')} delay={0.15} style={{ fontFamily: C.D }} />
         <br/>
-        <SplitText text={t('titleLine2')} delay={0.55} style={{ fontFamily: C.D }} />
+        <SplitText text={t('titleLine2')} delay={0.45} style={{ fontFamily: C.D }} />
+        <br/>
+        <SplitText text={t('titleLine3')} delay={0.75} style={{ fontFamily: C.D }} />
       </h1>
 
       {/* Subtitle — 0.95s */}
@@ -923,11 +906,9 @@ export default function Home() {
       {/* ── B2B Landing Sections ──── */}
       <LandingSections />
 
-      {/* ── Explore Tokens Section ──── */}
+      {/* ── Pricing Section ──── */}
       <FadeIn y={40} duration={1}>
-        <section style={{ padding: isMobileHome ? '64px 24px' : '96px 96px', maxWidth: 1440, margin: '0 auto' }}>
-          <ExploreTokens />
-        </section>
+        <PricingSection />
       </FadeIn>
 
       

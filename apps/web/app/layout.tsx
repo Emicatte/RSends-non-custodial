@@ -13,9 +13,9 @@ const dmMono = DM_Mono({
 })
 
 export const metadata: Metadata = {
-  title:       'RSends',
-  description: 'Non-custodial Web3 financial automation with native multi-chain payouts and split routing.',
-  keywords:    ['Web3', 'multi-chain', 'USDC', 'EURC', 'payments', 'crypto', 'B2B', 'split routing'],
+  title:       'RSends — Non-custodial stablecoin payment gateway',
+  description: 'Get paid in stablecoin, straight to your own wallet. A non-custodial B2B payment gateway with a flat fee, never a percentage. USDC, USDT and EURC on Base and Ethereum.',
+  keywords:    ['non-custodial', 'stablecoin', 'payment gateway', 'USDC', 'USDT', 'EURC', 'Base', 'Ethereum', 'B2B', 'flat fee'],
   icons: {
     icon: [
       

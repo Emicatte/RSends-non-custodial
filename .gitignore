@@ -34,6 +34,7 @@ Thumbs.db
 
 # Python
 **/venv/
+**/.venv/
 **/__pycache__/
 *.pyc
 *.pyo
@@ -58,5 +59,6 @@ rpagos-backend/scripts/manual/
 .turbo/
 packages/contracts/cache/
 packages/contracts/out/
+packages/contracts/broadcast/
 apps/web/.next/
 services/backend/scripts/manual/

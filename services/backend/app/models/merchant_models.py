@@ -28,9 +28,8 @@ from app.models.db_models import Base
 
 class IntentStatus(str, enum.Enum):
     pending = "pending"
-    completed = "completed"
-    sweeping = "sweeping"       # Fondi in fase di sweep dal deposit al treasury
-    settled = "settled"         # Fondi arrivati al merchant/treasury
+    paid = "paid"               # NON-CUSTODIAL: on-chain PaymentMade observed → settled to merchant
+    completed = "completed"     # legacy alias (kept for backward compatibility)
     expired = "expired"
     cancelled = "cancelled"
     review = "review"
@@ -105,22 +104,20 @@ class PaymentIntent(Base):
     tx_hash = Column(String(66), nullable=True, index=True)
     metadata_ = Column("metadata", JSON, nullable=True)     # dati merchant arbitrari
 
-    # Deposit address — indirizzo unico generato per ogni intent
-    deposit_address = Column(String(42), unique=True, nullable=True, index=True)
+    # NON-CUSTODIAL: on-chain invoiceId (bytes32 hex) the payer passes to
+    # RSendsRouter.pay(); the indexer matches the emitted PaymentMade.invoiceId
+    # back to this intent. Replaces the custodial deposit_address.
+    onchain_invoice_id = Column(String(66), nullable=True, index=True)
 
     # Chain su cui accettare il pagamento (default BASE)
     chain = Column(String(32), nullable=False, default="BASE")
 
-    # Matching — hash della TX che ha matchato + timestamp
+    # Matching — hash della TX on-chain che ha matchato + timestamp
     matched_tx_hash = Column(String(66), nullable=True, index=True)
     matched_at = Column(DateTime(timezone=True), nullable=True)
 
     # Scadenza
     expires_at = Column(DateTime(timezone=True), nullable=False)
-
-    # Sweep — forward fondi dal deposit al treasury/merchant
-    sweep_tx_hash = Column(String(66), nullable=True, index=True)
-    swept_at = Column(DateTime(timezone=True), nullable=True)
 
     # Timestamps
     created_at = Column(
@@ -149,12 +146,9 @@ class PaymentIntent(Base):
     allow_partial = Column(Boolean, default=False)
     allow_overpayment = Column(Boolean, default=True)
 
-    # Platform fee tracking
-    fee_bps = Column(Integer, nullable=True)
-    fee_amount = Column(String(32), nullable=True)
-    fee_tx_hash = Column(String(130), nullable=True)
-    fee_swept_at = Column(DateTime(timezone=True), nullable=True)
-    merchant_sweep_amount = Column(String(32), nullable=True)
+    # NON-CUSTODIAL: platform-fee sweep tracking removed. Any protocol fee is
+    # taken atomically on-chain by RSendsRouter (if enabled); RSends never
+    # sweeps funds. Billing is derived from settled on-chain payments instead.
 
     __table_args__ = (
         Index("ix_intent_merchant_status", "merchant_id", "status"),
@@ -284,10 +278,39 @@ class CreatePaymentIntentRequest(BaseModel):
         return v
 
 
+class OnchainPayment(BaseModel):
+    """Non-custodial on-chain payment instructions for the payer's wallet.
+
+    camelCase keys match the frontend Pay flow (apps/web/app/pay/[intentId]).
+    """
+    invoiceId: str
+    merchant: str
+    token: str               # 0x0000...0000 == native ETH
+    amount: str              # base units (wei / token decimals)
+    fee: Optional[str] = None       # fee in base units, live from quoteFee (None if unavailable)
+    total: Optional[str] = None     # amount + fee (what the payer parts with overall)
+    maxFee: Optional[str] = None    # payer ceiling passed to pay/payWithPermit/payNative (== fee)
+    chainId: int
+    router: str              # RSendsRouter contract address
+    calldata: Optional[str] = None  # ready-to-send pay()/payNative() calldata (None if fee unavailable)
+    payWithPermitCalldata: Optional[str] = None  # template; permit (deadline,v,r,s) filled client-side
+    function: str            # "pay" (ERC20, needs approve first) | "payNative"
+    decimals: int
+    isNative: bool
+    # STATIC permit policy from the registry (no runtime introspection):
+    #   "eip2612" → payWithPermit flow (permitVersion = EIP-712 domain version)
+    #   "none"    → approve()+pay() flow
+    permitType: Optional[str] = None
+    permitVersion: Optional[str] = None
+    feeUnavailable: bool = False    # True if live quoteFee failed → frontend quotes on-chain itself
+
+
 class PaymentIntentResponse(BaseModel):
     intent_id: str
     reference_id: str
-    deposit_address: Optional[str] = None
+    # NON-CUSTODIAL: deposit_address replaced by onchain_invoice_id + `onchain`.
+    onchain_invoice_id: Optional[str] = None
+    onchain: Optional[OnchainPayment] = None
     amount: float
     currency: str
     chain: str = "BASE"
@@ -306,12 +329,6 @@ class PaymentIntentResponse(BaseModel):
     amount_received: Optional[str] = None
     overpaid_amount: Optional[str] = None
     underpaid_amount: Optional[str] = None
-    sweep_tx_hash: Optional[str] = None
-    swept_at: Optional[str] = None
-    fee_bps: Optional[int] = None
-    fee_amount: Optional[str] = None
-    fee_tx_hash: Optional[str] = None
-    merchant_sweep_amount: Optional[str] = None
     expires_at: str
     created_at: str
     completed_at: Optional[str]
@@ -395,7 +412,7 @@ class ResolvePaymentRequest(BaseModel):
 
 class MerchantTransactionItem(BaseModel):
     intent_id: str
-    deposit_address: Optional[str] = None
+    onchain_invoice_id: Optional[str] = None
     amount: float
     currency: str
     chain: str = "BASE"
@@ -408,8 +425,6 @@ class MerchantTransactionItem(BaseModel):
     amount_received: Optional[str] = None
     overpaid_amount: Optional[str] = None
     underpaid_amount: Optional[str] = None
-    sweep_tx_hash: Optional[str] = None
-    swept_at: Optional[str] = None
     created_at: str
     completed_at: Optional[str]
 

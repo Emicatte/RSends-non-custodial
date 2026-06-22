@@ -45,7 +45,11 @@
   "exclude": [
     "node_modules",
     "vitest.config.ts",
-    "scripts"
+    "scripts",
+    "app/__tests__",
+    "src/__tests__",
+    "**/*.test.ts",
+    "**/*.test.tsx"
   ]
   
 }

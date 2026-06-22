@@ -85,22 +85,11 @@ celery.conf.update(
 
     # Task routing
     task_routes={
-        "app.tasks.sweep_tasks.process_incoming_tx": {"queue": "sweep"},
-        "app.tasks.sweep_tasks.execute_distribution": {"queue": "sweep"},
-        "app.tasks.sweep_tasks.confirm_batch": {"queue": "confirm"},
-        "app.tasks.sweep_tasks.confirm_tx": {"queue": "confirm"},
-        "app.tasks.sweep_tasks.retry_failed_items": {"queue": "sweep"},
-        "app.tasks.periodic_tasks.update_gas_oracle": {"queue": "analytics"},
-        "app.tasks.periodic_tasks.check_stale_batches": {"queue": "sweep"},
-        "app.tasks.periodic_tasks.check_hot_wallet": {"queue": "sweep"},
-        "app.tasks.periodic_tasks.aggregate_daily_stats": {"queue": "analytics"},
-        "app.tasks.periodic_tasks.cleanup_old_locks": {"queue": "analytics"},
+        # NON-CUSTODIAL: sweep/matching/periodic/fee-recovery task routes removed.
         "app.tasks.notification_tasks.send_notification_task": {"queue": "notify"},
-        "app.tasks.notification_tasks.send_daily_digest": {"queue": "notify"},
         "app.tasks.email_tasks.send_new_device_email_task": {"queue": "notify"},
         "app.tasks.webhook_tasks.process_webhook_deliveries": {"queue": "notify"},
         "app.tasks.webhook_tasks.expire_pending_intents": {"queue": "notify"},
-        "app.tasks.matching_tasks.match_transaction_task": {"queue": "default"},
     },
 
     # Default queue for unrouted tasks
@@ -108,14 +97,10 @@ celery.conf.update(
 
     # Task discovery
     include=[
-        "app.tasks.sweep_tasks",
-        "app.tasks.periodic_tasks",
         "app.tasks.notification_tasks",
         "app.tasks.email_tasks",
         "app.tasks.webhook_tasks",
-        "app.tasks.matching_tasks",
         "app.tasks.deletion_tasks",
-        "app.tasks.fee_recovery_tasks",
     ],
 )
 
@@ -160,31 +145,10 @@ def _restore_correlation_id(task, **kwargs):
         pass
 
 
+# NON-CUSTODIAL: gas-oracle / stale-batch / hot-wallet / daily-stats / fee-recovery
+# beat entries removed (sweep infra gone). On-chain PaymentMade watching runs as
+# an asyncio loop in the app lifespan (payment_indexer), not as a Celery beat task.
 celery.conf.beat_schedule = {
-    "update-gas-oracle": {
-        "task": "app.tasks.periodic_tasks.update_gas_oracle",
-        "schedule": 10.0,  # every 10 seconds
-    },
-    "check-stale-batches": {
-        "task": "app.tasks.periodic_tasks.check_stale_batches",
-        "schedule": 120.0,  # every 2 minutes
-    },
-    "check-hot-wallet": {
-        "task": "app.tasks.periodic_tasks.check_hot_wallet",
-        "schedule": 300.0,  # every 5 minutes
-    },
-    "aggregate-daily-stats": {
-        "task": "app.tasks.periodic_tasks.aggregate_daily_stats",
-        "schedule": crontab(hour=0, minute=5),  # daily 00:05 UTC
-    },
-    "cleanup-old-locks": {
-        "task": "app.tasks.periodic_tasks.cleanup_old_locks",
-        "schedule": 600.0,  # every 10 minutes
-    },
-    "send-daily-digest": {
-        "task": "app.tasks.notification_tasks.send_daily_digest",
-        "schedule": crontab(hour=0, minute=30),  # daily 00:30 UTC
-    },
     "process-webhook-deliveries": {
         "task": "app.tasks.webhook_tasks.process_webhook_deliveries",
         "schedule": 15.0,  # every 15 seconds
@@ -192,10 +156,6 @@ celery.conf.beat_schedule = {
     "expire-pending-intents": {
         "task": "app.tasks.webhook_tasks.expire_pending_intents",
         "schedule": 60.0,  # every 60 seconds
-    },
-    "recover-pending-fees": {
-        "task": "app.tasks.fee_recovery_tasks.recover_pending_fees",
-        "schedule": 600.0,  # every 10 minutes — collect fees whose leg crashed
     },
     "run-scheduled-account-deletions": {
         # GDPR art. 17 hard-delete cron — scans users past their 30-day

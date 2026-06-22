@@ -27,7 +27,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.models.ledger_models import LedgerAuditLog
+from app.models.audit_models import LedgerAuditLog
 from app.middleware.request_context import get_request_id, get_client_ip, get_user_agent
 
 logger = logging.getLogger(__name__)

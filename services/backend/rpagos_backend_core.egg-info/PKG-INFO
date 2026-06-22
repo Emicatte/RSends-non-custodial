@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: rpagos-backend-core
+Version: 1.0.0
+Summary: Compliance & Data Engine per transazioni Web3 — DAC8/CARF
+Requires-Python: >=3.11

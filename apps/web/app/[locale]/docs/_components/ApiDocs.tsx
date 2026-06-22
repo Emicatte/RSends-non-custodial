@@ -208,9 +208,10 @@ export function ApiDocs() {
         {/* 1 ── OVERVIEW ──────────────────────────────────────── */}
         <Section id="overview" title="Overview">
           <P>
-            RSends is a custodial, multi-chain B2B crypto payment gateway. The destination
-            chain is chosen per transaction — RSends routes each payout to the network the
-            merchant selects, with no single privileged chain.
+            RSends is a non-custodial B2B stablecoin payment gateway. Your customer pays in
+            stablecoin (USDC, USDT or EURC) on Base or Ethereum, and the funds settle on-chain
+            directly into your own wallet through an immutable smart contract — RSends never
+            holds or controls them.
           </P>
           <P>
             The REST API is served from a single base URL. Every response is{' '}
@@ -367,7 +368,7 @@ signature = HMAC_SHA256(secret, message).hexdigest()
           <CodeBlock
             label="POST /api/v1/distributions"
             code={`{
-  "label": "Q2 affiliate payouts",
+  "label": "Q2 affiliate payments",
   "chain_id": 8453,
   "recipients": [
     { "address": "0xRecipientA...", "percent_bps": 7000, "label": "Partner A" },
@@ -436,8 +437,8 @@ signature = HMAC_SHA256(secret, message).hexdigest()
         {/* 6 ── EXECUTION ─────────────────────────────────────── */}
         <Section id="execution" title="Execution">
           <P>
-            Execution plans describe a cross-chain payout: a source token/chain, a destination
-            token/chain chosen for the payout, and the destination addresses.
+            Execution plans describe a stablecoin payment on Base or Ethereum: the token, the
+            amount, and the merchant&apos;s own destination wallet the funds settle into.
           </P>
           <Endpoint method="POST" path="/api/v1/execution/plan" />
           <CodeBlock

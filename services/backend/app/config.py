@@ -45,33 +45,32 @@ class Settings(BaseSettings):
     alchemy_webhook_secret: str = ""
     alchemy_auth_token: str = ""
 
-    # ── Deposit Address Generation ────────────────────────
-    deposit_master_seed: str = ""         # [DEPRECATED] Legacy seed — usato solo per backward compat
-    deposit_master_key: str = ""          # Master private key per derivazione deposit addresses (0x-prefixed 64-char hex)
-                                          # CRITICO: backup sicuro, se persa i fondi non sono recuperabili
-
-    # ── Sweeper / Key Management ────────────────────────
-    sweep_private_key: str = ""
-    signer_mode: str = "local"          # "local" (env key) | "kms" (AWS KMS) | "vault" (HashiCorp Vault)
-    kms_key_id: str = ""                # AWS KMS key ID (ECC_SECG_P256K1)
-    aws_region: str = "eu-west-1"       # AWS region for KMS
-
-    # ── Oracle signer (M1) — signs EIP-712 oracle approvals with a DEDICATED
-    # key, separate from the sweep hot wallet. In prod use "kms" so the oracle
-    # key never lives in the web tier (the Next oracle delegates digest signing
-    # to /api/internal/oracle/sign-digest). "local" (dev/testnet) uses
-    # ORACLE_SIGNER_PRIVATE_KEY. NB: the resulting signer address must be the
-    # on-chain oracleSigner (set it via the contract before switching).
-    oracle_signer_mode: str = "local"       # "local" | "kms"
-    oracle_kms_key_id: str = ""             # dedicated KMS key for the oracle (mode=kms)
-    oracle_signer_private_key: str = ""     # dev/testnet only (mode=local)
-    # Multisig (M1 slice B) — comma-separated lists for an M-of-N oracle (V5/V6
-    # threshold). Fall back to the single-key vars above when unset (N=1).
-    oracle_kms_key_ids: str = ""            # comma-separated KMS key ids (mode=kms)
-    oracle_signer_private_keys: str = ""    # comma-separated keys (mode=local, dev)
-    vault_addr: str = ""                # HashiCorp Vault server URL
-    vault_token: str = ""               # Vault authentication token
-    vault_key_name: str = "rsend-signer"  # Vault Transit key name
+    # ══════════════════════════════════════════════════════
+    #  NON-CUSTODIAL on-chain settlement
+    #  No KMS / no sweep key / no deposit master key — RSends never holds keys
+    #  or funds. The payer pays RSendsRouter directly from their own wallet; the
+    #  indexer watches PaymentMade events.
+    # ══════════════════════════════════════════════════════
+    # JSON map of chain_id → RSendsRouter address, e.g. {"8453":"0xRouter..."}
+    rsends_router_addresses_json: str = ""
+    # JSON map of chain_id → RPC URL (optional; falls back to rpc_manager defaults)
+    indexer_rpc_urls_json: str = ""
+    # Fallback confirmation depth (latest - N) used when the chain's finalized
+    # tag is unavailable/disabled. A settlement is FINAL (and only then is the
+    # invoice marked paid + webhook fired) once its block is this deep AND its
+    # stored block hash is still canonical.
+    indexer_confirmations: int = 2
+    # Prefer the chain's finalized/safe block tag (Base/Ethereum support it) to
+    # decide finality; set False to always use the indexer_confirmations depth.
+    indexer_use_finalized_tag: bool = True
+    # Block tag treated as final ("finalized" or "safe").
+    indexer_finalized_tag: str = "finalized"
+    # How far below the final head we keep re-verifying `final` rows' block hash,
+    # so a deeper-than-expected reorg of an already-finalized log can still be
+    # detected and reversed.
+    indexer_reorg_safety_depth: int = 64
+    # JSON map of chain_id → start block for first-run backfill, e.g. {"8453": 0}
+    indexer_start_blocks_json: str = ""
 
     # ── Server ────────────────────────────────────────────
     host: str = "0.0.0.0"
@@ -82,7 +81,7 @@ class Settings(BaseSettings):
     rsend_dev_auth_bypass: bool = False
 
     # ── CORS Origins (prod) ───────────────────────────────
-    cors_origins: str = "https://fee-router-dapp.vercel.app,https://rpagos.io"
+    cors_origins: str = "https://rsends-noncustodial.example,https://app.rsends-noncustodial.example"
 
     # ── Anomaly Detection ─────────────────────────────────
     anomaly_z_score_threshold: float = 3.0
@@ -99,12 +98,6 @@ class Settings(BaseSettings):
     notification_rate_limit: int = 30          # max messages per minute per chat
     notification_rate_window: int = 60         # sliding window in seconds
 
-    # ── Reconciliation ────────────────────────────────────
-    # Percentage threshold for reconciliation mismatch alert (e.g. 1.0 = 1%)
-    reconciliation_threshold_pct: float = 1.0
-    # JSON map of chain_id → treasury address, e.g. {"8453":"0xABC...","1":"0xDEF..."}
-    treasury_addresses_json: str = ""
-
     # ── Celery ────────────────────────────────────────────
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/2"
@@ -119,10 +112,8 @@ class Settings(BaseSettings):
     # ── Alert Webhook (Discord/Slack) ─────────────────────
     alert_webhook_url: str = ""        # Discord or Slack incoming webhook URL
 
-    # ── Platform Fee ─────────────────────────────────────
-    platform_fee_bps: int = 100              # 100 basis points = 1.0%
-    platform_treasury_address: str = ""       # RSends treasury wallet
-    platform_fee_enabled: bool = True
+    # NON-CUSTODIAL: platform-fee sweep config removed. Any protocol fee is taken
+    # atomically on-chain by RSendsRouter (if enabled), never swept by RSends.
 
     # ── End-user Auth (Google OAuth + Session JWT) ───────
     google_oauth_client_id: str = ""          # Google OAuth 2.0 client ID (web) — `aud` claim of ID tokens
@@ -144,8 +135,34 @@ class Settings(BaseSettings):
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
+    # ── Parsed JSON config helpers (non-custodial on-chain settlement) ──
+    @property
+    def rsends_router_addresses(self) -> dict:
+        """{chain_id(str) -> RSendsRouter address} parsed from the JSON env."""
+        return _parse_json_map(self.rsends_router_addresses_json)
+
+    @property
+    def indexer_rpc_urls(self) -> dict:
+        return _parse_json_map(self.indexer_rpc_urls_json)
+
+    @property
+    def indexer_start_blocks(self) -> dict:
+        return _parse_json_map(self.indexer_start_blocks_json)
+
 
 _HEX_KEY_RE = re.compile(r"^0x[0-9a-fA-F]{64}$")
+
+
+def _parse_json_map(raw: str) -> dict:
+    """Parse a JSON object env string into a dict; {} on empty/invalid."""
+    if not raw:
+        return {}
+    import json
+    try:
+        val = json.loads(raw)
+        return val if isinstance(val, dict) else {}
+    except (ValueError, TypeError):
+        return {}
 
 
 class StartupValidationError(SystemExit):
@@ -174,37 +191,8 @@ def validate_settings(settings: Settings) -> None:
     env = os.getenv("ENVIRONMENT", "").lower()
     is_prod = (not settings.debug) or env.startswith("prod")
 
-    # ── SWEEP_PRIVATE_KEY ─────────────────────────────────
-    if settings.signer_mode == "local":
-        if not settings.sweep_private_key:
-            errors.append(
-                "SWEEP_PRIVATE_KEY is empty. "
-                "The sweeper cannot sign transactions without it. "
-                "Set it in .env or switch SIGNER_MODE=kms."
-            )
-        elif not _HEX_KEY_RE.match(settings.sweep_private_key):
-            errors.append(
-                "SWEEP_PRIVATE_KEY is malformed. "
-                "Expected 0x-prefixed 64-char hex string (32 bytes). "
-                f"Got: {settings.sweep_private_key[:6]}...({len(settings.sweep_private_key)} chars)"
-            )
-    elif settings.signer_mode == "kms":
-        if not settings.kms_key_id:
-            errors.append(
-                "SIGNER_MODE=kms but KMS_KEY_ID is empty. "
-                "Set the AWS KMS key ID for transaction signing."
-            )
-    elif settings.signer_mode == "vault":
-        if not settings.vault_addr:
-            errors.append(
-                "SIGNER_MODE=vault but VAULT_ADDR is empty. "
-                "Set the HashiCorp Vault server URL."
-            )
-        if not settings.vault_token:
-            errors.append(
-                "SIGNER_MODE=vault but VAULT_TOKEN is empty. "
-                "Set the Vault authentication token."
-            )
+    # NON-CUSTODIAL: no SWEEP_PRIVATE_KEY / SIGNER_MODE / KMS / Vault validation.
+    # The platform holds no keys and signs nothing.
 
     # ── ALCHEMY_API_KEY ───────────────────────────────────
     if not settings.alchemy_api_key:
@@ -234,18 +222,11 @@ def validate_settings(settings: Settings) -> None:
             "This is likely incorrect — verify your connection string."
         )
 
-    # ── DEPOSIT_MASTER_KEY ────────────────────────────────
-    if not settings.deposit_master_key:
+    # NON-CUSTODIAL: no DEPOSIT_MASTER_KEY — the payer pays RSendsRouter directly.
+    if is_prod and not settings.rsends_router_addresses:
         warnings.append(
-            "DEPOSIT_MASTER_KEY is empty. "
-            "Deposit address generation will fail. "
-            "Set a 0x-prefixed 64-char hex private key in .env."
-        )
-    elif not _HEX_KEY_RE.match(settings.deposit_master_key):
-        errors.append(
-            "DEPOSIT_MASTER_KEY is malformed. "
-            "Expected 0x-prefixed 64-char hex string (32 bytes). "
-            f"Got: {settings.deposit_master_key[:6]}...({len(settings.deposit_master_key)} chars)"
+            "RSENDS_ROUTER_ADDRESSES_JSON is empty. The on-chain PaymentMade "
+            "indexer will be disabled until per-chain RSendsRouter addresses are set."
         )
 
     # ── ALCHEMY_WEBHOOK_SECRET ────────────────────────────
@@ -323,22 +304,8 @@ def validate_settings(settings: Settings) -> None:
             "wallet signatures are replayable. Set WALLET_AUTH_ALLOW_LEGACY=false."
         )
 
-    # ── Oracle signer (M1-A) ──────────────────────────────
-    # Mirror the sweep signer posture. In prod the oracle key must stay out of the
-    # web tier: only 'kms' does that. key_manager.py treats any non-'kms' mode
-    # (incl. 'remote') as LOCAL signing, so reject everything non-'kms' in prod.
-    if settings.oracle_signer_mode == "kms":
-        if not (settings.oracle_kms_key_id or settings.oracle_kms_key_ids):
-            errors.append(
-                "ORACLE_SIGNER_MODE=kms but ORACLE_KMS_KEY_ID(S) is empty. "
-                "Set ORACLE_KMS_KEY_ID (single) or ORACLE_KMS_KEY_IDS (CSV, multisig)."
-            )
-    elif is_prod:
-        errors.append(
-            f"ORACLE_SIGNER_MODE={settings.oracle_signer_mode!r} is forbidden in "
-            "production: only 'kms' keeps the oracle signing key out of the web tier "
-            "(forgery risk). Set ORACLE_SIGNER_MODE=kms and configure ORACLE_KMS_KEY_ID(S)."
-        )
+    # NON-CUSTODIAL: no oracle signer — transfers are not oracle-gated; the payer
+    # calls RSendsRouter directly and funds settle atomically on-chain.
 
     # ── Print results ─────────────────────────────────────
     for w in warnings:

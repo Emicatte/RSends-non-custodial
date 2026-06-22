@@ -582,29 +582,22 @@ function SparkleIcon() {
 // ═══════════════════════════════════════════════════════════
 
 const COLUMNS = [
-  { title: 'Crypto Solutions', links: [
-    { label: 'Crypto Payments',      href: '#how-it-works' },
-    { label: 'Stablecoin Settlement', href: 'https://www.circle.com/usdc' },
-    { label: 'Cross-Border Rails',   href: '#compliance' },
-    { label: 'Institutional Custody', href: 'https://www.coinbase.com/prime' },
+  { title: 'Product', links: [
+    { label: 'How it works', href: '#how-it-works' },
+    { label: 'Pricing',      href: '#pricing' },
+    { label: 'Supported assets', href: '#how-it-works' },
+    { label: 'Open the app',  href: '/app' },
   ]},
-  { title: 'Blockchain & Tech', links: [
-    { label: 'Multi-Chain Interoperability', href: 'https://docs.base.org' },
-    { label: 'Protocol Documentation',      href: 'https://docs.base.org/building-with-base/overview' },
-    { label: 'Network Status',              href: 'https://status.base.org' },
-    { label: 'Security Audits',             href: '#security' },
-  ]},
-  { title: 'Support & Resources', links: [
-    { label: 'Contact Support', href: 'mailto:support@rsends.com' },
-    { label: 'Help Center',     href: '#how-it-works' },
-    { label: 'Integration Guides', href: 'https://docs.base.org/building-with-base/guides/overview' },
-    { label: 'API Sandbox',     href: '#developers' },
+  { title: 'Developers', links: [
+    { label: 'API documentation', href: '/docs' },
+    { label: 'Base network status', href: 'https://status.base.org' },
+    { label: 'Ethereum status',    href: 'https://ethstats.dev' },
   ]},
   { title: 'Company', links: [
-    { label: 'About RSends', href: '#about' },
-    { label: 'Global Reach', href: '#compliance' },
-    { label: 'Careers (Web3)', href: 'https://www.linkedin.com/company/rsends/jobs' },
-    { label: 'Press',         href: 'mailto:press@rsends.com' },
+    { label: 'Contact', href: 'mailto:support@rsends.com' },
+    { label: 'Terms',   href: '/docs/terms' },
+    { label: 'Privacy', href: '/docs/privacy' },
+    { label: 'AML/KYC', href: '/docs/aml-kyc' },
   ]},
 ]
 
@@ -632,10 +625,10 @@ export default function FooterGlobe() {
       <div className={styles.accentLine} />
       <div className={styles.linksBar}>
         <p className={styles.disclaimer}>
-          *RSends&apos; global transaction throughput and compliance status based on composite network
-          analysis and independent audits across multi-chain environments, 2026. Global average
-          settlement times found to be up to 95% faster than legacy rails. Total Economic Impact of
-          compliant crypto rails verified by composite study, Q2 2026.
+          RSends is a non-custodial payment gateway for business: stablecoin payments settle on-chain
+          directly into your own wallet through an immutable smart contract — RSends never holds or
+          controls the funds. Early-stage product; a third-party security audit is planned. Available to
+          business customers outside the United States and Türkiye.
         </p>
 
         <div className={styles.grid}>

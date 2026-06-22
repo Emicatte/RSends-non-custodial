@@ -31,17 +31,10 @@ from app.config import get_settings, validate_settings, validate_dev_flags
 from app.db.session import init_db, close_db, async_session, _is_sqlite, engine
 from app.api.routes import router
 from app.services.cache_service import close_redis
-from app.services.polling_service import start_polling_if_needed, stop_polling
+from app.services.payment_indexer import start_indexer_if_needed, stop_indexer
 from app.services.price_service import fetch_all_prices, price_refresh_loop
-from app.api.websocket_routes import ws_router, feed_manager
 from app.api.payment_ws import payment_ws_router, payment_manager
 from app.logging_config import setup_logging
-from app.jobs.reconciliation_job import (
-    start_reconciliation_job,
-    stop_reconciliation_job,
-    get_last_report,
-)
-
 logger = logging.getLogger(__name__)
 
 
@@ -124,22 +117,25 @@ async def lifespan(app: FastAPI):
     )
 
     # ── Start WebSocket background tasks ─────────────
-    feed_manager.start_background_tasks()
     payment_manager.start_heartbeat()
 
-    # ── Start block polling if webhook not configured ──
-    poller = await start_polling_if_needed()
+    # ── Start on-chain PaymentMade indexer (non-custodial) ──
+    # Watches RSendsRouter.PaymentMade per configured chain. No-op if no
+    # RSENDS_ROUTER addresses are configured (e.g. dev/test).
+    await start_indexer_if_needed()
 
-    # ── Start reconciliation job ────────────────────
-    start_reconciliation_job()
-
-    # ── Initialize NonceManager + gap detection ────
+    # ── Token registry boot guard (defense-in-depth) ──
+    # Re-check enabled tokens' on-chain symbol()/decimals() against the registry.
+    # Mismatch → panic (real danger); RPC unreachable → retry/backoff then continue.
+    # No-op when no router addresses are configured. The deploy-script gate
+    # (SetFeeConfig.verifyAndSet) remains the primary backstop.
+    from app.services.router_registry import verify_enabled_tokens_onchain
     try:
-        from app.services.sweep_service import initialize_nonce_with_gap_detection
-        nonce_state = await initialize_nonce_with_gap_detection(chain_id=8453)
-        logger.info("NonceManager ready: %s", nonce_state)
-    except Exception as e:
-        logger.warning("NonceManager init skipped (Redis/RPC unavailable): %s", e)
+        await verify_enabled_tokens_onchain()
+    except SystemExit:
+        raise  # metadata mismatch → refuse to start
+    except Exception as e:  # never let a guard bug break startup
+        logger.warning("[registry-guard] skipped due to unexpected error: %s", e)
 
     # ── Price service: initial fetch + background loop ──
     import asyncio as _aio
@@ -202,10 +198,8 @@ async def lifespan(app: FastAPI):
             except Exception as _e:  # never let cleanup raise
                 logger.warning("Error awaiting cancelled task during shutdown: %s", _e)
 
-    # 2) Stop jobs / pollers / WS managers (these may use the DB/Redis).
-    await stop_reconciliation_job()
-    await stop_polling()
-    await feed_manager.shutdown()
+    # 2) Stop indexer / WS managers (these may use the DB/Redis).
+    await stop_indexer()
     await payment_manager.shutdown()
 
     # 3) Close shared connections LAST.
@@ -304,34 +298,17 @@ except ImportError:
 
 # ── Routes ───────────────────────────────────────────────
 app.include_router(router)
-from app.api.sweeper_routes import sweeper_router
-app.include_router(sweeper_router)
-from app.api.distribution_routes import distribution_router
-app.include_router(distribution_router)
-app.include_router(ws_router)
 app.include_router(payment_ws_router)
 from app.api.audit_routes import audit_router
 app.include_router(audit_router)
-from app.api.ledger_routes import ledger_router
-app.include_router(ledger_router)
 from app.api.price_routes import price_router
 app.include_router(price_router)
-from app.api.execution_routes import router as execution_router
-app.include_router(execution_router)
-from app.api.strategy_routes import router as strategy_router
-app.include_router(strategy_router)
 from app.api.merchant_routes import merchant_router
 app.include_router(merchant_router)
-from app.api.split_routes import split_router
-app.include_router(split_router)
 from app.api.health_routes import health_router
 app.include_router(health_router)
-from app.api.signing_routes import signing_router
-app.include_router(signing_router)
 from app.api.ratelimit_routes import ratelimit_router
 app.include_router(ratelimit_router)
-from app.api.oracle_signer_routes import oracle_signer_router
-app.include_router(oracle_signer_router)
 from app.api.aml_routes import aml_router
 app.include_router(aml_router)
 from app.api.api_key_routes import api_key_router
@@ -381,7 +358,7 @@ async def health():
         "version": "2.0.0",
         "redis": "connected" if redis_ok else "disconnected",
         "idempotency": "active" if redis_ok else "FAIL-CLOSED (webhooks rejected)",
-        "ws_connections": feed_manager.active_connections,
+        "ws_connections": payment_manager.active_connections,
     }
 
 
@@ -541,7 +518,7 @@ async def health_sweep(_admin: str = Depends(require_admin)):
     # ── 6. WebSocket connections ─────────────────────────
     checks["websocket"] = {
         "status": "ok",
-        "active_connections": feed_manager.active_connections,
+        "active_connections": payment_manager.active_connections,
     }
 
     # ── 7. Notification service ──────────────────────────
@@ -589,41 +566,14 @@ async def health_config(_admin: str = Depends(require_admin)):
             "REDIS_URL": _check(settings.redis_url, required=True, prod_only=True),
             "ALCHEMY_API_KEY": _check(settings.alchemy_api_key, required=True),
             "ALCHEMY_WEBHOOK_SECRET": _check(settings.alchemy_webhook_secret),
-            "SWEEP_PRIVATE_KEY": _check(
-                settings.sweep_private_key,
-                required=(settings.signer_mode == "local"),
-            ),
-            "SIGNER_MODE": settings.signer_mode,
-            "KMS_KEY_ID": _check(
-                settings.kms_key_id,
-                required=(settings.signer_mode == "kms"),
-            ),
+            # NON-CUSTODIAL: no SWEEP_PRIVATE_KEY / SIGNER_MODE / KMS_KEY_ID.
+            "RSENDS_ROUTER_ADDRESSES": _check(settings.rsends_router_addresses_json),
             "HMAC_SECRET": _check(settings.hmac_secret, required=True, prod_only=True),
             "TELEGRAM_BOT_TOKEN": _check(settings.telegram_bot_token),
             "TELEGRAM_CHAT_ID": _check(settings.telegram_chat_id),
             "SENTRY_DSN": _check(settings.sentry_dsn),
             "DEBUG": settings.debug,
         },
-    }
-
-
-@app.get("/health/reconciliation")
-async def health_reconciliation():
-    """Risultati dell'ultima riconciliazione (per monitoring dashboard)."""
-    report = get_last_report()
-    if report is None:
-        return {
-            "ledger_balanced": None,
-            "system_balanced": None,
-            "stale_transactions": None,
-            "last_reconciliation": None,
-            "message": "No reconciliation run yet",
-        }
-    return {
-        "ledger_balanced": report.ledger_balanced,
-        "system_balanced": report.system_balanced,
-        "stale_transactions": report.stale_transactions,
-        "last_reconciliation": report.last_reconciliation.isoformat() if report.last_reconciliation else None,
     }
 
 

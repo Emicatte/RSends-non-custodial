@@ -14,12 +14,9 @@ from sqlalchemy.ext.asyncio import (
 )
 from app.config import get_settings
 from app.models.db_models import Base
-from app.models import forwarding_models as _fwd_models   # noqa: F401 — registra tabelle forwarding in Base.metadata
-from app.models import ledger_models as _ledger_models    # noqa: F401 — registra tabelle ledger in Base.metadata
-from app.models import command_models as _cmd_models      # noqa: F401 — registra tabelle command center in Base.metadata
+from app.models import audit_models as _audit_models        # noqa: F401 — registra tabella audit_log (tamper-evident) in Base.metadata
+from app.models import settlement_models as _settlement_models  # noqa: F401 — registra tabella payment_settlements (on-chain settlement, non-custodial) in Base.metadata
 from app.models import aml_models as _aml_models            # noqa: F401 — registra tabella blacklisted_wallets in Base.metadata
-from app.models import strategy_models as _strat_models      # noqa: F401 — registra tabella strategies in Base.metadata
-from app.models import split_models as _split_models         # noqa: F401 — registra tabelle split_contracts / split_recipients / split_executions in Base.metadata
 from app.models import api_key_models as _apikey_models      # noqa: F401 — registra tabella api_keys in Base.metadata
 from app.models import auth_models as _auth_models            # noqa: F401 — registra tabelle users / user_sessions / auth_audit_log in Base.metadata
 from app.models import org_models as _org_models              # noqa: F401 — registra tabelle organizations / memberships / org_invites in Base.metadata (referenziata da users.active_org_id)

@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.db.session import get_db
-from app.models.ledger_models import LedgerAuditLog
+from app.models.audit_models import LedgerAuditLog
 
 audit_router = APIRouter(prefix="/api/v1/audit", tags=["audit"])
 
@@ -122,48 +122,6 @@ async def get_audit_log(
     )
 
 
-# ═══════════════════════════════════════════════════════════════
-#  Kill Switch Admin Endpoints (Wave 8.4)
-# ═══════════════════════════════════════════════════════════════
-
-
-class KillSwitchToggle(BaseModel):
-    active: bool
-
-
-@audit_router.get("/kill-switch/status")
-async def kill_switch_status(_admin: str = Depends(require_admin)):
-    from app.services.kill_switch import get_status
-
-    return await get_status()
-
-
-@audit_router.post("/kill-switch/global")
-async def toggle_global_kill_switch(
-    body: KillSwitchToggle,
-    _admin: str = Depends(require_admin),
-):
-    from app.services.kill_switch import set_global_stop
-
-    await set_global_stop(body.active)
-    return {"global_stopped": body.active}
-
-
-@audit_router.post("/kill-switch/client/{client_id}")
-async def toggle_client_kill_switch(
-    client_id: str,
-    body: KillSwitchToggle,
-    _admin: str = Depends(require_admin),
-):
-    from app.services.kill_switch import set_client_stop
-
-    await set_client_stop(client_id, body.active)
-    return {"client_id": client_id, "stopped": body.active}
-
-
-@audit_router.post("/kill-switch/clear-auto-stop")
-async def clear_auto_stop_endpoint(_admin: str = Depends(require_admin)):
-    from app.services.kill_switch import clear_auto_stop
-
-    await clear_auto_stop()
-    return {"auto_stop": None}
+# NON-CUSTODIAL: Kill Switch admin endpoints removed. They emergency-stopped the
+# custodial sweep engine (app.services.kill_switch), which no longer exists — the
+# platform never moves funds, so there is nothing to halt.

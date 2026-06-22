@@ -57,9 +57,14 @@ async def session():
 
 
 def _intent(
-    merchant_id: str, fee_swept_at, status: IntentStatus = IntentStatus.completed
+    merchant_id: str, completed_at, status: IntentStatus = IntentStatus.completed
 ) -> PaymentIntent:
-    """Helper: PaymentIntent minimo con fee_swept_at dato (None = fee non swept)."""
+    """Helper: minimal PaymentIntent settled at `completed_at` (None = not settled).
+
+    NON-CUSTODIAL: billing is now derived from on-chain-settled intents
+    (status paid/completed with completed_at in period), not the removed
+    custodial fee_swept_at column.
+    """
     return PaymentIntent(
         intent_id=f"pi_{secrets.token_hex(16)}",
         reference_id=secrets.token_hex(8),
@@ -69,7 +74,7 @@ def _intent(
         chain="BASE",
         status=status,
         expires_at=datetime(2026, 6, 30, tzinfo=timezone.utc),
-        fee_swept_at=fee_swept_at,
+        completed_at=completed_at,
     )
 
 

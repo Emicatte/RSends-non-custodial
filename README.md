@@ -423,7 +423,71 @@ fee-router-dapp/
     └── tokens/                   # Token icons
 ```
 
+## Local development
+
+One-command bootstrap for a fresh checkout — boots the FastAPI backend and the
+Next.js frontend together, in **development mode**, without the production-only
+requirements (TLS Redis, real Alchemy key, OAuth, etc.).
+
+```bash
+make setup    # one-time: venv + deps + dev .env + Postgres/Redis + migrations
+make dev      # run backend (:8000) + frontend (:3000) together — Ctrl-C stops both
+```
+
+Frontend only (quick UI viewing, no backend/infra needed):
+
+```bash
+make dev-web  # next dev on :3000
+```
+
+### Prerequisites
+- **Python 3.12** — `brew install python@3.12` (or `pyenv install 3.12`). The version
+  is pinned in [`services/backend/.python-version`](services/backend/.python-version);
+  `make setup` refuses to build the venv on any other version. Override the
+  interpreter with `make setup PYTHON=/full/path/to/python3.12`.
+- **Node.js >= 20** and npm.
+- **Docker** (for Postgres + Redis via `services/backend/docker-compose.dev.yml`),
+  **or** Homebrew services (see below).
+
+### What each target does
+| Target | Action |
+|--------|--------|
+| `make setup` | Creates the 3.12 venv at `services/backend/.venv`, installs backend deps + `pip install -e .`, runs `apps/web` `npm install`, generates the dev env files (if missing), starts Postgres+Redis, runs `alembic upgrade head`. |
+| `make dev` | Ensures infra is up, then runs `uvicorn app.main:app --reload` and `next dev` concurrently. |
+| `make dev-web` | Frontend only. |
+| `make dev-infra` | Just brings up Postgres + Redis. |
+| `make check-python` | Verifies the active interpreter is 3.12.x. |
+
+### Generated env files (dev-only, gitignored — never commit)
+`make setup` runs `scripts/gen_dev_env.py`, which writes:
+- `services/backend/.env` — `ENVIRONMENT=development`, `DEBUG=true`, local Postgres/Redis,
+  and freshly generated `HMAC_SECRET` / `AUTH_JWT_SECRET` / `INTERNAL_PROXY_SECRET`.
+- `apps/web/.env.local` — backend URLs plus the **same** `INTERNAL_PROXY_SECRET` and
+  `HMAC_SECRET` (the Next.js server routes authenticate to the backend
+  `/api/internal/*` endpoints with these), and a `NEXTAUTH_SECRET`.
+
+The script is idempotent: existing files are never overwritten, so secrets stay
+stable and matched across both sides. Development mode makes `app/config.py`'s
+`is_prod` False, which skips the production-only guards — **the strict production
+validation in `config.py` is unchanged**; dev convenience comes from the local
+`.env`, not from softening any check.
+
+### Homebrew alternative (instead of Docker)
+```bash
+brew install postgresql@16 redis
+brew services start postgresql@16
+brew services start redis
+createuser -s rsend 2>/dev/null; createdb -O rsend rsend_dev 2>/dev/null
+# (the generated DATABASE_URL expects user 'rsend' / db 'rsend_dev' on :5432)
+make dev   # skips compose if Postgres/Redis are already listening
+```
+If your local Postgres uses different credentials, edit `DATABASE_URL` in
+`services/backend/.env` to match.
+
 ## Setup
+
+> Manual / reference setup. For day-to-day local work prefer the
+> **Local development** one-command flow above.
 
 ### Prerequisites
 - Node.js >= 20.x

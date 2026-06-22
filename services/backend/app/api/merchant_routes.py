@@ -37,7 +37,11 @@ from app.models.merchant_models import (
 )
 from app.services.webhook_service import send_test_event, _dispatch_event
 from app.services.audit_service import log_event
-from app.services.deposit_address_service import generate_deposit_address
+from app.services.router_registry import (
+    derive_invoice_id,
+    build_onchain_payment,
+    token_is_enabled,
+)
 from app.services.key_usage_service import increment_intent_count, check_monthly_limits
 
 from datetime import datetime, timezone, timedelta
@@ -64,12 +68,17 @@ def _generate_intent_id() -> str:
     return f"pi_{secrets.token_hex(16)}"
 
 
-def _intent_to_response(intent: PaymentIntent) -> PaymentIntentResponse:
-    """Converte un PaymentIntent SQLAlchemy → PaymentIntentResponse Pydantic."""
+async def _intent_to_response(intent: PaymentIntent) -> PaymentIntentResponse:
+    """Converte un PaymentIntent SQLAlchemy → PaymentIntentResponse Pydantic.
+
+    Async because the on-chain payload reads the fee LIVE from RSendsRouter.quoteFee.
+    """
+    onchain = await build_onchain_payment(intent)
     return PaymentIntentResponse(
         intent_id=intent.intent_id,
         reference_id=intent.reference_id,
-        deposit_address=intent.deposit_address,
+        onchain_invoice_id=intent.onchain_invoice_id,
+        onchain=onchain,
         amount=intent.amount,
         currency=intent.currency,
         chain=intent.chain or "BASE",
@@ -87,12 +96,6 @@ def _intent_to_response(intent: PaymentIntent) -> PaymentIntentResponse:
         amount_received=intent.amount_received,
         overpaid_amount=intent.overpaid_amount,
         underpaid_amount=intent.underpaid_amount,
-        sweep_tx_hash=intent.sweep_tx_hash,
-        swept_at=intent.swept_at.isoformat() if intent.swept_at else None,
-        fee_bps=intent.fee_bps,
-        fee_amount=intent.fee_amount,
-        fee_tx_hash=intent.fee_tx_hash,
-        merchant_sweep_amount=intent.merchant_sweep_amount,
         expires_at=intent.expires_at.isoformat(),
         created_at=intent.created_at.isoformat(),
         completed_at=intent.completed_at.isoformat() if intent.completed_at else None,
@@ -138,6 +141,15 @@ async def create_payment_intent(
             "message": f"Live API keys cannot create intents on testnet chains. Requested: {requested_chain}.",
         })
 
+    # Token policy gate: reject any token not in the registry / not enabled for
+    # this chain (single source of truth: app/token_registry.json). This is the
+    # off-chain mirror of the contract's FeeConfig.enabled whitelist.
+    if not token_is_enabled(requested_chain, payload.currency):
+        raise HTTPException(400, {
+            "error": "UNSUPPORTED_TOKEN",
+            "message": f"Token {payload.currency} is not enabled on chain {requested_chain}.",
+        })
+
     # Monthly limits
     if key_id:
         limit_check = await check_monthly_limits(db, key_id)
@@ -150,16 +162,16 @@ async def create_payment_intent(
     now = datetime.now(timezone.utc)
     intent_id = _generate_intent_id()
 
-    # Genera deposit address unico per questo intent
-    try:
-        deposit_addr = generate_deposit_address(intent_id)
-    except ValueError:
-        deposit_addr = None
-        logger.warning("DEPOSIT_MASTER_SEED not set — deposit_address will be null for %s", intent_id)
+    # NON-CUSTODIAL: derive the on-chain invoiceId (bytes32) from the reference.
+    # The payer passes this to RSendsRouter.pay(); the indexer matches the
+    # emitted PaymentMade.invoiceId back to this intent. No deposit address,
+    # no custodial key — funds go payer -> merchant atomically on-chain.
+    reference_id = generate_reference_id(merchant_id)
+    onchain_invoice_id = derive_invoice_id(reference_id)
 
     intent = PaymentIntent(
         intent_id=intent_id,
-        reference_id=generate_reference_id(merchant_id),
+        reference_id=reference_id,
         merchant_id=merchant_id,
         amount=payload.amount,
         currency=payload.currency,
@@ -167,7 +179,7 @@ async def create_payment_intent(
         recipient=payload.recipient,
         network=payload.network,
         expected_sender=payload.expected_sender,
-        deposit_address=deposit_addr,
+        onchain_invoice_id=onchain_invoice_id,
         late_payment_policy=payload.late_payment_policy,
         amount_tolerance_percent=payload.amount_tolerance_percent,
         allow_partial=payload.allow_partial,
@@ -191,7 +203,7 @@ async def create_payment_intent(
             "currency": payload.currency,
             "chain": payload.chain,
             "reference_id": intent.reference_id,
-            "deposit_address": deposit_addr,
+            "onchain_invoice_id": onchain_invoice_id,
             "expected_sender": payload.expected_sender,
             "late_payment_policy": payload.late_payment_policy,
             "amount_tolerance_percent": payload.amount_tolerance_percent,
@@ -208,14 +220,14 @@ async def create_payment_intent(
     await db.commit()
 
     logger.info(
-        "PaymentIntent created: %s ref=%s deposit=%s (merchant=%s, %.6f %s, chain=%s, sender=%s, expires=%s)",
-        intent.intent_id, intent.reference_id, deposit_addr or "none",
+        "PaymentIntent created: %s ref=%s invoiceId=%s (merchant=%s, %.6f %s, chain=%s, sender=%s, expires=%s)",
+        intent.intent_id, intent.reference_id, onchain_invoice_id,
         merchant_id, payload.amount, payload.currency, payload.chain,
         payload.expected_sender or "any",
         intent.expires_at.isoformat(),
     )
 
-    return _intent_to_response(intent)
+    return await _intent_to_response(intent)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -264,7 +276,7 @@ async def get_payment_intent(
         intent.status = IntentStatus.expired
         await db.commit()
 
-    return _intent_to_response(intent)
+    return await _intent_to_response(intent)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -441,7 +453,7 @@ async def list_merchant_transactions(
     records = [
         MerchantTransactionItem(
             intent_id=i.intent_id,
-            deposit_address=i.deposit_address,
+            onchain_invoice_id=i.onchain_invoice_id,
             amount=i.amount,
             currency=i.currency,
             chain=i.chain or "BASE",
@@ -559,7 +571,7 @@ async def resolve_late_payment(
 
     await db.commit()
 
-    return _intent_to_response(intent)
+    return await _intent_to_response(intent)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -629,4 +641,4 @@ async def cancel_payment_intent(
         intent.intent_id, merchant_id,
     )
 
-    return _intent_to_response(intent)
+    return await _intent_to_response(intent)

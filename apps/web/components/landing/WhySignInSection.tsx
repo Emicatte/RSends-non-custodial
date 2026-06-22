@@ -1,28 +1,28 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Link } from "@/i18n/navigation";
 import { C } from "@/app/designTokens";
 import { useIsMobile } from "@/hooks/useIsMobile";
-import { slugForCardKey } from "@/lib/features";
 
 export function WhySignInSection() {
   const t = useTranslations("auth.whySignIn");
   const isMobile = useIsMobile();
 
   const features = [
-    { key: "routes", icon: <RouteIcon /> },
-    { key: "history", icon: <HistoryIcon /> },
-    { key: "contacts", icon: <ContactsIcon /> },
-    { key: "notifications", icon: <BellIcon /> },
+    { key: "routes", icon: <StepIcon n={1} /> },
+    { key: "history", icon: <StepIcon n={2} /> },
+    { key: "contacts", icon: <StepIcon n={3} /> },
+    { key: "notifications", icon: <StepIcon n={4} /> },
   ] as const;
 
   return (
     <section
+      id="how-it-works"
       style={{
         padding: isMobile ? "60px 24px" : "80px 96px",
         maxWidth: 1440,
         margin: "0 auto",
+        scrollMarginTop: 80,
       }}
     >
       <div style={{ maxWidth: 880, marginBottom: isMobile ? 32 : 48 }}>
@@ -67,21 +67,13 @@ export function WhySignInSection() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {features.map((f) => (
-          <Link
+          <div
             key={f.key}
-            href={`/${slugForCardKey(f.key)}`}
-            className="block rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C8512C]/40"
-            style={{ textDecoration: "none", color: "inherit" }}
+            className="block rounded-2xl"
           >
             <div
-              className="rounded-2xl bg-white p-6 transition-colors"
+              className="rounded-2xl bg-white p-6 h-full"
               style={{ border: "1px solid rgba(200,81,44,0.15)" }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.borderColor = "rgba(200,81,44,0.35)")
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.borderColor = "rgba(200,81,44,0.15)")
-              }
             >
               <div className="flex items-start gap-4">
                 <div
@@ -109,85 +101,25 @@ export function WhySignInSection() {
                 </div>
               </div>
             </div>
-          </Link>
+          </div>
         ))}
       </div>
     </section>
   );
 }
 
-function RouteIcon() {
+function StepIcon({ n }: { n: number }) {
   return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+    <span
+      style={{
+        fontFamily: C.D,
+        fontSize: 16,
+        fontWeight: 700,
+        color: "#C8512C",
+        lineHeight: 1,
+      }}
     >
-      <circle cx="6" cy="19" r="3" />
-      <circle cx="18" cy="5" r="3" />
-      <path d="M6.7 17.3L17.3 6.7" />
-    </svg>
-  );
-}
-
-function HistoryIcon() {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M3 12a9 9 0 1 0 3-6.7" />
-      <path d="M3 4v5h5" />
-      <path d="M12 7v5l3 2" />
-    </svg>
-  );
-}
-
-function ContactsIcon() {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-    </svg>
-  );
-}
-
-function BellIcon() {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
-      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-    </svg>
+      {n}
+    </span>
   );
 }

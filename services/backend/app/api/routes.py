@@ -21,9 +21,7 @@ from app.models.schemas import (
 )
 from app.services.hmac_service import verify_signature
 from app.services.anomaly_service import analyze_transactions
-from app.services.idempotency_service import check_idempotency, ConflictError
 from app.services.audit_service import log_event
-from app.services.transaction_matcher import match_transaction, IncomingTx
 
 import logging
 
@@ -52,28 +50,6 @@ async def receive_transaction(
       4. Se presente, salva il compliance record
       5. Restituisce conferma
     """
-
-    # ── 0. Idempotency check (se chiave presente) ─────────────
-    if payload.idempotency_key:
-        try:
-            existing_tx = await check_idempotency(db, payload.idempotency_key)
-            if existing_tx is not None:
-                # COMPLETED → restituisci il risultato precedente senza rieseguire
-                return CallbackResponse(
-                    status="success",
-                    message=f"Idempotent replay: TX {existing_tx.id}",
-                    transaction_id=0,  # legacy field — il vero ID è in existing_tx.id
-                    compliance_logged=False,
-                )
-        except ConflictError:
-            raise HTTPException(
-                status_code=409,
-                detail={
-                    "error": "IDEMPOTENCY_CONFLICT",
-                    "message": f"Transazione con idempotency_key "
-                               f"'{payload.idempotency_key}' è già in corso.",
-                },
-            )
 
     # ── 1. Validazione HMAC ──────────────────────────────────
     sig_valid = verify_signature(
@@ -171,97 +147,21 @@ async def receive_transaction(
         db.add(snapshot)
         compliance_logged = True
 
-    # ── 5. Commit TX to DB before matching ────────────────────
+    # ── 5. Commit TX to DB ────────────────────────────────────
     await db.commit()
 
-    # ── 6. Transaction matching — dispatch async or inline ──
-    matched_intent_id = None
-    webhook_triggered = False
-    matching_mode = None
-
-    if payload.recipient and payload.status == "completed":
-        matching_mode = _dispatch_matching(
-            tx_id=tx.id,
-            tx_hash=payload.tx_hash,
-            recipient=payload.recipient,
-            gross_amount=payload.gross_amount,
-            currency=payload.currency,
-        )
-
-        if matching_mode == "inline":
-            # Fallback sincrono: esegui il match nella stessa request
-            try:
-                match_result = await match_transaction(
-                    db,
-                    IncomingTx(
-                        tx_hash=payload.tx_hash,
-                        recipient=payload.recipient,
-                        amount=payload.gross_amount,
-                        currency=payload.currency,
-                    ),
-                )
-                await db.commit()
-                if match_result.matched:
-                    matched_intent_id = match_result.intent_id
-                    webhook_triggered = match_result.webhook_triggered
-                    _logger.info(
-                        "TX %s matched intent %s (webhook=%s) [inline]",
-                        payload.tx_hash[:16], matched_intent_id, webhook_triggered,
-                    )
-                else:
-                    _logger.debug(
-                        "TX %s no match: reason=%s [inline]",
-                        payload.tx_hash[:16], match_result.reason,
-                    )
-            except Exception:
-                _logger.exception(
-                    "Transaction matcher failed for tx=%s — TX saved, matching skipped",
-                    payload.tx_hash[:16],
-                )
+    # NON-CUSTODIAL: deposit-address transaction matching has been removed.
+    # Payment matching now happens on-chain in payment_indexer, which watches
+    # RSendsRouter.PaymentMade events and marks the matching PaymentIntent paid.
+    # This legacy /tx/callback endpoint is kept only for compliance logging of
+    # externally-reported transactions.
 
     return CallbackResponse(
-        status="success" if matching_mode != "queued" else "received",
+        status="success",
         message=f"TX {payload.tx_hash[:16]}… loggata per compliance",
         transaction_id=tx.id,
         compliance_logged=compliance_logged,
-        matched_intent_id=matched_intent_id,
-        webhook_triggered=webhook_triggered,
-        matching=matching_mode,
     )
-
-
-def _dispatch_matching(
-    tx_id: int,
-    tx_hash: str,
-    recipient: str,
-    gross_amount: float,
-    currency: str,
-) -> str:
-    """
-    Prova a dispatchare il matching via Celery.
-    Se Celery non è disponibile, ritorna "inline" per fallback sincrono.
-
-    Returns:
-        "queued" se il task è stato inviato a Celery
-        "inline" se Celery non è disponibile (dev senza Redis/worker)
-    """
-    try:
-        from app.tasks.matching_tasks import match_transaction_task
-        match_transaction_task.delay(
-            tx_id=tx_id,
-            tx_hash=tx_hash,
-            recipient=recipient,
-            gross_amount=gross_amount,
-            currency=currency,
-        )
-        _logger.info("Matching queued for tx %s (tx_id=%s)", tx_hash[:16], tx_id)
-        return "queued"
-    except Exception as exc:
-        _logger.info(
-            "Matching inline (Celery unavailable: %s) for tx %s",
-            type(exc).__name__, tx_hash[:16],
-        )
-        return "inline"
 
 
 # ═══════════════════════════════════════════════════════════════

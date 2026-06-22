@@ -44,25 +44,15 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies (pinned)
         run: pip install -r requirements.txt
-      - name: Audit-remediation regression tests
-        # Curated green set (the C/H/M fix regression tests). The legacy
-        # tests/audit/ suite has no sources (M12 backlog) and some older
-        # tests/test_*.py predate the model-registration fixture fix.
-        run: >
-          pytest -q
-          tests/test_ratelimit_internal.py
-          tests/test_forwarding_authz.py
-          tests/test_ws_ticket.py
-          tests/test_get_deny_by_default.py
-          tests/test_oracle_signer.py
-          tests/test_signing_guard_aml.py
-          tests/test_admin_auth_required.py
-          tests/test_config_hardening.py
-          tests/test_internal_secret.py
-          tests/test_wallet_session_auth.py
-          tests/test_webhook_dedup_atomic.py
-          tests/test_split_idempotency.py
-          tests/test_distribution_idempotency.py
+      - name: Unit tests (RPC-free; excludes e2e + integration)
+        # The whole backend suite EXCEPT:
+        #   - e2e        : needs a local Anvil node (separate e2e job)
+        #   - integration: needs a live service / authenticated DB-backed context
+        #                  (quarantined with documented reasons in the test files)
+        # This includes the RPC-free token-registry invariants
+        # (tests/test_registry_invariants.py) so every PR enforces:
+        # EIP-55 checksums, enabled⇒verified, and the registry schema.
+        run: pytest -q -m "not e2e and not integration"
 
   frontend:
     name: Frontend (tsc)
@@ -77,3 +67,33 @@ jobs:
       - name: Type-check
         working-directory: apps/web
         run: npx tsc --noEmit
+      - name: Production build
+        working-directory: apps/web
+        run: npx next build
+
+  e2e:
+    name: E2E (Anvil money-path)
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: "sqlite+aiosqlite://"
+      ENVIRONMENT: "test"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+      - run: forge --version
+      - name: Build contracts
+        working-directory: packages/contracts
+        run: forge build
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install backend deps + E2E deps
+        working-directory: services/backend
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-e2e.txt
+      - name: Run Anvil E2E (both branches + negative)
+        run: make e2e-anvil

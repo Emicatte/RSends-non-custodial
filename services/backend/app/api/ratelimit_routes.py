@@ -22,7 +22,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from app.api.signing_routes import require_internal_secret
+from app.security.internal_auth import require_internal_secret
 
 logger = logging.getLogger(__name__)
 

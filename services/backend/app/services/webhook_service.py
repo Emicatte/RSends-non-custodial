@@ -88,16 +88,84 @@ CHAIN_NETWORK_MAP = {
 
 
 # ═══════════════════════════════════════════════════════════════
-#  HMAC Signing — il merchant verifica con il suo secret
+#  HMAC Signing — il merchant verifica con il SUO secret per-merchant
+#  (MerchantWebhook.secret). Schema Stripe-style, replay-resistant.
+#
+#  Header inviati su OGNI webhook outbound:
+#    X-RSend-Timestamp : unix seconds (int as string) dell'attempt
+#    X-RSend-Signature : HMAC-SHA256(secret, f"{timestamp}.{raw_body}") hex
+#
+#  Il merchant (e i test) verificano con verify_webhook_signature():
+#    constant-time compare + freshness window (anti-replay).
+#
+#  NB: questo è l'UNICO firmatario outbound. Non usa MAI il secret globale
+#  inbound né il placeholder di verifica inbound (vedi app/services/hmac_*).
+#  Il test test_webhook_signing verifica staticamente questa separazione.
 # ═══════════════════════════════════════════════════════════════
 
-def compute_webhook_signature(secret: str, payload_bytes: bytes) -> str:
-    """Compute HMAC-SHA256(secret, raw_body) → hex string."""
+WEBHOOK_SIGNATURE_HEADER = "X-RSend-Signature"
+WEBHOOK_TIMESTAMP_HEADER = "X-RSend-Timestamp"
+WEBHOOK_FRESHNESS_SECONDS = 300  # anti-replay window per la verifica merchant
+
+
+def compute_webhook_signature(secret: str, timestamp: str, payload_bytes: bytes) -> str:
+    """Compute HMAC-SHA256(secret, f"{timestamp}.{raw_body}") → hex string.
+
+    Stripe-style: la firma copre sia il timestamp che il corpo esatto inviato,
+    così la verifica può imporre una finestra di freschezza (anti-replay) e
+    rilevare manomissioni sia del body che del timestamp.
+
+    Args:
+        secret: il secret per-merchant (MerchantWebhook.secret).
+        timestamp: unix seconds come stringa (lo stesso valore inviato
+            nell'header X-RSend-Timestamp).
+        payload_bytes: i byte ESATTI del corpo HTTP inviato.
+    """
+    signed = timestamp.encode("utf-8") + b"." + payload_bytes
     return hmac.new(
         secret.encode("utf-8"),
-        payload_bytes,
+        signed,
         hashlib.sha256,
     ).hexdigest()
+
+
+def verify_webhook_signature(
+    secret: str,
+    timestamp: str,
+    raw_body: bytes,
+    signature: str,
+    *,
+    tolerance: int = WEBHOOK_FRESHNESS_SECONDS,
+) -> bool:
+    """Verifica una firma webhook outbound (routine di riferimento per merchant e test).
+
+    Passi:
+      1. Parse del timestamp (unix seconds). Formato invalido → reject.
+      2. Freshness: rifiuta se |now - timestamp| > tolerance (anti-replay).
+      3. Ricalcola HMAC-SHA256(secret, f"{timestamp}.{raw_body}") e confronta
+         con hmac.compare_digest (constant-time).
+
+    Args:
+        secret: il secret per-merchant ricevuto a onboarding.
+        timestamp: valore dell'header X-RSend-Timestamp.
+        raw_body: i byte ESATTI del corpo ricevuto (non re-serializzati).
+        signature: valore dell'header X-RSend-Signature.
+        tolerance: ampiezza della finestra di freschezza in secondi.
+
+    Returns:
+        True se la firma è valida e fresca, False altrimenti.
+    """
+    try:
+        ts = int(timestamp)
+    except (TypeError, ValueError):
+        return False
+
+    now = int(datetime.now(timezone.utc).timestamp())
+    if abs(now - ts) > tolerance:
+        return False
+
+    expected = compute_webhook_signature(secret, timestamp, raw_body)
+    return hmac.compare_digest(signature, expected)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -851,13 +919,17 @@ def _build_event_payload(
     """Costruisce il payload JSON dell'evento webhook."""
     now = datetime.now(timezone.utc)
     payload = {
+        # event_id: identificatore univoco e stabile dell'evento (persistito sul
+        # delivery, invariato tra i retry) → i merchant possono deduplicare e
+        # ordinare gli eventi (es. paid prima di reversed) tramite event + timestamp.
+        "event_id": "evt_" + uuid.uuid4().hex,
         "event": event_type,
         "intent_id": intent.intent_id,
         "merchant_id": intent.merchant_id,
         "amount": intent.amount,
         "currency": intent.currency,
         "chain": getattr(intent, "chain", "BASE") or "BASE",
-        "deposit_address": getattr(intent, "deposit_address", None),
+        "onchain_invoice_id": getattr(intent, "onchain_invoice_id", None),
         "recipient": intent.recipient,
         "network": intent.network,
         "tx_hash": intent.matched_tx_hash or intent.tx_hash,
@@ -930,13 +1002,17 @@ async def _attempt_delivery(delivery: WebhookDelivery, webhook: MerchantWebhook)
         True se consegnato con successo (2xx), False altrimenti.
     """
     payload_bytes = json.dumps(delivery.payload, default=str).encode("utf-8")
-    signature = compute_webhook_signature(webhook.secret, payload_bytes)
+    # Timestamp per-attempt (ricalcolato su ogni retry); la firma copre i byte
+    # esatti inviati + il timestamp → anti-replay lato merchant.
+    timestamp = str(int(datetime.now(timezone.utc).timestamp()))
+    signature = compute_webhook_signature(webhook.secret, timestamp, payload_bytes)
 
     delivery_uuid = str(uuid.uuid4())
     headers = {
         "Content-Type": "application/json",
         "User-Agent": WEBHOOK_USER_AGENT,
-        "X-RSend-Signature": signature,
+        WEBHOOK_SIGNATURE_HEADER: signature,
+        WEBHOOK_TIMESTAMP_HEADER: timestamp,
         "X-RSend-Event": delivery.event_type,
         "X-RSend-Delivery": delivery_uuid,
         "X-RSend-Delivery-Id": delivery.idempotency_key,
@@ -1034,12 +1110,14 @@ async def send_test_event(webhook: MerchantWebhook) -> tuple:
     }
 
     payload_bytes = json.dumps(test_payload, default=str).encode("utf-8")
-    signature = compute_webhook_signature(webhook.secret, payload_bytes)
+    timestamp = str(int(datetime.now(timezone.utc).timestamp()))
+    signature = compute_webhook_signature(webhook.secret, timestamp, payload_bytes)
 
     headers = {
         "Content-Type": "application/json",
         "User-Agent": WEBHOOK_USER_AGENT,
-        "X-RSend-Signature": signature,
+        WEBHOOK_SIGNATURE_HEADER: signature,
+        WEBHOOK_TIMESTAMP_HEADER: timestamp,
         "X-RSend-Event": "test",
         "X-RSend-Delivery-Id": f"test:{webhook.id}:{datetime.now(timezone.utc).isoformat()}",
     }
@@ -1221,13 +1299,15 @@ def _build_merchant_payload(
     """
     now = datetime.now(timezone.utc)
     payload = {
+        # Vedi _build_event_payload: id evento univoco/stabile per dedup+ordering.
+        "event_id": "evt_" + uuid.uuid4().hex,
         "event": event_type,
         "intent_id": intent.intent_id,
         "amount": str(intent.amount),
         "currency": intent.currency,
         "chain": getattr(intent, "chain", "BASE") or "BASE",
         "tx_hash": intent.matched_tx_hash or intent.tx_hash,
-        "deposit_address": getattr(intent, "deposit_address", None),
+        "onchain_invoice_id": getattr(intent, "onchain_invoice_id", None),
         "metadata": intent.metadata_,
         "timestamp": now.isoformat(),
         # ── Campi estesi per reconciliazione merchant ──

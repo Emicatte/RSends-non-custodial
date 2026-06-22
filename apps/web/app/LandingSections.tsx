@@ -22,22 +22,34 @@ function useIsMobile(bp = 768) {
 
 function CtaLink({ children, color, outlined, style, href, ...rest }: Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, 'href'> & { color: string; outlined?: boolean; href: string }) {
   const [hov, setHov] = useState(false)
+  const linkStyle: React.CSSProperties = {
+    fontFamily: C.D, fontSize: 14, fontWeight: 600, cursor: 'pointer',
+    padding: '12px 24px', borderRadius: 10, transition: 'all 0.2s',
+    border: outlined ? `1.5px solid ${color}` : 'none',
+    background: outlined ? (hov ? color : 'transparent') : color,
+    color: outlined ? (hov ? '#fff' : color) : '#fff',
+    opacity: hov ? 1 : (outlined ? 0.9 : 0.95),
+    transform: hov ? 'translateY(-1px)' : 'none',
+    display: 'inline-block',
+    textDecoration: 'none',
+    ...style,
+  }
+  // Same-page hash anchors use a native <a>; next-intl Link is for routes.
+  if (href.startsWith('#')) {
+    return (
+      <a
+        href={href}
+        onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+        style={linkStyle}
+        {...rest}
+      >{children}</a>
+    )
+  }
   return (
     <Link
       href={href}
       onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-      style={{
-        fontFamily: C.D, fontSize: 14, fontWeight: 600, cursor: 'pointer',
-        padding: '12px 24px', borderRadius: 10, transition: 'all 0.2s',
-        border: outlined ? `1.5px solid ${color}` : 'none',
-        background: outlined ? (hov ? color : 'transparent') : color,
-        color: outlined ? (hov ? '#fff' : color) : '#fff',
-        opacity: hov ? 1 : (outlined ? 0.9 : 0.95),
-        transform: hov ? 'translateY(-1px)' : 'none',
-        display: 'inline-block',
-        textDecoration: 'none',
-        ...style,
-      }}
+      style={linkStyle}
       {...rest}
     >{children}</Link>
   )
@@ -158,7 +170,7 @@ export default function LandingSections() {
                 ))}
               </ul>
               <div style={{ marginTop: 'auto' }}>
-                <CtaLink color={C.text} href="/docs">{t('developers.cta')}</CtaLink>
+                <CtaLink color={C.text} href="#how-it-works">{t('developers.cta')}</CtaLink>
               </div>
             </motion.div>
           </StaggerItem>
@@ -189,7 +201,7 @@ export default function LandingSections() {
                 ))}
               </ul>
               <div style={{ marginTop: 'auto' }}>
-                <CtaLink color={C.text} outlined href="/app">{t('businesses.cta')}</CtaLink>
+                <CtaLink color={C.text} outlined href="#pricing">{t('businesses.cta')}</CtaLink>
               </div>
             </motion.div>
           </StaggerItem>

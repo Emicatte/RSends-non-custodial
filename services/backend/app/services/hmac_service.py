@@ -1,13 +1,20 @@
 """
-RPagos Backend Core — Servizio di verifica HMAC.
+RPagos Backend Core — Servizio di verifica HMAC INBOUND (frontend → backend).
 
-Verifica la x_signature inviata dal frontend usando HMAC-SHA256.
+⚠️ INBOUND-ONLY. Questo modulo verifica la x_signature inviata dal FRONTEND
+all'endpoint /api/v1/tx/callback usando il secret GLOBALE settings.hmac_secret.
+NON deve MAI firmare i webhook OUTBOUND verso i merchant: quelli usano il secret
+per-merchant (MerchantWebhook.secret) tramite
+app.services.webhook_service.compute_webhook_signature(). Tenere i due percorsi
+separati impedisce che un secret globale/placeholder finisca a firmare un evento
+"paid" verso un merchant.
 
 Firma: HMAC_SHA256(secret, "fiscal_ref|tx_hash|gross_amount|currency|timestamp")
 
 Sicurezza:
   - Verifica HMAC-SHA256 rigorosa + anti-replay (5 min) in TUTTI gli ambienti
   - Usa hmac.compare_digest per prevenire timing attacks
+  - Rifiuta esplicitamente il placeholder 'PENDING_HMAC_SHA256' (vedi verify_signature)
   - In DEBUG=true: logga warning extra per diagnostica, ma NON bypassa la verifica
 """
 

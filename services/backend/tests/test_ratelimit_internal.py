@@ -103,7 +103,7 @@ class _Settings:
 
 
 def _client(monkeypatch, *, redis=None):
-    monkeypatch.setattr("app.api.signing_routes.get_settings", lambda: _Settings())
+    monkeypatch.setattr("app.security.internal_auth.get_settings", lambda: _Settings())
     if redis is not None:
         async def _get():
             return redis

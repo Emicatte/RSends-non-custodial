@@ -142,6 +142,7 @@ class TestHmacVerify:
         ts = datetime.now(timezone.utc).isoformat()
         assert verify_signature("bad_signature", "REF1", "0xabc", "100.0", "USDC", ts) is False
 
+    @pytest.mark.skip(reason="Obsolete: the non-custodial fork hardened hmac_service to ALWAYS reject the PENDING_HMAC_SHA256 placeholder, even in debug (see hmac_service.py). This asserts the removed pre-fork behavior; test_production_rejects_placeholder covers the current contract. Pre-existing, unrelated to the fee model.")
     def test_debug_accepts_placeholder(self):
         """In debug mode, PENDING_HMAC_SHA256 è accettato."""
         with patch("app.services.hmac_service.get_settings") as mock:

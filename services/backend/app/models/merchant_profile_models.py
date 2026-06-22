@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from sqlalchemy import Column, DateTime, String, Text, Uuid
 
 from app.models.db_models import Base
-from app.models.ledger_models import JSONBType
+from app.models.db_types import JSONBType
 
 
 class MerchantProfile(Base):

@@ -10,10 +10,22 @@ asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 markers = [
     "slow: test that requires real wait time (>5 min)",
+    "e2e: end-to-end test against a local Anvil node (needs anvil/forge/web3; not in the default backend job)",
+    "integration: needs a live service or authenticated context (DB-backed auth/session); excluded from the per-PR unit run",
 ]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "rpagos-backend-core"
 version = "1.0.0"
 description = "Compliance & Data Engine per transazioni Web3 — DAC8/CARF"
 requires-python = ">=3.11"
+
+# Flat layout: the repo root holds several non-package dirs (alembic, data,
+# nginx, reports, monitoring, scripts, tests). Restrict discovery to the app
+# package so `pip install -e .` doesn't fail on multi-top-level discovery.
+[tool.setuptools.packages.find]
+include = ["app*"]

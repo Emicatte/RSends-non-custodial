@@ -15,12 +15,6 @@ Due livelli di idempotency:
 
 import asyncio
 import logging
-from typing import Optional
-
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.models.ledger_models import Transaction
 
 logger = logging.getLogger("idempotency")
 
@@ -134,46 +128,10 @@ async def claim_tx_processed(tx_hash: str) -> tuple[bool, str]:
 
 
 # ═══════════════════════════════════════════════════════════════
-#  2. Transaction Dedup (DB)
+#  2. Transaction Dedup (DB) — REMOVED (non-custodial)
+#
+#  The custodial double-entry ledger (Transaction table) was stripped in
+#  the non-custodial fork. On-chain idempotency is now enforced by the
+#  PaymentSettlement UniqueConstraint(chain_id, tx_hash, log_index) in the
+#  payment_indexer, and webhook idempotency by the Redis SETNX helpers above.
 # ═══════════════════════════════════════════════════════════════
-
-
-class ConflictError(Exception):
-    """La transazione con questa idempotency_key è già in corso."""
-
-    def __init__(self, transaction: Transaction):
-        self.transaction = transaction
-        super().__init__(
-            f"Transaction {transaction.id} is already {transaction.status}"
-        )
-
-
-async def check_idempotency(
-    session: AsyncSession,
-    key: str,
-) -> Optional[Transaction]:
-    """Controlla se esiste già una transazione con questa idempotency_key.
-
-    Returns:
-        None se la chiave non esiste (procedi).
-        Transaction se lo status è COMPLETED (restituisci il risultato).
-
-    Raises:
-        ConflictError se lo status è PENDING, AUTHORIZED, o PROCESSING.
-    """
-    result = await session.execute(
-        select(Transaction).where(Transaction.idempotency_key == key)
-    )
-    tx = result.scalar_one_or_none()
-
-    if tx is None:
-        return None
-
-    if tx.status == "COMPLETED":
-        return tx
-
-    if tx.status in ("PENDING", "AUTHORIZED", "PROCESSING"):
-        raise ConflictError(tx)
-
-    # FAILED o REVERSED → tratta come "non esiste", permetti retry
-    return None

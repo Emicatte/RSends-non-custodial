@@ -112,35 +112,8 @@ async def _check_rpc() -> dict:
 
 
 async def _check_kms() -> dict:
-    """Verifica KMS (solo se SIGNER_MODE=kms). Test firma opzionale."""
-    try:
-        from app.config import get_settings
-
-        settings = get_settings()
-        if settings.signer_mode != "kms":
-            return {"status": "skipped", "detail": f"signer_mode={settings.signer_mode}"}
-
-        if not settings.kms_key_id:
-            return {"status": "error", "detail": "KMS_KEY_ID not configured"}
-
-        import boto3
-
-        loop = asyncio.get_running_loop()
-
-        def _kms_ping():
-            client = boto3.client("kms", region_name=settings.aws_region)
-            client.describe_key(KeyId=settings.kms_key_id)
-            return True
-
-        await asyncio.wait_for(
-            loop.run_in_executor(None, _kms_ping),
-            timeout=5.0,
-        )
-        return {"status": "ok"}
-    except asyncio.TimeoutError:
-        return {"status": "error", "detail": "timeout (>5s)"}
-    except Exception as e:
-        return {"status": "error", "detail": str(e)[:200]}
+    """NON-CUSTODIAL: no KMS / signing backend exists. Always reported as skipped."""
+    return {"status": "skipped", "detail": "non-custodial: no KMS/signer"}
 
 
 @health_router.get("/health/deep")

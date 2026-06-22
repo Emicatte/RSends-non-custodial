@@ -314,63 +314,64 @@
       "last_auth_method": "You can't remove your last sign-in method."
     },
     "whySignIn": {
-      "eyebrow": "WHY SIGN IN",
-      "heading": "One account. All your chains. Everywhere.",
-      "subheading": "Sign in to sync your crypto experience across devices — your routes, history, contacts, and alerts follow you wherever you go.",
+      "eyebrow": "HOW IT WORKS",
+      "heading": "From invoice to your wallet, in four steps.",
+      "subheading": "Create a request, your customer pays in stablecoin, and the funds settle on-chain into your own wallet — automatically.",
       "routes": {
-        "title": "Saved routes",
-        "description": "Name your favorite payment paths and reuse them in one click. No more rebuilding cross-chain flows from scratch."
+        "title": "Create an invoice",
+        "description": "You generate a payment request for your customer in the dashboard or via the API."
       },
       "history": {
-        "title": "Cross-device history",
-        "description": "Every transaction you've ever made, searchable and filterable. Access from any browser, any device — always in sync."
+        "title": "Customer pays in stablecoin",
+        "description": "They pay in USDC, USDT or EURC on Base or Ethereum."
       },
       "contacts": {
-        "title": "Encrypted contacts",
-        "description": "Your address book with labels, notes, and safety warnings. Never paste a wrong address again."
+        "title": "Funds settle on-chain",
+        "description": "An immutable smart contract sends the payment straight to your own wallet. RSends never holds it."
       },
       "notifications": {
-        "title": "Smart notifications",
-        "description": "Email alerts when transactions confirm, fail, or when conditions you set are met. Stay in control without watching the screen."
+        "title": "Webhook fires",
+        "description": "The payment is auto-detected, the invoice is marked paid, and your webhook is called."
       }
     }
   },
   "hero": {
-    "eyebrow": "MULTI-CHAIN PAYMENT LAYER",
-    "titleLine1": "Crypto Payments.",
-    "titleLine2": "Fully Compliant.",
-    "subtitle": "Send, swap, and route crypto across any chain — move money anywhere in the world in one click. Every transaction comes with compliance and reporting built in, so you're covered from day one without the legal headache.",
-    "ctaPrimary": "Start building →",
+    "eyebrow": "",
+    "titleLine1": "Your money.",
+    "titleLine2": "Your wallet.",
+    "subtitle": "A non-custodial payment gateway for business. A flat fee, never a percentage. Funds settle on-chain directly into your wallet — RSends never holds them.",
+    "ctaPrimary": "Create an invoice →",
     "ctaSecondary": "Read the spec",
     "metrics": {
       "chainsLive": "Chains live",
       "amlScreening": "AML screening",
       "euReady": "EU-ready",
       "custodialRisk": "Custodial risk"
-    }
+    },
+    "titleLine3": "Always."
   },
   "twoPaths": {
-    "title": "One platform. Two ways in.",
-    "subtitle": "Integrate RSends into your backend, or use the dashboard if you'd rather not write code. Same routing, same ledger, same compliance — whichever path you take.",
+    "title": "Two reasons businesses choose RSends.",
+    "subtitle": "Non-custodial by design, and priced as a flat fee — never a cut of what you earn.",
     "developers": {
-      "eyebrow": "FOR DEVELOPERS",
-      "title": "Build with the API",
-      "body": "REST endpoints and SDKs for sending, swapping, and routing crypto across chains. Typed webhooks, double-entry ledger, and AML screening — all built in, so you don't engineer compliance from scratch.",
-      "b1": "Send, swap, route via REST API",
-      "b2": "Typed webhooks for every event",
-      "b3": "Multi-chain: EVM + Tron + Solana",
-      "b4": "Compliance and reporting included",
-      "cta": "View API Docs →"
+      "eyebrow": "NON-CUSTODIAL",
+      "title": "You hold the keys, always",
+      "body": "Payments settle on-chain straight to your own wallet through an immutable smart contract. RSends never takes custody, can’t move your funds, and can’t freeze them.",
+      "b1": "Funds settle straight to your wallet",
+      "b2": "Immutable smart contract",
+      "b3": "RSends never takes custody",
+      "b4": "No withdrawal limits, no freezes",
+      "cta": "How it works →"
     },
     "businesses": {
-      "eyebrow": "FOR BUSINESSES",
-      "title": "Use the dashboard",
-      "body": "A complete interface for moving, swapping, and splitting crypto — no code required. Flow lets you route a single transaction across chains, optimizing for cost, speed, or compliance with one click.",
-      "b1": "Send and swap from a clean UI",
-      "b2": "Split transactions with Flow routing",
-      "b3": "Real-time transaction tracking",
-      "b4": "Compliance and reporting included",
-      "cta": "Open the dashboard →"
+      "eyebrow": "FLAT FEE",
+      "title": "A flat fee, never a percentage",
+      "body": "You pay a fixed €0.15 per transaction, capped at €1.15 — whatever the amount. No percentage of volume, ever, so your margin stays yours as you grow.",
+      "b1": "€0.15 per transaction",
+      "b2": "€1.15 cap per payment",
+      "b3": "Never a % of volume",
+      "b4": "USDC · USDT · EURC",
+      "cta": "See pricing →"
     }
   },
   "explore": {
@@ -1217,7 +1218,7 @@
     "terms": {
       "metadata": {
         "title": "Terms of Service — RSends",
-        "description": "The terms governing your use of the RSends custodial multi-chain payment gateway provided by Rpagos S.R.L (Costa Rica)."
+        "description": "The terms governing your use of the RSends non-custodial payment gateway provided by Rpagos S.R.L (Costa Rica)."
       },
       "eyebrow": "Terms of Service",
       "title": "Terms of Service",
@@ -1228,7 +1229,7 @@
       "sections": {
         "service": {
           "heading": "1. The Service",
-          "body": "RSends provides a <strong>custodial multi-chain payment gateway</strong> that enables merchants to accept stablecoin payments across supported public blockchains (currently Base, Ethereum, Arbitrum, Optimism, Polygon, BNB Chain, Avalanche, Tron, and Solana) and receive periodic settlements in USDT. Specific features, supported networks, and limits may change over time."
+          "body": "RSends provides a <strong>non-custodial stablecoin payment gateway</strong> that enables businesses to accept stablecoin payments (USDC, USDT, and EURC) on <strong>Base and Ethereum</strong>. Payments settle on-chain directly into the merchant’s own wallet through an immutable smart contract; RSends never holds or controls the funds. Specific features, supported networks, and limits may change over time."
         },
         "eligibility": {
           "heading": "2. Eligibility",
@@ -1237,7 +1238,9 @@
             "You are at least 18 years of age and have legal capacity to enter into contracts.",
             "You are not a resident of, or located in, a jurisdiction subject to comprehensive sanctions administered by OFAC, the United Nations, or the European Union.",
             "You are not listed on, or owned or controlled by a person listed on, any applicable sanctions list.",
-            "You are not legally barred from using payment, custody, or virtual-asset services in your jurisdiction."
+            "You are not legally barred from using payment, custody, or virtual-asset services in your jurisdiction.",
+            "You are a business or professional using the Service for commercial purposes; the Service is not offered to consumers.",
+            "You are not a resident of, or located in, the United States or Türkiye."
           ]
         },
         "account": {
@@ -1246,17 +1249,17 @@
           "body2": "You are responsible for maintaining the confidentiality of your credentials and for all activity under your account. Notify us immediately of any suspected unauthorised access."
         },
         "custodial": {
-          "heading": "4. Custodial nature of the Service",
-          "intro": "RSends is a <strong>custodial</strong> service: between the moment a customer payment is received on-chain and the moment of settlement, the relevant funds are held by Rpagos S.R.L on your behalf. You acknowledge and accept that:",
+          "heading": "4. Non-custodial nature of the Service",
+          "intro": "RSends is a <strong>non-custodial</strong> service: customer payments settle on-chain directly into your own wallet through an immutable smart contract, and RSends never takes possession or control of the funds. You acknowledge and accept that:",
           "items": [
-            "You do not control the private keys to the receiving wallets and you have no direct on-chain access to held balances.",
-            "Funds held in custody are recorded as your entitlement on our books and records and are segregated from RSends' operating funds.",
-            "Custody is subject to operational, technical, and counterparty risks inherent in blockchain infrastructure."
+            "You control the receiving wallet and its private keys; RSends has no ability to move, withhold, or freeze your funds.",
+            "RSends never holds a customer balance: funds are never commingled with, or recorded as a liability of, Rpagos S.R.L.",
+            "On-chain settlement is subject to operational, technical, and smart-contract risks inherent in blockchain infrastructure."
           ]
         },
         "settlement": {
           "heading": "5. Settlement",
-          "body": "Settlements are paid out in <strong>USDT</strong> on a <strong>weekly</strong> cycle, with an initial <strong>three (3) day</strong> hold on the first settlement to a newly added payout address for fraud-prevention purposes. Settlement timing may be extended where compliance review is required."
+          "body": "Settlement is on-chain and direct: each payment is delivered to your own wallet at the moment it is confirmed on Base or Ethereum, with no holding period. Where compliance review is required, a transaction may be delayed or declined."
         },
         "fees": {
           "heading": "6. Fees",
@@ -1297,7 +1300,7 @@
         },
         "termination": {
           "heading": "12. Termination",
-          "body": "Either party may terminate the agreement on <strong>thirty (30) days'</strong> written notice. We may suspend or terminate immediately where required by law, where we suspect fraud or breach of these Terms, or where continued provision of the Service would expose us to legal or regulatory risk. On termination we will release any remaining balance to you, subject to applicable holds and compliance review. Records will be retained for five (5) years post-termination as required by law."
+          "body": "Either party may terminate the agreement on <strong>thirty (30) days’</strong> written notice. We may suspend or terminate immediately where required by law, where we suspect fraud or breach of these Terms, or where continued provision of the Service would expose us to legal or regulatory risk. Because the Service is non-custodial, RSends holds no customer balance to return on termination. Records will be retained for five (5) years post-termination as required by law."
         },
         "governingLaw": {
           "heading": "13. Governing law & dispute resolution",
@@ -1644,6 +1647,54 @@
           "a": "No. Notifications are part of your account — set as many as you need."
         }
       ]
+    }
+  },
+  "pricing": {
+    "eyebrow": "PRICING",
+    "title": "A flat fee, never a percentage.",
+    "subtitle": "Predictable cost on every payment. Pick a plan for the features you need — the per-transaction fee is always the same.",
+    "feeLine": "€0.15 per transaction · €1.15 cap · never a %",
+    "compliance": "Non-custodial · B2B only · Available outside the United States and Türkiye.",
+    "plans": {
+      "free": {
+        "name": "Free",
+        "price": "€0",
+        "period": "/month",
+        "tagline": "Start accepting stablecoin payments with the essentials.",
+        "features": [
+          "€0.15 per transaction (cap €1.15)",
+          "USDC, USDT & EURC",
+          "Base & Ethereum",
+          "Webhooks & API access"
+        ],
+        "cta": "Get started"
+      },
+      "pro": {
+        "name": "Pro",
+        "price": "€39",
+        "period": "/month",
+        "tagline": "For growing businesses that need more volume and support.",
+        "features": [
+          "Everything in Free",
+          "Higher rate limits",
+          "Priority support",
+          "Team members"
+        ],
+        "cta": "Choose Pro"
+      },
+      "custom": {
+        "name": "Custom",
+        "price": "Let’s talk",
+        "period": "",
+        "tagline": "Tailored terms for higher volume and specific requirements.",
+        "features": [
+          "Everything in Pro",
+          "Volume pricing",
+          "Dedicated onboarding",
+          "SLA & custom contracts"
+        ],
+        "cta": "Contact us"
+      }
     }
   }
 }

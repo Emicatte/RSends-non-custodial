@@ -2,7 +2,6 @@
 
 import Image from 'next/image'
 import { useCallback, useRef, useState } from 'react'
-import { Link } from '@/i18n/navigation'
 import { C } from '@/app/designTokens'
 
 type Chain = {
@@ -51,7 +50,7 @@ function LetterBubble({ letter, color }: { letter: string; color: string }) {
 }
 
 export default function SupportedNetworksCarousel() {
-  const itemRefs = useRef<Array<HTMLAnchorElement | null>>([])
+  const itemRefs = useRef<Array<HTMLDivElement | null>>([])
   const [hovering, setHovering] = useState(false)
   const [focusedIdx, setFocusedIdx] = useState<number | null>(null)
 
@@ -106,13 +105,13 @@ export default function SupportedNetworksCarousel() {
             const isFocused = hovering && focusedIdx === i
             const isDimmed = hovering && focusedIdx !== null && focusedIdx !== i
             return (
-              <Link
-                href={`/markets?chain=${chain.slug}`}
+              <div
                 key={`${chain.slug}-${i}`}
-                ref={(el: HTMLAnchorElement | null) => {
+                ref={(el: HTMLDivElement | null) => {
                   itemRefs.current[i] = el
                 }}
-                aria-label={`View ${chain.name} markets`}
+                aria-label={chain.name}
+                title={chain.name}
                 className="snc-item"
                 data-focused={isFocused ? 'true' : undefined}
                 data-dimmed={isDimmed ? 'true' : undefined}
@@ -129,7 +128,7 @@ export default function SupportedNetworksCarousel() {
                 ) : (
                   <LetterBubble letter={chain.name[0]!} color={chain.color} />
                 )}
-              </Link>
+              </div>
             )
           })}
         </div>
@@ -164,7 +163,7 @@ export default function SupportedNetworksCarousel() {
             filter 220ms ease,
             opacity 220ms ease,
             transform 220ms ease;
-          cursor: pointer;
+          cursor: default;
           border-radius: 50%;
           outline: none;
         }

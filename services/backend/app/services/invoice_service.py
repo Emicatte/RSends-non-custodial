@@ -56,14 +56,12 @@ async def aggregate_fees(
 ) -> dict:
     """Aggrega le commissioni del cliente nel periodo.
 
-    Conta i PaymentIntent con merchant_id == owner_address (case-insensitive) e
-    fee_swept_at NON nullo dentro [period_start, period_end]. IGNORA fee_amount in
-    token: il flat è già in EUR, nessuna conversione FX.
+    NON-CUSTODIAL: la fatturazione non si basa più sul fee-sweep custodial
+    (rimosso). Conta i PaymentIntent SETTLED on-chain — status `paid`/`completed`
+    con `completed_at` dentro [period_start, period_end] — del merchant
+    (case-insensitive). Il flat è già in EUR, nessuna conversione FX.
 
-    Esclude gli intent non fatturabili (refunded/cancelled): una commissione
-    eventualmente già "swept" non va fatturata se il pagamento è stato poi
-    rimborsato o annullato. status è non-nullable (default pending) → nessun
-    rischio di scartare righe con status NULL.
+    Esclude gli intent non fatturabili (refunded/cancelled).
     """
     owner = (owner_address or "").lower()
     result = await db.execute(
@@ -71,12 +69,10 @@ async def aggregate_fees(
         .select_from(PaymentIntent)
         .where(
             func.lower(PaymentIntent.merchant_id) == owner,
-            PaymentIntent.fee_swept_at.isnot(None),
-            PaymentIntent.fee_swept_at >= period_start,
-            PaymentIntent.fee_swept_at <= period_end,
-            PaymentIntent.status.notin_(
-                [IntentStatus.refunded, IntentStatus.cancelled]
-            ),
+            PaymentIntent.status.in_([IntentStatus.paid, IntentStatus.completed]),
+            PaymentIntent.completed_at.isnot(None),
+            PaymentIntent.completed_at >= period_start,
+            PaymentIntent.completed_at <= period_end,
         )
     )
     tx_count = int(result.scalar() or 0)
