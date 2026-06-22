@@ -30,9 +30,11 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 /// does NOT stop a direct on-chain pay() — the registry off-chain gate and the
 /// on-chain whitelist are independent and must both be set.
 ///
-/// Usage:
-///   ROUTER_ADDRESS=0x... PRIVATE_KEY=0x... \
-///   forge script script/SetFeeConfig.s.sol:SetFeeConfig --rpc-url <chain> --broadcast
+/// Usage (signs with a Foundry keystore account — NO private key in env/CLI):
+///   ROUTER_ADDRESS=0x... \
+///   forge script script/SetFeeConfig.s.sol:SetFeeConfig \
+///     --rpc-url <chain> --account <keystore> --broadcast
+/// The keystore account MUST be the router OWNER (setFeeConfig is onlyOwner).
 contract SetFeeConfig is Script {
     /// Reverts when the token at `token` doesn't match the registry's expected metadata.
     error TokenMetadataMismatch(address token, string expected, string actual);
@@ -41,7 +43,6 @@ contract SetFeeConfig is Script {
     string constant REGISTRY = "../../services/backend/app/token_registry.json";
 
     function run() external {
-        uint256 deployerKey = vm.envUint("PRIVATE_KEY");
         RSendsRouter router = RSendsRouter(vm.envAddress("ROUTER_ADDRESS"));
 
         string memory json = vm.readFile(REGISTRY);
@@ -50,7 +51,8 @@ contract SetFeeConfig is Script {
         // Symbols listed for this chain in the registry.
         string[] memory symbols = vm.parseJsonStringArray(json, string.concat(chainKey, ".symbols"));
 
-        vm.startBroadcast(deployerKey);
+        // Signs with the CLI --account <keystore> (which must be the OWNER).
+        vm.startBroadcast();
 
         for (uint256 i = 0; i < symbols.length; i++) {
             string memory base = string.concat(chainKey, ".tokens.", symbols[i], ".");

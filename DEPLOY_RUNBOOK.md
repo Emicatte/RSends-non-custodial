@@ -28,14 +28,52 @@ Legend: **[AUTO]** = done by Render/Vercel/CI · **[AZIONE UTENTE]** = you do it
 1. **Fresh database.** The Render Postgres starts empty so `alembic upgrade head`
    runs clean `0001 → 0004`. The old dev DB carried a **stale Classic stamp
    (0038)** — **never** point this deploy at it.
-2. **Testnet guard posture.** `config.py` sets `is_prod = (not DEBUG) or
-   ENVIRONMENT startswith "prod"`. To relax prod-only guards on testnet you need
-   **both `ENVIRONMENT=development` and `DEBUG=true`** (set in `render.yaml`).
-   `ENVIRONMENT=development` alone does **not** relax them. `ALCHEMY_API_KEY` is
-   **always** required regardless.
-3. **Keys never touch the repo.** The deployer private key lives in a Foundry
-   keystore (`cast wallet import`) or a gitignored shell env var — never in a
-   committed file, command, or log.
+2. **True-prod guard posture.** This deploy runs `ENVIRONMENT=production` +
+   `DEBUG=false`, so **every** prod guard in `config.py` is active. We satisfy
+   all of them — **no security guard is relaxed** (see "Prod guards" below). The
+   only non-security toggle is outbound email off (`EMAIL_DEV_MODE=true`).
+3. **Keys never touch the repo.** The deployer/owner private key lives in a
+   Foundry keystore (`cast wallet import`) — never in env, a committed file, a
+   command, or a log. `SetFeeConfig.s.sol` signs via `--account` (keystore).
+
+---
+
+## Prod guards (everything `is_prod=true` gates)
+
+`is_prod = (not DEBUG) or ENVIRONMENT startswith "prod"`. With our posture
+(`ENVIRONMENT=production`, `DEBUG=false`) `is_prod` is **true**. Full list from
+`config.py` and how each is satisfied here:
+
+**Always enforced (any posture) — ERROR = startup blocked:**
+| Guard | Severity | How we satisfy it |
+|---|---|---|
+| `ALCHEMY_API_KEY` non-empty | ERROR | real Alchemy key |
+| `APP_URL` set + non-localhost (if prod *or* email on) | ERROR | Vercel URL |
+
+**Enforced only when `is_prod` — ERROR unless noted:**
+| Guard | Severity | How we satisfy it |
+|---|---|---|
+| `HMAC_SECRET` not placeholder & ≥32 chars | ERROR | Render `generateValue` |
+| `REDIS_URL` must be `rediss://` (TLS) | ERROR | TLS Redis endpoint |
+| `CELERY_BROKER_URL` must be `rediss://` (TLS) | ERROR | TLS Redis endpoint |
+| no `rpagos:password@` default DB creds | ERROR | real DB creds |
+| `DEBUG` must not be true | ERROR | `DEBUG=false` |
+| `GOOGLE_OAUTH_CLIENT_ID` non-empty | ERROR | Google OAuth client |
+| `AUTH_JWT_SECRET` ≥64 chars | ERROR | manual `token_hex(32)` |
+| `INTERNAL_PROXY_SECRET` non-empty | ERROR | Render `generateValue` |
+| `WALLET_AUTH_ALLOW_LEGACY` not true | ERROR | `=false` |
+| `DATABASE_URL` not localhost | WARNING | real host |
+| `RSENDS_ROUTER_ADDRESSES_JSON` non-empty | WARNING | set after Part 1 |
+
+**Lifespan assertions (`validate_dev_flags`):** `RSEND_DEV_AUTH_BYPASS` truthy
+requires `ENVIRONMENT=development` (we never set it); `DEBUG=true` + `ENVIRONMENT`
+prod → refuse start (we use `DEBUG=false`).
+
+**Relaxed:** none of the security guards. The only non-security toggle is
+`EMAIL_DEV_MODE=true` (outbound email off) — `APP_URL` is still required and set.
+The two friction points are infra/setup, not relaxations: Redis must be a TLS
+(`rediss://`) endpoint, and a Google OAuth client must exist (free, works on a
+`vercel.app` domain).
 
 ---
 
@@ -94,17 +132,19 @@ asserts the on-chain `symbol()`/`decimals()` of the registry USDC address
 address reverts. **The signer here must be the router `OWNER`** (`setFeeConfig`
 is `onlyOwner`).
 
-This script reads the key from the **`PRIVATE_KEY` env var** (its design —
-`vm.envUint("PRIVATE_KEY")`), so for this step export it in your shell only:
+This script signs with a **Foundry keystore account** (`vm.startBroadcast()` — no
+private key in env or CLI). The `--account` you pass **must be the router
+`OWNER`**. If `OWNER` == the deployer from step 1a, reuse `rsends-deployer`;
+otherwise import the owner's key as its own keystore (`cast wallet import
+rsends-owner --interactive`) and use that.
 ```bash
 cd packages/contracts
-export PRIVATE_KEY=<OWNER_private_key>      # shell only; never committed/logged
-export ROUTER_ADDRESS=<ROUTER_ADDRESS>
-
+ROUTER_ADDRESS=<ROUTER_ADDRESS> \
 forge script script/SetFeeConfig.s.sol:SetFeeConfig \
   --rpc-url "$BASE_SEPOLIA_RPC" \
+  --account rsends-deployer \
   --broadcast
-unset PRIVATE_KEY
+# ROUTER_ADDRESS is a public address (not a secret). No PRIVATE_KEY is exported.
 ```
 
 ### 1d. Record the router address **[AZIONE UTENTE]**
@@ -122,30 +162,49 @@ You'll paste `<ROUTER_ADDRESS>` into:
    and provisions: `rsends-db` (Postgres), `rsends-redis`, `rsends-api` (web +
    indexer), `rsends-worker`, `rsends-beat`. **[AUTO]**
 
+> **⚠️ Always-on tiers (required — NOT free).** The indexer runs inside the web
+> service's lifespan, so `rsends-api` must never spin down. Minimum tiers:
+> - `rsends-api`, `rsends-worker`, `rsends-beat` → **Starter** (always-on; free
+>   web spins down on idle = indexer stops; Render workers have no free tier).
+> - `rsends-redis` → a plan **with persistence + `noeviction`** (the indexer
+>   cursor lives in Redis; a wiped instance = a payment-detection gap).
+> - `rsends-db` → paid (free Postgres expires after 30 days, no backups).
+
 ### 2b. Fill the `sync: false` env vars **[AZIONE UTENTE]**
 In the `rsends-shared` env group (Render dashboard):
 
 | Var | Value |
 |---|---|
-| `DATABASE_URL` | Render `rsends-db` **Internal** URL, **scheme rewritten** to `postgresql+asyncpg://…` |
-| `REDIS_URL` | `rsends-redis` Internal URL + `/0` |
-| `CELERY_BROKER_URL` | same Redis URL + `/1` |
-| `CELERY_RESULT_BACKEND` | same Redis URL + `/2` |
+| `DATABASE_URL` | Render `rsends-db` **Internal** URL, **scheme rewritten** to `postgresql+asyncpg://…` (no `rpagos:password@` default) |
+| `REDIS_URL` | **TLS** `rediss://…/0` (prod guard rejects `redis://`) |
+| `CELERY_BROKER_URL` | `rediss://…/1` |
+| `CELERY_RESULT_BACKEND` | `rediss://…/2` |
+| `AUTH_JWT_SECRET` | **manual** — `python -c 'import secrets;print(secrets.token_hex(32))'` (≥64 chars; Render's generated value may be too short) |
+| `GOOGLE_OAUTH_CLIENT_ID` | **required** — create a Google OAuth client (free; works on `vercel.app`) |
 | `ALCHEMY_API_KEY` | your Alchemy key (always required) |
 | `INDEXER_RPC_URLS_JSON` | `{"84532":"https://base-sepolia.g.alchemy.com/v2/<KEY>"}` |
 | `RSENDS_ROUTER_ADDRESSES_JSON` | `{"84532":"<ROUTER_ADDRESS>"}` (from Part 1) |
-| `CORS_ORIGINS` | your Vercel URL, e.g. `https://<app>.vercel.app` |
-| `APP_URL` | same Vercel URL |
-| `GOOGLE_OAUTH_CLIENT_ID`, `RESEND_API_KEY` | optional on testnet |
+| `CORS_ORIGINS` / `APP_URL` | your Vercel URL, e.g. `https://<app>.vercel.app` |
 
-`HMAC_SECRET`, `INTERNAL_PROXY_SECRET`, `AUTH_JWT_SECRET` are **[AUTO]**
-generated by Render — note `HMAC_SECRET` and `INTERNAL_PROXY_SECRET` (you copy
-them to Vercel in Part 4).
+`HMAC_SECRET` and `INTERNAL_PROXY_SECRET` are auto-generated by Render — copy
+both to Vercel (Part 4). `ENVIRONMENT=production`, `DEBUG=false`,
+`WALLET_AUTH_ALLOW_LEGACY=false`, `EMAIL_DEV_MODE=true` are set in the blueprint.
+
+> **Redis TLS note.** The prod guard requires `rediss://`. Render Key Value:
+> use its TLS connection string. If your instance only exposes internal
+> `redis://`, use an external TLS Redis (e.g. Upstash free → `rediss://`).
+> Downgrading to `redis://` is rejected at startup by design.
+
+`HMAC_SECRET` and `INTERNAL_PROXY_SECRET` are **[AUTO]** generated by Render —
+copy both to Vercel (Part 4). `AUTH_JWT_SECRET` is **manual** (≥64 chars).
 
 ### 2c. Deploy **[AUTO]**
-Render runs `preDeployCommand: alembic upgrade head` (clean `0001→0004`), then
-starts the three services. Confirm `https://rsends-api.onrender.com/health`
-returns `{"status":"healthy"}`.
+Render runs `preDeployCommand: alembic upgrade head` then starts the services.
+Migrations use Alembic's **async** engine (`async_engine_from_config`) reading
+`DATABASE_URL` directly — so the **same `postgresql+asyncpg://` URL works for
+migrations**; there is **no** separate sync/psycopg2 URL to configure (psycopg2
+isn't even installed). On the empty Render DB this runs clean `0001 → 0004`.
+Confirm `https://rsends-api.onrender.com/health` returns `{"status":"healthy"}`.
 
 ---
 
@@ -201,6 +260,33 @@ After editing env on either side, **redeploy** that service.
 
 ---
 
+## Restart-safety & migrations (verified)
+
+**Indexer cursor (restart-safe via Redis).** The indexer persists the last
+processed block in **Redis**, key `indexer:last_block:{chain_id}`
+(`payment_indexer.py` `_get_last_block`/`_set_last_block`). On (re)start it reads
+the cursor and resumes from `min(last+1, head+1)`, re-checking the last
+`INDEXER_REORG_SAFETY_DEPTH` finalized blocks for reorgs. So a **Render web
+redeploy/restart resumes cleanly** — no rescan from zero, no missed blocks.
+
+> **⚠️ The cursor is only as durable as Redis.** On **first run with no cursor**
+> the indexer starts at the **current head** (`max(final_head, 0)`), not block 0.
+> That means if Redis ever **loses** the key (eviction, or a wiped free-tier
+> instance), the next start jumps forward and **skips the gap → missed
+> payments** (it does NOT re-scan from zero). Mitigations, all applied/available:
+> - Redis plan **with persistence** + `maxmemoryPolicy: noeviction` (in
+>   `render.yaml`) so the key survives restarts and memory pressure.
+> - To recover after a known loss, set `INDEXER_START_BLOCKS_JSON={"84532":"<block>"}`
+>   to the last-known-good block and restart (forces a backfill from there).
+
+**Migrations (asyncpg, no sync URL).** `alembic upgrade head` (in
+`preDeployCommand`) uses Alembic's async engine reading `DATABASE_URL` directly —
+the same `postgresql+asyncpg://` URL the app uses. There is **no** psycopg2/sync
+URL to provide (psycopg2 is not installed). Idempotent across restarts: a
+re-deploy re-runs `upgrade head`, which is a no-op once at `0004`.
+
+---
+
 ## Master ENV checklist
 
 **SECRET** = dashboard only, never in the repo. **PUBLIC** = safe to expose.
@@ -209,19 +295,20 @@ After editing env on either side, **redeploy** that service.
 | Name | What | Class | Where to get it | Placeholder |
 |---|---|---|---|---|
 | `DATABASE_URL` | Postgres DSN (asyncpg) | SECRET | Render DB Internal URL, scheme `+asyncpg` | `postgresql+asyncpg://u:p@host:5432/rsends` |
-| `REDIS_URL` | cache/idempotency | SECRET | Render Redis Internal URL `/0` | `redis://host:6379/0` |
-| `CELERY_BROKER_URL` | Celery broker | SECRET | Redis URL `/1` | `redis://host:6379/1` |
-| `CELERY_RESULT_BACKEND` | Celery results | SECRET | Redis URL `/2` | `redis://host:6379/2` |
+| `REDIS_URL` | cache/idempotency/cursor | SECRET | TLS Redis URL `/0` | `rediss://host:6379/0` |
+| `CELERY_BROKER_URL` | Celery broker | SECRET | TLS Redis URL `/1` | `rediss://host:6379/1` |
+| `CELERY_RESULT_BACKEND` | Celery results | SECRET | TLS Redis URL `/2` | `rediss://host:6379/2` |
 | `HMAC_SECRET` | inbound callback HMAC (≥32) | SECRET | Render generateValue | (auto) |
 | `INTERNAL_PROXY_SECRET` | gates `/api/internal/*` | SECRET | Render generateValue | (auto) |
-| `AUTH_JWT_SECRET` | session JWT (≥64 prod) | SECRET | Render generateValue | (auto) |
+| `AUTH_JWT_SECRET` | session JWT (≥64) | SECRET | **manual** `token_hex(32)` | (64-char hex) |
+| `GOOGLE_OAUTH_CLIENT_ID` | Google login (**required**) | SECRET | Google Cloud Console | `<oauth_client_id>` |
 | `ALCHEMY_API_KEY` | RPC (always required) | SECRET | dashboard.alchemy.com | `<alchemy_key>` |
 | `RSENDS_ROUTER_ADDRESSES_JSON` | chain→router map | PUBLIC | Part 1 deploy output | `{"84532":"<FILL_AFTER_CONTRACT_DEPLOY>"}` |
 | `INDEXER_RPC_URLS_JSON` | chain→RPC map | SECRET (has key) | Alchemy | `{"84532":"https://base-sepolia.g.alchemy.com/v2/<KEY>"}` |
-| `CORS_ORIGINS` | allowed origins | PUBLIC | your Vercel URL | `https://<app>.vercel.app` |
-| `ENVIRONMENT` / `DEBUG` | guard posture | PUBLIC | testnet: `development` / `true` | — |
-| `GOOGLE_OAUTH_CLIENT_ID` | Google login | SECRET | Google Cloud Console | (optional testnet) |
-| `RESEND_API_KEY` | email | SECRET | resend.com | (optional testnet) |
+| `CORS_ORIGINS` / `APP_URL` | allowed origins / public URL | PUBLIC | your Vercel URL | `https://<app>.vercel.app` |
+| `ENVIRONMENT` / `DEBUG` | guard posture | PUBLIC | `production` / `false` (in blueprint) | — |
+| `WALLET_AUTH_ALLOW_LEGACY` | anti-replay guard | PUBLIC | `false` (in blueprint) | `false` |
+| `EMAIL_DEV_MODE` | outbound email off | PUBLIC | `true` (in blueprint) | `true` |
 
 ### Frontend (Vercel)
 | Name | What | Class | Where to get it | Placeholder |

@@ -1,73 +1,79 @@
 # ═══════════════════════════════════════════════════════════════════════════
-#  RSends Non-Custodial — Render Blueprint (Base Sepolia / testnet posture)
+#  RSends Non-Custodial — Render Blueprint (TRUE PRODUCTION posture)
 #
-#  Reflects the REAL backend architecture:
-#   • FastAPI web service — ALSO runs the on-chain PaymentMade indexer inside the
-#     app lifespan (app/main.py → start_indexer_if_needed). => the web service MUST
-#     stay at numInstances: 1. Scaling it would spawn N concurrent indexers all
-#     doing eth_getLogs and writing the SAME rows. DO NOT autoscale this service.
-#   • Celery worker — consumes the queues (notify = webhook delivery + intent
-#     expiry + email; confirm/analytics/default). See app/celery_app.py.
-#   • Celery beat — the 15s `process_webhook_deliveries` loop, 60s
-#     `expire_pending_intents`, daily GDPR deletion cron. Beat MUST be a single
-#     instance (duplicate beats = duplicate scheduled fires).
-#   • Managed PostgreSQL (fresh — see ⚠️ below) + managed Redis (idempotency,
-#     cache, Celery broker/result).
+#  Runs with ENVIRONMENT=production + DEBUG=false, so EVERY prod guard in
+#  app/config.py is ACTIVE. We satisfy all of them rather than relax — see the
+#  guard checklist at the bottom. (This blueprint targets Base Sepolia testnet
+#  but keeps the full prod security posture; only non-security conveniences like
+#  outbound email are toggled off.)
 #
-#  ⚠️ FRESH DATABASE: the dev DB carried a stale Classic alembic stamp (0038).
-#     This Render Postgres starts EMPTY, so `alembic upgrade head` runs clean
-#     0001 → 0004 (noncustodial baseline → settlement fee → reorg → reversal).
-#     NEVER restore/point this at the old dev DB — the stale stamp would break
-#     migrations. Empty DB only.
+#  ── Architecture (verified against the code) ──
+#   • FastAPI web service ALSO runs the on-chain PaymentMade indexer inside the
+#     app lifespan (app/main.py → start_indexer_if_needed). ⇒ numInstances: 1,
+#     ALWAYS-ON tier. Scaling it spawns N duplicate indexers; a spun-down free
+#     instance stops detecting payments.
+#   • Celery worker — queues notify (webhooks/expiry/email) / confirm / analytics
+#     / default. Celery beat — 15s process_webhook_deliveries, 60s
+#     expire_pending_intents, daily GDPR deletion. Beat MUST be single-instance.
+#   • Indexer cursor is persisted in REDIS (key indexer:last_block:{chain_id}).
+#     A web restart resumes from the cursor (re-checks reorg depth) — no rescan
+#     from zero. ⚠️ If Redis LOSES the key (eviction / wiped free instance), the
+#     next start jumps to the current head and SKIPS the gap → missed payments.
+#     ⇒ Redis needs persistence + noeviction (below). To backfill a gap, set
+#     INDEXER_START_BLOCKS_JSON and restart.
 #
-#  ⚠️ TESTNET GUARD POSTURE: backend config.py derives `is_prod` from
-#     `(not DEBUG) or ENVIRONMENT startswith "prod"` — NOT from ENVIRONMENT alone.
-#     To relax the prod-only guards (Redis must be rediss:// TLS, HMAC>=32,
-#     AUTH_JWT>=64, OAuth required, …) for testnet you need BOTH
-#     ENVIRONMENT=development AND DEBUG=true. ENVIRONMENT=development by itself
-#     does NOT relax them. (ALCHEMY_API_KEY is ALWAYS required, prod or not.)
+#  ⚠️ FRESH DATABASE: Render Postgres starts empty → `alembic upgrade head` runs
+#     clean 0001→0004. NEVER point this at the old dev DB (stale Classic stamp
+#     0038). Alembic uses an ASYNC engine reading DATABASE_URL directly, so the
+#     SAME postgresql+asyncpg:// URL works for migrations — no sync/psycopg2 URL.
 # ═══════════════════════════════════════════════════════════════════════════
 
 databases:
   - name: rsends-db
     databaseName: rsends
     user: rsends
-    plan: free          # testnet; bump to a paid plan for retention/perf
+    # Paid plan recommended: free Postgres expires after 30 days and has no
+    # backups. Use at least the basic plan for any persistent testnet.
+    plan: basic-256mb
     region: frankfurt
 
 services:
-  # ── Redis (cache + idempotency + Celery broker/result) ───────────────────
+  # ── Redis (cache + idempotency + Celery broker/result + INDEXER CURSOR) ──
   - type: redis
     name: rsends-redis
-    plan: free
+    # ⚠️ Use a plan WITH PERSISTENCE: the indexer cursor lives here. A wiped
+    #    Redis = a payment-detection gap (see header). noeviction makes sure the
+    #    cursor/broker keys are never dropped under memory pressure.
+    plan: standard
     region: frankfurt
-    ipAllowList: []     # internal-only (no public access)
-    maxmemoryPolicy: noeviction   # broker/idempotency must NOT silently evict
+    ipAllowList: []          # internal-only
+    maxmemoryPolicy: noeviction
 
-  # ── FastAPI web + in-process PaymentMade indexer (SINGLE INSTANCE) ───────
+  # ── FastAPI web + in-process indexer (SINGLE INSTANCE, ALWAYS-ON) ───────
   - type: web
     name: rsends-api
     runtime: docker
-    plan: starter       # always-on: free tier spins down → the indexer would pause
+    # ⚠️ ALWAYS-ON tier required (min: starter). Free web services spin down on
+    #    idle → the lifespan indexer would stop detecting PaymentMade events.
+    plan: starter
     region: frankfurt
     dockerfilePath: ./services/backend/Dockerfile
     dockerContext: ./services/backend
-    numInstances: 1     # ⚠️ NEVER raise — indexer runs in the app lifespan
-    healthCheckPath: /health     # NOT /health/sweep (removed); /health probes Redis
-    preDeployCommand: "alembic upgrade head"   # runs once per deploy, pre-traffic
+    numInstances: 1          # ⚠️ NEVER raise — indexer runs in the app lifespan
+    healthCheckPath: /health # probes Redis; /health/sweep no longer exists
+    preDeployCommand: "alembic upgrade head"   # async engine + asyncpg URL — OK
     envVars:
       - fromGroup: rsends-shared
       - key: PORT
         value: "8000"
-      # entrypoint.sh skips its own boot migration because preDeployCommand owns it
       - key: RUN_MIGRATIONS_ON_BOOT
-        value: "0"
+        value: "0"           # preDeployCommand owns migrations
 
-  # ── Celery worker (webhook delivery, intent expiry, email, deletions) ────
+  # ── Celery worker (ALWAYS-ON) ───────────────────────────────────────────
   - type: worker
     name: rsends-worker
     runtime: docker
-    plan: starter
+    plan: starter            # workers have no free tier; starter = min always-on
     region: frankfurt
     dockerfilePath: ./services/backend/Dockerfile
     dockerContext: ./services/backend
@@ -75,15 +81,15 @@ services:
     envVars:
       - fromGroup: rsends-shared
       - key: RUN_MIGRATIONS_ON_BOOT
-        value: "0"      # worker never migrates
+        value: "0"
 
-  # ── Celery beat (scheduler — SINGLE INSTANCE) ────────────────────────────
+  # ── Celery beat (SINGLE INSTANCE, ALWAYS-ON) ────────────────────────────
   - type: worker
     name: rsends-beat
     runtime: docker
     plan: starter
     region: frankfurt
-    numInstances: 1     # ⚠️ exactly one beat, or schedules double-fire
+    numInstances: 1          # ⚠️ exactly one beat or schedules double-fire
     dockerfilePath: ./services/backend/Dockerfile
     dockerContext: ./services/backend
     dockerCommand: "celery -A app.celery_app:celery beat -l info"
@@ -93,36 +99,34 @@ services:
         value: "0"
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  Shared env group. Secrets with generateValue are created once by Render and
-#  shared across web/worker/beat. Copy HMAC_SECRET and INTERNAL_PROXY_SECRET
-#  into the Vercel frontend so the two sides match.
-#
-#  `sync: false` = Render will NOT auto-fill; you paste the value in the
-#  dashboard. Used where the value needs a specific scheme/db-index Render's
-#  auto-wiring can't express (see notes), or is an external secret.
+#  Shared env group. `generateValue: true` = Render creates it once (shared).
+#  `sync: false` = you paste it in the dashboard.
 # ═══════════════════════════════════════════════════════════════════════════
 envVarGroups:
   - name: rsends-shared
     envVars:
-      # Testnet posture (relaxes prod guards — see header)
+      # ── TRUE PROD posture (all guards active) ──
       - key: ENVIRONMENT
-        value: development
+        value: production
       - key: DEBUG
-        value: "true"
+        value: "false"
+      - key: WALLET_AUTH_ALLOW_LEGACY
+        value: "false"       # prod guard: legacy replayable sigs forbidden
 
-      # ── Postgres ──
-      # Render's Internal Database URL is `postgresql://…`. The app + alembic use
-      # asyncpg ONLY (no psycopg2), so you MUST paste it with the +asyncpg driver:
+      # ── Postgres [guard: no rpagos:password@ default] ──
+      # asyncpg ONLY (no psycopg2). Paste Render Internal URL with +asyncpg:
       #   postgresql+asyncpg://USER:PASS@HOST:5432/rsends
       - key: DATABASE_URL
         sync: false
 
-      # ── Redis ── paste the Render rsends-redis Internal URL, with db index:
-      #   REDIS_URL              redis://…:6379/0
-      #   CELERY_BROKER_URL      redis://…:6379/1
-      #   CELERY_RESULT_BACKEND  redis://…:6379/2
-      # (redis:// is fine because the testnet posture sets is_prod=false; a
-      #  prod posture would require rediss:// TLS.)
+      # ── Redis [guard: MUST be rediss:// TLS in prod] ──
+      # Paste a TLS endpoint with the right db index. Render Key Value: use its
+      # TLS connection string. If your instance only exposes internal redis://
+      # (no TLS), use an external TLS Redis (e.g. Upstash free → rediss://).
+      # Downgrading to redis:// is REJECTED at startup by design.
+      #   REDIS_URL              rediss://…/0
+      #   CELERY_BROKER_URL      rediss://…/1
+      #   CELERY_RESULT_BACKEND  rediss://…/2
       - key: REDIS_URL
         sync: false
       - key: CELERY_BROKER_URL
@@ -130,39 +134,45 @@ envVarGroups:
       - key: CELERY_RESULT_BACKEND
         sync: false
 
-      # ── Secrets (auto-generated, shared across services) ──
-      - key: HMAC_SECRET                 # >=32 chars; copy to Vercel HMAC_SECRET
+      # ── Secrets (prod guards) ──
+      - key: HMAC_SECRET            # >=32 chars; copy to Vercel HMAC_SECRET
         generateValue: true
-      - key: INTERNAL_PROXY_SECRET       # copy to Vercel INTERNAL_PROXY_SECRET
+      - key: INTERNAL_PROXY_SECRET  # non-empty; copy to Vercel (same value)
         generateValue: true
-      - key: AUTH_JWT_SECRET             # session JWT signing
-        generateValue: true
+      # ⚠️ AUTH_JWT_SECRET must be >=64 chars. Render generateValue may be
+      #    shorter, so set it manually: python -c 'import secrets;print(secrets.token_hex(32))'
+      - key: AUTH_JWT_SECRET
+        sync: false
 
-      # ── RPC / indexer (REQUIRED) ──
-      - key: ALCHEMY_API_KEY             # ALWAYS required, even on testnet
+      # ── End-user auth [prod guard: GOOGLE_OAUTH_CLIENT_ID required] ──
+      # Create a Google OAuth client (free; works on a vercel.app domain).
+      - key: GOOGLE_OAUTH_CLIENT_ID
         sync: false
-      # {"84532":"0x<RSendsRouter>"} — FILL AFTER the contract deploy (Part 3)
-      - key: RSENDS_ROUTER_ADDRESSES_JSON
+
+      # ── RPC / indexer (ALCHEMY_API_KEY always required) ──
+      - key: ALCHEMY_API_KEY
         sync: false
-      # {"84532":"https://base-sepolia.g.alchemy.com/v2/<KEY>"} (or public RPC)
-      - key: INDEXER_RPC_URLS_JSON
+      - key: RSENDS_ROUTER_ADDRESSES_JSON   # {"84532":"0x<router>"} — after Part 1
+        sync: false
+      - key: INDEXER_RPC_URLS_JSON          # {"84532":"https://base-sepolia.g.alchemy.com/v2/<KEY>"}
         sync: false
       - key: INDEXER_CONFIRMATIONS
         value: "2"
       - key: INDEXER_USE_FINALIZED_TAG
         value: "true"
-
-      # ── CORS / frontend wiring ──
-      # Comma-separated; set to your Vercel domain, e.g. https://rsends.vercel.app
-      - key: CORS_ORIGINS
+      # Optional backfill if the Redis cursor was lost: {"84532":"<blockNumber>"}
+      - key: INDEXER_START_BLOCKS_JSON
         sync: false
 
-      # ── End-user auth + email (optional on testnet; fill to enable) ──
-      - key: GOOGLE_OAUTH_CLIENT_ID
+      # ── CORS / public URL [prod guard: APP_URL required & public] ──
+      - key: CORS_ORIGINS                   # https://<your-app>.vercel.app
         sync: false
-      - key: RESEND_API_KEY
+      - key: APP_URL                        # https://<your-app>.vercel.app
         sync: false
+
+      # ── Email — non-security testnet convenience: sending OFF ──
+      # EMAIL_DEV_MODE=true means no real email provider is required. APP_URL is
+      # still mandatory (prod guard) and is set above. For real mainnet email,
+      # set EMAIL_DEV_MODE=false and provide RESEND_API_KEY.
       - key: EMAIL_DEV_MODE
         value: "true"
-      - key: APP_URL                     # public URL of the Vercel frontend
-        sync: false
