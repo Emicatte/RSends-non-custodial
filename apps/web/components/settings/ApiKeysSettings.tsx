@@ -215,6 +215,21 @@ export function ApiKeysSettings() {
 
       <DocsSnippet t={t} />
 
+      {/* Contextual hand-off: after creating/viewing a key, open the merchant
+          dashboard (separate API-key app) and paste the key there. */}
+      <a
+        href="/merchant/dashboard"
+        className="text-sm px-4 py-2 rounded-lg self-start"
+        style={{
+          background: ORANGE,
+          color: '#FFFFFF',
+          textDecoration: 'none',
+          fontWeight: 600,
+        }}
+      >
+        Open Merchant Dashboard →
+      </a>
+
       {modalOpen ? (
         <CreateApiKeyModal
           onClose={() => setModalOpen(false)}
