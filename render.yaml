@@ -12,9 +12,11 @@
 #     app lifespan (app/main.py → start_indexer_if_needed). ⇒ numInstances: 1,
 #     ALWAYS-ON tier. Scaling it spawns N duplicate indexers; a spun-down free
 #     instance stops detecting payments.
-#   • Celery worker — queues notify (webhooks/expiry/email) / confirm / analytics
-#     / default. Celery beat — 15s process_webhook_deliveries, 60s
-#     expire_pending_intents, daily GDPR deletion. Beat MUST be single-instance.
+#   • Celery worker with EMBEDDED beat (--beat), single service for demo/low-scale:
+#     queues notify (webhooks/expiry/email) / confirm / analytics / default, plus
+#     the scheduler (15s process_webhook_deliveries, 60s expire_pending_intents,
+#     daily GDPR deletion). ⚠️ numInstances MUST be 1 — a duplicate embedded beat
+#     double-fires every schedule. For production: split worker + dedicated beat.
 #   • Indexer cursor is persisted in REDIS (key indexer:last_block:{chain_id}).
 #     A web restart resumes from the cursor (re-checks reorg depth) — no rescan
 #     from zero. ⚠️ If Redis LOSES the key (eviction / wiped free instance), the
@@ -39,14 +41,21 @@ databases:
 
 services:
   # ── Redis (cache + idempotency + Celery broker/result + INDEXER CURSOR) ──
+  # ⚠️ The prod guard requires rediss:// (TLS), which Render Key Value only
+  #    exposes on its EXTERNAL connection. So the URLs are set MANUALLY (sync:
+  #    false) to the external rediss:// URL — NOT auto-wired via fromService
+  #    (that would give the internal redis:// and fail the guard). This resource
+  #    is the instance you connect to externally; see DEPLOY_RUNBOOK "Redis setup".
   - type: redis
     name: rsends-redis
-    # ⚠️ Use a plan WITH PERSISTENCE: the indexer cursor lives here. A wiped
-    #    Redis = a payment-detection gap (see header). noeviction makes sure the
-    #    cursor/broker keys are never dropped under memory pressure.
+    # ⚠️ PAID plan WITH PERSISTENCE: the indexer cursor lives here. A wiped Redis
+    #    = a payment-detection gap (see header). Free plans do NOT persist.
     plan: standard
     region: frankfurt
-    ipAllowList: []          # internal-only
+    # ⚠️ Enable external access and allowlist your Render region's STATIC OUTBOUND
+    #    IPs (Render dashboard → Connect → Outbound). Fill them here or in the
+    #    dashboard. [] alone = internal-only (external rediss:// would be blocked).
+    ipAllowList: []          # → add region outbound IPs (see runbook step 3)
     maxmemoryPolicy: noeviction
 
   # ── FastAPI web + in-process indexer (SINGLE INSTANCE, ALWAYS-ON) ───────
@@ -69,30 +78,21 @@ services:
       - key: RUN_MIGRATIONS_ON_BOOT
         value: "0"           # preDeployCommand owns migrations
 
-  # ── Celery worker (ALWAYS-ON) ───────────────────────────────────────────
+  # ── Celery worker + EMBEDDED beat (SINGLE INSTANCE, ALWAYS-ON) ──────────
+  # Demo/low-scale: one service runs the worker AND the beat scheduler (--beat
+  # reads celery.conf.beat_schedule from the same app: webhook 15s, expiry 60s,
+  # GDPR daily). ⚠️ numInstances MUST stay 1 — a second instance = a second
+  # embedded beat = duplicate scheduled fires. For production, split this back
+  # into a dedicated worker + a separate single-instance beat (see DEPLOY_RUNBOOK).
   - type: worker
     name: rsends-worker
     runtime: docker
     plan: starter            # workers have no free tier; starter = min always-on
     region: frankfurt
+    numInstances: 1          # ⚠️ exactly one — embedded beat must never duplicate
     dockerfilePath: ./services/backend/Dockerfile
     dockerContext: ./services/backend
-    dockerCommand: "celery -A app.celery_app:celery worker -l info -Q notify,confirm,analytics,default"
-    envVars:
-      - fromGroup: rsends-shared
-      - key: RUN_MIGRATIONS_ON_BOOT
-        value: "0"
-
-  # ── Celery beat (SINGLE INSTANCE, ALWAYS-ON) ────────────────────────────
-  - type: worker
-    name: rsends-beat
-    runtime: docker
-    plan: starter
-    region: frankfurt
-    numInstances: 1          # ⚠️ exactly one beat or schedules double-fire
-    dockerfilePath: ./services/backend/Dockerfile
-    dockerContext: ./services/backend
-    dockerCommand: "celery -A app.celery_app:celery beat -l info"
+    dockerCommand: "celery -A app.celery_app:celery worker --beat -l info -Q notify,confirm,analytics,default"
     envVars:
       - fromGroup: rsends-shared
       - key: RUN_MIGRATIONS_ON_BOOT
@@ -119,11 +119,11 @@ envVarGroups:
       - key: DATABASE_URL
         sync: false
 
-      # ── Redis [guard: MUST be rediss:// TLS in prod] ──
-      # Paste a TLS endpoint with the right db index. Render Key Value: use its
-      # TLS connection string. If your instance only exposes internal redis://
-      # (no TLS), use an external TLS Redis (e.g. Upstash free → rediss://).
-      # Downgrading to redis:// is REJECTED at startup by design.
+      # ── Redis [guard: MUST be rediss:// TLS in prod] — MANUAL, not fromService ──
+      # Set to the rsends-redis EXTERNAL rediss:// URL (with db index). Do NOT
+      # auto-wire via fromService — that yields the internal redis:// and fails
+      # the guard. See DEPLOY_RUNBOOK "Redis setup" (paid, noeviction, external
+      # access + IP allowlist). Downgrading to redis:// is REJECTED at startup.
       #   REDIS_URL              rediss://…/0
       #   CELERY_BROKER_URL      rediss://…/1
       #   CELERY_RESULT_BACKEND  rediss://…/2
