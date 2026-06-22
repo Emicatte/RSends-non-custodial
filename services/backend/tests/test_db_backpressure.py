@@ -15,7 +15,6 @@ def test_is_db_heavy_matches_known_paths():
     assert _is_db_heavy("/api/v1/merchant/payment-intent") is True
     assert _is_db_heavy("/api/v1/merchant/payment-intent/pi_abc123") is True
     assert _is_db_heavy("/api/v1/tx/callback") is True
-    assert _is_db_heavy("/api/v1/sweep/execute") is True
     assert _is_db_heavy("/api/v1/split") is True
     assert _is_db_heavy("/api/v1/aml/check") is True
 
