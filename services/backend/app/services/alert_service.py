@@ -47,7 +47,6 @@ class AlertSeverity(Enum):
 class AlertType(Enum):
     SIGNING_DOWN = "signing_down"
     SIGNING_SPIKE = "signing_spike"
-    KMS_RATE_LIMIT = "kms_rate_limit"
     RPC_DOWN = "rpc_down"
     REDIS_DOWN = "redis_down"
     AML_BLOCK = "aml_block"
@@ -68,12 +67,10 @@ class AlertType(Enum):
 SEVERITY_MAP: dict[AlertType, AlertSeverity] = {
     AlertType.SIGNING_DOWN: AlertSeverity.EMERGENCY,
     AlertType.SIGNING_SPIKE: AlertSeverity.CRITICAL,
-    AlertType.KMS_RATE_LIMIT: AlertSeverity.CRITICAL,
     AlertType.RPC_DOWN: AlertSeverity.WARNING,
     AlertType.REDIS_DOWN: AlertSeverity.EMERGENCY,
     AlertType.AML_BLOCK: AlertSeverity.INFO,
     AlertType.SWEEP_FAILED: AlertSeverity.CRITICAL,
-    AlertType.BALANCE_LOW: AlertSeverity.WARNING,
     AlertType.CB_RECOVERY: AlertSeverity.INFO,
     AlertType.SYSTEM_IMBALANCE: AlertSeverity.EMERGENCY,
     AlertType.LEDGER_DISCREPANCY: AlertSeverity.WARNING,

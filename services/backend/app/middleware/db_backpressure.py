@@ -23,7 +23,6 @@ DB_HEAVY_SEMAPHORE_LIMIT = 40
 DB_HEAVY_PATHS = (
     "/api/v1/merchant/payment-intent",
     "/api/v1/tx/callback",
-    "/api/v1/sweep/execute",
     "/api/v1/execution/plan",
     "/api/v1/distribution/execute",
     "/api/v1/split",

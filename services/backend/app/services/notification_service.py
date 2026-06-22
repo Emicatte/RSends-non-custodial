@@ -92,40 +92,6 @@ async def _check_rate_limit(chat_id: str) -> bool:
 #  Message Formatters
 # ═══════════════════════════════════════════════════════════════
 
-def format_sweep_completed(data: dict) -> str:
-    """Format a sweep-completed notification."""
-    batch_id = data.get("batch_id", "?")[:8]
-    amount_wei = int(data.get("total_amount_wei", 0))
-    amount_eth = amount_wei / 10**18
-    tx_count = data.get("completed", 0)
-    chain_id = data.get("chain_id", 8453)
-    recipients = data.get("recipients", tx_count)
-
-    return (
-        f"<b>[OK] Sweep Completed</b>\n"
-        f"Batch: <code>{batch_id}...</code>\n"
-        f"Amount: <b>{amount_eth:.6f} ETH</b>\n"
-        f"Recipients: {recipients}\n"
-        f"TXs: {tx_count}\n"
-        f"Chain: {chain_id}"
-    )
-
-
-def format_sweep_failed(data: dict) -> str:
-    """Format a sweep-failed notification."""
-    batch_id = data.get("batch_id", "?")[:8]
-    reason = data.get("reason", data.get("error_message", "unknown"))
-    amount_wei = int(data.get("total_amount_wei", 0))
-    amount_eth = amount_wei / 10**18
-
-    return (
-        f"<b>[FAIL] Sweep Failed</b>\n"
-        f"Batch: <code>{batch_id}...</code>\n"
-        f"Amount: {amount_eth:.6f} ETH\n"
-        f"Reason: {reason}"
-    )
-
-
 def format_circuit_breaker(data: dict) -> str:
     """Format a circuit breaker state change alert."""
     service = data.get("service", "unknown")
@@ -189,8 +155,6 @@ def format_daily_digest(data: dict) -> str:
 
 # Formatter registry
 _FORMATTERS = {
-    "sweep_completed": format_sweep_completed,
-    "sweep_failed": format_sweep_failed,
     "circuit_breaker": format_circuit_breaker,
     "spending_warning": format_spending_warning,
     "daily_digest": format_daily_digest,

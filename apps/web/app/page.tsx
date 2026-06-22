@@ -660,7 +660,7 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
         flexWrap: 'wrap',
         justifyContent: isMobile ? 'center' : 'flex-start',
       }}>
-        <Link href="/app" style={{ textDecoration: 'none' }}>
+        <Link href="/login" style={{ textDecoration: 'none' }}>
           <button
             style={{
               padding: '11px 20px',

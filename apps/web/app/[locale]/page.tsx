@@ -671,7 +671,7 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
           justifyContent: isMobile ? 'center' : 'flex-start',
         }}
       >
-        <Link href="/app" style={{ textDecoration: 'none', width: isMobile ? '100%' : 'auto' }}>
+        <Link href="/login" style={{ textDecoration: 'none', width: isMobile ? '100%' : 'auto' }}>
           <motion.button
             whileHover={{ y: -2 }}
             whileTap={{ y: 0, scale: 0.98 }}

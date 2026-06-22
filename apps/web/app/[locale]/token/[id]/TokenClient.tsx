@@ -200,7 +200,7 @@ export default function TokenClient({ id }: { id: string }) {
           </div>
 
           <Link
-            href={`/app?token=${token.id}`}
+            href={`/login`}
             className="bg-[#0A0A0A] text-white px-6 py-3 rounded-lg font-medium hover:bg-[#0A0A0A]/90 transition-colors"
           >
             Open in RSends →

@@ -40,68 +40,9 @@ New metrics (CC-12):
 from prometheus_client import Counter, Gauge, Histogram
 
 
-# ═══════════════════════════════════════════════════════════════
-#  Sweep Pipeline
-# ═══════════════════════════════════════════════════════════════
-
-SWEEP_BATCHES_TOTAL = Counter(
-    "rsend_sweep_batches_total",
-    "Total sweep batches by final status",
-    ["status", "chain_id"],
-)
-
-SWEEP_DURATION_SECONDS = Histogram(
-    "rsend_sweep_duration_seconds",
-    "End-to-end sweep batch execution time",
-    ["chain_id"],
-    buckets=[0.5, 1, 2, 5, 10, 30, 60, 120, 300],
-)
-
-SWEEP_RECIPIENTS_TOTAL = Counter(
-    "rsend_sweep_recipients_total",
-    "Total recipients across all sweep batches",
-    ["chain_id"],
-)
-
-SWEEP_AMOUNT_WEI = Counter(
-    "rsend_sweep_amount_wei",
-    "Total amount swept in Wei",
-    ["chain_id", "token"],
-)
-
-SWEEP_GAS_USED_TOTAL = Counter(
-    "rsend_sweep_gas_used_total",
-    "Total gas used by sweep transactions (wei)",
-    ["chain_id"],
-)
-
-
-# ═══════════════════════════════════════════════════════════════
-#  Nonce Management
-# ═══════════════════════════════════════════════════════════════
-
-NONCE_GAPS_ON_STARTUP = Counter(
-    "rsend_nonce_gaps_on_startup",
-    "Number of times the sweeper restarted with a nonce gap (pending TXes in mempool)",
-    ["chain_id"],
-)
-
-
-# ═══════════════════════════════════════════════════════════════
-#  Spending & Wallet
-# ═══════════════════════════════════════════════════════════════
-
-SPENDING_USAGE_RATIO = Gauge(
-    "rsend_spending_usage_ratio",
-    "Current spending usage as ratio (0.0 - 1.0) by tier",
-    ["tier", "source"],
-)
-
-HOT_WALLET_BALANCE_WEI = Gauge(
-    "rsend_hot_wallet_balance_wei",
-    "Hot wallet balance in Wei",
-    ["chain_id"],
-)
+# NON-CUSTODIAL: removed Classic custodial metrics — sweep pipeline
+# (rsend_sweep_*), sweeper nonce gaps (rsend_nonce_gaps_on_startup), and hot
+# wallet balance (rsend_hot_wallet_balance_wei). RSends holds no funds/keys.
 
 
 # ═══════════════════════════════════════════════════════════════

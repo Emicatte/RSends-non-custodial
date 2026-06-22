@@ -5,7 +5,6 @@ Broker: Redis (DB 1)
 Result backend: Redis (DB 2)
 
 Task routes:
-  sweep.*     → queue "sweep"    (8 workers)
   confirm.*   → queue "confirm"  (4 workers)
   notify.*    → queue "notify"   (2 workers)
   analytics.* → queue "analytics" (1 worker)
@@ -42,8 +41,7 @@ _default_exchange = Exchange("default", type="direct")
 _dlq_exchange = Exchange("dlq", type="direct")
 
 celery.conf.task_queues = (
-    # High priority — sweep & confirmation
-    Queue("sweep", _default_exchange, routing_key="sweep"),
+    # High priority — confirmation
     Queue("confirm", _default_exchange, routing_key="confirm"),
     # Medium priority — notifications & webhooks
     Queue("notify", _default_exchange, routing_key="notify"),

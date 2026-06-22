@@ -312,9 +312,9 @@ export function SignupForm() {
       </form>
 
       <OAuthDivider />
-      <GoogleSignInButton callbackUrl={`/${locale}/app`} disabled={loading} />
+      <GoogleSignInButton callbackUrl={`/${locale}/settings`} disabled={loading} />
       <div className="mt-2">
-        <GitHubSignInButton callbackUrl={`/${locale}/app`} disabled={loading} />
+        <GitHubSignInButton callbackUrl={`/${locale}/settings`} disabled={loading} />
       </div>
 
       <p className="mt-6 text-center text-sm" style={{ color: '#888780' }}>

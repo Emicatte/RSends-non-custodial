@@ -152,7 +152,7 @@ export default function PricingSection() {
                   </ul>
                   <div style={{ marginTop: 'auto' }}>
                     <Link
-                      href={key === 'custom' ? '/docs' : '/app'}
+                      href={key === 'custom' ? '/docs' : '/login'}
                       style={{
                         fontFamily: C.D, fontSize: 14, fontWeight: 600,
                         padding: '12px 24px', borderRadius: 10,

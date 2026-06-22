@@ -21,15 +21,16 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
-  // ── User dashboard guard (/app) — NEW ─────────────────
-  // I path sono localizzati (/en/app, /it/app, ...). Ricava path "spoglio" + locale attivo.
-  const segments = pathname.split('/')                      // '/en/app/x' → ['','en','app','x']
+  // ── User dashboard guard (/settings) ──────────────────
+  // The OAuth/session area is now /settings (the Classic /app consumer dashboard
+  // was archived). Paths are localized (/en/settings, /it/settings, ...).
+  const segments = pathname.split('/')                      // '/en/settings/x' → ['','en','settings','x']
   const maybeLocale = segments[1] ?? ''
   const hasLocale = (routing.locales as readonly string[]).includes(maybeLocale)
   const locale = hasLocale ? maybeLocale : routing.defaultLocale
   const bare = hasLocale ? '/' + segments.slice(2).join('/') : pathname
 
-  if (bare === '/app' || bare.startsWith('/app/')) {
+  if (bare === '/settings' || bare.startsWith('/settings/')) {
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
 
     // (a) Non loggato → /login con ?redirect=<path completo> per tornare dopo il login.

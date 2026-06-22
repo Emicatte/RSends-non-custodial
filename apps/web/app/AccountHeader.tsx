@@ -8,13 +8,11 @@ import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useWalletMount } from './providers'
 import { formatUnits } from 'viem'
 import { getRegistry } from '../lib/contractRegistry'
-import dynamic from 'next/dynamic'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { useLocale } from 'next-intl'
 import { useRouter, usePathname } from '@/i18n/navigation'
 import type { Locale } from '@/i18n/routing'
 
-const PortfolioDashboard = dynamic(() => import('./PortfolioDashboard'), { ssr: false })
 
 const LOCALES: { code: Locale; flag: string }[] = [
   { code: 'en', flag: 'EN' },
@@ -110,8 +108,6 @@ function AccountHeaderImpl({ nonEvmWallet }: { nonEvmWallet?: NonEvmWalletProps 
   const [, startLocaleTransition] = useTransition()
 
   const [open, setOpen]                 = useState(false)
-  const [portfolioOpen, setPortfolioOpen] = useState(false)
-  const [portfolioTab, setPortfolioTab] = useState<'overview'|'tokens'|'activity'|'swap'>('overview')
   const [copied, setCopied]             = useState(false)
   const [recentTxs, setRecentTxs]       = useState<RecentTx[]>([])
   const [menuPos, setMenuPos]           = useState({ top: 0, right: 0 })
@@ -155,18 +151,6 @@ function AccountHeaderImpl({ nonEvmWallet }: { nonEvmWallet?: NonEvmWalletProps 
       .catch(() => { if (!c) setRecentTxs([]) })
     return () => { c = true }
   }, [isNonEvm, open, address])
-
-  // Global event listeners (from page.tsx buttons)
-  useEffect(() => {
-    const openSwap = () => { setPortfolioTab('swap'); setPortfolioOpen(true) }
-    const openPortfolio = () => { setPortfolioTab('overview'); setPortfolioOpen(true) }
-    window.addEventListener('rpagos:openSwap', openSwap)
-    window.addEventListener('rpagos:openPortfolio', openPortfolio)
-    return () => {
-      window.removeEventListener('rpagos:openSwap', openSwap)
-      window.removeEventListener('rpagos:openPortfolio', openPortfolio)
-    }
-  }, [])
 
   const handleCopy = useCallback(async () => {
     if (!address) return
@@ -269,37 +253,6 @@ function AccountHeaderImpl({ nonEvmWallet }: { nonEvmWallet?: NonEvmWalletProps 
                   <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 600, color: 'rgba(10,10,10,0.55)' }}>{balSym}</span>
                 </div>
               )}
-
-              {/* View Portfolio — HERO BUTTON */}
-              <button onClick={() => { setOpen(false); setPortfolioTab('overview'); setPortfolioOpen(true) }} style={{
-                width: '100%', padding: '11px 0', borderRadius: 12,
-                background: 'linear-gradient(135deg, rgba(0,255,163,0.08), rgba(0,255,163,0.02))',
-                border: '1px solid rgba(0,255,163,0.2)',
-                color: '#00ffa3', fontFamily: 'var(--font-display)',
-                fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                transition: 'all 0.15s', marginBottom: 10,
-                letterSpacing: '-0.01em',
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = 'linear-gradient(135deg, rgba(0,255,163,0.15), rgba(0,255,163,0.05))'}
-              onMouseLeave={e => e.currentTarget.style.background = 'linear-gradient(135deg, rgba(0,255,163,0.08), rgba(0,255,163,0.02))'}
-              >
-                📊 Vedi Portfolio
-              </button>
-
-              {/* Swap shortcut */}
-              <button onClick={() => { setOpen(false); setPortfolioTab('swap'); setPortfolioOpen(true) }} style={{
-                width: '100%', padding: '10px 0', borderRadius: 12,
-                background: 'rgba(76,130,251,0.06)',
-                border: '1px solid rgba(76,130,251,0.15)',
-                color: '#4C82FB', fontFamily: 'var(--font-display)',
-                fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                transition: 'all 0.15s', marginBottom: 10,
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(76,130,251,0.12)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'rgba(76,130,251,0.06)'}
-              >
-                ⇅ Swap Token
-              </button>
 
               {/* Language selector — 5 locale flags (inline, no nested dropdown) */}
               <div style={{
@@ -413,13 +366,6 @@ function AccountHeaderImpl({ nonEvmWallet }: { nonEvmWallet?: NonEvmWalletProps 
         document.body
       )}
 
-      {/* Portfolio Dashboard Overlay */}
-      <PortfolioDashboard
-        open={portfolioOpen}
-        onClose={() => setPortfolioOpen(false)}
-        initialTab={portfolioTab}
-        overrideWallet={nonEvmWallet ? { family: nonEvmWallet.family, address: nonEvmWallet.address } : undefined}
-      />
     </>
   )
 }

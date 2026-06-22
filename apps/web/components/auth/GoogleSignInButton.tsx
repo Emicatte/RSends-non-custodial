@@ -12,7 +12,7 @@ export function GoogleSignInButton({
 }) {
   const t = useTranslations('auth')
   const locale = useLocale()
-  const target = callbackUrl ?? `/${locale}/app`
+  const target = callbackUrl ?? `/${locale}/settings`
 
   return (
     <button

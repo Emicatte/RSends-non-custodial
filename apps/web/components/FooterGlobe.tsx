@@ -586,7 +586,7 @@ const COLUMNS = [
     { label: 'How it works', href: '#how-it-works' },
     { label: 'Pricing',      href: '#pricing' },
     { label: 'Supported assets', href: '#how-it-works' },
-    { label: 'Open the app',  href: '/app' },
+    { label: 'Open the app',  href: '/login' },
   ]},
   { title: 'Developers', links: [
     { label: 'API documentation', href: '/docs' },
