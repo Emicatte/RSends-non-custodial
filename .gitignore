@@ -46,6 +46,14 @@ Thumbs.db
 *.db-wal
 dev.db
 
+# Redis snapshots
+*.rdb
+dump.rdb
+
+# Generic build output
+dist/
+build/
+
 # TypeScript build cache
 tsconfig.tsbuildinfo
 *.tsbuildinfo

@@ -33,7 +33,7 @@ except ImportError:
     sys.exit(1)
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-FORK_RPC       = "https://base-sepolia.g.alchemy.com/v2/KsynbKs-OZ1c4BSw-2D4R"
+FORK_RPC       = os.environ["FORK_RPC"]  # required; e.g. a base-sepolia Alchemy/Infura URL
 ANVIL_RPC      = "http://127.0.0.1:8545"
 CONTRACT       = "0x481062Ba5843BbF8BcC7781EF84D42e49D0D77c3"
 # Anvil default account #0 — deterministic, pre-funded with 1000 ETH
