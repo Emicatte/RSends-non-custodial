@@ -38,13 +38,13 @@ export default function PricingSection() {
   return (
     <div id="pricing" style={{ position: 'relative', zIndex: 1, scrollMarginTop: 80 }}>
       <section style={{
-        padding: isMobile ? '60px 24px' : '80px 96px',
+        padding: isMobile ? '60px 24px' : '100px 96px',
         maxWidth: 1440,
         margin: '0 auto',
       }}>
         {/* ── Section header ── */}
         <FadeIn y={32} duration={0.9}>
-          <div style={{ maxWidth: 880, marginBottom: isMobile ? 32 : 48 }}>
+          <div style={{ maxWidth: 880, marginBottom: isMobile ? 32 : 56 }}>
             <div style={{
               fontFamily: C.M,
               fontSize: 11,

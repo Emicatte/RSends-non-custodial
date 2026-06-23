@@ -626,11 +626,11 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
       <h1 style={{
         fontFamily: C.D,
         fontSize: isMobile ? 56 : 'clamp(74px, 8vw, 96px)',
-        fontWeight: 600,
+        fontWeight: 500,
         color: C.text,
-        lineHeight: 1.05,
-        letterSpacing: '-0.03em',
-        margin: '0 0 16px',
+        lineHeight: 1.1,
+        letterSpacing: '-0.02em',
+        margin: '0 0 24px',
         maxWidth: 880,
       }}>
         <SplitText text={t('titleLine1')} delay={0.15} style={{ fontFamily: C.D }} />
@@ -648,9 +648,9 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
         style={{
           fontFamily: C.D,
           fontSize: isMobile ? 17 : 19,
-          color: 'rgba(10,10,10,0.70)',
-          lineHeight: 1.5,
-          margin: '0 0 20px',
+          color: C.sub,
+          lineHeight: 1.6,
+          margin: '0 0 28px',
           maxWidth: 760,
         }}
       >
@@ -867,7 +867,7 @@ export default function Home() {
       {/* Main content — padded below navbar */}
       <main className="main-content" style={{
         minHeight: '100dvh',
-        paddingTop: isMobileHome ? '88px' : 'clamp(100px, 10vh, 140px)',
+        paddingTop: isMobileHome ? '88px' : 'clamp(120px, 11vh, 160px)',
         paddingBottom: isMobileHome ? '40px' : '120px',
         display: 'flex', flexDirection: 'column', alignItems: 'stretch',
         opacity: ready ? 1 : 0, transition: 'opacity 0.9s ease',

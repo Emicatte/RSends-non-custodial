@@ -19,13 +19,13 @@ export function WhySignInSection() {
     <section
       id="how-it-works"
       style={{
-        padding: isMobile ? "60px 24px" : "80px 96px",
+        padding: isMobile ? "60px 24px" : "100px 96px",
         maxWidth: 1440,
         margin: "0 auto",
         scrollMarginTop: 80,
       }}
     >
-      <div style={{ maxWidth: 880, marginBottom: isMobile ? 32 : 48 }}>
+      <div style={{ maxWidth: 880, marginBottom: isMobile ? 32 : 56 }}>
         <div
           style={{
             fontFamily: C.M,
