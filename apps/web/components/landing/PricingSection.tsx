@@ -55,7 +55,7 @@ export default function PricingSection() {
             }}>
               {t('eyebrow')}
             </div>
-            <h2 className="rp-section-title" style={{
+            <h2 style={{
               fontFamily: C.D,
               fontSize: 'clamp(28px, 4vw, 52px)',
               fontWeight: 600,
