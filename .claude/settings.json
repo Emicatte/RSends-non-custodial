@@ -105,7 +105,15 @@
       "Bash(lsof -nP -iTCP:5432 -sTCP:LISTEN)",
       "Bash(awk '{print $1, $2, $9}')",
       "Bash(lsof -nP -iTCP:6379 -sTCP:LISTEN)",
-      "Bash(./../../venv/bin/alembic heads *)"
+      "Bash(./../../venv/bin/alembic heads *)",
+      "Bash(npx --no-install playwright --version)",
+      "Read(//Applications/Google Chrome.app/Contents/MacOS/**)",
+      "Read(//Applications/Chromium.app/Contents/MacOS/**)",
+      "Read(//Applications/Microsoft Edge.app/Contents/MacOS/**)",
+      "Bash(PORT=3137 npx next start -p 3137)",
+      "Bash(echo \"started pid $!\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3137/en)",
+      "Bash(curl -s http://localhost:3137/en)"
     ]
   }
 }
