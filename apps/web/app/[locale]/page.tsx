@@ -706,7 +706,7 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
           height: '0.5px',
           background: C.border,
           maxWidth: 1600,
-          marginTop: 50,
+          marginTop: 28,
           marginBottom: 8,
         }}
       />
@@ -867,7 +867,7 @@ export default function Home() {
       {/* Main content — padded below navbar */}
       <main className="main-content" style={{
         minHeight: '100dvh',
-        paddingTop: isMobileHome ? '88px' : 'clamp(120px, 11vh, 160px)',
+        paddingTop: isMobileHome ? '88px' : 'clamp(96px, 9vh, 128px)',
         paddingBottom: isMobileHome ? '40px' : '120px',
         display: 'flex', flexDirection: 'column', alignItems: 'stretch',
         opacity: ready ? 1 : 0, transition: 'opacity 0.9s ease',

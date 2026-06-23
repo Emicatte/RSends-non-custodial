@@ -42,7 +42,7 @@ export function WhySignInSection() {
           style={{
             fontFamily: C.D,
             fontSize: "clamp(28px, 4vw, 52px)",
-            fontWeight: 600,
+            fontWeight: 500,
             color: C.text,
             lineHeight: 1.1,
             letterSpacing: "-0.02em",
@@ -87,7 +87,7 @@ export function WhySignInSection() {
                 </div>
                 <div>
                   <h3
-                    className="text-lg font-semibold mb-1"
+                    className="text-lg font-medium mb-1"
                     style={{ color: "#2C2C2A" }}
                   >
                     {t(`${f.key}.title`)}

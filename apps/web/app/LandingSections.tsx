@@ -91,7 +91,7 @@ export default function LandingSections() {
   const cardHeadingStyle: React.CSSProperties = {
     fontFamily: C.D,
     fontSize: isMobile ? 24 : 28,
-    fontWeight: 600,
+    fontWeight: 500,
     color: C.text,
     letterSpacing: '-0.02em',
     lineHeight: 1.15,
@@ -119,7 +119,7 @@ export default function LandingSections() {
             <h2 style={{
               fontFamily: C.D,
               fontSize: 'clamp(28px, 4vw, 52px)',
-              fontWeight: 600,
+              fontWeight: 500,
               color: C.text,
               lineHeight: 1.1,
               letterSpacing: '-0.02em',

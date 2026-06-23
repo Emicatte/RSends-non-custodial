@@ -58,7 +58,7 @@ export default function PricingSection() {
             <h2 style={{
               fontFamily: C.D,
               fontSize: 'clamp(28px, 4vw, 52px)',
-              fontWeight: 600,
+              fontWeight: 500,
               color: C.text,
               lineHeight: 1.1,
               letterSpacing: '-0.02em',
