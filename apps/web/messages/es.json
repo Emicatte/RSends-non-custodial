@@ -1176,6 +1176,16 @@
       ]
     }
   },
+  "getStarted": {
+    "heading": "Empezar",
+    "subcopy": "Empieza a aceptar pagos en stablecoins que se liquidan directamente en tu propia wallet. Demo de testnet activa en Base Sepolia.",
+    "features": {
+      "noncustodial": { "title": "Non-custodial por diseño", "desc": "Los fondos se liquidan on-chain en tu wallet; RSends nunca los custodia." },
+      "developers": { "title": "Hecho para desarrolladores", "desc": "Crea solicitudes de pago desde el panel o la API, con webhooks." }
+    },
+    "cta": "Empezar",
+    "secondary": "Habla con nosotros"
+  },
   "pricing": {
     "eyebrow": "PRICING",
     "title": "A flat fee, never a percentage.",

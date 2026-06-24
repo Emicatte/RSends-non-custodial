@@ -1176,6 +1176,16 @@
       ]
     }
   },
+  "getStarted": {
+    "heading": "Loslegen",
+    "subcopy": "Akzeptieren Sie Stablecoin-Zahlungen, die direkt in Ihre eigene Wallet fließen. Testnet-Demo live auf Base Sepolia.",
+    "features": {
+      "noncustodial": { "title": "Non-custodial konzipiert", "desc": "Gelder werden on-chain in Ihre Wallet abgewickelt; RSends verwahrt sie nie." },
+      "developers": { "title": "Für Entwickler gebaut", "desc": "Erstellen Sie Zahlungsanfragen über das Dashboard oder die API, mit Webhooks." }
+    },
+    "cta": "Loslegen",
+    "secondary": "Sprechen Sie mit uns"
+  },
   "pricing": {
     "eyebrow": "PRICING",
     "title": "A flat fee, never a percentage.",

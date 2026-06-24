@@ -1175,6 +1175,16 @@
       ]
     }
   },
+  "getStarted": {
+    "heading": "Get started",
+    "subcopy": "Start accepting stablecoin payments that settle straight into your own wallet. Testnet demo live on Base Sepolia.",
+    "features": {
+      "noncustodial": { "title": "Non-custodial by design", "desc": "Funds settle on-chain into your wallet; RSends never holds them." },
+      "developers": { "title": "Built for developers", "desc": "Create payment requests via dashboard or API, with webhooks." }
+    },
+    "cta": "Get started",
+    "secondary": "Talk to us"
+  },
   "pricing": {
     "eyebrow": "PRICING",
     "title": "A flat fee, never a percentage.",

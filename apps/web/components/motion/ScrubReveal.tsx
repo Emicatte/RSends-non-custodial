@@ -37,7 +37,7 @@ export default function ScrubReveal({
   style,
   y = 40,
   start = 'top 92%',
-  end = 'top 56%',
+  end = 'top 40%',
 }: Props) {
   const ref = useRef<HTMLDivElement>(null)
 

@@ -202,7 +202,11 @@
       "Bash(git -C /Users/emi/dev/rsends-noncustodial status --short)",
       "Bash(git -C /Users/emi/dev/rsends-noncustodial diff --stat apps/web/components/landing/WhySignInSection.tsx)",
       "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>{const p=JSON.parse\\(d\\);console.log\\('name:',p.name\\);console.log\\('version:',p.version\\);console.log\\('homepage:',p.homepage\\);console.log\\('repo:',JSON.stringify\\(p.repository\\)\\);console.log\\('license:',p.license\\);console.log\\('main:',p.main,'module:',p.module\\);}\\)\")",
-      "Bash(node -e \"const p=require\\('/Users/emi/dev/rsends-noncustodial/apps/web/node_modules/lucide-react/package.json'\\);console.log\\('name:',p.name\\);console.log\\('version:',p.version\\);console.log\\('homepage:',p.homepage\\);console.log\\('repo:',JSON.stringify\\(p.repository\\)\\);console.log\\('license:',p.license\\);\")"
+      "Bash(node -e \"const p=require\\('/Users/emi/dev/rsends-noncustodial/apps/web/node_modules/lucide-react/package.json'\\);console.log\\('name:',p.name\\);console.log\\('version:',p.version\\);console.log\\('homepage:',p.homepage\\);console.log\\('repo:',JSON.stringify\\(p.repository\\)\\);console.log\\('license:',p.license\\);\")",
+      "Bash(node -e \"require.resolve\\('ws'\\); console.log\\('ws available'\\)\")",
+      "Bash(node -e \"require.resolve\\('ws',{paths:['./node_modules','../../node_modules']}\\); console.log\\('ws resolvable'\\)\")",
+      "Bash(node -e \"require.resolve\\('puppeteer-core',{paths:['./node_modules','../../node_modules']}\\); console.log\\('have puppeteer-core'\\)\")",
+      "Bash(node _probe.js)"
     ],
     "additionalDirectories": [
       "/Users/emi/dev/rsends-noncustodial/apps/web/public/globe"

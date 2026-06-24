@@ -31,7 +31,7 @@ import { useWalletModal } from '@solana/wallet-adapter-react-ui'
 import { useTron } from '../providers-tron'
 import type { NonEvmWalletProps } from '../AccountHeader'
 import { ToastContainer } from '../../components/shared/Toast'
-import PricingSection from '@/components/landing/PricingSection'
+import GetStartedSection from '@/components/landing/GetStartedSection'
 import LandingSections from '../LandingSections'
 import { C, EASE } from '@/app/designTokens'
 import SplitText from '@/components/motion/SplitText'
@@ -910,8 +910,8 @@ export default function Home() {
       {/* ── B2B Landing Sections ──── */}
       <LandingSections />
 
-      {/* ── Pricing Section ──── */}
-      <PricingSection />
+      {/* ── Get started closing block ──── */}
+      <GetStartedSection />
 
       
 

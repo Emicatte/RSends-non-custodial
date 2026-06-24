@@ -28,26 +28,36 @@ const STEPS: { key: string; Icon: LucideIcon }[] = [
 export function WhySignInSection() {
   const t = useTranslations("auth.whySignIn");
   const isMobile = useIsMobile();
-  const leftRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLDivElement>(null);
 
   useIsoLayoutEffect(() => {
     const mm = gsap.matchMedia();
     mm.add("(prefers-reduced-motion: no-preference)", () => {
-      const el = leftRef.current;
-      if (!el) return;
+      const root = textRef.current;
+      if (!root) return;
       const ctx = gsap.context(() => {
-        // EXACTLY ONE tween for the whole left column, on the outer container.
-        // Fade only (no y) => the building can never slide inside the rounded frame.
-        gsap.fromTo(
-          el,
-          { autoAlpha: 0 },
-          {
-            autoAlpha: 1,
-            ease: "none",
-            scrollTrigger: { trigger: el, start: "top 88%", end: "top 60%", scrub: 0.5 },
-          },
-        );
-      }, el);
+        // The building image + frame stay STATIC (fully visible, no tween). Only the
+        // copy overlaid on the photo animates: eyebrow -> heading -> subcopy fade-up
+        // in a small index cascade, scrubbed by scroll.
+        const txt = gsap.utils.selector(root)(".rs-hiw-text");
+        txt.forEach((el, i) => {
+          gsap.fromTo(
+            el,
+            { autoAlpha: 0, y: 28 },
+            {
+              autoAlpha: 1,
+              y: 0,
+              ease: "none",
+              scrollTrigger: {
+                trigger: el,
+                start: `top ${86 - i * 4}%`,
+                end: `top ${66 - i * 4}%`,
+                scrub: 0.5,
+              },
+            },
+          );
+        });
+      }, root);
       // Recompute start/end once webfonts settle (layout shift), then clean up.
       if (typeof document !== "undefined" && document.fonts?.ready) {
         document.fonts.ready.then(() => ScrollTrigger.refresh());
@@ -73,19 +83,21 @@ export function WhySignInSection() {
           gridTemplateColumns: isMobile ? "1fr" : "0.84fr 1.16fr",
           alignItems: "stretch",
           borderRadius: 24,
-          overflow: "hidden",
           background: C.bg,
           border: `1px solid ${C.border}`,
         }}
       >
-        {/* Left: skyscraper image with overlaid copy */}
+        {/* Left: skyscraper image with overlaid copy — STATIC (no animation). */}
         <div
-          ref={leftRef}
           style={{
             position: "relative",
             minHeight: isMobile ? 280 : undefined,
             display: "flex",
             flexDirection: "column",
+            overflow: "hidden",
+            // Rounded clip frame for the image. Round only the OUTER corners
+            // (the inner seam between the two columns stays square).
+            borderRadius: isMobile ? "24px 24px 0 0" : "24px 0 0 24px",
           }}
         >
           <Image
@@ -104,6 +116,7 @@ export function WhySignInSection() {
             }}
           />
           <div
+            ref={textRef}
             style={{
               position: "relative",
               display: "flex",
@@ -112,6 +125,7 @@ export function WhySignInSection() {
             }}
           >
             <div
+              className="rs-hiw-text"
               style={{
                 fontFamily: C.M,
                 fontSize: 12,
@@ -125,6 +139,7 @@ export function WhySignInSection() {
               {t("eyebrow")}
             </div>
             <h2
+              className="rs-hiw-text"
               style={{
                 fontFamily: C.D,
                 fontSize: isMobile ? 28 : 32,
@@ -138,6 +153,7 @@ export function WhySignInSection() {
               {t("heading")}
             </h2>
             <p
+              className="rs-hiw-text"
               style={{
                 fontFamily: C.D,
                 fontSize: 14,

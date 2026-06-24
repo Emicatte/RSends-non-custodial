@@ -16,6 +16,12 @@ type Props = {
   style?: React.CSSProperties
   /** rise distance (px) for the fade-up */
   y?: number
+  /** first card's `start` (% of viewport). Each later card starts `stagger`% deeper. */
+  startBase?: number
+  /** first card's `end` (% of viewport). Each later card ends `stagger`% deeper. */
+  endBase?: number
+  /** per-index offset (%) applied to both start and end — the cascade tightness. */
+  stagger?: number
 }
 
 /**
@@ -27,7 +33,15 @@ type Props = {
  * (stop -> hold, scroll up -> reverse). Respects prefers-reduced-motion; the base CSS
  * `.rs-card { opacity: 1 }` keeps content visible when the animation never runs.
  */
-export default function ScrubCascade({ children, className, style, y = 40 }: Props) {
+export default function ScrubCascade({
+  children,
+  className,
+  style,
+  y = 40,
+  startBase = 88,
+  endBase = 93,
+  stagger = 6,
+}: Props) {
   const ref = useRef<HTMLDivElement>(null)
 
   useIsoLayoutEffect(() => {
@@ -49,8 +63,8 @@ export default function ScrubCascade({ children, className, style, y = 40 }: Pro
               ease: 'none',
               scrollTrigger: {
                 trigger: el,
-                start: `top ${88 - i * 6}%`,
-                end: `top ${66 - i * 6}%`,
+                start: `top ${startBase - i * stagger}%`,
+                end: `top ${endBase - i * stagger}%`,
                 scrub: 0.5,
               },
             },
@@ -64,7 +78,7 @@ export default function ScrubCascade({ children, className, style, y = 40 }: Pro
       return () => ctx.revert()
     })
     return () => mm.revert()
-  }, [y])
+  }, [y, startBase, endBase, stagger])
 
   return (
     <div ref={ref} className={className} style={style}>
