@@ -3,8 +3,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { C } from '@/app/designTokens'
-import FadeIn from '@/components/motion/FadeIn'
-import { StaggerContainer, StaggerItem } from '@/components/motion/Stagger'
+import ScrubReveal from '@/components/motion/ScrubReveal'
 import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 
@@ -42,9 +41,9 @@ export default function PricingSection() {
         maxWidth: 1440,
         margin: '0 auto',
       }}>
-        {/* ── Section header ── */}
-        <FadeIn y={32} duration={0.9}>
-          <div style={{ maxWidth: 880, marginBottom: isMobile ? 32 : 56 }}>
+        <ScrubReveal>
+          {/* ── Section header ── */}
+          <div className="rs-reveal" style={{ maxWidth: 880, marginBottom: isMobile ? 32 : 56 }}>
             <div style={{
               fontFamily: C.M,
               fontSize: 11,
@@ -89,25 +88,23 @@ export default function PricingSection() {
               {t('feeLine')}
             </div>
           </div>
-        </FadeIn>
 
-        {/* ── Plan cards ── */}
-        <StaggerContainer
-          staggerDelay={0.15}
-          style={{
-            display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr',
-            gap: 24,
-          }}
-        >
-          {PLAN_KEYS.map((key) => {
-            const featured = key === 'pro'
-            const features = t.raw(`plans.${key}.features`) as string[]
-            return (
-              <StaggerItem key={key}>
+          {/* ── Plan cards ── */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr',
+              gap: 24,
+            }}
+          >
+            {PLAN_KEYS.map((key) => {
+              const featured = key === 'pro'
+              const features = t.raw(`plans.${key}.features`) as string[]
+              return (
+                <div key={key} className="rs-reveal" style={{ display: 'flex', flexDirection: 'column' }}>
                 <motion.div
                   whileHover={{ y: -4, transition: { duration: 0.3, ease: [0.22, 1, 0.36, 1] } }}
-                  style={cardStyle(featured)}
+                  style={{ ...cardStyle(featured), flex: 1 }}
                 >
                   <div style={{
                     fontFamily: C.M,
@@ -166,14 +163,13 @@ export default function PricingSection() {
                     </Link>
                   </div>
                 </motion.div>
-              </StaggerItem>
-            )
-          })}
-        </StaggerContainer>
+                </div>
+              )
+            })}
+          </div>
 
-        {/* ── Compliance line ── */}
-        <FadeIn y={20} duration={0.8}>
-          <p style={{
+          {/* ── Compliance line ── */}
+          <p className="rs-reveal" style={{
             fontFamily: C.M,
             fontSize: 12,
             color: C.sub,
@@ -183,7 +179,7 @@ export default function PricingSection() {
           }}>
             {t('compliance')}
           </p>
-        </FadeIn>
+        </ScrubReveal>
       </section>
     </div>
   )

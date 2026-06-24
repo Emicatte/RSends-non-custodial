@@ -2,6 +2,10 @@
 
 import { ReactNode, useEffect } from 'react'
 import Lenis from 'lenis'
+import { gsap } from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
+
+gsap.registerPlugin(ScrollTrigger)
 
 export default function SmoothScroll({ children }: { children: ReactNode }) {
   useEffect(() => {
@@ -18,25 +22,20 @@ export default function SmoothScroll({ children }: { children: ReactNode }) {
       syncTouch: false,
     })
 
-    let rafId: number
-    const raf = (time: number) => {
-      lenis.raf(time)
-      rafId = requestAnimationFrame(raf)
-    }
-    rafId = requestAnimationFrame(raf)
-
-    // GSAP ScrollTrigger sync
-    import('gsap').then(({ gsap }) => {
-      import('gsap/ScrollTrigger').then(({ ScrollTrigger }) => {
-        gsap.registerPlugin(ScrollTrigger)
-        lenis.on('scroll', ScrollTrigger.update)
-        gsap.ticker.add((time) => lenis.raf(time * 1000))
-        gsap.ticker.lagSmoothing(0)
-      })
-    })
+    // Canonical Lenis <-> ScrollTrigger integration: drive Lenis from a SINGLE
+    // clock (GSAP's ticker) and update ScrollTrigger on every Lenis scroll, so
+    // scrubbed timelines track the smoothed wheel. (The previous version drove
+    // lenis.raf from BOTH a manual rAF loop and the ticker, with two time bases,
+    // which corrupted the scroll delta and made scrubs feel auto-played.)
+    lenis.on('scroll', ScrollTrigger.update)
+    const onTick = (time: number) => lenis.raf(time * 1000)
+    gsap.ticker.add(onTick)
+    gsap.ticker.lagSmoothing(0)
+    ScrollTrigger.refresh()
 
     return () => {
-      cancelAnimationFrame(rafId)
+      lenis.off('scroll', ScrollTrigger.update)
+      gsap.ticker.remove(onTick)
       lenis.destroy()
     }
   }, [])

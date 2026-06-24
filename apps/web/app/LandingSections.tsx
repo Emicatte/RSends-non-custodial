@@ -3,8 +3,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { C } from '@/app/designTokens'
-import FadeIn from '@/components/motion/FadeIn'
-import { StaggerContainer, StaggerItem } from '@/components/motion/Stagger'
+import ScrubReveal from '@/components/motion/ScrubReveal'
 import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 
@@ -113,9 +112,9 @@ export default function LandingSections() {
         maxWidth: 1440,
         margin: '0 auto',
       }}>
+        <ScrubReveal>
         {/* ── Section header ── */}
-        <FadeIn y={32} duration={0.9}>
-          <div style={{ maxWidth: 880, marginBottom: isMobile ? 32 : 56 }}>
+        <div className="rs-reveal" style={{ maxWidth: 880, marginBottom: isMobile ? 32 : 56 }}>
             <h2 style={{
               fontFamily: C.D,
               fontSize: 'clamp(28px, 4vw, 52px)',
@@ -138,11 +137,9 @@ export default function LandingSections() {
               {t('subtitle')}
             </p>
           </div>
-        </FadeIn>
 
         {/* ── Dual-card grid ── */}
-        <StaggerContainer
-          staggerDelay={0.15}
+        <div
           style={{
             display: 'grid',
             gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
@@ -150,10 +147,10 @@ export default function LandingSections() {
           }}
         >
           {/* Card 1 — FOR DEVELOPERS */}
-          <StaggerItem>
+            <div className="rs-reveal" style={{ display: 'flex', flexDirection: 'column' }}>
             <motion.div
               whileHover={{ y: -4, transition: { duration: 0.3, ease: [0.22, 1, 0.36, 1] } }}
-              style={cardStyle}
+              style={{ ...cardStyle, flex: 1 }}
             >
               <div style={iconBoxStyle}>
                 <span style={{ fontFamily: C.M, fontSize: 16, fontWeight: 700, color: C.purple }}>{'<>'}</span>
@@ -173,13 +170,13 @@ export default function LandingSections() {
                 <CtaLink color={C.text} href="#how-it-works">{t('developers.cta')}</CtaLink>
               </div>
             </motion.div>
-          </StaggerItem>
+            </div>
 
           {/* Card 2 — FOR BUSINESSES */}
-          <StaggerItem>
+            <div className="rs-reveal" style={{ display: 'flex', flexDirection: 'column' }}>
             <motion.div
               whileHover={{ y: -4, transition: { duration: 0.3, ease: [0.22, 1, 0.36, 1] } }}
-              style={cardStyle}
+              style={{ ...cardStyle, flex: 1 }}
             >
               <div style={iconBoxStyle}>
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style={{ color: C.purple }}>
@@ -204,8 +201,9 @@ export default function LandingSections() {
                 <CtaLink color={C.text} outlined href="#pricing">{t('businesses.cta')}</CtaLink>
               </div>
             </motion.div>
-          </StaggerItem>
-        </StaggerContainer>
+            </div>
+        </div>
+        </ScrubReveal>
       </section>
     </div>
   )

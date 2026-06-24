@@ -14,7 +14,7 @@ import LanguageSwitcher from '@/components/LanguageSwitcher'
 
 // STATIC IMPORTS
 import AccountHeader from '../AccountHeader'
-const HeroWireframe = dynamic(() => import('@/components/HeroWireframe'), { ssr: false })
+const HeroGlobe = dynamic(() => import('@/components/HeroGlobe'), { ssr: false })
 import { useSweepWebSocket } from '../../lib/useSweepWebSocket'
 import { useSweepStats } from '../../lib/useSweepStats'
 import AntiPhishingSetup from '../AntiPhishingSetup'
@@ -36,7 +36,6 @@ import LandingSections from '../LandingSections'
 import { C, EASE } from '@/app/designTokens'
 import SplitText from '@/components/motion/SplitText'
 import SmoothScroll from '@/components/SmoothScroll'
-import FadeIn from '@/components/motion/FadeIn'
 import { LandingAuthButtons } from '@/components/auth/LandingAuthButtons'
 import { WhySignInSection } from '@/components/landing/WhySignInSection'
 import SupportedNetworksCarousel from '@/components/landing/SupportedNetworksCarousel'
@@ -601,6 +600,8 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
       margin: '0 auto',
       padding: isMobile ? '0 20px' : '0 96px',
       textAlign: isMobile ? 'center' : 'left',
+      position: 'relative',
+      zIndex: 2,
     }}>
       {/* Eyebrow — 0.0s (hidden when empty) */}
       {t('eyebrow') && (
@@ -651,7 +652,7 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
           color: C.sub,
           lineHeight: 1.6,
           margin: '0 0 28px',
-          maxWidth: 760,
+          maxWidth: 560,
         }}
       >
         {t('subtitle')}
@@ -760,8 +761,13 @@ export default function Home() {
   const [ready, setReady] = useState(false)
   const [showAntiPhishing, setShowAntiPhishing] = useState(false)
   const [isMobileHome, setIsMobileHome] = useState(false)
+  // Globe panel only renders when the split hero has room for it beside the text.
+  const [globeFits, setGlobeFits] = useState(false)
   useEffect(() => {
-    const check = () => setIsMobileHome(window.innerWidth < 768)
+    const check = () => {
+      setIsMobileHome(window.innerWidth < 768)
+      setGlobeFits(window.innerWidth >= 1024)
+    }
     check()
     window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
@@ -867,7 +873,7 @@ export default function Home() {
       {/* Main content — padded below navbar */}
       <main className="main-content" style={{
         minHeight: '100dvh',
-        paddingTop: isMobileHome ? '88px' : 'clamp(96px, 9vh, 128px)',
+        paddingTop: isMobileHome ? '72px' : 'clamp(64px, 6vh, 88px)',
         paddingBottom: isMobileHome ? '40px' : '120px',
         display: 'flex', flexDirection: 'column', alignItems: 'stretch',
         opacity: ready ? 1 : 0, transition: 'opacity 0.9s ease',
@@ -876,22 +882,22 @@ export default function Home() {
         {/* Hero */}
         <div style={{ width: '100%', position: 'relative' }}>
           <HeroTitle isMobile={isMobileHome} />
-          {!isMobileHome && (
+          {globeFits && (
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: '-50%' }}
               animate={{ opacity: 1, scale: 1, y: '-50%' }}
               transition={{ duration: 1.2, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
               style={{
                 position: 'absolute',
-                right: '4%',
+                right: '2%',
                 top: '50%',
-                width: 540,
-                height: 540,
+                width: 'clamp(360px, calc(120vw - 820px), 920px)',
+                height: 'clamp(300px, 42vw, 520px)',
                 zIndex: 1,
                 pointerEvents: 'none',
               }}
             >
-              <HeroWireframe />
+              <HeroGlobe />
             </motion.div>
           )}
         </div>
@@ -899,17 +905,13 @@ export default function Home() {
       </main>
 
       {/* ── Why Sign In value props ──── */}
-      <FadeIn y={40} duration={1}>
-        <WhySignInSection />
-      </FadeIn>
+      <WhySignInSection />
 
       {/* ── B2B Landing Sections ──── */}
       <LandingSections />
 
       {/* ── Pricing Section ──── */}
-      <FadeIn y={40} duration={1}>
-        <PricingSection />
-      </FadeIn>
+      <PricingSection />
 
       
 
