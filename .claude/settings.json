@@ -206,7 +206,24 @@
       "Bash(node -e \"require.resolve\\('ws'\\); console.log\\('ws available'\\)\")",
       "Bash(node -e \"require.resolve\\('ws',{paths:['./node_modules','../../node_modules']}\\); console.log\\('ws resolvable'\\)\")",
       "Bash(node -e \"require.resolve\\('puppeteer-core',{paths:['./node_modules','../../node_modules']}\\); console.log\\('have puppeteer-core'\\)\")",
-      "Bash(node _probe.js)"
+      "Bash(node _probe.js)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(pkill -f \"next-server\")",
+      "Bash(rm -rf apps/web/.next .turbo apps/web/.turbo)",
+      "Bash(ls -d apps/web/.next .turbo apps/web/.turbo)",
+      "Bash(break)",
+      "Bash(PORT=3000 npm run dev)",
+      "Bash(PORT=3217 npx next dev -p 3217)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" -L http://localhost:3217/en)",
+      "Bash(lsof -iTCP:3217 -sTCP:LISTEN -n)",
+      "Bash(node verify-globe.mjs)",
+      "Bash(kill 77944)",
+      "Bash(pkill -f \"next dev -p 3217\")",
+      "Skill(run)",
+      "Skill(run:*)",
+      "Bash(node --check lib/rsends-globe.js)",
+      "Bash(PORT=3100 npm run dev)",
+      "Bash(curl -s -o /tmp/en.html -w \"%{http_code}\" http://localhost:3100/en)"
     ],
     "additionalDirectories": [
       "/Users/emi/dev/rsends-noncustodial/apps/web/public/globe"
