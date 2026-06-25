@@ -1,70 +1,59 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { C } from '@/app/designTokens';
+// Side-effect import: executes the IIFE in rsends-globe.js, which registers the
+// <rsends-globe> custom element via customElements.define(). This module is only
+// evaluated in the browser because HeroGlobe is imported with { ssr: false }
+// (app/[locale]/page.tsx), so the browser-only canvas/window code never runs on the server.
+import '@/lib/rsends-globe';
 
 type Props = {
   className?: string;
 };
 
 /**
- * Hero visual — rotating globe video. The asset (globe_baked.mp4) is an opaque
- * MP4 with the globe's original black background luma-keyed and re-composited
- * onto the hero color (#FAFAFA) — original colors kept, no tint. Since the hero
- * background is flat #FAFAFA, the globe blends in with no visible box/panel.
- * (Baked rather than a transparent VP9-alpha WebM because Chrome here renders
- * VP9 alpha as an opaque black box; opaque H.264 works in every browser.)
- * Loops forever, slowed to 0.5×, no cursor interaction. Respects
- * prefers-reduced-motion: no autoplay, shows the first frame paused.
+ * Hero visual — the rotating dotted globe with terracotta payment routes.
+ *
+ * Renders the self-contained <rsends-globe> custom element (lib/rsends-globe.js):
+ * a dependency-free <canvas> drawing Natural Earth land as dots, spinning 360° in
+ * a ~45s loop, with great-circle route arcs + travelling packets between cities.
+ * The element handles its own crispness (devicePixelRatio), off-screen pause
+ * (IntersectionObserver), and prefers-reduced-motion (one static frame), so this
+ * wrapper only needs to register the element and size it.
+ *
+ * Browser-only (canvas + window): this component is mounted client-side only
+ * (imported with { ssr: false } in app/[locale]/page.tsx).
  */
 export default function HeroGlobe({ className }: Props) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  // Read once before first paint (client-only component) to avoid an autoplay flash.
-  const [prefersReduced] = useState(
-    () =>
-      typeof window !== 'undefined' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    if (prefersReduced) {
-      // Stay on the first frame, no motion.
-      video.pause();
-      return;
-    }
-
-    // Slow the rotation; also set on loadedmetadata in case metadata isn't ready yet.
-    video.playbackRate = 0.5;
-  }, [prefersReduced]);
-
   return (
     <div
       className={className}
-      style={{ width: '100%', height: '100%' }}
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
       aria-hidden="true"
     >
-      <video
-        ref={videoRef}
-        src="/globe/globe_baked.mp4"
-        autoPlay={!prefersReduced}
-        muted
-        loop
-        playsInline
-        preload="auto"
-        aria-hidden="true"
-        onLoadedMetadata={(e) => {
-          if (!prefersReduced) e.currentTarget.playbackRate = 0.5;
-        }}
-        style={{
-          width: '100%',
-          height: '100%',
-          objectFit: 'contain',
-          display: 'block',
-        }}
-      />
+      {/* <rsends-globe> has no intrinsic size and sizes its square canvas to its OWN
+          width (clientWidth), so the wrapper needs a DEFINITE width to paint. We give it
+          an explicit width here; the globe is 1:1 and derives its own height from that
+          width via width:100% (no aspect-ratio / height:100% — a height-derived width can
+          collapse to 0 and the canvas paints invisibly). maxWidth keeps it bounded.
+          Labels hidden for the minimal/airy light hero; routes/packets stay on
+          (show-routes defaults to true). Set show-labels="true" to show city names. */}
+      <div style={{ width: 'min(560px, 42vw)', maxWidth: '100%', margin: '0 auto' }}>
+        <rsends-globe
+          rotation-seconds="45"
+          tilt="20"
+          accent={C.purple}
+          ink={C.text}
+          show-labels="false"
+          style={{ display: 'block', width: '100%' }}
+        />
+      </div>
     </div>
   );
 }
