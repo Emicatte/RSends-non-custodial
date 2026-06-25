@@ -1232,6 +1232,8 @@
       ]
     },
     "split": {
+      "heading": "Splits, integrados",
+      "body": "Cobra tu comisión de plataforma dentro del pago. Los splits se enrutan de forma atómica — o cobran todos, o no cobra nadie.",
       "label": "SPLIT",
       "feeLabel": "Comisión RSends",
       "note": "enrutado en 1 tx",

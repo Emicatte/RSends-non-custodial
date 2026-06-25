@@ -1231,6 +1231,8 @@
       ]
     },
     "split": {
+      "heading": "Split, integrati",
+      "body": "Trattieni la tua fee di piattaforma dentro il pagamento. Gli split vengono instradati in modo atomico — o vengono pagati tutti, o nessuno.",
       "label": "SPLIT",
       "feeLabel": "Fee RSends",
       "note": "instradato in 1 tx",

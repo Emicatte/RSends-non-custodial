@@ -1231,6 +1231,8 @@
       ]
     },
     "split": {
+      "heading": "Splits, built in",
+      "body": "Take your platform fee inside the payment. Splits route atomically — everyone is paid, or no one is.",
       "label": "SPLIT",
       "feeLabel": "RSends fee",
       "note": "routed in 1 tx",

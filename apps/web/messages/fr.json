@@ -1232,6 +1232,8 @@
       ]
     },
     "split": {
+      "heading": "Splits, intégrés",
+      "body": "Prélevez vos frais de plateforme à l'intérieur du paiement. Les splits sont acheminés de façon atomique — tout le monde est payé, ou personne.",
       "label": "SPLIT",
       "feeLabel": "Frais RSends",
       "note": "acheminé en 1 tx",

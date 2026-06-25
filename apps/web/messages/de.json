@@ -1232,6 +1232,8 @@
       ]
     },
     "split": {
+      "heading": "Splits, eingebaut",
+      "body": "Behalte deine Plattform-Gebühr innerhalb der Zahlung ein. Splits werden atomar geroutet — entweder werden alle bezahlt oder niemand.",
       "label": "SPLIT",
       "feeLabel": "RSends-Gebühr",
       "note": "in 1 Tx geroutet",

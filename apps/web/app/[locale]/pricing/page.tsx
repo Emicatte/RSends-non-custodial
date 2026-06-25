@@ -15,7 +15,8 @@ export const metadata: Metadata = {
 type PageProps = { params: Promise<{ locale: string }> }
 
 const HPAD = 'clamp(20px, 6vw, 96px)'
-const MAXW = 1440
+const MAXW = 1440 // hero only — full-bleed dark band
+const CONTAINER = 1160 // shared width for every section below the hero
 
 // ── Fee model — single source of truth. Figures hard-coded so every locale
 //    renders identical numbers (DM Mono). The % columns are illustrative
@@ -41,6 +42,12 @@ const PLAN_KEYS = ['free', 'pro', 'custom'] as const
 
 const section: React.CSSProperties = {
   maxWidth: MAXW,
+  margin: '0 auto',
+  width: '100%',
+}
+
+const container: React.CSSProperties = {
+  maxWidth: CONTAINER,
   margin: '0 auto',
   width: '100%',
 }
@@ -114,7 +121,7 @@ export default async function PricingPage({ params }: PageProps) {
       </section>
 
       {/* ── Comparison table — the centerpiece ─────────────────── */}
-      <section style={{ ...section, padding: `clamp(64px, 11vh, 120px) ${HPAD} clamp(40px, 7vh, 72px)` }}>
+      <section style={{ ...container, padding: `clamp(64px, 11vh, 120px) ${HPAD} clamp(40px, 7vh, 72px)` }}>
         <ScrubReveal scrub={0.5}>
           <h2
             className="rs-reveal"
@@ -184,7 +191,7 @@ export default async function PricingPage({ params }: PageProps) {
       </section>
 
       {/* ── Fee details strip ──────────────────────────────────── */}
-      <section style={{ ...section, padding: `clamp(24px, 4vh, 48px) ${HPAD}` }}>
+      <section style={{ ...container, padding: `clamp(24px, 4vh, 48px) ${HPAD}` }}>
         <ScrubReveal scrub={0.5}>
           <h2 className="rs-reveal" style={sectionLabel}>
             {t('details.title')}
@@ -194,11 +201,7 @@ export default async function PricingPage({ params }: PageProps) {
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-            gap: 0,
-            border: `1px solid ${C.border}`,
-            borderRadius: 16,
-            overflow: 'hidden',
-            background: C.surface,
+            gap: 16,
           }}
         >
           {details.map((d, i) => (
@@ -206,9 +209,10 @@ export default async function PricingPage({ params }: PageProps) {
               key={i}
               className="rs-card"
               style={{
-                padding: '22px 24px',
-                borderRight: `1px solid ${C.border}`,
-                borderBottom: `1px solid ${C.border}`,
+                background: C.surface,
+                border: `1px solid ${C.border}`,
+                borderRadius: 12,
+                padding: '20px 22px',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 6,
@@ -226,21 +230,36 @@ export default async function PricingPage({ params }: PageProps) {
       </section>
 
       {/* ── Split illustration ─────────────────────────────────── */}
-      <section style={{ ...section, padding: `clamp(40px, 7vh, 72px) ${HPAD}` }}>
+      <section style={{ ...container, padding: `clamp(40px, 7vh, 72px) ${HPAD}` }}>
         <ScrubReveal scrub={0.5}>
-          {/* Card is the outermost (clipped) boundary — reveal lives here;
-              inner rows stay static so nothing translates inside overflow:hidden */}
           <div
-            className="rs-reveal"
             style={{
-              maxWidth: 480,
-              background: C.surface,
-              border: `1px solid ${C.border}`,
-              borderRadius: 24,
-              overflow: 'hidden',
-              boxShadow: '0 24px 60px rgba(10,10,10,0.06)',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+              gap: 'clamp(32px, 5vw, 64px)',
+              alignItems: 'center',
             }}
           >
+            {/* LEFT — copy */}
+            <div className="rs-reveal">
+              <h2 style={{ ...sectionLabel, margin: '0 0 14px' }}>{t('split.heading')}</h2>
+              <p style={{ fontFamily: C.D, fontSize: 16, lineHeight: 1.6, color: C.sub, margin: 0, maxWidth: 440 }}>
+                {t('split.body')}
+              </p>
+            </div>
+
+            {/* RIGHT — Split card. The card is the outermost (clipped) boundary,
+                so the reveal lives here; inner rows stay static (no translate
+                inside overflow:hidden). */}
+            <div
+              className="rs-reveal"
+              style={{
+                background: C.surface,
+                border: `1px solid ${C.border}`,
+                borderRadius: 24,
+                overflow: 'hidden',
+              }}
+            >
             {/* Header */}
             <div
               style={{
@@ -283,9 +302,9 @@ export default async function PricingPage({ params }: PageProps) {
                   fontSize: 9.5,
                   letterSpacing: '0.08em',
                   textTransform: 'uppercase',
-                  color: C.purple,
-                  background: 'rgba(200,81,44,0.08)',
-                  border: `1px solid rgba(200,81,44,0.20)`,
+                  color: C.sub,
+                  background: 'rgba(10,10,10,0.04)',
+                  border: `1px solid ${C.border}`,
                   borderRadius: 999,
                   padding: '4px 9px',
                   textAlign: 'right',
@@ -364,12 +383,13 @@ export default async function PricingPage({ params }: PageProps) {
             <div style={{ padding: '12px 24px 18px' }}>
               <span style={{ fontFamily: C.D, fontSize: 13, color: C.sub }}>• {t('split.note')}</span>
             </div>
+            </div>
           </div>
         </ScrubReveal>
       </section>
 
       {/* ── Tiers — what you get on top (same fee everywhere) ──── */}
-      <section style={{ ...section, padding: `clamp(40px, 7vh, 80px) ${HPAD}` }}>
+      <section style={{ ...container, padding: `clamp(40px, 7vh, 80px) ${HPAD}` }}>
         <ScrubReveal scrub={0.5}>
           <div className="rs-reveal" style={{ maxWidth: 760, marginBottom: 'clamp(28px, 4vh, 44px)' }}>
             <div
@@ -427,7 +447,6 @@ export default async function PricingPage({ params }: PageProps) {
                   padding: '36px 32px',
                   display: 'flex',
                   flexDirection: 'column',
-                  boxShadow: isPro ? '0 12px 40px rgba(200,81,44,0.10)' : 'none',
                 }}
               >
                 {isPro && (
@@ -540,7 +559,7 @@ export default async function PricingPage({ params }: PageProps) {
       </section>
 
       {/* ── FAQ — always-open, left-aligned 2-col grid ─────────── */}
-      <section style={{ ...section, padding: `clamp(40px, 7vh, 80px) ${HPAD}` }}>
+      <section style={{ ...container, padding: `clamp(40px, 7vh, 80px) ${HPAD}` }}>
         <ScrubReveal scrub={0.5}>
           <h2 className="rs-reveal" style={{ ...sectionLabel, marginBottom: 'clamp(24px, 4vh, 40px)' }}>
             {t('faq.title')}
@@ -567,7 +586,7 @@ export default async function PricingPage({ params }: PageProps) {
       </section>
 
       {/* ── Footer disclaimer ──────────────────────────────────── */}
-      <section style={{ ...section, padding: `clamp(32px, 5vh, 56px) ${HPAD} clamp(56px, 9vh, 96px)` }}>
+      <section style={{ ...container, padding: `clamp(32px, 5vh, 56px) ${HPAD} clamp(56px, 9vh, 96px)` }}>
         <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 28 }}>
           <p style={{ fontFamily: C.M, fontSize: 12, lineHeight: 1.6, color: C.sub, margin: 0, maxWidth: 760 }}>
             {t('compliance')}
