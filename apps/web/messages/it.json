@@ -1195,9 +1195,40 @@
     "feeModel": {
       "eyebrow": "COME FUNZIONA LA FEE",
       "title": "Una fee fissa, con un cap rigido.",
-      "paymentLabel": "Pagamento",
-      "feeLabel": "Fee",
-      "caption": "€0.15 fissi per transazione, +€1 oltre €1.000, cap massimo €1.15."
+      "subtitle": "€0.15 per transazione fino a €1.000, poi €1.15 fissi — mai una percentuale di ciò che incassi."
+    },
+    "comparison": {
+      "title": "Quanto paghi rispetto a un gateway a percentuale",
+      "colPayment": "Pagamento",
+      "colRsends": "Fee RSends",
+      "col1": "All'1%",
+      "col29": "Al 2,9%",
+      "illustrative": "illustrativo",
+      "caption": "€0.15 fissi per transazione, +€1 oltre €1.000, cap massimo €1.15. Le colonne percentuali sono riferimenti illustrativi — non legate ad alcun provider specifico."
+    },
+    "details": {
+      "title": "Dettagli della fee",
+      "items": [
+        { "label": "Gas", "value": "pagato dal pagatore; il merchant riceve il pagamento meno la sola fee fissa" },
+        { "label": "Transazioni fallite", "value": "mai addebitate (atomica — un revert non instrada nulla e non costa nulla)" },
+        { "label": "Costo di setup", "value": "nessuno" },
+        { "label": "Minimo mensile", "value": "nessuno (il piano Free è €0/mese)" },
+        { "label": "Custodia", "value": "nessuna (pagatore → merchant diretto)" },
+        { "label": "Settlement", "value": "on-chain, atomico, una sola transazione" }
+      ]
+    },
+    "faq": {
+      "title": "Domande",
+      "items": [
+        { "q": "Quali chain e token sono supportati?", "a": "USDC, USDT ed EURC su Base ed Ethereum. Il prodotto è attualmente una demo su testnet Base Sepolia." },
+        { "q": "Chi paga il gas?", "a": "Il gas è pagato dal pagatore, in quanto soggetto che avvia la transazione on-chain. Il merchant riceve il pagamento meno la sola fee fissa RSends — nessun costo di gas per il merchant." },
+        { "q": "La fee è mai una percentuale dell'importo?", "a": "No. È una fee fissa di €0.15 per transazione fino a €1.000, e di €1.15 fissi oltre tale soglia — un cap rigido. Non è mai una percentuale del volume." },
+        { "q": "Le transazioni fallite hanno un costo?", "a": "No. La fee è prelevata atomicamente all'interno della transazione di settlement, quindi se va in revert non viene instradato nulla e non viene addebitato nulla." },
+        { "q": "Come vengono gestiti i rimborsi?", "a": "RSends è non-custodial e non detiene mai i fondi, quindi non può annullare un pagamento. La restituzione dei fondi è un nuovo pagamento avviato dal merchant e prevede la stessa fee fissa di qualsiasi pagamento." },
+        { "q": "Ci sono costi di setup o un minimo mensile?", "a": "Nessun costo di setup e nessun minimo mensile per iniziare — il piano Free è €0/mese. I piani a pagamento aggiungono funzioni, non una fee per transazione diversa." },
+        { "q": "RSends detiene mai i miei fondi?", "a": "No. I pagamenti vengono regolati on-chain direttamente dal pagatore al merchant; RSends non prende mai in custodia e non può spostare o congelare i fondi." },
+        { "q": "Quando viene regolato un pagamento?", "a": "On-chain e in modo atomico — una sola transazione, confermata nel blocco. Il blocco è la ricevuta; non c'è alcun ledger nascosto da riconciliare." }
+      ]
     },
     "split": {
       "label": "SPLIT",

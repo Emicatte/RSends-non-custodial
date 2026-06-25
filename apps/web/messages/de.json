@@ -1196,9 +1196,40 @@
     "feeModel": {
       "eyebrow": "SO FUNKTIONIERT DIE GEBÜHR",
       "title": "Eine feste Gebühr, mit hartem Deckel.",
-      "paymentLabel": "Zahlung",
-      "feeLabel": "Gebühr",
-      "caption": "Feste €0.15 pro Transaktion, +€1 über €1.000, harter Deckel €1.15."
+      "subtitle": "€0.15 pro Transaktion bis €1.000, danach feste €1.15 — niemals ein Prozentsatz dessen, was du einnimmst."
+    },
+    "comparison": {
+      "title": "Was du zahlst im Vergleich zu einem Prozent-Gateway",
+      "colPayment": "Zahlung",
+      "colRsends": "RSends-Gebühr",
+      "col1": "Bei 1%",
+      "col29": "Bei 2,9%",
+      "illustrative": "illustrativ",
+      "caption": "Feste €0.15 pro Transaktion, +€1 über €1.000, harter Deckel €1.15. Die Prozentspalten sind illustrative Referenzwerte — nicht an einen genannten Anbieter gebunden."
+    },
+    "details": {
+      "title": "Gebührendetails",
+      "items": [
+        { "label": "Gas", "value": "vom Zahler getragen; der Händler erhält die Zahlung abzüglich nur der festen Gebühr" },
+        { "label": "Fehlgeschlagene Transaktionen", "value": "nie berechnet (atomar — ein Revert routet nichts und kostet nichts)" },
+        { "label": "Einrichtungsgebühr", "value": "keine" },
+        { "label": "Monatliches Minimum", "value": "keines (Free ist €0/Monat)" },
+        { "label": "Verwahrung", "value": "keine (Zahler → Händler direkt)" },
+        { "label": "Settlement", "value": "on-chain, atomar, eine einzige Transaktion" }
+      ]
+    },
+    "faq": {
+      "title": "Fragen",
+      "items": [
+        { "q": "Welche Chains und Token werden unterstützt?", "a": "USDC, USDT und EURC auf Base und Ethereum. Das Produkt ist derzeit eine Testnet-Demo auf Base Sepolia." },
+        { "q": "Wer zahlt das Gas?", "a": "Der Zahler zahlt das Gas, als die Partei, die die On-Chain-Transaktion initiiert. Der Händler erhält die Zahlung abzüglich nur der festen RSends-Gebühr — keine Gas-Kosten für den Händler." },
+        { "q": "Ist die Gebühr jemals ein Prozentsatz des Betrags?", "a": "Nein. Es ist eine feste Gebühr von €0.15 pro Transaktion bis €1.000 und feste €1.15 darüber — ein harter Deckel. Sie ist niemals ein Prozentsatz des Volumens." },
+        { "q": "Kosten fehlgeschlagene Transaktionen etwas?", "a": "Nein. Die Gebühr wird atomar innerhalb der Settlement-Transaktion erhoben, wenn sie also zurückgesetzt wird, wird nichts geroutet und nichts berechnet." },
+        { "q": "Wie werden Rückerstattungen gehandhabt?", "a": "RSends ist non-custodial und hält niemals Gelder, kann eine Zahlung also nicht rückgängig machen. Gelder zurückzugeben ist eine neue, vom Händler initiierte Zahlung und fällt unter die übliche feste Gebühr wie jede Zahlung." },
+        { "q": "Gibt es eine Einrichtungsgebühr oder ein monatliches Minimum?", "a": "Keine Einrichtungsgebühr und kein monatliches Minimum für den Start — der Free-Tarif ist €0/Monat. Bezahlte Tarife fügen Funktionen hinzu, keine andere Gebühr pro Transaktion." },
+        { "q": "Hält RSends jemals meine Gelder?", "a": "Nein. Zahlungen werden on-chain direkt vom Zahler zum Händler abgewickelt; RSends nimmt nie Verwahrung und kann Gelder weder bewegen noch einfrieren." },
+        { "q": "Wann wird eine Zahlung abgewickelt?", "a": "On-chain und atomar — eine einzige Transaktion, im Block bestätigt. Der Block ist der Beleg; es gibt kein verstecktes Ledger zum Abgleichen." }
+      ]
     },
     "split": {
       "label": "SPLIT",

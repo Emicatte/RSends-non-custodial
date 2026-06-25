@@ -1196,9 +1196,40 @@
     "feeModel": {
       "eyebrow": "CÓMO FUNCIONA LA COMISIÓN",
       "title": "Una comisión fija, con un límite máximo.",
-      "paymentLabel": "Pago",
-      "feeLabel": "Comisión",
-      "caption": "€0.15 fijos por transacción, +€1 por encima de €1.000, límite máximo €1.15."
+      "subtitle": "€0.15 por transacción hasta €1.000, después €1.15 fijos — nunca un porcentaje de lo que cobras."
+    },
+    "comparison": {
+      "title": "Lo que pagas frente a una pasarela por porcentaje",
+      "colPayment": "Pago",
+      "colRsends": "Comisión RSends",
+      "col1": "Al 1%",
+      "col29": "Al 2,9%",
+      "illustrative": "ilustrativo",
+      "caption": "€0.15 fijos por transacción, +€1 por encima de €1.000, límite máximo €1.15. Las columnas porcentuales son referencias ilustrativas — no vinculadas a ningún proveedor concreto."
+    },
+    "details": {
+      "title": "Detalles de la comisión",
+      "items": [
+        { "label": "Gas", "value": "lo paga el pagador; el comercio recibe el pago menos solo la comisión fija" },
+        { "label": "Transacciones fallidas", "value": "nunca se cobran (atómica — un revert no enruta nada y no cuesta nada)" },
+        { "label": "Coste de configuración", "value": "ninguno" },
+        { "label": "Mínimo mensual", "value": "ninguno (Free es €0/mes)" },
+        { "label": "Custodia", "value": "ninguna (pagador → comercio directo)" },
+        { "label": "Liquidación", "value": "on-chain, atómica, una sola transacción" }
+      ]
+    },
+    "faq": {
+      "title": "Preguntas",
+      "items": [
+        { "q": "¿Qué cadenas y tokens se admiten?", "a": "USDC, USDT y EURC en Base y Ethereum. El producto es actualmente una demo en testnet Base Sepolia." },
+        { "q": "¿Quién paga el gas?", "a": "El pagador paga el gas, como parte que inicia la transacción on-chain. El comercio recibe el pago menos solo la comisión fija de RSends — sin coste de gas para el comercio." },
+        { "q": "¿La comisión es alguna vez un porcentaje del importe?", "a": "No. Es una comisión fija de €0.15 por transacción hasta €1.000, y de €1.15 fijos por encima de eso — un límite máximo. Nunca es un porcentaje del volumen." },
+        { "q": "¿Las transacciones fallidas tienen algún coste?", "a": "No. La comisión se toma de forma atómica dentro de la transacción de liquidación, así que si revierte no se enruta nada y no se cobra nada." },
+        { "q": "¿Cómo se gestionan los reembolsos?", "a": "RSends es no-custodial y nunca retiene fondos, por lo que no puede revertir un pago. Devolver fondos es un nuevo pago iniciado por el comercio e incurre en la comisión fija estándar como cualquier pago." },
+        { "q": "¿Hay coste de configuración o mínimo mensual?", "a": "Sin coste de configuración y sin mínimo mensual para empezar — el plan Free es €0/mes. Los planes de pago añaden funciones, no una comisión por transacción distinta." },
+        { "q": "¿RSends retiene alguna vez mis fondos?", "a": "No. Los pagos se liquidan on-chain directamente del pagador al comercio; RSends nunca toma custodia y no puede mover ni congelar los fondos." },
+        { "q": "¿Cuándo se liquida un pago?", "a": "On-chain y de forma atómica — una sola transacción, confirmada en el bloque. El bloque es el recibo; no hay ningún libro mayor oculto que reconciliar." }
+      ]
     },
     "split": {
       "label": "SPLIT",

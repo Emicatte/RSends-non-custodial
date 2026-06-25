@@ -1196,9 +1196,40 @@
     "feeModel": {
       "eyebrow": "COMMENT FONCTIONNENT LES FRAIS",
       "title": "Des frais fixes, avec un plafond strict.",
-      "paymentLabel": "Paiement",
-      "feeLabel": "Frais",
-      "caption": "€0.15 fixes par transaction, +€1 au-delà de €1 000, plafond strict €1.15."
+      "subtitle": "€0.15 par transaction jusqu'à €1 000, puis €1.15 fixes — jamais un pourcentage de ce que vous encaissez."
+    },
+    "comparison": {
+      "title": "Ce que vous payez face à une passerelle au pourcentage",
+      "colPayment": "Paiement",
+      "colRsends": "Frais RSends",
+      "col1": "À 1%",
+      "col29": "À 2,9%",
+      "illustrative": "illustratif",
+      "caption": "€0.15 fixes par transaction, +€1 au-delà de €1 000, plafond strict €1.15. Les colonnes en pourcentage sont des repères illustratifs — non liés à un fournisseur nommé."
+    },
+    "details": {
+      "title": "Détails des frais",
+      "items": [
+        { "label": "Gas", "value": "payé par le payeur ; le marchand reçoit le paiement moins les seuls frais fixes" },
+        { "label": "Transactions échouées", "value": "jamais facturées (atomique — un revert n'achemine rien et ne coûte rien)" },
+        { "label": "Frais de mise en place", "value": "aucun" },
+        { "label": "Minimum mensuel", "value": "aucun (Free est à €0/mois)" },
+        { "label": "Conservation", "value": "aucune (payeur → marchand direct)" },
+        { "label": "Règlement", "value": "on-chain, atomique, une seule transaction" }
+      ]
+    },
+    "faq": {
+      "title": "Questions",
+      "items": [
+        { "q": "Quelles chaînes et quels tokens sont pris en charge ?", "a": "USDC, USDT et EURC sur Base et Ethereum. Le produit est actuellement une démo sur le testnet Base Sepolia." },
+        { "q": "Qui paie le gas ?", "a": "Le payeur paie le gas, en tant que partie initiant la transaction on-chain. Le marchand reçoit le paiement moins uniquement les frais fixes RSends — aucun coût de gas pour le marchand." },
+        { "q": "Les frais sont-ils parfois un pourcentage du montant ?", "a": "Non. Ce sont des frais fixes de €0.15 par transaction jusqu'à €1 000, et de €1.15 fixes au-delà — un plafond strict. Ce n'est jamais un pourcentage du volume." },
+        { "q": "Les transactions échouées coûtent-elles quelque chose ?", "a": "Non. Les frais sont prélevés de façon atomique dans la transaction de règlement, donc si elle échoue rien n'est acheminé et rien n'est facturé." },
+        { "q": "Comment les remboursements sont-ils gérés ?", "a": "RSends est non-custodial et ne détient jamais les fonds, il ne peut donc pas annuler un paiement. Restituer des fonds est un nouveau paiement initié par le marchand et entraîne les frais fixes standards comme tout paiement." },
+        { "q": "Y a-t-il des frais de mise en place ou un minimum mensuel ?", "a": "Aucun frais de mise en place et aucun minimum mensuel pour commencer — l'offre Free est à €0/mois. Les offres payantes ajoutent des fonctionnalités, pas des frais par transaction différents." },
+        { "q": "RSends détient-il jamais mes fonds ?", "a": "Non. Les paiements sont réglés on-chain directement du payeur au marchand ; RSends ne prend jamais la garde et ne peut ni déplacer ni geler les fonds." },
+        { "q": "Quand un paiement est-il réglé ?", "a": "On-chain et de façon atomique — une seule transaction, confirmée dans le bloc. Le bloc est le reçu ; il n'y a aucun registre caché à rapprocher." }
+      ]
     },
     "split": {
       "label": "SPLIT",
