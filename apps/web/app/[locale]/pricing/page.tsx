@@ -26,7 +26,7 @@ export default async function PricingPage({ params }: PageProps) {
         style={{
           position: 'relative',
           width: '100%',
-          minHeight: 'clamp(520px, 70vh, 720px)',
+          minHeight: '100vh',
           display: 'flex',
           alignItems: 'center',
           overflow: 'hidden',
@@ -39,7 +39,7 @@ export default async function PricingPage({ params }: PageProps) {
           aria-hidden="true"
           style={{ position: 'absolute', inset: 0, background: 'rgba(10,10,12,0.45)', zIndex: 1 }}
         />
-        {/* content */}
+        {/* content — eyebrow + headline only, vertically centered */}
         <div
           style={{
             position: 'relative',
@@ -47,7 +47,7 @@ export default async function PricingPage({ params }: PageProps) {
             width: '100%',
             maxWidth: 1440,
             margin: '0 auto',
-            padding: `clamp(96px, 14vh, 160px) ${HPAD} clamp(64px, 10vh, 120px)`,
+            padding: `0 ${HPAD}`,
           }}
         >
           <div
@@ -67,45 +67,17 @@ export default async function PricingPage({ params }: PageProps) {
           <h1
             style={{
               fontFamily: C.D,
-              fontSize: 'clamp(40px, 6vw, 84px)',
-              fontWeight: 600,
-              lineHeight: 1.05,
-              letterSpacing: '-1px',
+              fontSize: 'clamp(32px, 4.2vw, 60px)',
+              fontWeight: 400,
+              lineHeight: 1.08,
+              letterSpacing: '-0.5px',
               color: '#FFFFFF',
-              margin: '0 0 20px',
+              margin: 0,
               maxWidth: 900,
             }}
           >
             {t('title')}
           </h1>
-
-          <p
-            style={{
-              fontFamily: C.D,
-              fontSize: 18,
-              lineHeight: 1.6,
-              color: 'rgba(255,255,255,0.82)',
-              margin: '0 0 28px',
-              maxWidth: 560,
-            }}
-          >
-            {t('subtitle')}
-          </p>
-
-          <span
-            style={{
-              display: 'inline-block',
-              fontFamily: C.M,
-              fontSize: 14,
-              color: '#FFFFFF',
-              background: 'rgba(255,255,255,0.1)',
-              border: '1px solid rgba(255,255,255,0.16)',
-              borderRadius: 999,
-              padding: '8px 16px',
-            }}
-          >
-            {t('feeLine')}
-          </span>
         </div>
       </section>
 
