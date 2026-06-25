@@ -78,6 +78,19 @@ export default async function PricingPage({ params }: PageProps) {
           >
             {t('title')}
           </h1>
+
+          <p
+            style={{
+              fontFamily: C.D,
+              fontSize: 17,
+              lineHeight: 1.6,
+              color: 'rgba(255,255,255,0.8)',
+              margin: '20px 0 0',
+              maxWidth: 560,
+            }}
+          >
+            {t('subtitle')}
+          </p>
         </div>
       </section>
 
