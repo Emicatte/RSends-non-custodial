@@ -890,7 +890,7 @@ export default function Home() {
               style={{
                 position: 'absolute',
                 right: '0%',
-                top: '38%',
+                top: '46%',
                 width: 'clamp(360px, calc(120vw - 820px), 920px)',
                 height: 'clamp(300px, 42vw, 520px)',
                 zIndex: 1,
