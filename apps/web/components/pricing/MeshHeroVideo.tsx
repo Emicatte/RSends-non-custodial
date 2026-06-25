@@ -22,6 +22,9 @@ export default function MeshHeroVideo() {
       typeof window !== 'undefined' &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches,
   );
+  // Keep the video transparent until it has data, then fade it in over the ink
+  // background so navigating to the page never shows a white/empty flash.
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -38,6 +41,7 @@ export default function MeshHeroVideo() {
       preload="auto"
       poster="/pricing/mesh-poster.jpg"
       aria-hidden="true"
+      onLoadedData={() => setReady(true)}
       style={{
         position: 'absolute',
         inset: 0,
@@ -45,6 +49,9 @@ export default function MeshHeroVideo() {
         height: '100%',
         objectFit: 'cover',
         zIndex: 0,
+        backgroundColor: '#0A0A0A', // ink box → never a white flash while loading
+        opacity: prefersReduced || ready ? 1 : 0,
+        transition: 'opacity 200ms ease',
       }}
     >
       <source src="/pricing/mesh-bg.mp4" type="video/mp4" />

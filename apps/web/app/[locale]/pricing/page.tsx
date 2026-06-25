@@ -30,7 +30,7 @@ export default async function PricingPage({ params }: PageProps) {
           display: 'flex',
           alignItems: 'center',
           overflow: 'hidden',
-          background: '#0B0B0C',
+          background: '#0A0A0A',
         }}
       >
         <MeshHeroVideo />
