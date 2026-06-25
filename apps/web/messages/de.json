@@ -1192,6 +1192,7 @@
     "subtitle": "Predictable cost on every payment. Pick a plan for the features you need — the per-transaction fee is always the same.",
     "feeLine": "€0.15 per transaction · €1.15 cap · never a %",
     "compliance": "Non-custodial · B2B only · Available outside the United States and Türkiye.",
+    "footnote": "Testnet-Demo auf Base Sepolia. Die Gebühr pro Transaktion ist fest und gedeckelt — niemals ein Prozentsatz des Volumens.",
     "plans": {
       "free": {
         "name": "Free",

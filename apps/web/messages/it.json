@@ -1191,6 +1191,7 @@
     "subtitle": "Costo prevedibile su ogni pagamento. Scegli il piano per le funzioni che ti servono — la fee per transazione è sempre la stessa.",
     "feeLine": "€0.15 per transazione · cap €1.15 · mai una %",
     "compliance": "Non-custodial · solo B2B · Disponibile fuori da Stati Uniti e Türkiye.",
+    "footnote": "Demo su testnet Base Sepolia. La fee per transazione è fissa e con cap — mai una percentuale del volume.",
     "plans": {
       "free": {
         "name": "Free",
