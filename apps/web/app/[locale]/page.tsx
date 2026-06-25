@@ -631,7 +631,7 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
         color: C.text,
         lineHeight: 1.1,
         letterSpacing: '-0.02em',
-        margin: '0 0 24px',
+        margin: '0 0 18px',
         maxWidth: 880,
       }}>
         <SplitText text={t('titleLine1')} delay={0.15} style={{ fontFamily: C.D }} />
@@ -651,7 +651,7 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
           fontSize: isMobile ? 17 : 19,
           color: C.sub,
           lineHeight: 1.6,
-          margin: '0 0 28px',
+          margin: '0 0 22px',
           maxWidth: 560,
         }}
       >
@@ -667,7 +667,7 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
           display: 'flex',
           gap: 16,
           alignItems: 'center',
-          marginBottom: 32,
+          marginBottom: 24,
           flexWrap: 'wrap',
           justifyContent: isMobile ? 'center' : 'flex-start',
         }}
@@ -707,7 +707,7 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
           height: '0.5px',
           background: C.border,
           maxWidth: 1600,
-          marginTop: 28,
+          marginTop: 20,
           marginBottom: 8,
         }}
       />
@@ -873,8 +873,8 @@ export default function Home() {
       {/* Main content — padded below navbar */}
       <main className="main-content" style={{
         minHeight: '100dvh',
-        paddingTop: isMobileHome ? '72px' : 'clamp(64px, 6vh, 88px)',
-        paddingBottom: isMobileHome ? '40px' : '120px',
+        paddingTop: isMobileHome ? '72px' : 'clamp(64px, 5vh, 76px)',
+        paddingBottom: isMobileHome ? '40px' : '80px',
         display: 'flex', flexDirection: 'column', alignItems: 'stretch',
         opacity: ready ? 1 : 0, transition: 'opacity 0.9s ease',
       }}>
@@ -889,8 +889,8 @@ export default function Home() {
               transition={{ duration: 1.2, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
               style={{
                 position: 'absolute',
-                right: '2%',
-                top: '50%',
+                right: '0%',
+                top: '38%',
                 width: 'clamp(360px, calc(120vw - 820px), 920px)',
                 height: 'clamp(300px, 42vw, 520px)',
                 zIndex: 1,
