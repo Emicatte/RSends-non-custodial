@@ -3,6 +3,8 @@ import { getTranslations } from 'next-intl/server'
 import { Link } from '@/i18n/navigation'
 import { C } from '@/app/designTokens'
 import MeshHeroVideo from '@/components/pricing/MeshHeroVideo'
+import ScrubReveal from '@/components/motion/ScrubReveal'
+import ScrubCascade from '@/components/motion/ScrubCascade'
 
 export const metadata: Metadata = {
   title: 'Pricing — RSends',
@@ -12,8 +14,28 @@ export const metadata: Metadata = {
 
 type PageProps = { params: Promise<{ locale: string }> }
 
-const PLAN_KEYS = ['free', 'pro', 'custom'] as const
 const HPAD = 'clamp(20px, 6vw, 96px)'
+
+// Single source of truth for the fee model. Hard-coded so every locale renders
+// the exact same figures (DM Mono). NEVER a percentage of volume.
+const FEE_ROWS = [
+  { payment: '€50', fee: '€0.15' },
+  { payment: '€1,200', fee: '€1.15' },
+  { payment: '€50,000', fee: '€1.15' },
+] as const
+
+// Illustrative split — percentages sum to 100; the fee is a flat line item,
+// NOT part of the split. Address labels are obviously fake placeholders.
+const SPLIT = {
+  total: '€49.00',
+  rows: [
+    { addr: '0x…shop', pct: 88 },
+    { addr: '0x…seller', pct: 12 },
+  ],
+  fee: '€0.15',
+} as const
+
+const PLAN_KEYS = ['free', 'pro', 'custom'] as const
 
 export default async function PricingPage({ params }: PageProps) {
   const { locale } = await params
@@ -39,7 +61,7 @@ export default async function PricingPage({ params }: PageProps) {
           aria-hidden="true"
           style={{ position: 'absolute', inset: 0, background: 'rgba(10,10,12,0.45)', zIndex: 1 }}
         />
-        {/* content — eyebrow + headline only, vertically centered */}
+        {/* content — eyebrow + headline, vertically centered */}
         <div
           style={{
             position: 'relative',
@@ -94,10 +116,339 @@ export default async function PricingPage({ params }: PageProps) {
         </div>
       </section>
 
-      {/* ── Light cards section ───────────────────────────────── */}
-      <section style={{ background: C.bg, padding: `clamp(56px, 9vh, 104px) ${HPAD}` }}>
-        <div style={{ maxWidth: 1120, margin: '0 auto' }}>
+      {/* ── Fee model — explained by example ──────────────────── */}
+      <section style={{ background: C.bg, padding: `clamp(64px, 11vh, 120px) ${HPAD}` }}>
+        <div style={{ maxWidth: 1040, margin: '0 auto' }}>
+          <ScrubReveal scrub={0.5}>
+            <div className="rs-reveal" style={{ maxWidth: 760, marginBottom: 'clamp(32px, 5vh, 56px)' }}>
+              <div
+                style={{
+                  fontFamily: C.M,
+                  fontSize: 11,
+                  letterSpacing: '0.18em',
+                  color: C.purple,
+                  fontWeight: 500,
+                  marginBottom: 14,
+                }}
+              >
+                {t('feeModel.eyebrow')}
+              </div>
+              <h2
+                style={{
+                  fontFamily: C.D,
+                  fontSize: 'clamp(28px, 4vw, 48px)',
+                  fontWeight: 500,
+                  color: C.text,
+                  lineHeight: 1.12,
+                  letterSpacing: '-0.02em',
+                  margin: 0,
+                }}
+              >
+                {t('feeModel.title')}
+              </h2>
+            </div>
+          </ScrubReveal>
+
+          {/* Example grid — each column is its own animated boundary */}
+          <ScrubCascade
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: 20,
+            }}
+          >
+            {FEE_ROWS.map((row) => (
+              <div
+                key={row.payment}
+                className="rs-card"
+                style={{
+                  background: C.surface,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 16,
+                  padding: '32px 28px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 18,
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      fontFamily: C.D,
+                      fontSize: 13,
+                      color: C.sub,
+                      marginBottom: 6,
+                    }}
+                  >
+                    {t('feeModel.paymentLabel')}
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: C.M,
+                      fontSize: 'clamp(26px, 3vw, 32px)',
+                      fontWeight: 500,
+                      color: C.text,
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
+                    {row.payment}
+                  </div>
+                </div>
+
+                <div
+                  aria-hidden="true"
+                  style={{ height: 1, background: C.border, margin: '2px 0' }}
+                />
+
+                <div>
+                  <div
+                    style={{
+                      fontFamily: C.D,
+                      fontSize: 13,
+                      color: C.sub,
+                      marginBottom: 6,
+                    }}
+                  >
+                    {t('feeModel.feeLabel')}
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: C.M,
+                      fontSize: 'clamp(26px, 3vw, 32px)',
+                      fontWeight: 500,
+                      color: C.purple,
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
+                    {row.fee}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </ScrubCascade>
+
+          {/* Rule caption */}
+          <ScrubReveal scrub={0.5}>
+            <p
+              className="rs-reveal"
+              style={{
+                fontFamily: C.D,
+                fontSize: 15,
+                lineHeight: 1.6,
+                color: C.sub,
+                margin: '28px 0 0',
+                maxWidth: 680,
+              }}
+            >
+              {t('feeModel.caption')}
+            </p>
+          </ScrubReveal>
+        </div>
+      </section>
+
+      {/* ── Split illustration — the fee inside a real transaction ─ */}
+      <section style={{ background: C.bg, padding: `0 ${HPAD} clamp(56px, 9vh, 104px)` }}>
+        <ScrubReveal scrub={0.5} style={{ maxWidth: 520, margin: '0 auto' }}>
+          {/* Card is the outermost (clipped) boundary — y-reveal lives here;
+              inner rows stay static so nothing translates inside overflow:hidden */}
           <div
+            className="rs-reveal"
+            style={{
+              background: C.surface,
+              border: `1px solid ${C.border}`,
+              borderRadius: 24,
+              overflow: 'hidden',
+              boxShadow: '0 24px 60px rgba(10,10,10,0.06)',
+            }}
+          >
+            {/* Header */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+                padding: '22px 26px',
+                borderBottom: `1px solid ${C.border}`,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                <span
+                  style={{
+                    fontFamily: C.D,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    letterSpacing: '0.18em',
+                    color: C.text,
+                  }}
+                >
+                  {t('split.label')}
+                </span>
+                <span style={{ color: C.sub }}>·</span>
+                <span
+                  style={{
+                    fontFamily: C.M,
+                    fontSize: 18,
+                    fontWeight: 500,
+                    color: C.text,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  {SPLIT.total}
+                </span>
+              </div>
+              <span
+                style={{
+                  fontFamily: C.M,
+                  fontSize: 10,
+                  letterSpacing: '0.10em',
+                  textTransform: 'uppercase',
+                  color: C.purple,
+                  background: 'rgba(200,81,44,0.08)',
+                  border: `1px solid rgba(200,81,44,0.20)`,
+                  borderRadius: 999,
+                  padding: '4px 9px',
+                }}
+              >
+                {t('split.disclaimer')}
+              </span>
+            </div>
+
+            {/* Split rows — sum to 100% */}
+            <div style={{ padding: '20px 26px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {SPLIT.rows.map((r) => (
+                <div key={r.addr} style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <span
+                    style={{
+                      fontFamily: C.M,
+                      fontSize: 14,
+                      color: C.text,
+                      width: 92,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {r.addr}
+                  </span>
+                  <div
+                    aria-hidden="true"
+                    style={{
+                      flex: 1,
+                      height: 8,
+                      borderRadius: 999,
+                      background: 'var(--rs-wash)',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${r.pct}%`,
+                        height: '100%',
+                        borderRadius: 999,
+                        background: C.purple,
+                      }}
+                    />
+                  </div>
+                  <span
+                    style={{
+                      fontFamily: C.M,
+                      fontSize: 14,
+                      color: C.text,
+                      width: 44,
+                      textAlign: 'right',
+                      flexShrink: 0,
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
+                    {r.pct}%
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Fee — a SEPARATE flat line item, not part of the split % */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+                padding: '16px 26px',
+                borderTop: `1px solid ${C.border}`,
+                background: 'rgba(200,81,44,0.04)',
+              }}
+            >
+              <span style={{ fontFamily: C.D, fontSize: 14, fontWeight: 500, color: C.text }}>
+                {t('split.feeLabel')}
+              </span>
+              <span
+                style={{
+                  fontFamily: C.M,
+                  fontSize: 16,
+                  fontWeight: 500,
+                  color: C.purple,
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {SPLIT.fee}
+              </span>
+            </div>
+
+            {/* Footnote */}
+            <div style={{ padding: '12px 26px 18px' }}>
+              <span style={{ fontFamily: C.D, fontSize: 13, color: C.sub }}>
+                • {t('split.note')}
+              </span>
+            </div>
+          </div>
+        </ScrubReveal>
+      </section>
+
+      {/* ── Tiers — what you get on top (same fee everywhere) ──── */}
+      <section style={{ background: C.bg, padding: `clamp(40px, 7vh, 80px) ${HPAD} clamp(56px, 9vh, 104px)` }}>
+        <div style={{ maxWidth: 1120, margin: '0 auto' }}>
+          <ScrubReveal scrub={0.5}>
+            <div className="rs-reveal" style={{ maxWidth: 760, marginBottom: 'clamp(28px, 4vh, 44px)' }}>
+              <div
+                style={{
+                  fontFamily: C.M,
+                  fontSize: 11,
+                  letterSpacing: '0.18em',
+                  color: C.purple,
+                  fontWeight: 500,
+                  marginBottom: 14,
+                }}
+              >
+                {t('tiers.eyebrow')}
+              </div>
+              <h2
+                style={{
+                  fontFamily: C.D,
+                  fontSize: 'clamp(26px, 3.6vw, 44px)',
+                  fontWeight: 500,
+                  color: C.text,
+                  lineHeight: 1.12,
+                  letterSpacing: '-0.02em',
+                  margin: '0 0 16px',
+                }}
+              >
+                {t('tiers.title')}
+              </h2>
+              <p
+                style={{
+                  fontFamily: C.D,
+                  fontSize: 15,
+                  lineHeight: 1.6,
+                  color: C.sub,
+                  margin: 0,
+                  maxWidth: 680,
+                }}
+              >
+                {t('tiers.note')}
+              </p>
+            </div>
+          </ScrubReveal>
+
+          <ScrubCascade
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
@@ -113,6 +464,7 @@ export default async function PricingPage({ params }: PageProps) {
               return (
                 <div
                   key={key}
+                  className="rs-card"
                   style={{
                     background: C.surface,
                     border: isPro ? `1.5px solid ${C.purple}` : `1px solid ${C.border}`,
@@ -159,11 +511,12 @@ export default async function PricingPage({ params }: PageProps) {
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 10 }}>
                     <span
                       style={{
-                        fontFamily: C.D,
+                        fontFamily: C.M,
                         fontSize: 'clamp(34px, 4vw, 44px)',
-                        fontWeight: 600,
+                        fontWeight: 500,
                         letterSpacing: '-1px',
                         color: C.text,
+                        fontVariantNumeric: 'tabular-nums',
                       }}
                     >
                       {t(`plans.${key}.price`)}
@@ -249,22 +602,39 @@ export default async function PricingPage({ params }: PageProps) {
                 </div>
               )
             })}
-          </div>
+          </ScrubCascade>
 
-          {/* Honest footnote */}
-          <p
-            style={{
-              fontFamily: C.D,
-              fontSize: 13,
-              lineHeight: 1.6,
-              color: C.sub,
-              textAlign: 'center',
-              maxWidth: 640,
-              margin: '32px auto 0',
-            }}
-          >
-            {t('footnote')}
-          </p>
+          {/* Compliance + honest footnote */}
+          <ScrubReveal scrub={0.5}>
+            <p
+              className="rs-reveal"
+              style={{
+                fontFamily: C.M,
+                fontSize: 12,
+                lineHeight: 1.6,
+                color: C.sub,
+                textAlign: 'center',
+                maxWidth: 680,
+                margin: '40px auto 0',
+              }}
+            >
+              {t('compliance')}
+            </p>
+            <p
+              className="rs-reveal"
+              style={{
+                fontFamily: C.D,
+                fontSize: 13,
+                lineHeight: 1.6,
+                color: C.sub,
+                textAlign: 'center',
+                maxWidth: 640,
+                margin: '12px auto 0',
+              }}
+            >
+              {t('footnote')}
+            </p>
+          </ScrubReveal>
         </div>
       </section>
     </main>

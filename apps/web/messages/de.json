@@ -1193,6 +1193,24 @@
     "feeLine": "€0.15 per transaction · €1.15 cap · never a %",
     "compliance": "Non-custodial · B2B only · Available outside the United States and Türkiye.",
     "footnote": "Testnet-Demo auf Base Sepolia. Die Gebühr pro Transaktion ist fest und gedeckelt — niemals ein Prozentsatz des Volumens.",
+    "feeModel": {
+      "eyebrow": "SO FUNKTIONIERT DIE GEBÜHR",
+      "title": "Eine feste Gebühr, mit hartem Deckel.",
+      "paymentLabel": "Zahlung",
+      "feeLabel": "Gebühr",
+      "caption": "Feste €0.15 pro Transaktion, +€1 über €1.000, harter Deckel €1.15."
+    },
+    "split": {
+      "label": "SPLIT",
+      "feeLabel": "RSends-Gebühr",
+      "note": "in 1 Tx geroutet",
+      "disclaimer": "Illustratives Beispiel — keine echten Kundendaten."
+    },
+    "tiers": {
+      "eyebrow": "WAS DU BEKOMMST",
+      "title": "Gleiche Gebühr. Mehr Raum zum Wachsen.",
+      "note": "Jeder Tarif zahlt dieselbe Gebühr von €0.15 pro Transaktion (Deckel €1.15). Tarife ergänzen Rate-Limits, Support, Team-Sitze und SLA — niemals eine andere Gebühr."
+    },
     "plans": {
       "free": {
         "name": "Free",
@@ -1200,7 +1218,6 @@
         "period": "/month",
         "tagline": "Start accepting stablecoin payments with the essentials.",
         "features": [
-          "€0.15 per transaction (cap €1.15)",
           "USDC, USDT & EURC",
           "Base & Ethereum",
           "Webhooks & API access"

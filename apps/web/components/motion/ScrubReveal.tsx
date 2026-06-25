@@ -20,6 +20,8 @@ type Props = {
   start?: string
   /** ScrollTrigger end, per element (fully revealed in the lower-middle of the viewport) */
   end?: string
+  /** ScrollTrigger scrub smoothing (seconds). Lower = tighter tracking. */
+  scrub?: number
 }
 
 /**
@@ -38,6 +40,7 @@ export default function ScrubReveal({
   y = 40,
   start = 'top 92%',
   end = 'top 40%',
+  scrub = 0.9,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null)
 
@@ -59,7 +62,7 @@ export default function ScrubReveal({
               autoAlpha: 1,
               y: 0,
               ease: 'none',
-              scrollTrigger: { trigger: el, start, end, scrub: 0.9 },
+              scrollTrigger: { trigger: el, start, end, scrub },
             },
           )
         })
@@ -71,7 +74,7 @@ export default function ScrubReveal({
       return () => ctx.revert()
     })
     return () => mm.revert()
-  }, [y, start, end])
+  }, [y, start, end, scrub])
 
   return (
     <div ref={ref} className={className} style={style}>

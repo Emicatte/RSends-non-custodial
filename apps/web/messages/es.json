@@ -1193,6 +1193,24 @@
     "feeLine": "€0.15 per transaction · €1.15 cap · never a %",
     "compliance": "Non-custodial · B2B only · Available outside the United States and Türkiye.",
     "footnote": "Demo en testnet Base Sepolia. La comisión por transacción es fija y con límite — nunca un porcentaje del volumen.",
+    "feeModel": {
+      "eyebrow": "CÓMO FUNCIONA LA COMISIÓN",
+      "title": "Una comisión fija, con un límite máximo.",
+      "paymentLabel": "Pago",
+      "feeLabel": "Comisión",
+      "caption": "€0.15 fijos por transacción, +€1 por encima de €1.000, límite máximo €1.15."
+    },
+    "split": {
+      "label": "SPLIT",
+      "feeLabel": "Comisión RSends",
+      "note": "enrutado en 1 tx",
+      "disclaimer": "Ejemplo ilustrativo — no son datos reales de clientes."
+    },
+    "tiers": {
+      "eyebrow": "QUÉ INCLUYE",
+      "title": "Misma comisión. Más margen para crecer.",
+      "note": "Todos los planes pagan la misma comisión de €0.15 por transacción (límite €1.15). Los planes añaden límites de tasa, soporte, miembros de equipo y SLA — nunca una comisión distinta."
+    },
     "plans": {
       "free": {
         "name": "Free",
@@ -1200,7 +1218,6 @@
         "period": "/month",
         "tagline": "Start accepting stablecoin payments with the essentials.",
         "features": [
-          "€0.15 per transaction (cap €1.15)",
           "USDC, USDT & EURC",
           "Base & Ethereum",
           "Webhooks & API access"

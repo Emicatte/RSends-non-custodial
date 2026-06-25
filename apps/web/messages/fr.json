@@ -1193,6 +1193,24 @@
     "feeLine": "€0.15 per transaction · €1.15 cap · never a %",
     "compliance": "Non-custodial · B2B only · Available outside the United States and Türkiye.",
     "footnote": "Démo sur testnet Base Sepolia. Les frais par transaction sont fixes et plafonnés — jamais un pourcentage du volume.",
+    "feeModel": {
+      "eyebrow": "COMMENT FONCTIONNENT LES FRAIS",
+      "title": "Des frais fixes, avec un plafond strict.",
+      "paymentLabel": "Paiement",
+      "feeLabel": "Frais",
+      "caption": "€0.15 fixes par transaction, +€1 au-delà de €1 000, plafond strict €1.15."
+    },
+    "split": {
+      "label": "SPLIT",
+      "feeLabel": "Frais RSends",
+      "note": "acheminé en 1 tx",
+      "disclaimer": "Exemple illustratif — pas de données client réelles."
+    },
+    "tiers": {
+      "eyebrow": "CE QUE VOUS OBTENEZ",
+      "title": "Mêmes frais. Plus de marge pour grandir.",
+      "note": "Chaque offre paie les mêmes frais de €0.15 par transaction (plafond €1.15). Les offres ajoutent des limites de débit, du support, des membres d’équipe et un SLA — jamais des frais différents."
+    },
     "plans": {
       "free": {
         "name": "Free",
@@ -1200,7 +1218,6 @@
         "period": "/month",
         "tagline": "Start accepting stablecoin payments with the essentials.",
         "features": [
-          "€0.15 per transaction (cap €1.15)",
           "USDC, USDT & EURC",
           "Base & Ethereum",
           "Webhooks & API access"

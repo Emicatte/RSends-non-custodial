@@ -1192,6 +1192,24 @@
     "feeLine": "€0.15 per transaction · €1.15 cap · never a %",
     "compliance": "Non-custodial · B2B only · Available outside the United States and Türkiye.",
     "footnote": "Testnet demo on Base Sepolia. The per-transaction fee is flat and capped — never a percentage of volume.",
+    "feeModel": {
+      "eyebrow": "HOW THE FEE WORKS",
+      "title": "One flat fee, with a hard cap.",
+      "paymentLabel": "Payment",
+      "feeLabel": "Fee",
+      "caption": "Flat €0.15 per transaction, +€1 above €1,000, hard cap €1.15."
+    },
+    "split": {
+      "label": "SPLIT",
+      "feeLabel": "RSends fee",
+      "note": "routed in 1 tx",
+      "disclaimer": "Illustrative example — not real customer data."
+    },
+    "tiers": {
+      "eyebrow": "WHAT YOU GET",
+      "title": "Same fee. More room to grow.",
+      "note": "Every tier pays the same €0.15 per transaction (cap €1.15). Plans add rate limits, support, team seats and SLA — never a different fee."
+    },
     "plans": {
       "free": {
         "name": "Free",
@@ -1199,7 +1217,6 @@
         "period": "/month",
         "tagline": "Start accepting stablecoin payments with the essentials.",
         "features": [
-          "€0.15 per transaction (cap €1.15)",
           "USDC, USDT & EURC",
           "Base & Ethereum",
           "Webhooks & API access"

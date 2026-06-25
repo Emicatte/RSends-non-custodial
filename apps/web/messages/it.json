@@ -1192,6 +1192,24 @@
     "feeLine": "€0.15 per transazione · cap €1.15 · mai una %",
     "compliance": "Non-custodial · solo B2B · Disponibile fuori da Stati Uniti e Türkiye.",
     "footnote": "Demo su testnet Base Sepolia. La fee per transazione è fissa e con cap — mai una percentuale del volume.",
+    "feeModel": {
+      "eyebrow": "COME FUNZIONA LA FEE",
+      "title": "Una fee fissa, con un cap rigido.",
+      "paymentLabel": "Pagamento",
+      "feeLabel": "Fee",
+      "caption": "€0.15 fissi per transazione, +€1 oltre €1.000, cap massimo €1.15."
+    },
+    "split": {
+      "label": "SPLIT",
+      "feeLabel": "Fee RSends",
+      "note": "instradato in 1 tx",
+      "disclaimer": "Esempio illustrativo — non sono dati reali di clienti."
+    },
+    "tiers": {
+      "eyebrow": "COSA OTTIENI",
+      "title": "Stessa fee. Più spazio per crescere.",
+      "note": "Ogni piano paga la stessa fee di €0.15 per transazione (cap €1.15). I piani aggiungono limiti di frequenza, supporto, membri del team e SLA — mai una fee diversa."
+    },
     "plans": {
       "free": {
         "name": "Free",
@@ -1199,7 +1217,6 @@
         "period": "/mese",
         "tagline": "Inizia ad accettare pagamenti in stablecoin con l’essenziale.",
         "features": [
-          "€0.15 per transazione (cap €1.15)",
           "USDC, USDT ed EURC",
           "Base ed Ethereum",
           "Webhook e accesso API"
