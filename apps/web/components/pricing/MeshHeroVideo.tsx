@@ -2,13 +2,22 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+const POSTER = '/pricing/mesh-poster.jpg';
+
 /**
- * Full-bleed looping mesh-gradient background for the pricing hero.
+ * Full-bleed looping mesh-gradient background for the pricing / how-it-works hero.
  *
  * The asset (public/pricing/mesh-bg.mp4) is the AI-generated mesh clip with the
  * black pillarbox bars cropped off and the generator watermark removed (ffmpeg),
  * re-encoded muted + web-optimized. It sits behind the hero text via object-fit:
  * cover. Respects prefers-reduced-motion: no autoplay, stays on the poster frame.
+ *
+ * Black-screen guard: a dedicated poster layer (mesh first-frame) is ALWAYS
+ * painted behind the video, with #0A0A0A only *behind* the poster as the
+ * anti-white-flash measure. The video starts transparent and fades in only once
+ * it is actually painting frames (onPlaying) — so on cold cache / throttled
+ * playback / refused autoplay the user sees the gradient first-frame, never a
+ * pure-black rectangle.
  *
  * Browser-only concern is just the reduced-motion read; rendered client-side so the
  * <video> never autoplays for users who asked for less motion.
@@ -22,39 +31,69 @@ export default function MeshHeroVideo() {
       typeof window !== 'undefined' &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches,
   );
-  // Keep the video transparent until it has data, then fade it in over the ink
-  // background so navigating to the page never shows a white/empty flash.
-  const [ready, setReady] = useState(false);
+  // Stay on the poster image until the video is *actually painting* frames, then
+  // fade it in. onPlaying (not onLoadedData) guarantees we never reveal a still-
+  // empty video and uncover the ink background.
+  const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
     const video = videoRef.current;
-    if (video && prefersReduced) video.pause(); // hold on the poster frame
+    if (!video) return;
+    if (prefersReduced) {
+      video.pause(); // hold on the poster frame
+      return;
+    }
+    // Some browsers reject autoplay even when muted (low battery / data saver).
+    // Swallow the rejection so it never bubbles; the poster layer stays visible.
+    const p = video.play();
+    if (p && typeof p.catch === 'function') p.catch(() => {});
   }, [prefersReduced]);
 
+  const showVideo = playing && !prefersReduced;
+
   return (
-    <video
-      ref={videoRef}
-      autoPlay={!prefersReduced}
-      muted
-      loop
-      playsInline
-      preload="auto"
-      poster="/pricing/mesh-poster.jpg"
-      aria-hidden="true"
-      onLoadedData={() => setReady(true)}
-      style={{
-        position: 'absolute',
-        inset: 0,
-        width: '100%',
-        height: '100%',
-        objectFit: 'cover',
-        zIndex: 0,
-        backgroundColor: '#0A0A0A', // ink box → never a white flash while loading
-        opacity: prefersReduced || ready ? 1 : 0,
-        transition: 'opacity 200ms ease',
-      }}
-    >
-      <source src="/pricing/mesh-bg.mp4" type="video/mp4" />
-    </video>
+    <>
+      {/* Poster layer: the mesh first-frame, ALWAYS painted above the ink
+          background so the hero is never a pure-black rectangle while the video
+          buffers or if autoplay is refused. #0A0A0A sits behind the image as the
+          anti-white-flash fallback, not as the visible state. */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          backgroundColor: '#0A0A0A',
+          backgroundImage: `url(${POSTER})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          zIndex: 0,
+        }}
+      />
+      <video
+        ref={videoRef}
+        autoPlay={!prefersReduced}
+        muted
+        loop
+        playsInline
+        preload="auto"
+        poster={POSTER}
+        aria-hidden="true"
+        onPlaying={() => setPlaying(true)}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          zIndex: 1,
+          opacity: showVideo ? 1 : 0,
+          transition: 'opacity 200ms ease',
+        }}
+      >
+        <source src="/pricing/mesh-bg.mp4" type="video/mp4" />
+      </video>
+    </>
   );
 }

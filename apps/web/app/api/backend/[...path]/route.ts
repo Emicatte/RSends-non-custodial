@@ -64,7 +64,21 @@ async function proxyRequest(
     return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 })
   }
 
-  const backend = getBackendUrl()
+  // Resolve the backend URL up front. requireEnv throws when RPAGOS_BACKEND_URL
+  // is unset (e.g. backend not deployed yet) — handle it here so the route
+  // degrades to a clean 502 instead of an unhandled 500 stack. Clients already
+  // treat a non-ok response as "backend down" and fall back.
+  let backend: string
+  try {
+    backend = getBackendUrl()
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error(`[backend-proxy] ${req.method} /${subPath} unavailable:`, msg)
+    return NextResponse.json(
+      { error: 'BACKEND_UNREACHABLE', message: msg },
+      { status: 502 },
+    )
+  }
   const queryString = req.nextUrl.search // preserves ?owner_address=...&foo=bar
   const targetUrl = `${backend}/${subPath}${queryString}`
 
