@@ -418,8 +418,9 @@ function CheckoutCard() {
 
 function SplitCard() {
   return (
+    <div>
     <div className="rs-reveal" style={cardShell()}>
-      {/* Header — label + total + illustrative pill */}
+      {/* Header — label + total */}
       <div
         style={{
           display: 'flex',
@@ -439,7 +440,6 @@ function SplitCard() {
             {SPLIT.total}
           </span>
         </div>
-        <span style={illoPill}>Illustrative example</span>
       </div>
 
       {/* Split rows — sum to 100% */}
@@ -491,6 +491,8 @@ function SplitCard() {
       <div style={{ padding: '12px 24px 18px' }}>
         <span style={{ fontFamily: C.D, fontSize: 13, color: C.sub }}>• routed in 1 tx</span>
       </div>
+    </div>
+    <p style={splitCaption}>Illustrative example — not real customer data.</p>
     </div>
   )
 }
@@ -561,15 +563,11 @@ const sectionLabel: React.CSSProperties = {
   margin: '0 0 20px',
 }
 
-const illoPill: React.CSSProperties = {
+const splitCaption: React.CSSProperties = {
   fontFamily: C.M,
-  fontSize: 9.5,
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase',
+  fontSize: 11,
+  lineHeight: 1.5,
   color: C.sub,
-  background: 'rgba(10,10,10,0.04)',
-  border: `1px solid ${C.border}`,
-  borderRadius: 999,
-  padding: '4px 9px',
-  textAlign: 'right',
+  letterSpacing: 0,
+  margin: '10px 0 0',
 }

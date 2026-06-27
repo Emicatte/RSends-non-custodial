@@ -248,9 +248,11 @@ export default async function PricingPage({ params }: PageProps) {
               </p>
             </div>
 
-            {/* RIGHT — Split card. The card is the outermost (clipped) boundary,
-                so the reveal lives here; inner rows stay static (no translate
-                inside overflow:hidden). */}
+            {/* RIGHT — Split card + quiet disclosure caption below it. The card
+                is the outermost (clipped) boundary, so the reveal lives there;
+                inner rows stay static (no translate inside overflow:hidden). The
+                caption is a plain always-visible line (required honesty note). */}
+            <div>
             <div
               className="rs-reveal"
               style={{
@@ -296,22 +298,6 @@ export default async function PricingPage({ params }: PageProps) {
                   {SPLIT.total}
                 </span>
               </div>
-              <span
-                style={{
-                  fontFamily: C.M,
-                  fontSize: 9.5,
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                  color: C.sub,
-                  background: 'rgba(10,10,10,0.04)',
-                  border: `1px solid ${C.border}`,
-                  borderRadius: 999,
-                  padding: '4px 9px',
-                  textAlign: 'right',
-                }}
-              >
-                {t('split.disclaimer')}
-              </span>
             </div>
 
             {/* Split rows — sum to 100% */}
@@ -383,6 +369,8 @@ export default async function PricingPage({ params }: PageProps) {
             <div style={{ padding: '12px 24px 18px' }}>
               <span style={{ fontFamily: C.D, fontSize: 13, color: C.sub }}>• {t('split.note')}</span>
             </div>
+            </div>
+            <p style={splitCaption}>{t('split.disclaimer')}</p>
             </div>
           </div>
         </ScrubReveal>
@@ -608,6 +596,15 @@ const sectionLabel: React.CSSProperties = {
   color: C.text,
   letterSpacing: '-0.01em',
   margin: '0 0 20px',
+}
+
+const splitCaption: React.CSSProperties = {
+  fontFamily: C.M,
+  fontSize: 11,
+  lineHeight: 1.5,
+  color: C.sub,
+  letterSpacing: 0,
+  margin: '10px 0 0',
 }
 
 const illoStyle: React.CSSProperties = {
