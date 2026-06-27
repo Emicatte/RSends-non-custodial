@@ -1283,5 +1283,38 @@
         "cta": "Contact us"
       }
     }
+  },
+  "howItWorks": {
+    "hero": {
+      "eyebrow": "How it works",
+      "title": "How a payment moves through RSends",
+      "subtitle": "Every payment settles on-chain, straight to the wallet the merchant names — routed by an immutable contract that never takes custody."
+    },
+    "flowEyebrow": "The flow",
+    "step1": {
+      "heading": "Checkout",
+      "body": "The customer opens a hosted checkout or a shareable payment link and picks a stablecoin and chain. The payment settles straight to the wallet the merchant names."
+    },
+    "step2": {
+      "heading": "Split & route",
+      "body": "A single payment can divide across many wallets, and the platform fee is taken in the same transaction. Everyone is paid atomically — or no one is."
+    },
+    "step3": {
+      "heading": "On-chain settlement",
+      "body": "Every payment is a verifiable transaction on the chain you chose. There is no reconciliation against a hidden ledger — the block is the receipt."
+    },
+    "proof": {
+      "eyebrow": "Proof",
+      "title": "See a real settlement on-chain",
+      "body": "This is an actual payment processed by the contract on Base Sepolia — a public testnet, not mainnet or production volume. Open it on BaseScan and read the transaction yourself.",
+      "cta": "See a real settlement on-chain →",
+      "network": "Base Sepolia · testnet"
+    },
+    "cta": {
+      "title": "A flat fee, never a percentage.",
+      "body": "The same contract that settles your payments charges one flat fee — see exactly what it costs.",
+      "pricing": "See pricing →",
+      "secondary": "Open the app"
+    }
   }
 }

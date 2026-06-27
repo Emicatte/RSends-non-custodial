@@ -167,7 +167,7 @@ export default function LandingSections() {
                 ))}
               </ul>
               <div style={{ marginTop: 'auto' }}>
-                <CtaLink color={C.text} href="#how-it-works">{t('developers.cta')}</CtaLink>
+                <CtaLink color={C.text} href="/how-it-works">{t('developers.cta')}</CtaLink>
               </div>
             </motion.div>
             </div>

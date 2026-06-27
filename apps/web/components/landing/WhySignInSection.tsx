@@ -69,12 +69,10 @@ export function WhySignInSection() {
 
   return (
     <section
-      id="how-it-works"
       style={{
         padding: isMobile ? "72px 24px" : "120px 96px",
         maxWidth: 1440,
         margin: "0 auto",
-        scrollMarginTop: 80,
       }}
     >
       <div

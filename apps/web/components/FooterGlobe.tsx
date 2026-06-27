@@ -583,9 +583,9 @@ function SparkleIcon() {
 
 const COLUMNS = [
   { title: 'Product', links: [
-    { label: 'How it works', href: '#how-it-works' },
+    { label: 'How it works', href: '/how-it-works' },
     { label: 'Get started',  href: '#get-started' },
-    { label: 'Supported assets', href: '#how-it-works' },
+    { label: 'Supported assets', href: '/how-it-works' },
     { label: 'Open the app',  href: '/login' },
   ]},
   { title: 'Developers', links: [
