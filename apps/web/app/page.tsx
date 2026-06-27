@@ -886,17 +886,6 @@ export default function Home() {
         <div className="rp-bg__noise" />
       </div>
 
-      {/* Top bar accent — ink line with terracotta segment left */}
-      <div style={{
-        position: 'fixed', top: 0, left: 0, right: 0,
-        height: 3, background: C.text, zIndex: 1001,
-      }}>
-        <div style={{
-          position: 'absolute', top: 0, left: 0,
-          width: 96, height: 3, background: C.purple,
-        }} />
-      </div>
-
       {/* Navbar */}
       <Navbar sweeps24h={sweeps24h} vol24h={vol24h} unseenCount={unseenCount} nonEvmWallet={nonEvmWallet} />
 
