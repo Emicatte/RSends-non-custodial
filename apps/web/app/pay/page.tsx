@@ -15,9 +15,11 @@ import { Suspense, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { useSearchParams } from 'next/navigation'
 import { QueryClient } from '@tanstack/react-query'
+import { RainbowKitProvider } from '@rainbow-me/rainbowkit'
 import { C } from '@/app/designTokens'
 import { parsePayParams } from '@/lib/web3/payParams'
 import { Shell, Card, TestnetBadge, Spinner, Eyebrow, GhostButton } from './_components/payUi'
+import { rsendsWalletTheme } from './_components/walletTheme'
 import CheckoutPanel from './_components/CheckoutPanel'
 import RequestGenerator from './_components/RequestGenerator'
 
@@ -31,12 +33,17 @@ export default function PayPage() {
   const [queryClient] = useState(makeQueryClient)
   return (
     <WalletStackFull autoOpenModal={false} reconnectOnMount={true} queryClient={queryClient}>
-      <Shell>
-        <Suspense fallback={<LoadingCard />}>
-          <PayContent />
-        </Suspense>
-        <TestnetBadge />
-      </Shell>
+      {/* Nested provider re-themes the Connect button + modal to brand (light +
+          terracotta) for the /pay subtree only. wagmi/connectors come from the
+          outer WalletStackFull — not re-instantiated. */}
+      <RainbowKitProvider theme={rsendsWalletTheme} modalSize="compact" appInfo={{ appName: 'RSends' }}>
+        <Shell>
+          <Suspense fallback={<LoadingCard />}>
+            <PayContent />
+          </Suspense>
+          <TestnetBadge />
+        </Shell>
+      </RainbowKitProvider>
     </WalletStackFull>
   )
 }
