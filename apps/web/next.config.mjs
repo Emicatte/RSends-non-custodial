@@ -50,6 +50,18 @@ const nextConfig = {
     };
     return config;
   },
+  // The API docs live at the English-only /docs (excluded from next-intl). The
+  // old localized hub at /{locale}/docs is retired → redirect it to /docs at the
+  // server level (robust regardless of the app's client-side render bailout).
+  // The exact `:locale/docs` source does NOT match the localized legal pages
+  // (/{locale}/docs/privacy, /terms, /cookies, /aml-kyc), which keep working.
+  redirects: async () => [
+    {
+      source: '/:locale(en|it|es|fr|de)/docs',
+      destination: '/docs',
+      permanent: false,
+    },
+  ],
   headers: async () => [
     {
       source: '/(.*)',

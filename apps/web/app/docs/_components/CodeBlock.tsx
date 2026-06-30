@@ -3,7 +3,7 @@
 import { useState } from 'react'
 
 type Props = {
-  /** Optional label shown in the header bar (e.g. "POST /api/v1/tx/callback" or "bash"). */
+  /** Optional label shown in the header bar (e.g. "POST /api/v1/merchant/payment-intent" or "bash"). */
   label?: string
   /** The code/text to render and copy. */
   code: string
@@ -11,7 +11,7 @@ type Props = {
 
 /**
  * Reusable dark code block with a copy button.
- * Mono font, ink background, no external deps, no storage APIs.
+ * Mono font (DM Mono), ink background, no external deps, no storage APIs.
  */
 export function CodeBlock({ label, code }: Props) {
   const [copied, setCopied] = useState(false)
@@ -42,7 +42,7 @@ export function CodeBlock({ label, code }: Props) {
         </button>
       </div>
       <pre className="overflow-x-auto px-4 py-4">
-        <code className="font-mono text-[12.5px] leading-relaxed text-white/85 whitespace-pre">
+        <code className="whitespace-pre font-mono text-[12.5px] leading-relaxed text-white/85">
           {code}
         </code>
       </pre>

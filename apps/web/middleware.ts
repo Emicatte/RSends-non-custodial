@@ -63,8 +63,11 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Match everything EXCEPT: /app, /api, /admin, /_next, static files
+  // Match everything EXCEPT: /api, /admin, /merchant, /pay, /tokens, /docs, /_next, static files.
+  // /docs is the English-only, next-intl–excluded docs site (served at /docs/* with no locale
+  // prefix). Excluding it here stops the locale redirect; the localized legal pages still live at
+  // /{locale}/docs/* (those start with a locale segment, so they remain matched).
   matcher: [
-    '/((?!api|_next|admin|merchant|pay|tokens|_vercel|.*\\..*).*)',
+    '/((?!api|_next|admin|merchant|pay|tokens|docs|_vercel|.*\\..*).*)',
   ],
 }
