@@ -72,7 +72,7 @@ export function DocsLayout({ children }: { children: ReactNode }) {
         {/* ── Sidebar (desktop) ───────────────────────────────── */}
         <aside className="sticky top-0 hidden h-[100dvh] w-60 shrink-0 flex-col overflow-y-auto py-10 md:flex">
           <Link href="/docs" className="mb-10 inline-flex items-baseline gap-2">
-            <span className="font-display text-[18px] font-bold tracking-tight text-ink">
+            <span className="font-display text-[18px] font-semibold tracking-[-0.02em] text-ink">
               RSends
             </span>
             <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-terracotta">

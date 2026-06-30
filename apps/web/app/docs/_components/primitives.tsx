@@ -35,7 +35,7 @@ export function H2({ children, id }: { children: ReactNode; id?: string }) {
   return (
     <h2
       id={id}
-      className="mb-3 mt-14 scroll-mt-24 border-t border-ink/[0.08] pt-12 font-display text-[24px] font-bold tracking-tight text-ink first:mt-0 first:border-t-0 first:pt-0"
+      className="mb-3 mt-14 scroll-mt-24 border-t border-ink/[0.08] pt-12 font-display text-[24px] font-medium tracking-[-0.02em] text-ink first:mt-0 first:border-t-0 first:pt-0"
     >
       {children}
     </h2>
@@ -161,7 +161,7 @@ export function PageHeader({
       <p className="mb-3 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-terracotta">
         {eyebrow}
       </p>
-      <h1 className="mb-4 font-display text-[clamp(32px,5vw,46px)] font-bold leading-[1.1] tracking-tight text-ink">
+      <h1 className="mb-4 font-display text-[clamp(32px,5vw,46px)] font-medium leading-[1.1] tracking-[-0.02em] text-ink">
         {title}
       </h1>
       <Lead>{lead}</Lead>

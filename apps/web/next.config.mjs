@@ -61,6 +61,22 @@ const nextConfig = {
       destination: '/docs',
       permanent: false,
     },
+    // pay.rsends.io is a docs-only domain: send its landing roots to /docs so
+    // the docs are the face of the domain. Host-scoped so demo.rsends.io (and
+    // every other domain on this project) is untouched. Only the bare root and
+    // the localized landing roots redirect — deep app routes still resolve.
+    {
+      source: '/',
+      has: [{ type: 'host', value: 'pay.rsends.io' }],
+      destination: '/docs',
+      permanent: false,
+    },
+    {
+      source: '/:locale(en|it|es|fr|de)',
+      has: [{ type: 'host', value: 'pay.rsends.io' }],
+      destination: '/docs',
+      permanent: false,
+    },
   ],
   headers: async () => [
     {
