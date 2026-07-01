@@ -63,6 +63,20 @@ def _get_merchant_id(request: Request) -> str:
     return "unknown"
 
 
+def _get_environment(request: Request) -> str:
+    """Environment ("test"|"live") of the authenticated key.
+
+    merchant_id (== owner address) is shared across an owner's test and live
+    keys, so reads/mutates must additionally scope by this to keep test and live
+    data isolated. Defaults to "live" when absent (unauthenticated public GET),
+    which combined with the merchant_id filter still yields no rows.
+    """
+    client = getattr(request.state, "client", None)
+    if client and isinstance(client, dict):
+        return client.get("environment", "live")
+    return "live"
+
+
 def _generate_intent_id() -> str:
     """Genera un ID univoco per il payment intent: pi_xxxx."""
     return f"pi_{secrets.token_hex(16)}"
@@ -173,6 +187,7 @@ async def create_payment_intent(
         intent_id=intent_id,
         reference_id=reference_id,
         merchant_id=merchant_id,
+        environment=env,
         amount=payload.amount,
         currency=payload.currency,
         chain=payload.chain,
@@ -253,6 +268,7 @@ async def get_payment_intent(
             and_(
                 PaymentIntent.intent_id == intent_id,
                 PaymentIntent.merchant_id == merchant_id,
+                PaymentIntent.environment == _get_environment(request),
             )
         )
     )
@@ -413,9 +429,12 @@ async def list_merchant_transactions(
     """
     merchant_id = _get_merchant_id(request)
 
-    # Base query
-    base_filter = PaymentIntent.merchant_id == merchant_id
-    filters = [base_filter]
+    # Base query — scoped to the key's merchant AND environment (test/live
+    # share the same merchant_id, so both predicates are required for isolation).
+    filters = [
+        PaymentIntent.merchant_id == merchant_id,
+        PaymentIntent.environment == _get_environment(request),
+    ]
 
     if status:
         try:
@@ -508,6 +527,7 @@ async def resolve_late_payment(
             and_(
                 PaymentIntent.intent_id == intent_id,
                 PaymentIntent.merchant_id == merchant_id,
+                PaymentIntent.environment == _get_environment(request),
             )
         )
     )
@@ -596,6 +616,7 @@ async def cancel_payment_intent(
             and_(
                 PaymentIntent.intent_id == intent_id,
                 PaymentIntent.merchant_id == merchant_id,
+                PaymentIntent.environment == _get_environment(request),
             )
         )
     )

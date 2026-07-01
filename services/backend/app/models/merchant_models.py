@@ -88,6 +88,14 @@ class PaymentIntent(Base):
     # Merchant
     merchant_id = Column(String(64), nullable=False, index=True)
 
+    # Environment binding: "test" | "live". Derived from the API key at create
+    # time. merchant_id is the owner address — IDENTICAL across an owner's test
+    # and live keys — so this column is what isolates test data from live data
+    # on every read/mutate. Defaults to "live" so legacy rows stay live-only.
+    environment = Column(
+        String(8), nullable=False, default="live", server_default="live",
+    )
+
     # Pagamento
     amount = Column(Float, nullable=False)
     currency = Column(String(16), nullable=False)           # "USDC", "ETH", ecc.
