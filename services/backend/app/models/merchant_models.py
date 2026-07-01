@@ -174,6 +174,14 @@ class MerchantWebhook(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     merchant_id = Column(String(64), nullable=False, index=True)
 
+    # Environment binding: "test" | "live". Stamped from the API key at
+    # register time. merchant_id is the owner address — IDENTICAL across an
+    # owner's test and live keys — so this column is what keeps test webhooks
+    # from receiving live events (and vice versa) on lookup AND dispatch.
+    environment = Column(
+        String(8), nullable=False, default="live", server_default="live",
+    )
+
     url = Column(String(2048), nullable=False)
     secret = Column(String(128), nullable=False)            # HMAC secret per verifica
     events = Column(JSON, nullable=False, default=list)     # ["payment.completed", "payment.expired"]

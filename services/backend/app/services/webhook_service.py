@@ -871,6 +871,7 @@ async def _dispatch_event(
         select(MerchantWebhook).where(
             and_(
                 MerchantWebhook.merchant_id == merchant_id,
+                MerchantWebhook.environment == intent.environment,
                 MerchantWebhook.is_active == True,
             )
         )
@@ -1218,6 +1219,7 @@ async def send_webhook(
         select(MerchantWebhook).where(
             and_(
                 MerchantWebhook.merchant_id == merchant_id,
+                MerchantWebhook.environment == intent.environment,
                 MerchantWebhook.is_active == True,
             )
         )
