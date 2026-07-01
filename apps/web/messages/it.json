@@ -1316,5 +1316,26 @@
       "pricing": "See pricing →",
       "secondary": "Open the app"
     }
+  },
+  "contact": {
+    "title": "Parla con noi",
+    "subtitle": "Raccontaci il tuo progetto e ti risponderemo al più presto.",
+    "nameLabel": "Nome",
+    "surnameLabel": "Cognome",
+    "companyLabel": "Azienda (facoltativo)",
+    "emailLabel": "Email",
+    "messageLabel": "Messaggio",
+    "submit": "Invia messaggio",
+    "submitLoading": "Invio in corso…",
+    "successTitle": "Messaggio inviato",
+    "successBody": "Grazie per averci contattato — ti risponderemo al più presto.",
+    "errors": {
+      "invalidRequest": "Qualcosa è andato storto. Riprova.",
+      "validation": "Controlla i campi del modulo e riprova.",
+      "rateLimit": "Troppe richieste. Riprova tra qualche minuto.",
+      "turnstile": "Verifica captcha non riuscita. Riprova.",
+      "sendFailed": "Non siamo riusciti a inviare il messaggio. Riprova più tardi.",
+      "network": "Errore di rete. Controlla la connessione e riprova."
+    }
   }
 }

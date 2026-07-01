@@ -184,8 +184,8 @@ export default function GetStartedSection() {
             {t('cta')}
           </Link>
 
-          <a
-            href="mailto:support@rsends.com"
+          <Link
+            href="/contact"
             style={{
               display: 'block',
               textAlign: 'center',
@@ -197,7 +197,7 @@ export default function GetStartedSection() {
             }}
           >
             {t('secondary')}
-          </a>
+          </Link>
         </div>
       </div>
     </section>

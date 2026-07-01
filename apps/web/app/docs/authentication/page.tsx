@@ -31,14 +31,14 @@ export default function AuthenticationPage() {
       <Table
         head={['Prefix', 'Environment', 'Settles on']}
         rows={[
-          [<Code key="t">rk_test_…</Code>, 'Test', 'Base Sepolia testnet (test tokens, no real value)'],
-          [<Code key="l">rk_live_…</Code>, 'Live', 'Mainnet — enabled per jurisdiction as RSends rolls out'],
+          [<Code key="t">rsend_test_…</Code>, 'Test', 'Base Sepolia testnet (test tokens, no real value)'],
+          [<Code key="l">rsend_live_…</Code>, 'Live', 'Mainnet — enabled per jurisdiction as RSends rolls out'],
         ]}
       />
       <CodeBlock
         label="Authorization header"
         code={`curl https://pay.rsends.io/api/v1/merchant/transactions \\
-  -H "Authorization: Bearer rk_test_YOUR_KEY"`}
+  -H "Authorization: Bearer rsend_test_YOUR_KEY"`}
       />
 
       <H2>How keys are issued</H2>
