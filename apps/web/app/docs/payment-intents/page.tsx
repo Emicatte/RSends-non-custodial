@@ -38,7 +38,7 @@ export default function PaymentIntentsPage() {
       <CodeBlock
         label="POST /api/v1/merchant/payment-intent"
         code={`curl https://pay.rsends.io/api/v1/merchant/payment-intent \\
-  -H "Authorization: Bearer rk_test_YOUR_KEY" \\
+  -H "Authorization: Bearer rsend_test_YOUR_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
     "amount": 100,
