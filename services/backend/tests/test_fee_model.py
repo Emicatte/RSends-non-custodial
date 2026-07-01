@@ -59,8 +59,8 @@ USDC_ADDR, USDC_DEC = token_for("base", "USDC")  # ("0x8335..2913", 6)
 MERCHANT = "0x" + "1" * 40
 PAYER = "0x" + "2" * 40
 
-# Locked fee for €0.15 base in USDC smallest units.
-BASE_FEE = 150000  # 0.15 * 10**6
+# Locked fee for €0.60 base in USDC smallest units.
+BASE_FEE = 600000  # 0.60 * 10**6
 
 
 # ── log/event builders ───────────────────────────────────────
