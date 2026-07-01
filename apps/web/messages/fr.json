@@ -202,9 +202,9 @@
     "businesses": {
       "eyebrow": "FLAT FEE",
       "title": "A flat fee, never a percentage",
-      "body": "You pay a fixed €0.15 per transaction, capped at €1.15 — whatever the amount. No percentage of volume, ever, so your margin stays yours as you grow.",
-      "b1": "€0.15 per transaction",
-      "b2": "€1.15 cap per payment",
+      "body": "You pay a fixed €0.60 per transaction, capped at €3.00 — whatever the amount. No percentage of volume, ever, so your margin stays yours as you grow.",
+      "b1": "€0.60 per transaction",
+      "b2": "€3.00 cap per payment",
       "b3": "Never a % of volume",
       "b4": "USDC · USDT · EURC",
       "cta": "See pricing →"
@@ -1190,13 +1190,13 @@
     "eyebrow": "PRICING",
     "title": "A flat fee, never a percentage.",
     "subtitle": "Predictable cost on every payment. Pick a plan for the features you need — the per-transaction fee is always the same.",
-    "feeLine": "€0.15 per transaction · €1.15 cap · never a %",
+    "feeLine": "€0.60 per transaction · €3.00 cap · never a %",
     "compliance": "Non-custodial · B2B only · Available outside the United States and Türkiye.",
     "footnote": "Démo sur testnet Base Sepolia. Les frais par transaction sont fixes et plafonnés — jamais un pourcentage du volume.",
     "feeModel": {
       "eyebrow": "COMMENT FONCTIONNENT LES FRAIS",
       "title": "Des frais fixes, avec un plafond strict.",
-      "subtitle": "€0.15 par transaction jusqu'à €1 000, puis €1.15 fixes — jamais un pourcentage de ce que vous encaissez."
+      "subtitle": "€0.60 par transaction jusqu'à €1 000, puis €3.00 fixes — jamais un pourcentage de ce que vous encaissez."
     },
     "comparison": {
       "title": "Ce que vous payez face à une passerelle au pourcentage",
@@ -1205,7 +1205,7 @@
       "col1": "À 1%",
       "col29": "À 2,9%",
       "illustrative": "illustratif",
-      "caption": "€0.15 fixes par transaction, +€1 au-delà de €1 000, plafond strict €1.15. Les colonnes en pourcentage sont des repères illustratifs — non liés à un fournisseur nommé."
+      "caption": "€0.60 fixes par transaction, plafond strict €3.00 au-delà de €1 000. Les colonnes en pourcentage sont des repères illustratifs — non liés à un fournisseur nommé."
     },
     "details": {
       "title": "Détails des frais",
@@ -1223,7 +1223,7 @@
       "items": [
         { "q": "Quelles chaînes et quels tokens sont pris en charge ?", "a": "USDC, USDT et EURC sur Base et Ethereum. Le produit est actuellement une démo sur le testnet Base Sepolia." },
         { "q": "Qui paie le gas ?", "a": "Le payeur paie le gas, en tant que partie initiant la transaction on-chain. Le marchand reçoit le paiement moins uniquement les frais fixes RSends — aucun coût de gas pour le marchand." },
-        { "q": "Les frais sont-ils parfois un pourcentage du montant ?", "a": "Non. Ce sont des frais fixes de €0.15 par transaction jusqu'à €1 000, et de €1.15 fixes au-delà — un plafond strict. Ce n'est jamais un pourcentage du volume." },
+        { "q": "Les frais sont-ils parfois un pourcentage du montant ?", "a": "Non. Ce sont des frais fixes de €0.60 par transaction jusqu'à €1 000, et de €3.00 fixes au-delà — un plafond strict. Ce n'est jamais un pourcentage du volume." },
         { "q": "Les transactions échouées coûtent-elles quelque chose ?", "a": "Non. Les frais sont prélevés de façon atomique dans la transaction de règlement, donc si elle échoue rien n'est acheminé et rien n'est facturé." },
         { "q": "Comment les remboursements sont-ils gérés ?", "a": "RSends est non-custodial et ne détient jamais les fonds, il ne peut donc pas annuler un paiement. Restituer des fonds est un nouveau paiement initié par le marchand et entraîne les frais fixes standards comme tout paiement." },
         { "q": "Y a-t-il des frais de mise en place ou un minimum mensuel ?", "a": "Aucun frais de mise en place et aucun minimum mensuel pour commencer — l'offre Free est à €0/mois. Les offres payantes ajoutent des fonctionnalités, pas des frais par transaction différents." },
@@ -1242,7 +1242,7 @@
     "tiers": {
       "eyebrow": "CE QUE VOUS OBTENEZ",
       "title": "Mêmes frais. Plus de marge pour grandir.",
-      "note": "Chaque offre paie les mêmes frais de €0.15 par transaction (plafond €1.15). Les offres ajoutent des limites de débit, du support, des membres d’équipe et un SLA — jamais des frais différents."
+      "note": "Chaque offre paie les mêmes frais de €0.60 par transaction (plafond €3.00). Les offres ajoutent des limites de débit, du support, des membres d’équipe et un SLA — jamais des frais différents."
     },
     "plans": {
       "free": {

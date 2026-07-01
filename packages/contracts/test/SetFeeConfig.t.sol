@@ -10,10 +10,10 @@ import {MockUSDC6} from "./mocks/E2EMocks.sol";
 /// assert the token's on-chain symbol()+decimals() before enabling, and REVERT on
 /// any mismatch — so a wrong/mistyped address can never be whitelisted.
 contract SetFeeConfigTest is Test {
-    // 6-decimal decided pricing (€0.15 / €1.15 at/above €1,000).
-    uint256 constant FLAT_6      = 150_000;        // €0.15
+    // 6-decimal decided pricing (€0.60 / €3.00 at/above €1,000).
+    uint256 constant FLAT_6      = 600_000;        // €0.60
     uint256 constant THRESHOLD_6 = 1_000_000_000;  // €1,000
-    uint256 constant ABOVE_6     = 1_150_000;      // €1.15
+    uint256 constant ABOVE_6     = 3_000_000;      // €3.00
     uint256 constant SURCHARGE_6 = ABOVE_6 - FLAT_6;
 
     SetFeeConfig internal cfg;
@@ -80,8 +80,8 @@ contract SetFeeConfigTest is Test {
         address usdc = vm.parseJsonAddress(json, string.concat(baseKey, ".tokens.USDC.address"));
         assertEq(usdc, 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913, "base USDC address");
         assertEq(vm.parseJsonUint(json, string.concat(baseKey, ".tokens.USDC.decimals")), 6);
-        assertEq(vm.parseJsonUint(json, string.concat(baseKey, ".tokens.USDC.flatFee")), 150_000);
-        assertEq(vm.parseJsonUint(json, string.concat(baseKey, ".tokens.USDC.aboveFee")), 1_150_000);
+        assertEq(vm.parseJsonUint(json, string.concat(baseKey, ".tokens.USDC.flatFee")), 600_000);
+        assertEq(vm.parseJsonUint(json, string.concat(baseKey, ".tokens.USDC.aboveFee")), 3_000_000);
 
         // 18-decimal big integers parse exactly.
         string memory ethKey = "$[\"1\"]";
@@ -91,7 +91,7 @@ contract SetFeeConfigTest is Test {
         );
         assertEq(
             vm.parseJsonUint(json, string.concat(ethKey, ".tokens.DAI.aboveFee")),
-            1_150_000_000_000_000_000
+            3_000_000_000_000_000_000
         );
     }
 

@@ -14,7 +14,7 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 ///
 /// Fee model (per token, in the token's smallest unit, NO oracle, NEVER a %):
 ///   fee = flatFee + (amount >= threshold ? (aboveFee - flatFee) : 0)
-///   Decided pricing: €0.15 below €1,000, €1.15 at/above.
+///   Decided pricing: €0.60 below €1,000, €3.00 at/above.
 ///
 /// ADDRESS SAFETY (critical): a wrong token address sends funds to the wrong
 /// contract. Before enabling ANY token, `verifyAndSet` asserts the token at that

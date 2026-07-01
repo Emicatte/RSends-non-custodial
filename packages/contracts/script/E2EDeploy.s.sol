@@ -27,9 +27,9 @@ import {MockUSDC6, MockUSDT6} from "../test/mocks/E2EMocks.sol";
 ///     --rpc-url http://127.0.0.1:8545 --broadcast --private-key <deployerKey>
 contract E2EDeploy is Script {
     // Locked flat fee — 6-decimal stablecoins (matches script/SetFeeConfig.s.sol).
-    uint256 constant BASE_6      = 150000;        // €0.15
+    uint256 constant BASE_6      = 600000;        // €0.60
     uint256 constant THRESHOLD_6 = 1000000000;    // €1,000
-    uint256 constant SURCHARGE_6 = 1000000;       // €1 → at/above fee = 1_150_000 (€1.15)
+    uint256 constant SURCHARGE_6 = 2400000;       // €2.40 → at/above fee = 3_000_000 (€3.00)
 
     // Generous mint so balances never bound the test.
     uint256 constant MINT_6 = 1_000_000 * 1e6;    // 1,000,000 tokens

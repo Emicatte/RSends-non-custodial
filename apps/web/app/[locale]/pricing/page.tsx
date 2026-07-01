@@ -9,7 +9,7 @@ import ScrubCascade from '@/components/motion/ScrubCascade'
 export const metadata: Metadata = {
   title: 'Pricing — RSends',
   description:
-    'A flat fee, never a percentage. €0.15 per transaction, capped at €1.15. Pick a plan for the features you need.',
+    'A flat fee, never a percentage. €0.60 per transaction, capped at €3.00. Pick a plan for the features you need.',
 }
 
 type PageProps = { params: Promise<{ locale: string }> }
@@ -22,9 +22,9 @@ const CONTAINER = 1160 // shared width for every section below the hero
 //    renders identical numbers (DM Mono). The % columns are illustrative
 //    reference points, not any named provider's tariff. NEVER a % of volume.
 const COMPARISON_ROWS = [
-  { payment: '€50', rsends: '€0.15', p1: '€0.50', p29: '€1.45' },
-  { payment: '€1,200', rsends: '€1.15', p1: '€12.00', p29: '€34.80' },
-  { payment: '€50,000', rsends: '€1.15', p1: '€500.00', p29: '€1,450.00' },
+  { payment: '€50', rsends: '€0.60', p1: '€0.50', p29: '€1.45' },
+  { payment: '€1,200', rsends: '€3.00', p1: '€12.00', p29: '€34.80' },
+  { payment: '€50,000', rsends: '€3.00', p1: '€500.00', p29: '€1,450.00' },
 ] as const
 
 // Illustrative split — percentages sum to 100; the fee is a flat line item,
@@ -35,7 +35,7 @@ const SPLIT = {
     { addr: '0x…shop', pct: 88 },
     { addr: '0x…seller', pct: 12 },
   ],
-  fee: '€0.15',
+  fee: '€0.60',
 } as const
 
 const PLAN_KEYS = ['free', 'pro', 'custom'] as const

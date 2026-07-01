@@ -100,13 +100,13 @@ contract RSendsRouterTest is Test {
     RSendsRouter router;
     MockERC20Permit token;
 
-    // Locked EUR-stable pricing in 6-decimal minimal units: €0.15 flat, €1.15 at/above €1,000.
-    uint256 constant BASE      = 150_000;        // €0.15
+    // Locked EUR-stable pricing in 6-decimal minimal units: €0.60 flat, €3.00 at/above €1,000.
+    uint256 constant BASE      = 600_000;        // €0.60
     uint256 constant THRESHOLD = 1_000_000_000;  // €1,000
-    uint256 constant SURCHARGE = 1_000_000;      // €1.00 -> at/above fee = 1_150_000 (€1.15)
+    uint256 constant SURCHARGE = 2_400_000;      // €2.40 -> at/above fee = 3_000_000 (€3.00)
 
-    uint256 constant FEE_BELOW = BASE;               // 150_000
-    uint256 constant FEE_ABOVE = BASE + SURCHARGE;   // 1_150_000
+    uint256 constant FEE_BELOW = BASE;               // 600_000
+    uint256 constant FEE_ABOVE = BASE + SURCHARGE;   // 3_000_000
 
     uint256 constant AMT_BELOW = 100_000_000;        // €100
     uint256 constant AMT_ABOVE = 5_000_000_000;      // €5,000
@@ -153,10 +153,10 @@ contract RSendsRouterTest is Test {
         assertEq(router.quoteFee(address(token), AMT_ABOVE), FEE_ABOVE);
     }
 
-    /// Verifies the locked pricing is exactly €0.15 / €1.15 (never a percentage).
+    /// Verifies the locked pricing is exactly €0.60 / €3.00 (never a percentage).
     function test_quoteFee_exactDecidedPricing() public view {
-        assertEq(FEE_BELOW, 150_000);   // €0.15
-        assertEq(FEE_ABOVE, 1_150_000); // €1.15
+        assertEq(FEE_BELOW, 600_000);   // €0.60
+        assertEq(FEE_ABOVE, 3_000_000); // €3.00
         // fee is flat, not proportional: 8x the amount (still below threshold) -> same fee.
         assertEq(router.quoteFee(address(token), AMT_BELOW), router.quoteFee(address(token), AMT_BELOW * 8));
     }

@@ -202,9 +202,9 @@
     "businesses": {
       "eyebrow": "FLAT FEE",
       "title": "A flat fee, never a percentage",
-      "body": "You pay a fixed €0.15 per transaction, capped at €1.15 — whatever the amount. No percentage of volume, ever, so your margin stays yours as you grow.",
-      "b1": "€0.15 per transaction",
-      "b2": "€1.15 cap per payment",
+      "body": "You pay a fixed €0.60 per transaction, capped at €3.00 — whatever the amount. No percentage of volume, ever, so your margin stays yours as you grow.",
+      "b1": "€0.60 per transaction",
+      "b2": "€3.00 cap per payment",
       "b3": "Never a % of volume",
       "b4": "USDC · USDT · EURC",
       "cta": "See pricing →"
@@ -1190,13 +1190,13 @@
     "eyebrow": "PRICING",
     "title": "A flat fee, never a percentage.",
     "subtitle": "Predictable cost on every payment. Pick a plan for the features you need — the per-transaction fee is always the same.",
-    "feeLine": "€0.15 per transaction · €1.15 cap · never a %",
+    "feeLine": "€0.60 per transaction · €3.00 cap · never a %",
     "compliance": "Non-custodial · B2B only · Available outside the United States and Türkiye.",
     "footnote": "Testnet-Demo auf Base Sepolia. Die Gebühr pro Transaktion ist fest und gedeckelt — niemals ein Prozentsatz des Volumens.",
     "feeModel": {
       "eyebrow": "SO FUNKTIONIERT DIE GEBÜHR",
       "title": "Eine feste Gebühr, mit hartem Deckel.",
-      "subtitle": "€0.15 pro Transaktion bis €1.000, danach feste €1.15 — niemals ein Prozentsatz dessen, was du einnimmst."
+      "subtitle": "€0.60 pro Transaktion bis €1.000, danach feste €3.00 — niemals ein Prozentsatz dessen, was du einnimmst."
     },
     "comparison": {
       "title": "Was du zahlst im Vergleich zu einem Prozent-Gateway",
@@ -1205,7 +1205,7 @@
       "col1": "Bei 1%",
       "col29": "Bei 2,9%",
       "illustrative": "illustrativ",
-      "caption": "Feste €0.15 pro Transaktion, +€1 über €1.000, harter Deckel €1.15. Die Prozentspalten sind illustrative Referenzwerte — nicht an einen genannten Anbieter gebunden."
+      "caption": "Feste €0.60 pro Transaktion, harter Deckel €3.00 über €1.000. Die Prozentspalten sind illustrative Referenzwerte — nicht an einen genannten Anbieter gebunden."
     },
     "details": {
       "title": "Gebührendetails",
@@ -1223,7 +1223,7 @@
       "items": [
         { "q": "Welche Chains und Token werden unterstützt?", "a": "USDC, USDT und EURC auf Base und Ethereum. Das Produkt ist derzeit eine Testnet-Demo auf Base Sepolia." },
         { "q": "Wer zahlt das Gas?", "a": "Der Zahler zahlt das Gas, als die Partei, die die On-Chain-Transaktion initiiert. Der Händler erhält die Zahlung abzüglich nur der festen RSends-Gebühr — keine Gas-Kosten für den Händler." },
-        { "q": "Ist die Gebühr jemals ein Prozentsatz des Betrags?", "a": "Nein. Es ist eine feste Gebühr von €0.15 pro Transaktion bis €1.000 und feste €1.15 darüber — ein harter Deckel. Sie ist niemals ein Prozentsatz des Volumens." },
+        { "q": "Ist die Gebühr jemals ein Prozentsatz des Betrags?", "a": "Nein. Es ist eine feste Gebühr von €0.60 pro Transaktion bis €1.000 und feste €3.00 darüber — ein harter Deckel. Sie ist niemals ein Prozentsatz des Volumens." },
         { "q": "Kosten fehlgeschlagene Transaktionen etwas?", "a": "Nein. Die Gebühr wird atomar innerhalb der Settlement-Transaktion erhoben, wenn sie also zurückgesetzt wird, wird nichts geroutet und nichts berechnet." },
         { "q": "Wie werden Rückerstattungen gehandhabt?", "a": "RSends ist non-custodial und hält niemals Gelder, kann eine Zahlung also nicht rückgängig machen. Gelder zurückzugeben ist eine neue, vom Händler initiierte Zahlung und fällt unter die übliche feste Gebühr wie jede Zahlung." },
         { "q": "Gibt es eine Einrichtungsgebühr oder ein monatliches Minimum?", "a": "Keine Einrichtungsgebühr und kein monatliches Minimum für den Start — der Free-Tarif ist €0/Monat. Bezahlte Tarife fügen Funktionen hinzu, keine andere Gebühr pro Transaktion." },
@@ -1242,7 +1242,7 @@
     "tiers": {
       "eyebrow": "WAS DU BEKOMMST",
       "title": "Gleiche Gebühr. Mehr Raum zum Wachsen.",
-      "note": "Jeder Tarif zahlt dieselbe Gebühr von €0.15 pro Transaktion (Deckel €1.15). Tarife ergänzen Rate-Limits, Support, Team-Sitze und SLA — niemals eine andere Gebühr."
+      "note": "Jeder Tarif zahlt dieselbe Gebühr von €0.60 pro Transaktion (Deckel €3.00). Tarife ergänzen Rate-Limits, Support, Team-Sitze und SLA — niemals eine andere Gebühr."
     },
     "plans": {
       "free": {

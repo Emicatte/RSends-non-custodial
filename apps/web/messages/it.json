@@ -201,9 +201,9 @@
     "businesses": {
       "eyebrow": "FEE FISSA",
       "title": "Una fee fissa, mai una percentuale",
-      "body": "Paghi €0.15 fissi per transazione, con un cap di €1.15 — qualunque sia l’importo. Mai una percentuale sul volume, così il tuo margine resta tuo mentre cresci.",
-      "b1": "€0.15 per transazione",
-      "b2": "Cap di €1.15 per pagamento",
+      "body": "Paghi €0.60 fissi per transazione, con un cap di €3.00 — qualunque sia l’importo. Mai una percentuale sul volume, così il tuo margine resta tuo mentre cresci.",
+      "b1": "€0.60 per transazione",
+      "b2": "Cap di €3.00 per pagamento",
       "b3": "Mai una % sul volume",
       "b4": "USDC · USDT · EURC",
       "cta": "Vedi i prezzi →"
@@ -1189,13 +1189,13 @@
     "eyebrow": "PREZZI",
     "title": "Una fee fissa, mai una percentuale.",
     "subtitle": "Costo prevedibile su ogni pagamento. Scegli il piano per le funzioni che ti servono — la fee per transazione è sempre la stessa.",
-    "feeLine": "€0.15 per transazione · cap €1.15 · mai una %",
+    "feeLine": "€0.60 per transazione · cap €3.00 · mai una %",
     "compliance": "Non-custodial · solo B2B · Disponibile fuori da Stati Uniti e Türkiye.",
     "footnote": "Demo su testnet Base Sepolia. La fee per transazione è fissa e con cap — mai una percentuale del volume.",
     "feeModel": {
       "eyebrow": "COME FUNZIONA LA FEE",
       "title": "Una fee fissa, con un cap rigido.",
-      "subtitle": "€0.15 per transazione fino a €1.000, poi €1.15 fissi — mai una percentuale di ciò che incassi."
+      "subtitle": "€0.60 per transazione fino a €1.000, poi €3.00 fissi — mai una percentuale di ciò che incassi."
     },
     "comparison": {
       "title": "Quanto paghi rispetto a un gateway a percentuale",
@@ -1204,7 +1204,7 @@
       "col1": "All'1%",
       "col29": "Al 2,9%",
       "illustrative": "illustrativo",
-      "caption": "€0.15 fissi per transazione, +€1 oltre €1.000, cap massimo €1.15. Le colonne percentuali sono riferimenti illustrativi — non legate ad alcun provider specifico."
+      "caption": "€0.60 fissi per transazione, cap massimo €3.00 oltre €1.000. Le colonne percentuali sono riferimenti illustrativi — non legate ad alcun provider specifico."
     },
     "details": {
       "title": "Dettagli della fee",
@@ -1222,7 +1222,7 @@
       "items": [
         { "q": "Quali chain e token sono supportati?", "a": "USDC, USDT ed EURC su Base ed Ethereum. Il prodotto è attualmente una demo su testnet Base Sepolia." },
         { "q": "Chi paga il gas?", "a": "Il gas è pagato dal pagatore, in quanto soggetto che avvia la transazione on-chain. Il merchant riceve il pagamento meno la sola fee fissa RSends — nessun costo di gas per il merchant." },
-        { "q": "La fee è mai una percentuale dell'importo?", "a": "No. È una fee fissa di €0.15 per transazione fino a €1.000, e di €1.15 fissi oltre tale soglia — un cap rigido. Non è mai una percentuale del volume." },
+        { "q": "La fee è mai una percentuale dell'importo?", "a": "No. È una fee fissa di €0.60 per transazione fino a €1.000, e di €3.00 fissi oltre tale soglia — un cap rigido. Non è mai una percentuale del volume." },
         { "q": "Le transazioni fallite hanno un costo?", "a": "No. La fee è prelevata atomicamente all'interno della transazione di settlement, quindi se va in revert non viene instradato nulla e non viene addebitato nulla." },
         { "q": "Come vengono gestiti i rimborsi?", "a": "RSends è non-custodial e non detiene mai i fondi, quindi non può annullare un pagamento. La restituzione dei fondi è un nuovo pagamento avviato dal merchant e prevede la stessa fee fissa di qualsiasi pagamento." },
         { "q": "Ci sono costi di setup o un minimo mensile?", "a": "Nessun costo di setup e nessun minimo mensile per iniziare — il piano Free è €0/mese. I piani a pagamento aggiungono funzioni, non una fee per transazione diversa." },
@@ -1241,7 +1241,7 @@
     "tiers": {
       "eyebrow": "COSA OTTIENI",
       "title": "Stessa fee. Più spazio per crescere.",
-      "note": "Ogni piano paga la stessa fee di €0.15 per transazione (cap €1.15). I piani aggiungono limiti di frequenza, supporto, membri del team e SLA — mai una fee diversa."
+      "note": "Ogni piano paga la stessa fee di €0.60 per transazione (cap €3.00). I piani aggiungono limiti di frequenza, supporto, membri del team e SLA — mai una fee diversa."
     },
     "plans": {
       "free": {
