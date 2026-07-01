@@ -1316,5 +1316,26 @@
       "pricing": "See pricing →",
       "secondary": "Open the app"
     }
+  },
+  "contact": {
+    "title": "Talk to us",
+    "subtitle": "Tell us about your project and we'll get back to you.",
+    "nameLabel": "Name",
+    "surnameLabel": "Surname",
+    "companyLabel": "Company (optional)",
+    "emailLabel": "Email",
+    "messageLabel": "Message",
+    "submit": "Send message",
+    "submitLoading": "Sending…",
+    "successTitle": "Message sent",
+    "successBody": "Thanks for reaching out — we'll get back to you soon.",
+    "errors": {
+      "invalidRequest": "Something went wrong. Please try again.",
+      "validation": "Please check the form fields and try again.",
+      "rateLimit": "Too many requests. Please try again in a few minutes.",
+      "turnstile": "Captcha verification failed. Please try again.",
+      "sendFailed": "We couldn't send your message. Please try again later.",
+      "network": "Network error. Please check your connection and try again."
+    }
   }
 }
