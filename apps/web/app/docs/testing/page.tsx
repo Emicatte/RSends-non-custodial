@@ -26,14 +26,14 @@ export default function TestingPage() {
 
       <H2>Testnet vs mainnet</H2>
       <P>
-        RSends mirrors the classic test/live split onto chains. Your <Code>rk_test_</Code> key drives
-        the testnet router on Base Sepolia; your <Code>rk_live_</Code> key drives mainnet once it is
+        RSends mirrors the classic test/live split onto chains. Your <Code>rsend_test_</Code> key drives
+        the testnet router on Base Sepolia; your <Code>rsend_live_</Code> key drives mainnet once it is
         enabled for your jurisdiction.
       </P>
       <Table
         head={['', 'Test', 'Live']}
         rows={[
-          [<strong key="k">API key</strong>, <Code key="t">rk_test_…</Code>, <Code key="l">rk_live_…</Code>],
+          [<strong key="k">API key</strong>, <Code key="t">rsend_test_…</Code>, <Code key="l">rsend_live_…</Code>],
           [<strong key="n">Network</strong>, 'Base Sepolia (chain 84532)', 'Mainnet, per jurisdiction'],
           [<strong key="v">Token value</strong>, 'None — faucet test tokens', 'Real funds'],
           [<strong key="t2">Tokens</strong>, 'Test USDC', 'USDC (more rolling out)'],
@@ -72,7 +72,7 @@ Faucet:   https://faucet.circle.com`}
         head={['Step', 'Action']}
         rows={[
           ['1', <>Fund a wallet with test USDC + Base Sepolia ETH (above).</>],
-          ['2', <>Create a payment intent with your <Code>rk_test_</Code> key — see <A href="/docs/payment-intents">Payment intents</A>.</>],
+          ['2', <>Create a payment intent with your <Code>rsend_test_</Code> key — see <A href="/docs/payment-intents">Payment intents</A>.</>],
           ['3', <>Open the returned <Code>checkout_url</Code>, connect the funded wallet, and pay.</>],
           ['4', <>Confirm you receive a <Code>payment.completed</Code> <A href="/docs/webhooks">webhook</A> and that the funds landed in your destination wallet.</>],
           ['5', <>Verify the <Code>PaymentMade</Code> event on <A href="https://sepolia.basescan.org">sepolia.basescan.org</A>.</>],
@@ -81,8 +81,8 @@ Faucet:   https://faucet.circle.com`}
 
       <H3>Going live</H3>
       <P>
-        To move to mainnet, <strong>swap both secrets</strong>: replace your <Code>rk_test_</Code>{' '}
-        key with the <Code>rk_live_</Code> key, and replace the webhook signing secret with the one
+        To move to mainnet, <strong>swap both secrets</strong>: replace your <Code>rsend_test_</Code>{' '}
+        key with the <Code>rsend_live_</Code> key, and replace the webhook signing secret with the one
         issued for your live webhook. Point your integration at the same endpoints — only the
         credentials and network change.
       </P>

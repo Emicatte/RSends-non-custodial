@@ -58,7 +58,7 @@ export default function RefundsPage() {
       <CodeBlock
         label="record a refund (resolve action)"
         code={`curl https://pay.rsends.io/api/v1/merchant/payment-intent/int_abc123/resolve \\
-  -H "Authorization: Bearer rk_test_YOUR_KEY" \\
+  -H "Authorization: Bearer rsend_test_YOUR_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "action": "refund" }'
 
