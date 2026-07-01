@@ -34,7 +34,7 @@ const SPLIT = {
     { addr: '0x…shop', pct: 88 },
     { addr: '0x…seller', pct: 12 },
   ],
-  fee: '€0.15',
+  fee: '€0.60',
 } as const
 
 const SETTLE = {

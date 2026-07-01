@@ -3,7 +3,7 @@ Token policy/registry tests — fee encoding + the create-intent enable gate.
 
 Asserts the shared registry (app/token_registry.json, the SINGLE source of truth
 also consumed by packages/contracts/script/SetFeeConfig.s.sol) encodes the decided
-FLAT pricing — 0.15 below the threshold, 1.15 at/above, NEVER proportional — for
+FLAT pricing — 0.60 below the threshold, 3.00 at/above, NEVER proportional — for
 both 6- and 18-decimal tokens, and that the enable gate rejects unknown/disabled
 tokens.
 
@@ -42,18 +42,18 @@ def _quote(pol, amount: int) -> int:
     return fee
 
 
-# ── Fee encoding: exactly 0.15 / 1.15, in minimal units, for 6- and 18-dec ──
+# ── Fee encoding: exactly 0.60 / 3.00, in minimal units, for 6- and 18-dec ──
 def test_fee_config_encodes_decided_flat_pricing_for_all_tokens():
     seen_decimals = set()
     for chain, sym, pol in _stablecoins():
         dec = pol["decimals"]
         seen_decimals.add(dec)
-        # 0.15 below, 1.15 at/above, 1000 threshold — all in token minimal units.
-        assert pol["flatFee"] == 15 * 10 ** (dec - 2), f"{chain}.{sym} flatFee"
-        assert pol["aboveFee"] == 115 * 10 ** (dec - 2), f"{chain}.{sym} aboveFee"
+        # 0.60 below, 3.00 at/above, 1000 threshold — all in token minimal units.
+        assert pol["flatFee"] == 60 * 10 ** (dec - 2), f"{chain}.{sym} flatFee"
+        assert pol["aboveFee"] == 300 * 10 ** (dec - 2), f"{chain}.{sym} aboveFee"
         assert pol["threshold"] == 1000 * 10 ** dec, f"{chain}.{sym} threshold"
-        # surcharge the script will pass on-chain = aboveFee - flatFee (= 1.00).
-        assert pol["aboveFee"] - pol["flatFee"] == 100 * 10 ** (dec - 2), f"{chain}.{sym} surcharge"
+        # surcharge the script will pass on-chain = aboveFee - flatFee (= 2.40).
+        assert pol["aboveFee"] - pol["flatFee"] == 240 * 10 ** (dec - 2), f"{chain}.{sym} surcharge"
 
     # Coverage: both a 6-decimal (USDC/USDT/EURC) and an 18-decimal (DAI) token.
     assert 6 in seen_decimals and 18 in seen_decimals

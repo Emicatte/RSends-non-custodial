@@ -201,9 +201,9 @@
     "businesses": {
       "eyebrow": "FLAT FEE",
       "title": "A flat fee, never a percentage",
-      "body": "You pay a fixed €0.15 per transaction, capped at €1.15 — whatever the amount. No percentage of volume, ever, so your margin stays yours as you grow.",
-      "b1": "€0.15 per transaction",
-      "b2": "€1.15 cap per payment",
+      "body": "You pay a fixed €0.60 per transaction, capped at €3.00 — whatever the amount. No percentage of volume, ever, so your margin stays yours as you grow.",
+      "b1": "€0.60 per transaction",
+      "b2": "€3.00 cap per payment",
       "b3": "Never a % of volume",
       "b4": "USDC · USDT · EURC",
       "cta": "See pricing →"
@@ -1189,13 +1189,13 @@
     "eyebrow": "PRICING",
     "title": "A flat fee, never a percentage.",
     "subtitle": "Predictable cost on every payment. Pick a plan for the features you need — the per-transaction fee is always the same.",
-    "feeLine": "€0.15 per transaction · €1.15 cap · never a %",
+    "feeLine": "€0.60 per transaction · €3.00 cap · never a %",
     "compliance": "Non-custodial · B2B only · Available outside the United States and Türkiye.",
     "footnote": "Testnet demo on Base Sepolia. The per-transaction fee is flat and capped — never a percentage of volume.",
     "feeModel": {
       "eyebrow": "HOW THE FEE WORKS",
       "title": "One flat fee, with a hard cap.",
-      "subtitle": "€0.15 per transaction up to €1,000, then a flat €1.15 — never a percentage of what you collect."
+      "subtitle": "€0.60 per transaction up to €1,000, then a flat €3.00 — never a percentage of what you collect."
     },
     "comparison": {
       "title": "What you pay versus a percentage gateway",
@@ -1204,7 +1204,7 @@
       "col1": "At 1%",
       "col29": "At 2.9%",
       "illustrative": "illustrative",
-      "caption": "Flat €0.15 per transaction, +€1 above €1,000, hard cap €1.15. Percentage columns are illustrative reference points — not tied to any named provider."
+      "caption": "Flat €0.60 per transaction, hard cap €3.00 above €1,000. Percentage columns are illustrative reference points — not tied to any named provider."
     },
     "details": {
       "title": "Fee details",
@@ -1222,7 +1222,7 @@
       "items": [
         { "q": "Which chains and tokens are supported?", "a": "USDC, USDT and EURC on Base and Ethereum. The product is currently a testnet demo on Base Sepolia." },
         { "q": "Who pays the gas?", "a": "The payer pays the gas, as the party initiating the on-chain transaction. The merchant receives the payment minus only the flat RSends fee — no gas cost to the merchant." },
-        { "q": "Is the fee ever a percentage of the amount?", "a": "No. It is a flat €0.15 per transaction up to €1,000, and a flat €1.15 above that — a hard cap. It is never a percentage of volume." },
+        { "q": "Is the fee ever a percentage of the amount?", "a": "No. It is a flat €0.60 per transaction up to €1,000, and a flat €3.00 above that — a hard cap. It is never a percentage of volume." },
         { "q": "Do failed transactions cost anything?", "a": "No. The fee is taken atomically inside the settlement transaction, so if it reverts nothing routes and nothing is charged." },
         { "q": "How are refunds handled?", "a": "RSends is non-custodial and never holds funds, so it cannot reverse a payment. Returning funds is a new payment initiated by the merchant and incurs the standard flat fee like any payment." },
         { "q": "Is there a setup fee or monthly minimum?", "a": "No setup fee and no monthly minimum to start — the Free tier is €0/month. Paid plans add features, not a different per-transaction fee." },
@@ -1241,7 +1241,7 @@
     "tiers": {
       "eyebrow": "WHAT YOU GET",
       "title": "Same fee. More room to grow.",
-      "note": "Every tier pays the same €0.15 per transaction (cap €1.15). Plans add rate limits, support, team seats and SLA — never a different fee."
+      "note": "Every tier pays the same €0.60 per transaction (cap €3.00). Plans add rate limits, support, team seats and SLA — never a different fee."
     },
     "plans": {
       "free": {

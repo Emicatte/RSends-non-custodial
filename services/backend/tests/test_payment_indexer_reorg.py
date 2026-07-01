@@ -32,7 +32,7 @@ ROUTER = "0x" + "a" * 40
 MERCHANT = "0x" + "1" * 40
 PAYER = "0x" + "2" * 40
 CHAIN = 8453
-BASE_FEE = 150000
+BASE_FEE = 600000
 AMT = to_base_units(100.0, USDC_DEC)  # 100_000000
 
 

@@ -271,7 +271,7 @@ async def test_usdc_paywithpermit_full_loop(wired):
 
     intent_id, oc = await _create_intent(wired, "USDC", 100.0)
     amount, fee, max_fee = int(oc["amount"]), int(oc["fee"]), int(oc["maxFee"])
-    assert fee == 150_000  # €0.15 below threshold
+    assert fee == 600_000  # €0.60 below threshold
 
     deadline = int(time.time()) + 3600
     v, r, s = _sign_permit(
