@@ -56,11 +56,23 @@ merchant_router = APIRouter(prefix="/api/v1/merchant", tags=["merchant"])
 # ═══════════════════════════════════════════════════════════════
 
 def _get_merchant_id(request: Request) -> str:
-    """Estrae il merchant_id dal client autenticato via APIKeyMiddleware."""
+    """Estrae il merchant_id dal client autenticato via APIKeyMiddleware.
+
+    Fail-closed: nessun client autenticato (o un client senza client_id) è un
+    401 — mai un bucket condiviso tipo "unknown". L'unico path pubblico che
+    raggiunge un handler merchant senza client è la GET checkout (allowlist
+    GET_PUBLIC_PREFIXES), che get_payment_intent gestisce esplicitamente PRIMA
+    di chiamare questo helper.
+    """
     client = getattr(request.state, "client", None)
     if client and isinstance(client, dict):
-        return client.get("client_id", "unknown")
-    return "unknown"
+        merchant_id = client.get("client_id")
+        if merchant_id:
+            return merchant_id
+    raise HTTPException(
+        status_code=401,
+        detail={"error": "INVALID_API_KEY", "message": "Valid API key required"},
+    )
 
 
 def _get_environment(request: Request) -> str:
@@ -261,6 +273,19 @@ async def get_payment_intent(
     Il merchant può fare polling su questo endpoint per verificare
     se il pagamento è stato completato.
     """
+    # Public checkout GET: questa route è in GET_PUBLIC_PREFIXES, quindi può
+    # arrivare qui senza client autenticato (/pay polling, X-Checkout-Public).
+    # Comportamento pre-fail-closed preservato: 404 secco, nessun dato.
+    # (Il vero status pubblico per /pay è un follow-up tracciato in CLAUDE.md.)
+    if not getattr(request.state, "client", None):
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": "INTENT_NOT_FOUND",
+                "message": f"Payment intent '{intent_id}' not found",
+            },
+        )
+
     merchant_id = _get_merchant_id(request)
 
     result = await db.execute(
@@ -317,6 +342,7 @@ async def register_webhook(
 
     webhook = MerchantWebhook(
         merchant_id=merchant_id,
+        environment=_get_environment(request),
         url=payload.url,
         secret=webhook_secret,
         events=payload.events,
@@ -377,6 +403,7 @@ async def test_webhook(
             and_(
                 MerchantWebhook.id == payload.webhook_id,
                 MerchantWebhook.merchant_id == merchant_id,
+                MerchantWebhook.environment == _get_environment(request),
             )
         )
     )
