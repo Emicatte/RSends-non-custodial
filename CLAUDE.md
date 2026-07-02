@@ -46,6 +46,14 @@ flag the divergence and update this file in the same review.
   default bucket. `_get_merchant_id` raises 401 when there is no authenticated client; **no
   merchant route is public**. The only sanctioned unauthenticated read is the dedicated
   payer-facing view in `app/api/public_routes.py` (see below).
+- **One account per email (user auth).** Emails are normalized (`lower().strip()`) on EVERY
+  auth ingest path (email/password schemas, Google, GitHub) and again in the login handlers;
+  every entry path guards collisions — a second provider hitting an existing email gets
+  **409 `email_already_registered` (block-and-guide** via `AccountLinkingModal`), never a
+  second account and **never auto-linking** (explicit settings-page linking is the only merge
+  path). DB backstop: unique index `uq_users_email_lower` on `lower(email)` (User
+  `__table_args__` + migration 0007 — which reports-and-stops on pre-existing duplicates,
+  never auto-merges). The Google email-change sync also refuses to overwrite into a collision.
 - **Public (payer-facing) endpoints live in `app/api/public_routes.py` only.** Trust boundary
   rules for anything added there: access model is **id-as-secret** (the lookup key must be
   ≥128-bit CSPRNG, e.g. `intent_id = "pi_" + secrets.token_hex(16)`); single-object lookups
@@ -122,6 +130,14 @@ webhook `environment` dimension incl. outbound dispatch (migration 0006); fail-c
 verified working in production config without `RSEND_DEV_AUTH_BYPASS`). SQL-injection sweep
 verdict: parametrized everywhere (ORM/bound params; only static `SELECT 1` probes and SQLite
 PRAGMAs outside it).
+
+Closed (2026-07-03, account-linking audit): **Google double-sign-up** — email-collision guard
+added to the Google path (parity with GitHub), emails normalized on all ingest paths, the 409
+now surfaces in the frontend (`OAuthConflictListener` → `AccountLinkingModal`) instead of
+being swallowed, and `uq_users_email_lower` (migration 0007) backstops at the DB. Also fixed
+en-route: OAuth signups never set the NOT NULL `account_type` (latent 500 for every fresh
+Google/GitHub signup) — now `individual`. Still open (go-live checklist, provider consoles):
+publish the Google OAuth consent screen; configure the prod GitHub OAuth app.
 
 Closed (2026-07-03, user-auth audit remediation): **admin token separated from HMAC_SECRET**
 (dedicated `ADMIN_API_TOKEN`, constant-time compare, fail-closed when unset — see admin table

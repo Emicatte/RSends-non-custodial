@@ -11,6 +11,7 @@ Three tables:
 from datetime import datetime, timezone
 from sqlalchemy import (
     Column, String, Text, Boolean, BigInteger, Date, DateTime, TIMESTAMP, ForeignKey, Index,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB, INET
 from sqlalchemy.types import TypeDecorator, CHAR, JSON
@@ -71,6 +72,15 @@ class _JSONB(TypeDecorator):
 
 class User(Base):
     __tablename__ = "users"
+
+    # One account per email, case-insensitively, BY CONSTRUCTION: every auth
+    # entry path normalizes to lowercase and guards collisions (409
+    # block-and-guide), and this expression index is the DB backstop against
+    # a future bug/race. Mirrored by migration 0007 for existing DBs (fresh
+    # DBs — incl. all tests — get it via Base.metadata.create_all).
+    __table_args__ = (
+        Index("uq_users_email_lower", text("lower(email)"), unique=True),
+    )
 
     id = Column(_UUID(), primary_key=True)
     google_sub = Column(Text, nullable=True, unique=True, index=True)
