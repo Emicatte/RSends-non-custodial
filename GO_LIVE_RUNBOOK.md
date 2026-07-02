@@ -28,6 +28,7 @@
 | M1-A | backend `ORACLE_SIGNER_MODE=kms` + `ORACLE_KMS_KEY_ID(S)` + `setOracleSigner` su V4 | `local` | **backend NON parte in prod** se ≠ `kms` (`local`/`remote` → fail-closed) ✋ |
 | M1-B | deploy V5/V6 + `setOracleSigners` + `version:'v6'` | V4 single | single-point-of-forgery (chiave singola) |
 | M11 | `ADMIN_TOTP_SECRET` (frontend/Vercel) | vuoto | **login admin bloccato in prod (503)** se vuoto (fail-closed); bootstrap solo in dev ✋ |
+| #9 | `ADMIN_API_TOKEN` (backend, ≥32 char, ≠ HMAC_SECRET) — **da settare prima/contestualmente al deploy** su ogni ambiente che usava la vecchia convenzione `X-Admin-Token == HMAC_SECRET` | vuoto | **backend NON parte in prod** (fail-fast); il vecchio valore HMAC_SECRET è rifiutato come admin token ✋ |
 | — | `ADMIN_ALLOW_BEARER` vuoto in prod | vuoto ✅ | (Bearer no-2FA già disabilitato in prod) |
 
 ---

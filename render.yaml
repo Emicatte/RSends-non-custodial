@@ -137,6 +137,13 @@ envVarGroups:
       # ── Secrets (prod guards) ──
       - key: HMAC_SECRET            # >=32 chars; copy to Vercel HMAC_SECRET
         generateValue: true
+      # Dedicated admin bearer (X-Admin-Token) — NO LONGER HMAC_SECRET. Any
+      # environment that used the old X-Admin-Token == HMAC_SECRET convention
+      # must have this set before/with the deploy: startup FAILS in prod if
+      # it's empty, <32 chars, or equal to HMAC_SECRET. Two independent
+      # generated values are distinct by construction.
+      - key: ADMIN_API_TOKEN
+        generateValue: true
       - key: INTERNAL_PROXY_SECRET  # non-empty; copy to Vercel (same value)
         generateValue: true
       # ⚠️ AUTH_JWT_SECRET must be >=64 chars. Render generateValue may be
