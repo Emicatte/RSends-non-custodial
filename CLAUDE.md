@@ -95,6 +95,12 @@ This is what the hosted checkout `/pay` polls (via `apps/web/app/api/pay/[intent
 The merchant GET is fully authenticated — its old `GET_PUBLIC_PREFIXES` exception and the
 `X-Checkout-Public` rate-limit special case were removed when this route replaced them.
 
+Admin surface (server-to-server only; the web proxy denylists these paths):
+
+| Surface | Auth | Notes |
+|---|---|---|
+| `GET /api/v1/audit/log`, `/admin/aml/*` (4 routes), `GET /health/config` | `X-Admin-Token` == **`ADMIN_API_TOKEN`** (dedicated env var) | Single `require_admin` dependency (`audit_routes.py`): constant-time `secrets.compare_digest`, denies everything when unset. **Never reuse `HMAC_SECRET` as an auth token** — startup fails in prod if the two are equal, too short, or placeholder. |
+
 ### Known follow-ups (tracked here so they're not forgotten — do not fix as a drive-by)
 
 - **CI backend job has no Redis service** — `tests/test_api.py::test_health` and
@@ -106,7 +112,8 @@ The merchant GET is fully authenticated — its old `GET_PUBLIC_PREFIXES` except
   `HTTPException(detail={...})` responses get FastAPI-wrapped as `{detail: {...}}` — align in a
   dedicated docs/handler change.
 - **Render provisioning before go-live:** Redis must be provisioned and `DEBUG=false` set —
-  fail-closed rate limiting depends on both.
+  fail-closed rate limiting depends on both. Also set **`ADMIN_API_TOKEN`** (≥32 chars,
+  distinct from `HMAC_SECRET`) — the admin surface is fully denied without it.
 
 Closed (2026-07-02): environment filter on intent reads/mutates (PR #2, migration 0005);
 webhook `environment` dimension incl. outbound dispatch (migration 0006); fail-closed

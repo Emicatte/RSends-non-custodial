@@ -11,7 +11,8 @@
 > notify/analytics + beat via docker-compose); frontend su **Vercel** (`next build`).
 >
 > Convenzioni: `<…>` = placeholder da sostituire. Env pydantic = UPPERCASE del campo
-> (nessun prefix). Token admin = header `X-Admin-Token` con valore `= HMAC_SECRET`.
+> (nessun prefix). Token admin = header `X-Admin-Token` con valore `= ADMIN_API_TOKEN`
+> (dedicato — NON è più HMAC_SECRET).
 
 ---
 
@@ -39,8 +40,11 @@ Genera (una volta) e inserisci nei pannelli **Render** (backend) e **Vercel** (f
 # Segreto condiviso Next↔backend (H3) — DEVE essere IDENTICO sui due lati
 openssl rand -hex 32        # → INTERNAL_PROXY_SECRET
 
-# Webhook HMAC + admin token (X-Admin-Token == questo valore)
+# HMAC inbound-callback + audit chain (NON è un token di auth)
 openssl rand -hex 32        # → HMAC_SECRET
+
+# Admin bearer dedicato (X-Admin-Token == questo valore) — DIVERSO da HMAC_SECRET
+openssl rand -hex 32        # → ADMIN_API_TOKEN
 
 # Password dashboard admin
 openssl rand -hex 32        # → ADMIN_SECRET
@@ -57,6 +61,7 @@ REDIS_URL=rediss://<host>:6379/0          # TLS obbligatorio in prod
 CELERY_BROKER_URL=rediss://<host>:6379/1
 DATABASE_URL=postgresql+asyncpg://<user>:<pass>@<host>:5432/<db>   # NO "rpagos:password@"
 HMAC_SECRET=<hex32>
+ADMIN_API_TOKEN=<hex32>                   # diverso da HMAC_SECRET (startup fallisce se uguali)
 INTERNAL_PROXY_SECRET=<hex32>             # uguale a Next
 GOOGLE_OAUTH_CLIENT_ID=<...>
 AUTH_JWT_SECRET=<hex32>                    # >= 64 char
@@ -109,7 +114,7 @@ curl -s -o /dev/null -w "%{http_code}\n" \
 ### 3.2 — H6 (hardening prod)
 Già attivo con `DEBUG=false`. Verifica via endpoint admin-gated:
 ```bash
-curl -s -H "X-Admin-Token: <HMAC_SECRET>" https://<backend-host>/health/config
+curl -s -H "X-Admin-Token: <ADMIN_API_TOKEN>" https://<backend-host>/health/config
 # "environment":"production", e SIGNER_MODE/KMS coerenti
 ```
 
@@ -251,7 +256,7 @@ curl -s -X POST https://<dominio>/api/admin/2fa/setup \
 ## 7. Verifica post-deploy (smoke-test)
 
 ```bash
-DOMAIN=https://<dominio>; ADMIN="X-Admin-Token: <HMAC_SECRET>"
+DOMAIN=https://<dominio>; ADMIN="X-Admin-Token: <ADMIN_API_TOKEN>"
 
 # H1/H2/M8 — ledger anonimo negato; con admin token ok
 curl -s -o /dev/null -w "ledger anon: %{http_code}\n"  $DOMAIN/api/backend/api/v1/ledger/accounts            # 401/404

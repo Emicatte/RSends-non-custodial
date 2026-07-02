@@ -5,6 +5,7 @@ GET /api/v1/audit/log — Cursor-based paginated audit log.
 Accesso riservato ad admin (header X-Admin-Token).
 """
 
+import secrets
 from datetime import datetime
 from typing import Optional
 
@@ -46,12 +47,20 @@ class AuditLogPage(BaseModel):
 # ── Admin auth dependency ────────────────────────────────────
 
 async def require_admin(
-    x_admin_token: str = Header(..., description="Token admin per accesso audit log"),
+    x_admin_token: str = Header(..., description="Token admin (ADMIN_API_TOKEN)"),
 ) -> str:
-    """Verifica il token admin. In produzione usa un sistema di auth più robusto."""
+    """Verifica il token admin dedicato (ADMIN_API_TOKEN).
+
+    Fail-closed: se il token non è configurato, TUTTO è negato — con
+    compare_digest un header vuoto matcherebbe un setting vuoto. Confronto
+    constant-time; nessun riuso del secret HMAC globale (che resta solo per
+    l'inbound-callback e la audit chain).
+    """
     settings = get_settings()
-    expected = settings.hmac_secret  # riusa il secret HMAC come admin token
-    if x_admin_token != expected:
+    expected = settings.admin_api_token
+    if not expected or not secrets.compare_digest(
+        x_admin_token.encode(), expected.encode()
+    ):
         raise HTTPException(status_code=403, detail="Forbidden: invalid admin token")
     return x_admin_token
 

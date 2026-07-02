@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     # ── Sicurezza ─────────────────────────────────────────
     hmac_secret: str = "MUST_BE_SET_VIA_ENV_32_CHARS_MIN"
 
+    # Dedicated admin bearer (X-Admin-Token) for /api/v1/audit, /admin/aml/*,
+    # /health/config. Deliberately SEPARATE from hmac_secret (audit finding #9:
+    # one secret must not span two trust domains). Empty ⇒ admin surface is
+    # fully denied (fail-closed in require_admin).
+    admin_api_token: str = ""
+
     # Shared secret for Next.js → backend internal endpoints (/api/internal/*).
     # MUST match INTERNAL_PROXY_SECRET on the Next.js side (H3).
     internal_proxy_secret: str = ""
@@ -213,6 +219,27 @@ def validate_settings(settings: Settings) -> None:
             errors.append(
                 f"HMAC_SECRET is too short ({len(settings.hmac_secret)} chars). "
                 "Must be >= 32 characters in production."
+            )
+
+    # ── ADMIN_API_TOKEN (prod only) ───────────────────────
+    if is_prod:
+        if settings.admin_api_token in ("", "change-me-in-production-min-32-chars"):
+            errors.append(
+                "ADMIN_API_TOKEN is empty or the default placeholder. "
+                "The admin surface (/api/v1/audit, /admin/aml/*, /health/config) "
+                "is unusable without it. Set a unique secret >= 32 chars "
+                "(distinct from HMAC_SECRET)."
+            )
+        elif len(settings.admin_api_token) < 32:
+            errors.append(
+                f"ADMIN_API_TOKEN is too short ({len(settings.admin_api_token)} chars). "
+                "Must be >= 32 characters in production."
+            )
+        elif settings.admin_api_token == settings.hmac_secret:
+            errors.append(
+                "ADMIN_API_TOKEN must be DIFFERENT from HMAC_SECRET — reusing "
+                "the webhook/audit HMAC secret as the admin bearer is exactly "
+                "the coupling this token exists to remove."
             )
 
     # ── DATABASE_URL (prod only) ──────────────────────────
