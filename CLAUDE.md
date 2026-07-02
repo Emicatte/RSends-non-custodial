@@ -95,6 +95,12 @@ This is what the hosted checkout `/pay` polls (via `apps/web/app/api/pay/[intent
 The merchant GET is fully authenticated — its old `GET_PUBLIC_PREFIXES` exception and the
 `X-Checkout-Public` rate-limit special case were removed when this route replaced them.
 
+Admin surface (server-to-server only; the web proxy denylists these paths):
+
+| Surface | Auth | Notes |
+|---|---|---|
+| `GET /api/v1/audit/log`, `/admin/aml/*` (4 routes), `GET /health/config` | `X-Admin-Token` == **`ADMIN_API_TOKEN`** (dedicated env var) | Single `require_admin` dependency (`audit_routes.py`): constant-time `secrets.compare_digest`, denies everything when unset. **Never reuse `HMAC_SECRET` as an auth token** — startup fails in prod if the two are equal, too short, or placeholder. |
+
 ### Known follow-ups (tracked here so they're not forgotten — do not fix as a drive-by)
 
 - **CI backend job has no Redis service** — `tests/test_api.py::test_health` and
@@ -106,7 +112,8 @@ The merchant GET is fully authenticated — its old `GET_PUBLIC_PREFIXES` except
   `HTTPException(detail={...})` responses get FastAPI-wrapped as `{detail: {...}}` — align in a
   dedicated docs/handler change.
 - **Render provisioning before go-live:** Redis must be provisioned and `DEBUG=false` set —
-  fail-closed rate limiting depends on both.
+  fail-closed rate limiting depends on both. Also set **`ADMIN_API_TOKEN`** (≥32 chars,
+  distinct from `HMAC_SECRET`) — the admin surface is fully denied without it.
 
 Closed (2026-07-02): environment filter on intent reads/mutates (PR #2, migration 0005);
 webhook `environment` dimension incl. outbound dispatch (migration 0006); fail-closed
@@ -115,3 +122,11 @@ webhook `environment` dimension incl. outbound dispatch (migration 0006); fail-c
 verified working in production config without `RSEND_DEV_AUTH_BYPASS`). SQL-injection sweep
 verdict: parametrized everywhere (ORM/bound params; only static `SELECT 1` probes and SQLite
 PRAGMAs outside it).
+
+Closed (2026-07-03, user-auth audit remediation): **admin token separated from HMAC_SECRET**
+(dedicated `ADMIN_API_TOKEN`, constant-time compare, fail-closed when unset — see admin table
+above); **blocking logout** (`apps/web/lib/logoutClient.ts` gates client sign-out on the
+backend session revocation — never a silent half-logout); **user PII cleared on sign-out**
+(`rp_address_book`, `rsends.pendingMerge`, `rsend_antiphishing_code`, `rp_pending_queue`,
+`rp_compliance_db` — cross-logout offline-first persistence consciously traded for
+shared-device privacy).

@@ -1,12 +1,16 @@
 'use client'
 import Link from 'next/link'
-import { signOut, useSession } from 'next-auth/react'
+import { useState } from 'react'
+import { useSession } from 'next-auth/react'
 import { useLocale, useTranslations } from 'next-intl'
+import { performLogout } from '@/lib/logoutClient'
 
 export function AuthButtons() {
   const { data: session, status } = useSession()
   const t = useTranslations('auth')
   const locale = useLocale()
+  const [signingOut, setSigningOut] = useState(false)
+  const [signOutFailed, setSignOutFailed] = useState(false)
 
   if (status === 'loading') return null
 
@@ -14,23 +18,33 @@ export function AuthButtons() {
     const image = session?.user?.image
     return (
       <div className="flex items-center gap-2">
+        {signOutFailed && (
+          <span role="alert" className="text-xs text-[#C8512C]">
+            {t('signOutError')}
+          </span>
+        )}
         {image && (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={image} alt="" className="h-7 w-7 rounded-full" />
         )}
         <button
           type="button"
-          onClick={() => {
-            void signOut({ redirect: false })
-            // Best-effort backend logout (clears Redis session + cookies).
-            void fetch('/api/rp-auth/api/v1/auth/logout', {
-              method: 'POST',
-              credentials: 'include',
-            })
+          disabled={signingOut}
+          onClick={async () => {
+            setSigningOut(true)
+            setSignOutFailed(false)
+            // Blocking logout: the backend call revokes the Redis session and
+            // expires the HttpOnly cookies — client state is cleared only if
+            // that succeeds (never a silent half-logout).
+            const { ok } = await performLogout()
+            if (!ok) {
+              setSignOutFailed(true)
+              setSigningOut(false)
+            }
           }}
-          className="text-xs text-[#888780] transition-colors hover:text-[#C8512C]"
+          className="text-xs text-[#888780] transition-colors hover:text-[#C8512C] disabled:opacity-50"
         >
-          {t('signOut')}
+          {signingOut ? t('signingOut') : t('signOut')}
         </button>
       </div>
     )

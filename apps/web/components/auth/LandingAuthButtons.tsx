@@ -1,15 +1,18 @@
 "use client";
 
-import { signOut, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useTranslations, useLocale } from "next-intl";
 import Link from "next/link";
 import { useState, useRef, useEffect } from "react";
+import { performLogout } from "@/lib/logoutClient";
 
 export function LandingAuthButtons() {
   const { data: session, status } = useSession();
   const t = useTranslations("auth");
   const locale = useLocale();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutFailed, setSignOutFailed] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -110,17 +113,32 @@ export function LandingAuthButtons() {
               style={{ borderTop: "1px solid rgba(200,81,44,0.15)" }}
             />
             <button
-              onClick={() => {
-                setMenuOpen(false);
-                signOut({ callbackUrl: `/${locale}` });
+              disabled={signingOut}
+              onClick={async () => {
+                setSigningOut(true);
+                setSignOutFailed(false);
+                // Blocking logout: server session revoked first; the menu
+                // stays open and shows the error if revocation fails.
+                const { ok } = await performLogout({ callbackUrl: `/${locale}` });
+                if (!ok) {
+                  setSignOutFailed(true);
+                  setSigningOut(false);
+                } else {
+                  setMenuOpen(false);
+                }
               }}
-              className="block w-full text-left px-4 py-2 text-sm transition-colors"
+              className="block w-full text-left px-4 py-2 text-sm transition-colors disabled:opacity-50"
               style={{ color: "#2C2C2A" }}
               onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(200,81,44,0.06)")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
             >
-              {t("signOut")}
+              {signingOut ? t("signingOut") : t("signOut")}
             </button>
+            {signOutFailed && (
+              <p role="alert" className="px-4 py-1 text-xs" style={{ color: "#C8512C" }}>
+                {t("signOutError")}
+              </p>
+            )}
           </div>
         )}
       </div>

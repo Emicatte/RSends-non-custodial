@@ -99,9 +99,10 @@ export function PostLoginMerge() {
     const payload: CreateContactPayload[] = local.map(localToServer)
     void (async () => {
       const res = await bulkImportContacts(payload)
-      // Intentionally do NOT remove CONTACTS_LS_KEY: the unauth fallback in
-      // AddressIntelligence reads it after logout. Retrying on the next session
-      // is idempotent (upsert on UNIQUE(user_id, address)).
+      // CONTACTS_LS_KEY is kept during the session (retry is idempotent —
+      // upsert on UNIQUE(user_id, address)) but IS wiped on sign-out by
+      // performLogout (lib/logoutClient.ts, audit #8): shared-device privacy
+      // beats the old keep-after-logout offline fallback.
       if (!res) contactsDoneRef.current = false
     })()
   }, [status, accessToken, bulkImportContacts])

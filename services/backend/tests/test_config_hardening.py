@@ -30,6 +30,7 @@ def _prod_settings(**over):
         debug=False,
         alchemy_api_key="alch-key",
         hmac_secret="x" * 32,
+        admin_api_token="y" * 32,  # dedicated admin bearer — MUST differ from hmac_secret
         database_url="postgresql+asyncpg://u:p@db.internal/rpagos",
         alchemy_webhook_secret="whsec",
         telegram_bot_token="tg",
@@ -60,6 +61,20 @@ def test_strong_tier_runs_when_debug_false_without_ENVIRONMENT_prod(env_val):
 
 def test_short_jwt_secret_blocks_in_prod():
     s = _prod_settings(auth_jwt_secret="too-short")
+    with patch.dict(os.environ, {"ENVIRONMENT": ""}, clear=False):
+        with pytest.raises(StartupValidationError):
+            validate_settings(s)
+
+
+@pytest.mark.parametrize(
+    "bad_token",
+    ["", "change-me-in-production-min-32-chars", "short", "x" * 32],
+    ids=["empty", "placeholder", "too-short", "equals-hmac-secret"],
+)
+def test_bad_admin_api_token_blocks_in_prod(bad_token):
+    """Audit #9: the admin bearer must be set, >=32 chars, and DISTINCT from
+    the HMAC secret ('x'*32 in the stand-in) — prod startup blocks otherwise."""
+    s = _prod_settings(admin_api_token=bad_token)
     with patch.dict(os.environ, {"ENVIRONMENT": ""}, clear=False):
         with pytest.raises(StartupValidationError):
             validate_settings(s)

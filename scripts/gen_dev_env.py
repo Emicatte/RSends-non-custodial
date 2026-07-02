@@ -48,7 +48,7 @@ def _parse_env(path: Path) -> dict[str, str]:
     return out
 
 
-def _backend_template(hmac: str, jwt: str, proxy: str) -> str:
+def _backend_template(hmac: str, jwt: str, proxy: str, admin: str) -> str:
     return f"""\
 # ─────────────────────────────────────────────────────────────
 # Auto-generated local DEVELOPMENT env — DO NOT COMMIT.
@@ -77,9 +77,12 @@ WALLET_AUTH_ALLOW_LEGACY=false
 ALCHEMY_API_KEY=dev-placeholder-not-a-real-key
 
 # Dev secrets (generated). HMAC + INTERNAL_PROXY are mirrored on the Next.js side.
+# ADMIN_API_TOKEN is backend-only (X-Admin-Token bearer) and deliberately
+# distinct from HMAC_SECRET.
 HMAC_SECRET={hmac}
 AUTH_JWT_SECRET={jwt}
 INTERNAL_PROXY_SECRET={proxy}
+ADMIN_API_TOKEN={admin}
 
 # Optional integrations stay empty in dev
 GOOGLE_OAUTH_CLIENT_ID=
@@ -121,7 +124,7 @@ def main() -> None:
         skipped.append(str(BACKEND_ENV.relative_to(ROOT)))
     else:
         hmac, proxy = _gen(), _gen()
-        BACKEND_ENV.write_text(_backend_template(hmac, _gen(), proxy))
+        BACKEND_ENV.write_text(_backend_template(hmac, _gen(), proxy, _gen()))
         created.append(str(BACKEND_ENV.relative_to(ROOT)))
 
     # ── Web .env.local: reuse the backend's shared secrets ──
