@@ -5,6 +5,8 @@
     "signUp": "Registrarse",
     "logIn": "Iniciar sesión",
     "signOut": "Cerrar sesión",
+    "signingOut": "Cerrando sesión…",
+    "signOutError": "No se pudo cerrar la sesión. Inténtalo de nuevo.",
     "signInWithGoogle": "Iniciar sesión con Google",
     "saveRoute": "Guardar ruta",
     "savedRoutes": "Rutas guardadas",

@@ -4,6 +4,8 @@
     "signUp": "Sign up",
     "logIn": "Log in",
     "signOut": "Sign out",
+    "signingOut": "Signing out…",
+    "signOutError": "Sign-out failed. Please try again.",
     "signInWithGoogle": "Log in with Google",
     "saveRoute": "Save route",
     "savedRoutes": "Saved routes",

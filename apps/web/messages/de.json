@@ -5,6 +5,8 @@
     "signUp": "Registrieren",
     "logIn": "Anmelden",
     "signOut": "Abmelden",
+    "signingOut": "Abmelden…",
+    "signOutError": "Abmelden fehlgeschlagen. Bitte erneut versuchen.",
     "signInWithGoogle": "Mit Google anmelden",
     "saveRoute": "Route speichern",
     "savedRoutes": "Gespeicherte Routen",

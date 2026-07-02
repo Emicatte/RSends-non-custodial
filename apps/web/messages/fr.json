@@ -5,6 +5,8 @@
     "signUp": "S'inscrire",
     "logIn": "Se connecter",
     "signOut": "Se déconnecter",
+    "signingOut": "Déconnexion…",
+    "signOutError": "Échec de la déconnexion. Veuillez réessayer.",
     "signInWithGoogle": "Se connecter avec Google",
     "saveRoute": "Enregistrer la route",
     "savedRoutes": "Routes enregistrées",

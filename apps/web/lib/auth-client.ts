@@ -1,7 +1,7 @@
 'use client'
 
 import type { MutableRefObject } from 'react'
-import { signOut } from 'next-auth/react'
+import { performLogout } from '@/lib/logoutClient'
 
 /**
  * Authenticated API helper for calls to the RPagos backend.
@@ -43,7 +43,9 @@ export async function apiCall<T>(
         res = await fetch(`/api/backend${path}`, { ...init, headers })
       }
     } else {
-      await signOut({ redirect: false })
+      // Refresh failed ⇒ the server session is already dead (revoked/rotated
+      // away) — skipBackend: requiring a logout call here would deadlock.
+      await performLogout({ skipBackend: true })
       throw new Error('session_expired')
     }
   }

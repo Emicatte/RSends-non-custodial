@@ -4,6 +4,8 @@
     "signUp": "Registrati",
     "logIn": "Accedi",
     "signOut": "Esci",
+    "signingOut": "Disconnessione…",
+    "signOutError": "Disconnessione non riuscita. Riprova.",
     "signInWithGoogle": "Accedi con Google",
     "saveRoute": "Salva rotta",
     "savedRoutes": "Rotte salvate",
