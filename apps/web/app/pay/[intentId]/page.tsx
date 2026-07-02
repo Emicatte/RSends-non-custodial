@@ -53,6 +53,9 @@ interface RawPaymentIntent {
   matched_tx_hash?: string | null
   tx_hash?: string | null
   metadata?: Record<string, unknown> | null
+  // Public limited view (GET /api/v1/public/payment-intent): the backend
+  // derives the display name server-side; the metadata dict stays private.
+  merchant_name?: string | null
   // ── NEW non-custodial on-chain fields ───────────────────────────────────
   // The backend nests these under `onchain` (PaymentIntentResponse.onchain).
   onchain?: {
@@ -229,7 +232,11 @@ function normalizeIntent(raw: RawPaymentIntent, intentId: string): PaymentIntent
   }
 }
 
-function merchantName(meta: Record<string, unknown> | null): string {
+function merchantName(intent: PaymentIntent): string {
+  // Public limited view: server-derived display name (metadata not exposed).
+  if (intent.raw.merchant_name) return intent.raw.merchant_name
+  // Legacy shape: derive from the metadata dict if the backend sent one.
+  const meta = intent.metadata
   if (!meta) return 'RSends Payment'
   return (meta.merchant_name as string) || (meta.store_name as string) || 'RSends Payment'
 }
@@ -467,7 +474,7 @@ function PendingView({
     return () => clearInterval(id)
   }, [intent.expiresAt])
 
-  const name = merchantName(intent.metadata)
+  const name = merchantName(intent)
 
   return (
     <Card>

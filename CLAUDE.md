@@ -43,9 +43,15 @@ flag the divergence and update this file in the same review.
   window (`services/backend/app/services/webhook_service.py`). Consumers must verify before
   trusting. This is the **only** signing scheme — do not introduce another.
 - **Fail closed.** Auth/isolation fallbacks must deny (401/404), never fall into a shared or
-  default bucket. `_get_merchant_id` raises 401 when there is no authenticated client; the only
-  unauthenticated path into a merchant handler is the public checkout GET, which short-circuits
-  to a bare 404 explicitly.
+  default bucket. `_get_merchant_id` raises 401 when there is no authenticated client; **no
+  merchant route is public**. The only sanctioned unauthenticated read is the dedicated
+  payer-facing view in `app/api/public_routes.py` (see below).
+- **Public (payer-facing) endpoints live in `app/api/public_routes.py` only.** Trust boundary
+  rules for anything added there: access model is **id-as-secret** (the lookup key must be
+  ≥128-bit CSPRNG, e.g. `intent_id = "pi_" + secrets.token_hex(16)`); single-object lookups
+  only (no lists/filters — nothing enumerable); serialize an explicit allowlisted Pydantic
+  model, never the ORM object; read-only (no DB writes); per-IP rate limited; 404 on miss.
+  Must work in production config — never rely on `RSEND_DEV_AUTH_BYPASS`.
 
 ### Access-control matrix
 
@@ -79,16 +85,23 @@ Outbound webhook dispatch (`webhook_service.py`) also filters
 `MerchantWebhook.environment == intent.environment` — test endpoints never receive live
 events and vice versa.
 
+Public (unauthenticated, payer-facing) surface — `app/api/public_routes.py`:
+
+| Route | Auth | Access model | Rate limit |
+|---|---|---|---|
+| `GET /api/v1/public/payment-intent/{intent_id}` | none | id-as-secret (128-bit CSPRNG id); limited allowlisted view: `status, amount, currency, chain, expires_at, merchant_name, tx_hash, onchain`; read-only; 404 on miss | 20/min **per IP** |
+
+This is what the hosted checkout `/pay` polls (via `apps/web/app/api/pay/[intentId]/route.ts`).
+The merchant GET is fully authenticated — its old `GET_PUBLIC_PREFIXES` exception and the
+`X-Checkout-Public` rate-limit special case were removed when this route replaced them.
+
 ### Known follow-ups (tracked here so they're not forgotten — do not fix as a drive-by)
 
-- **Public checkout status GET is broken in production config.** The allowlisted
-  unauthenticated `GET /payment-intent/{id}` (what `/pay` polls via
-  `apps/web/app/api/pay/[intentId]/route.ts` with `X-Checkout-Public`) returns a bare 404 for
-  every intent — it only works in dev because `RSEND_DEV_AUTH_BYPASS=1` makes every request
-  client `"debug"`. Safe (no leak) but non-functional. Proposed fix: on unauthenticated +
-  allowlisted GET, look up by `intent_id` alone and return a **limited public status view**
-  (the route's documented intent: anyone with the link can view status) — product decision
-  pending, separate change.
+- **CI backend job has no Redis service** — `tests/test_api.py::test_health` and
+  `tests/test_circuit_breaker.py::TestExternalHealth::test_health_all_healthy` fail on every
+  CI run (`degraded != healthy`) while passing locally where Redis runs. Fix: add a `redis`
+  service container to the backend job in `.github/workflows/ci.yml`, or make the two tests
+  tolerate a degraded cache. Pre-dates all 2026-07 PRs.
 - **Error envelope inconsistency.** Middleware errors are flat `{error, message}` but route
   `HTTPException(detail={...})` responses get FastAPI-wrapped as `{detail: {...}}` — align in a
   dedicated docs/handler change.
@@ -97,5 +110,8 @@ events and vice versa.
 
 Closed (2026-07-02): environment filter on intent reads/mutates (PR #2, migration 0005);
 webhook `environment` dimension incl. outbound dispatch (migration 0006); fail-closed
-`_get_merchant_id` (401, no shared bucket). SQL-injection sweep verdict: parametrized
-everywhere (ORM/bound params; only static `SELECT 1` probes and SQLite PRAGMAs outside it).
+`_get_merchant_id` (401, no shared bucket); **public checkout status view** — `/pay` now reads
+`GET /api/v1/public/payment-intent/{id}` (id-as-secret, limited allowlist, per-IP rate limit,
+verified working in production config without `RSEND_DEV_AUTH_BYPASS`). SQL-injection sweep
+verdict: parametrized everywhere (ORM/bound params; only static `SELECT 1` probes and SQLite
+PRAGMAs outside it).

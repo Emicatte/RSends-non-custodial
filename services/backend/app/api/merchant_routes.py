@@ -59,10 +59,9 @@ def _get_merchant_id(request: Request) -> str:
     """Estrae il merchant_id dal client autenticato via APIKeyMiddleware.
 
     Fail-closed: nessun client autenticato (o un client senza client_id) è un
-    401 — mai un bucket condiviso tipo "unknown". L'unico path pubblico che
-    raggiunge un handler merchant senza client è la GET checkout (allowlist
-    GET_PUBLIC_PREFIXES), che get_payment_intent gestisce esplicitamente PRIMA
-    di chiamare questo helper.
+    401 — mai un bucket condiviso tipo "unknown". Nessuna route merchant è
+    pubblica: il checkout /pay legge dalla view limitata in
+    app/api/public_routes.py (id-as-secret), non da qui.
     """
     client = getattr(request.state, "client", None)
     if client and isinstance(client, dict):
@@ -273,19 +272,6 @@ async def get_payment_intent(
     Il merchant può fare polling su questo endpoint per verificare
     se il pagamento è stato completato.
     """
-    # Public checkout GET: questa route è in GET_PUBLIC_PREFIXES, quindi può
-    # arrivare qui senza client autenticato (/pay polling, X-Checkout-Public).
-    # Comportamento pre-fail-closed preservato: 404 secco, nessun dato.
-    # (Il vero status pubblico per /pay è un follow-up tracciato in CLAUDE.md.)
-    if not getattr(request.state, "client", None):
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error": "INTENT_NOT_FOUND",
-                "message": f"Payment intent '{intent_id}' not found",
-            },
-        )
-
     merchant_id = _get_merchant_id(request)
 
     result = await db.execute(

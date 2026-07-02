@@ -9,11 +9,10 @@ function getBackendUrl() {
  * GET /api/pay/{intentId}
  *
  * Public proxy — no auth required.
- * Forwards to GET /api/v1/merchant/payment-intent/{intentId} on the backend.
- *
- * The backend enforces merchant ownership via API key, but this checkout
- * endpoint is public: anyone with the intent link can view payment status.
- * We pass a special header to signal "public checkout" to the backend.
+ * Forwards to GET /api/v1/public/payment-intent/{intentId} on the backend:
+ * the dedicated payer-facing endpoint (id-as-secret — anyone with the intent
+ * link can view that one intent's limited, pay-relevant view). Per-IP rate
+ * limited backend-side; merchant-private fields are never returned.
  */
 export async function GET(
   _req: NextRequest,
@@ -29,13 +28,10 @@ export async function GET(
   }
 
   const backend = getBackendUrl()
-  const url = `${backend}/api/v1/merchant/payment-intent/${encodeURIComponent(intentId)}`
+  const url = `${backend}/api/v1/public/payment-intent/${encodeURIComponent(intentId)}`
 
   try {
-    const res = await fetch(url, {
-      headers: { 'X-Checkout-Public': '1' },
-      cache: 'no-store',
-    })
+    const res = await fetch(url, { cache: 'no-store' })
 
     const body = await res.json()
     return NextResponse.json(body, { status: res.status })

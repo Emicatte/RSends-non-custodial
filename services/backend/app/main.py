@@ -305,6 +305,8 @@ from app.api.price_routes import price_router
 app.include_router(price_router)
 from app.api.merchant_routes import merchant_router
 app.include_router(merchant_router)
+from app.api.public_routes import public_router  # payer-facing, id-as-secret
+app.include_router(public_router)
 from app.api.health_routes import health_router
 app.include_router(health_router)
 from app.api.ratelimit_routes import ratelimit_router

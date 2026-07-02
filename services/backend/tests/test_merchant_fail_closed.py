@@ -7,10 +7,9 @@ shared one merchant bucket instead of being denied.
 
 Two behaviors pinned here:
 1. An absent or malformed client on an authenticated route → 401 (fail-closed).
-2. The public checkout GET (`/api/v1/merchant/payment-intent/{id}` is in
-   GET_PUBLIC_PREFIXES and legitimately reaches the handler unauthenticated)
-   keeps its exact pre-existing behavior: 404, revealing nothing. This test
-   guards the fail-closed change from breaking the public /pay path.
+2. NO merchant route is public: the merchant GET denies unauthenticated calls
+   too (the /pay hosted checkout reads the limited id-as-secret view in
+   app/api/public_routes.py instead — see tests/test_public_intent_view.py).
 
 Direct-handler tests, same style as tests/test_merchant_env_isolation.py.
 """
@@ -99,12 +98,13 @@ async def test_malformed_client_denied_401(session):
         assert exc.value.status_code == 401, f"client={broken!r}"
 
 
-# ── public checkout GET: behavior preserved, no leak ─────────
+# ── merchant GET: fully fail-closed, no unauthenticated read ──
 
 @pytest.mark.asyncio
-async def test_public_get_intent_stays_404_without_leak(session):
-    """The allowlisted unauthenticated GET must keep returning a bare 404
-    (today's behavior) — not 401, and never the intent data."""
+async def test_unauth_merchant_get_denied_401(session):
+    """The merchant GET is no longer on the public allowlist — an
+    unauthenticated call fails closed (401) and leaks nothing. The public
+    read is app/api/public_routes.py, id-as-secret."""
     intent = _live_intent()
     session.add(intent)
     await session.commit()
@@ -112,8 +112,8 @@ async def test_public_get_intent_stays_404_without_leak(session):
     with pytest.raises(HTTPException) as exc:
         await get_payment_intent(intent.intent_id, _unauth_req(), db=session)
 
-    assert exc.value.status_code == 404
-    assert exc.value.detail["error"] == "INTENT_NOT_FOUND"
+    assert exc.value.status_code == 401
+    assert exc.value.detail["error"] == "INVALID_API_KEY"
     # No leak: nothing about the (existing) intent in the error payload.
     assert intent.merchant_id not in str(exc.value.detail)
     assert str(intent.amount) not in str(exc.value.detail)
