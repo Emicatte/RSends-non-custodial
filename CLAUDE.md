@@ -122,3 +122,11 @@ webhook `environment` dimension incl. outbound dispatch (migration 0006); fail-c
 verified working in production config without `RSEND_DEV_AUTH_BYPASS`). SQL-injection sweep
 verdict: parametrized everywhere (ORM/bound params; only static `SELECT 1` probes and SQLite
 PRAGMAs outside it).
+
+Closed (2026-07-03, user-auth audit remediation): **admin token separated from HMAC_SECRET**
+(dedicated `ADMIN_API_TOKEN`, constant-time compare, fail-closed when unset — see admin table
+above); **blocking logout** (`apps/web/lib/logoutClient.ts` gates client sign-out on the
+backend session revocation — never a silent half-logout); **user PII cleared on sign-out**
+(`rp_address_book`, `rsends.pendingMerge`, `rsend_antiphishing_code`, `rp_pending_queue`,
+`rp_compliance_db` — cross-logout offline-first persistence consciously traded for
+shared-device privacy).

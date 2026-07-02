@@ -96,3 +96,54 @@ it('forwards callbackUrl to signOut on success', async () => {
 
   expect(signOutMock).toHaveBeenCalledWith({ callbackUrl: '/en' })
 })
+
+// ── PII clearing on sign-out (audit finding #8) ──────────────
+// On a shared device a logged-out user's address book / fiscal records must
+// not stay readable. Clearing consciously trades away cross-logout
+// offline-first persistence.
+
+const PII_KEYS = [
+  'rp_address_book',
+  'rsends.pendingMerge',
+  'rsend_antiphishing_code',
+  'rp_pending_queue',
+  'rp_compliance_db',
+]
+
+function seedStorage() {
+  for (const key of PII_KEYS) localStorage.setItem(key, '[{"pii":true}]')
+  localStorage.setItem('rs_cg_prices', '{"eth":1}') // non-PII cache — must survive
+}
+
+it('clears user PII from localStorage after a successful logout', async () => {
+  mockFetchSequence(async () => ({ ok: true, status: 200 }))
+  seedStorage()
+
+  const result = await performLogout()
+
+  expect(result.ok).toBe(true)
+  for (const key of PII_KEYS) expect(localStorage.getItem(key)).toBeNull()
+  expect(localStorage.getItem('rs_cg_prices')).toBe('{"eth":1}')
+})
+
+it('clears user PII on the skipBackend (expired-session) path too', async () => {
+  mockFetchSequence()
+  seedStorage()
+
+  await performLogout({ skipBackend: true })
+
+  for (const key of PII_KEYS) expect(localStorage.getItem(key)).toBeNull()
+})
+
+it('does NOT clear PII when the backend logout fails (user is still signed in)', async () => {
+  mockFetchSequence(
+    async () => ({ ok: false, status: 503 }),
+    async () => ({ ok: false, status: 503 }),
+  )
+  seedStorage()
+
+  const result = await performLogout()
+
+  expect(result.ok).toBe(false)
+  for (const key of PII_KEYS) expect(localStorage.getItem(key)).not.toBeNull()
+})
