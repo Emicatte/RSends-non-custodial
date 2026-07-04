@@ -21,7 +21,7 @@ from hashlib import sha256
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -163,17 +163,53 @@ async def google_login(
         status = 503 if e.code == "server_misconfigured" else 401
         raise HTTPException(status_code=status, detail={"code": e.code, "message": str(e)})
 
+    # One account per lowercase email: normalized here IN THE HANDLER (not
+    # only in the verifier) so the guard and the stored value can't drift if
+    # the service layer ever regresses.
+    normalized_email = (google_user.email or "").strip().lower()
+
     # ── Upsert user ──
     res = await db.execute(select(User).where(User.google_sub == google_user.sub))
     user = res.scalar_one_or_none()
 
     is_new_user = user is None
     if user is None:
+        # Account linking guard (parity with the GitHub path below): if the
+        # email is already bound to another sign-in method, refuse — 409,
+        # block-and-guide. No auto-linking; explicit settings-page linking is
+        # the only merge path. func.lower() keeps the guard case-blind even
+        # against legacy mixed-case rows.
+        email_res = await db.execute(
+            select(User).where(func.lower(User.email) == normalized_email)
+        )
+        collision = email_res.scalar_one_or_none()
+        if collision is not None:
+            await record_auth_event(
+                event_type="login_failure",
+                user_id=str(collision.id),
+                ip_address=ip, user_agent=ua,
+                correlation_id=correlation_id,
+                details={
+                    "code": "email_already_registered",
+                    "google_sub": google_user.sub,
+                },
+            )
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "email_already_registered",
+                    "message": "This email is already registered with another sign-in method",
+                },
+            )
+
         user = User(
             id=str(uuid4()),
             google_sub=google_user.sub,
-            email=google_user.email,
+            email=normalized_email,
             email_verified=google_user.email_verified,
+            # OAuth signups have no account-type chooser (that's the
+            # email/password form); they onboard as individuals.
+            account_type="individual",
             display_name=google_user.name,
             avatar_url=google_user.picture,
             locale=google_user.locale,
@@ -197,7 +233,24 @@ async def google_login(
             )
         user.last_login_at = datetime.now(timezone.utc)
         user.last_login_ip = ip
-        user.email = google_user.email
+        # Email sync guard: the Google account's email can change upstream.
+        # If the NEW address already belongs to ANOTHER user, keep the stored
+        # one — overwriting would violate uq_users_email_lower (500) and
+        # effectively absorb the other account's address. Login still works.
+        if normalized_email != (user.email or "").lower():
+            other = await db.execute(
+                select(User).where(
+                    func.lower(User.email) == normalized_email,
+                    User.id != user.id,
+                )
+            )
+            if other.scalar_one_or_none() is None:
+                user.email = normalized_email
+            else:
+                log.warning(
+                    "google_email_sync_skipped_collision",
+                    extra={"user_id": str(user.id)},
+                )
         user.display_name = google_user.name
         user.avatar_url = google_user.picture
         user.locale = google_user.locale
@@ -302,6 +355,10 @@ async def github_login(
             detail={"code": f"github_{e.code}", "message": e.detail},
         )
 
+    # Normalized in the handler (see google_login) — the guard and the stored
+    # value must not depend on the service layer's casing.
+    normalized_email = (profile.email or "").strip().lower()
+
     # ── Lookup by github_sub first ──
     res = await db.execute(select(User).where(User.github_sub == profile.sub))
     user = res.scalar_one_or_none()
@@ -309,9 +366,10 @@ async def github_login(
     is_new_user = user is None
     if user is None:
         # Account linking guard: if email already bound to another provider,
-        # refuse. Multi-provider merge is out of scope (Prompt 15+).
+        # refuse (409, block-and-guide — no auto-merge). func.lower() keeps
+        # the guard case-blind even against legacy mixed-case rows.
         email_res = await db.execute(
-            select(User).where(User.email == profile.email)
+            select(User).where(func.lower(User.email) == normalized_email)
         )
         collision = email_res.scalar_one_or_none()
         if collision is not None:
@@ -338,9 +396,11 @@ async def github_login(
             id=str(uuid4()),
             github_sub=profile.sub,
             github_username=profile.username,
-            email=profile.email,
+            email=normalized_email,
             email_verified=True,
             email_verified_at=datetime.now(timezone.utc),
+            # OAuth signups have no account-type chooser — see Google path.
+            account_type="individual",
             display_name=profile.display_name or profile.username,
             avatar_url=profile.avatar_url,
             last_login_at=datetime.now(timezone.utc),

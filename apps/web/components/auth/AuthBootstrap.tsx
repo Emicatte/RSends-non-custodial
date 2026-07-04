@@ -1,7 +1,8 @@
 'use client'
 
-import { useSession } from 'next-auth/react'
+import { signOut, useSession } from 'next-auth/react'
 import { useEffect, useRef } from 'react'
+import { exchangeOAuthToken, OAUTH_CONFLICT_EVENT } from '@/lib/oauthExchange'
 
 /**
  * After NextAuth completes an OAuth redirect (Google or GitHub), the
@@ -12,6 +13,13 @@ import { useEffect, useRef } from 'react'
  *
  *   Google → `id_token` → POST /api/v1/auth/google
  *   GitHub → `github_access_token` → POST /api/v1/auth/github
+ *
+ * Collision (409 email_already_registered — the email already belongs to an
+ * account with another sign-in method): block-and-guide. The NextAuth
+ * half-session is discarded (no backend account exists for it) and a
+ * `rsends:oauth-conflict` event is dispatched; OAuthConflictListener (inside
+ * the locale tree, where the i18n context lives) shows AccountLinkingModal.
+ * This component sits OUTSIDE NextIntlClientProvider, hence the event.
  */
 export function AuthBootstrap() {
   const { data: session, update } = useSession()
@@ -26,6 +34,7 @@ export function AuthBootstrap() {
       id_token?: string
       github_access_token?: string
       access_token?: string
+      user?: { email?: string | null }
     } | null
     const idToken = s?.id_token
     const githubAccessToken = s?.github_access_token
@@ -41,22 +50,27 @@ export function AuthBootstrap() {
         const endpoint = idToken
           ? '/api/rp-auth/api/v1/auth/google'
           : '/api/rp-auth/api/v1/auth/github'
-        const body = idToken
+        const body: Record<string, string> = idToken
           ? { id_token: idToken }
-          : { access_token: githubAccessToken }
-        const res = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-          credentials: 'include',
-        })
-        if (!res.ok) return
-        const data = (await res.json()) as { access_token?: string }
-        if (!data.access_token) return
+          : { access_token: githubAccessToken! }
+
+        const result = await exchangeOAuthToken(endpoint, body)
+
+        if (result.status === 'conflict') {
+          // Don't retry this token, drop the half-session, guide the user.
+          processedTokens.current.add(key)
+          window.dispatchEvent(
+            new CustomEvent(OAUTH_CONFLICT_EVENT, {
+              detail: { email: s?.user?.email ?? '' },
+            }),
+          )
+          await signOut({ redirect: false })
+          return
+        }
+        if (result.status !== 'ok') return // transport error: next sign-in retries
+
         processedTokens.current.add(key)
-        await update({ access_token: data.access_token })
-      } catch {
-        /* swallow: the next sign-in attempt will retry */
+        await update({ access_token: result.accessToken })
       } finally {
         exchanging.current = false
       }

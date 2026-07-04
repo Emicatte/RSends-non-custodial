@@ -151,7 +151,10 @@ async def verify_google_id_token(
 
     return GoogleUserInfo(
         sub=claims["sub"],
-        email=claims["email"],
+        # Normalized on ingest: one account per lowercase email — every other
+        # entry path (email/password schemas, GitHub service) already lowers,
+        # and the collision guards + uq_users_email_lower index rely on it.
+        email=claims["email"].strip().lower(),
         email_verified=bool(claims["email_verified"]),
         name=claims.get("name"),
         picture=claims.get("picture"),
@@ -338,10 +341,11 @@ def peek_unverified_email(id_token_str: str) -> Optional[str]:
     Returns None if the token is malformed.
     """
     try:
-        return jwt.decode(
+        email = jwt.decode(
             id_token_str,
             options={"verify_signature": False, "verify_aud": False, "verify_exp": False},
             algorithms=["RS256", "HS256"],
         ).get("email")
+        return email.strip().lower() if isinstance(email, str) else None
     except Exception:
         return None
