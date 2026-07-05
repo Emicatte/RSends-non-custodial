@@ -1319,5 +1319,74 @@
       "pricing": "See pricing →",
       "secondary": "Open the app"
     }
+  },
+  "vision": {
+    "eyebrow": "VISION",
+    "title": "Eine Zahlung sollte Geld bewegen, nicht festhalten.",
+    "body1": "Die meisten Zahlungsanbieter stehen zwischen dir und deinem Geld. Dein Kunde zahlt an sie, sie halten das Guthaben, und irgendwann zahlen sie an dich. In dieser Lücke wohnen Auszahlungsverzögerungen und eingefrorene Konten.",
+    "body2": "RSends beseitigt diese Lücke. Wenn ein Kunde zahlt, sendet ein Smart Contract das Geld an deine Wallet und zieht unsere Gebühr in derselben Transaktion ein. Der Contract wird einmal deployt, kann nicht aktualisiert werden, und nichts in ihm kann ein Guthaben halten. Wir könnten dein Geld nicht anfassen, selbst wenn wir wollten.",
+    "body3": "Wir wollen, dass das Akzeptieren eines Stablecoins so alltäglich ist wie das Akzeptieren einer Karte.",
+    "pullLine": "Das Geld gehört dir in der Sekunde, in der der Block bestätigt ist.",
+    "cards": [
+      {
+        "title": "Direkte Abwicklung",
+        "body": "Die Wallet deines Kunden zahlt in einer einzigen Transaktion an deine Wallet. Die Gebühr wird im selben Schritt abgezogen."
+      },
+      {
+        "title": "Non-custodial by Design",
+        "body": "Der Contract kann keine Gelder halten, und wir auch nicht. Es gibt kein Guthaben, das eingefroren werden könnte."
+      },
+      {
+        "title": "Für Entwickler gebaut",
+        "body": "Erstelle eine Rechnung über das Dashboard oder die API. Ein Webhook meldet deinem System, wenn die Zahlung eingeht."
+      }
+    ],
+    "timeline": [
+      {
+        "label": "Projektstart"
+      },
+      {
+        "label": "Öffentliche Testnet-Demo"
+      },
+      {
+        "label": "Händler-Integrationen"
+      }
+    ],
+    "crossLink": "Lerne das Team kennen"
+  },
+  "team": {
+    "eyebrow": "TEAM",
+    "title": "RSends sind zwei Personen.",
+    "body1": "Emilio schreibt den Code. Stefano unterschreibt die Verträge.",
+    "body2": "Die naheliegende Frage ist, ob man einem so kleinen Unternehmen Zahlungen anvertrauen kann. Unsere Antwort: Du solltest uns überhaupt nicht vertrauen müssen. Der Contract, der deine Zahlungen abwickelt, kann nicht aktualisiert werden, und nichts in ihm kann den Anteil des Händlers anrühren. Jede Abwicklung ist öffentlich auf BaseScan.",
+    "body3": "Ein großer Zahlungsabwickler bittet dich, seiner Bilanz zu vertrauen. Wir bitten dich, einen Contract zu lesen.",
+    "profiles": [
+      {
+        "bio": "Hat die Plattform von Ende zu Ende gebaut, vom Solidity-Contract bis zur Checkout-Seite."
+      },
+      {
+        "bio": "Verantwortet die gesellschaftsrechtliche Seite von RPagos S.R.L. und die Händlerbeziehungen."
+      }
+    ],
+    "philosophyLabel": "UNSERE PHILOSOPHIE",
+    "philosophy": [
+      {
+        "title": "Sicherheit zuerst",
+        "body": "Wir liefern ein Feature erst aus, wenn wir verstehen, wie es fehlschlägt."
+      },
+      {
+        "title": "Transparenz",
+        "body": "Jede Abwicklung ist öffentlich. Du kannst unsere Aussagen auf BaseScan prüfen, statt uns beim Wort zu nehmen."
+      },
+      {
+        "title": "Vorhersehbarkeit",
+        "body": "Die API tut jedes Mal dasselbe, und die Gebühr, die dir angezeigt wird, ist die Gebühr, die der Contract berechnet."
+      },
+      {
+        "title": "Langfristig",
+        "body": "Zahlungsinfrastruktur zählt nur, wenn sie in fünf Jahren noch läuft. Dafür bauen wir."
+      }
+    ],
+    "crossLink": "Lies die Vision"
   }
 }
