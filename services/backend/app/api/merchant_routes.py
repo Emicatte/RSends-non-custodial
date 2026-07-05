@@ -40,6 +40,7 @@ from app.services.audit_service import log_event
 from app.services.router_registry import (
     derive_invoice_id,
     build_onchain_payment,
+    chain_is_supported,
     token_is_enabled,
 )
 from app.services.key_usage_service import increment_intent_count, check_monthly_limits
@@ -150,9 +151,19 @@ async def create_payment_intent(
     env = client.get("environment", "live") if client else "live"
 
     # Environment enforcement: test keys ↔ testnet, live keys ↔ mainnet
-    TESTNET_CHAINS = {"base_sepolia", "sepolia", "goerli", "nile", "shasta", "devnet"}
-    MAINNET_CHAINS = {"base", "ethereum", "eth", "arbitrum", "optimism", "polygon", "bnb", "avalanche", "tron", "solana"}
+    TESTNET_CHAINS = {"base_sepolia", "sepolia", "goerli", "devnet"}
+    MAINNET_CHAINS = {"base", "ethereum", "eth", "arbitrum", "optimism", "polygon", "bnb", "avalanche", "solana"}
     requested_chain = (payload.chain or "base").lower()
+
+    # Categorical settlement gate: a chain that doesn't canonicalize into the
+    # token registry has no settlement path at all (no tokens, no router, no
+    # indexer). Reject before the env-binding check — the verdict must not
+    # depend on the key's environment.
+    if not chain_is_supported(requested_chain):
+        raise HTTPException(400, {
+            "error": "UNSUPPORTED_CHAIN",
+            "message": f"Unsupported chain for settlement: {requested_chain}.",
+        })
 
     if env == "test" and requested_chain in MAINNET_CHAINS:
         raise HTTPException(400, {

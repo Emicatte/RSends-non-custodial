@@ -155,6 +155,12 @@ def fee_policy_for(chain: str, currency: str) -> Optional[dict]:
     return FEE_POLICY.get(name, {}).get((currency or "").upper())
 
 
+def chain_is_supported(chain: str) -> bool:
+    """True iff the chain canonicalizes into the token registry — i.e. the
+    system has any settlement path for it at all (tokens, router, indexer)."""
+    return _canonical_chain(chain) is not None
+
+
 def token_is_enabled(chain: str, currency: str) -> bool:
     """True iff (chain, currency) is in the registry AND policy enabled is true."""
     pol = fee_policy_for(chain, currency)
