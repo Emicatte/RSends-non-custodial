@@ -1318,5 +1318,74 @@
       "pricing": "See pricing →",
       "secondary": "Open the app"
     }
+  },
+  "vision": {
+    "eyebrow": "VISION",
+    "title": "A payment should move money, not hold it.",
+    "body1": "Most payment providers sit between you and your money. Your customer pays them, they hold the balance, and at some point they pay you. That gap is where settlement delays and frozen accounts live.",
+    "body2": "RSends removes the gap. When a customer pays, a smart contract sends the money to your wallet and takes our fee inside the same transaction. The contract is deployed once, it can't be upgraded, and nothing in it can hold a balance. We couldn't touch your money if we wanted to.",
+    "body3": "We want accepting a stablecoin to feel as ordinary as accepting a card.",
+    "pullLine": "The money is yours the second the block confirms.",
+    "cards": [
+      {
+        "title": "Direct settlement",
+        "body": "Your customer's wallet pays your wallet in one transaction. The fee comes out in the same step."
+      },
+      {
+        "title": "Non-custodial by design",
+        "body": "The contract can't hold funds and neither can we. There is no balance to freeze."
+      },
+      {
+        "title": "Built for developers",
+        "body": "Create an invoice from the dashboard or the API. A webhook tells your system when the payment lands."
+      }
+    ],
+    "timeline": [
+      {
+        "label": "Project started"
+      },
+      {
+        "label": "Public testnet demo"
+      },
+      {
+        "label": "Merchant integrations"
+      }
+    ],
+    "crossLink": "Meet the team"
+  },
+  "team": {
+    "eyebrow": "TEAM",
+    "title": "RSends is two people.",
+    "body1": "Emilio writes the code. Stefano signs the contracts.",
+    "body2": "The obvious question is whether a company this small can be trusted with payments. Our answer is that you shouldn't have to trust us at all. The contract that settles your payments can't be upgraded, and nothing in it can touch the merchant's share of a payment. Every settlement is public on BaseScan.",
+    "body3": "A large processor asks you to trust its balance sheet. We ask you to read a contract.",
+    "profiles": [
+      {
+        "bio": "Built the platform end to end, from the Solidity contract to the checkout page."
+      },
+      {
+        "bio": "Runs the corporate side of RPagos S.R.L. and the merchant relationships."
+      }
+    ],
+    "philosophyLabel": "OUR PHILOSOPHY",
+    "philosophy": [
+      {
+        "title": "Security first",
+        "body": "We ship a feature once we understand how it fails."
+      },
+      {
+        "title": "Transparency",
+        "body": "Every settlement is public. You can check our claims on BaseScan instead of taking our word."
+      },
+      {
+        "title": "Predictability",
+        "body": "The API does the same thing every time, and the fee you see quoted is the fee the contract charges."
+      },
+      {
+        "title": "Long term",
+        "body": "Payment infrastructure only matters if it's still running in five years. We build for that."
+      }
+    ],
+    "crossLink": "Read the vision"
   }
 }

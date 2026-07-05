@@ -1318,5 +1318,74 @@
       "pricing": "See pricing →",
       "secondary": "Open the app"
     }
+  },
+  "vision": {
+    "eyebrow": "VISIONE",
+    "title": "Un pagamento dovrebbe muovere i soldi, non trattenerli.",
+    "body1": "La maggior parte dei fornitori di pagamento si mette tra te e i tuoi soldi. Il tuo cliente paga loro, loro trattengono il saldo e a un certo punto pagano te. In quello spazio vivono i ritardi di liquidazione e i conti congelati.",
+    "body2": "RSends elimina quello spazio. Quando un cliente paga, uno smart contract invia i soldi al tuo wallet e preleva la nostra fee nella stessa transazione. Il contratto viene deployato una sola volta, non può essere aggiornato e niente al suo interno può trattenere un saldo. Non potremmo toccare i tuoi soldi nemmeno volendo.",
+    "body3": "Vogliamo che accettare una stablecoin sia normale quanto accettare una carta.",
+    "pullLine": "I soldi sono tuoi nel secondo in cui il blocco viene confermato.",
+    "cards": [
+      {
+        "title": "Liquidazione diretta",
+        "body": "Il wallet del tuo cliente paga il tuo wallet in un'unica transazione. La fee viene prelevata nello stesso passaggio."
+      },
+      {
+        "title": "Non-custodial by design",
+        "body": "Il contratto non può trattenere fondi e nemmeno noi. Non c'è nessun saldo da congelare."
+      },
+      {
+        "title": "Fatto per gli sviluppatori",
+        "body": "Crea una fattura dalla dashboard o dall'API. Un webhook avvisa il tuo sistema quando il pagamento arriva."
+      }
+    ],
+    "timeline": [
+      {
+        "label": "Avvio del progetto"
+      },
+      {
+        "label": "Demo pubblica su testnet"
+      },
+      {
+        "label": "Integrazioni merchant"
+      }
+    ],
+    "crossLink": "Conosci il team"
+  },
+  "team": {
+    "eyebrow": "TEAM",
+    "title": "RSends è due persone.",
+    "body1": "Emilio scrive il codice. Stefano firma i contratti.",
+    "body2": "La domanda ovvia è se un'azienda così piccola possa essere affidabile per i pagamenti. La nostra risposta è che non dovresti doverti fidare di noi affatto. Il contratto che liquida i tuoi pagamenti non può essere aggiornato e niente al suo interno può toccare la quota del merchant. Ogni liquidazione è pubblica su BaseScan.",
+    "body3": "Un grande processore ti chiede di fidarti del suo bilancio. Noi ti chiediamo di leggere un contratto.",
+    "profiles": [
+      {
+        "bio": "Ha costruito la piattaforma da cima a fondo, dal contratto Solidity alla pagina di checkout."
+      },
+      {
+        "bio": "Gestisce la parte societaria di RPagos S.R.L. e le relazioni con i merchant."
+      }
+    ],
+    "philosophyLabel": "LA NOSTRA FILOSOFIA",
+    "philosophy": [
+      {
+        "title": "Prima la sicurezza",
+        "body": "Rilasciamo una funzionalità solo quando capiamo come fallisce."
+      },
+      {
+        "title": "Trasparenza",
+        "body": "Ogni liquidazione è pubblica. Puoi verificare le nostre affermazioni su BaseScan invece di crederci sulla parola."
+      },
+      {
+        "title": "Prevedibilità",
+        "body": "L'API fa la stessa cosa ogni volta, e la fee che vedi indicata è la fee che il contratto applica."
+      },
+      {
+        "title": "Lungo periodo",
+        "body": "L'infrastruttura di pagamento conta solo se funziona ancora tra cinque anni. Costruiamo per questo."
+      }
+    ],
+    "crossLink": "Leggi la visione"
   }
 }

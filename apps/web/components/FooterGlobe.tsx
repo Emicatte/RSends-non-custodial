@@ -581,7 +581,7 @@ function SparkleIcon() {
 //  FOOTER LINK COLUMNS
 // ═══════════════════════════════════════════════════════════
 
-const COLUMNS = [
+export const COLUMNS = [
   { title: 'Product', links: [
     { label: 'How it works', href: '/how-it-works' },
     { label: 'Get started',  href: '#get-started' },
@@ -594,6 +594,8 @@ const COLUMNS = [
     { label: 'Ethereum status',    href: 'https://ethstats.dev' },
   ]},
   { title: 'Company', links: [
+    { label: 'Vision',  href: '/vision' },
+    { label: 'Team',    href: '/team' },
     { label: 'Contact', href: 'mailto:support@rsends.com' },
     { label: 'Terms',   href: '/docs/terms' },
     { label: 'Privacy', href: '/docs/privacy' },
