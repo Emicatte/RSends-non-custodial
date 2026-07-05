@@ -1,4 +1,9 @@
 {
+  "nav": {
+    "howItWorks": "Come funziona",
+    "pricing": "Prezzi",
+    "vision": "Visione"
+  },
   "auth": {
     "signIn": "Accedi",
     "signUp": "Registrati",
