@@ -1350,13 +1350,19 @@
     ],
     "timeline": [
       {
-        "label": "Project started"
+        "label": "PHASE 01",
+        "title": "Built",
+        "body": "The router contract is deployed and immutable. Its source is verified on BaseScan, so anyone can read exactly how a payment is split."
       },
       {
-        "label": "Public testnet demo"
+        "label": "PHASE 02",
+        "title": "Live on testnet",
+        "body": "Real payments run through the contract on Base Sepolia today. Every settlement is a public transaction you can open and check."
       },
       {
-        "label": "Merchant integrations"
+        "label": "NEXT",
+        "title": "Merchant integrations",
+        "body": "The next step is onboarding the first merchants and wiring their API and webhook flow."
       }
     ],
     "crossLink": "Meet the team"

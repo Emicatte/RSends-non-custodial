@@ -18,13 +18,34 @@ type PageProps = { params: Promise<{ locale: string }> }
 const HPAD = 'clamp(20px, 6vw, 96px)'
 const CONTAINER = 1160
 
-// Timeline years are DM Mono figures rendered identically in every locale;
-// only the labels are translated.
-const TIMELINE_YEARS = [
-  { year: '2025', accent: false },
-  { year: '2026', accent: false },
-  { year: 'NEXT', accent: true },
-] as const
+// Phase labels/titles/bodies come from vision.timeline; only the accent
+// (terracotta NEXT node) is structural.
+const TIMELINE_PHASES = [{ accent: false }, { accent: false }, { accent: true }] as const
+
+// Mirrors team/page.tsx (pages can't import from pages). Every locale keeps
+// the literal "BaseScan" in the phase-01 body so the split anchors it.
+const ROUTER_ADDRESS = '0x2Ec353815F2Cd382628d0D399F8d80959C1758CA'
+const CONTRACT_URL = `https://sepolia.basescan.org/address/${ROUTER_ADDRESS}`
+
+function linkifyBaseScan(text: string) {
+  const parts = text.split('BaseScan')
+  return parts.flatMap((part, i) =>
+    i === 0
+      ? [part]
+      : [
+          <a
+            key={i}
+            href={CONTRACT_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: C.text, textDecoration: 'none', borderBottom: `1px solid ${C.border}` }}
+          >
+            BaseScan
+          </a>,
+          part,
+        ],
+  )
+}
 
 const container: React.CSSProperties = {
   maxWidth: CONTAINER,
@@ -47,7 +68,7 @@ export default async function VisionPage({ params }: PageProps) {
   const tHiw = await getTranslations({ locale, namespace: 'howItWorks' })
 
   const cards = t.raw('cards') as { title: string; body: string }[]
-  const timeline = t.raw('timeline') as { label: string }[]
+  const timeline = t.raw('timeline') as { label: string; title: string; body: string }[]
 
   return (
     <main style={{ background: C.bg }}>
@@ -72,7 +93,18 @@ export default async function VisionPage({ params }: PageProps) {
           aria-hidden="true"
           style={{ position: 'absolute', inset: 0, background: 'rgba(10,10,12,0.50)', zIndex: 1 }}
         />
-        <div style={{ ...container, position: 'relative', zIndex: 2, padding: `0 ${HPAD}` }}>
+        <div
+          style={{
+            ...container,
+            position: 'relative',
+            zIndex: 2,
+            padding: `0 ${HPAD}`,
+            // Static offset: optical anchor sits ~56% down instead of dead
+            // center. Applied identically SSR/client, outside the typewriter's
+            // sizing ghost, so the type cycle stays CLS-free.
+            marginTop: 'clamp(40px, 12vh, 120px)',
+          }}
+        >
           {/* Three levels, left-aligned: eyebrow / typed headline / subline */}
           <div style={{ maxWidth: 640 }}>
             <div
@@ -188,12 +220,12 @@ export default async function VisionPage({ params }: PageProps) {
         </ScrubCascade>
       </section>
 
-      {/* ── Timeline — full-width rail, 3 nodes, NEXT in terracotta ───── */}
+      {/* ── Phase timeline — 3 cards on a rail, NEXT in terracotta ────── */}
       <section style={{ ...container, padding: `clamp(48px, 8vh, 96px) ${HPAD} clamp(28px, 5vh, 56px)` }}>
         {/* Continuous rail across the container; vertical rail under 480px.
             Inline styles can't express the breakpoint, so the rule lives with
             the page. The rail is not a .rs-card, so ScrubCascade leaves it
-            static while the nodes cascade. */}
+            static while dot + card cascade together per phase. */}
         <style>{`
           .rs-vision-timeline { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(20px, 3vw, 36px); }
           .rs-vision-timeline-rail { position: absolute; top: 5px; left: 0; right: 0; height: 1px; background: ${C.border}; }
@@ -208,8 +240,8 @@ export default async function VisionPage({ params }: PageProps) {
         `}</style>
         <ScrubCascade className="rs-vision-timeline">
           <div className="rs-vision-timeline-rail" aria-hidden="true" />
-          {TIMELINE_YEARS.map((node, i) => (
-            <div key={node.year} className="rs-card rs-vision-tl-item">
+          {TIMELINE_PHASES.map((node, i) => (
+            <div key={timeline[i]?.label ?? i} className="rs-card rs-vision-tl-item">
               <div
                 aria-hidden="true"
                 className="rs-vision-tl-dot"
@@ -217,18 +249,41 @@ export default async function VisionPage({ params }: PageProps) {
               />
               <div
                 style={{
-                  fontFamily: C.M,
-                  fontSize: 14,
-                  fontWeight: 500,
-                  letterSpacing: '0.14em',
-                  color: node.accent ? C.purple : C.text,
-                  marginBottom: 10,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 16,
+                  background: C.surface,
+                  padding: 'clamp(24px, 3.5vw, 36px)',
+                  height: '100%',
                 }}
               >
-                {node.year}
-              </div>
-              <div style={{ fontFamily: C.D, fontSize: 15, lineHeight: 1.5, color: C.sub, maxWidth: 300 }}>
-                {timeline[i]?.label}
+                <div
+                  style={{
+                    fontFamily: C.M,
+                    fontSize: 13,
+                    fontWeight: 500,
+                    letterSpacing: '0.14em',
+                    textTransform: 'uppercase',
+                    color: node.accent ? C.purple : C.text,
+                    marginBottom: 12,
+                  }}
+                >
+                  {timeline[i]?.label}
+                </div>
+                <h2
+                  style={{
+                    fontFamily: C.D,
+                    fontSize: 18,
+                    fontWeight: 500,
+                    color: C.text,
+                    letterSpacing: '-0.01em',
+                    margin: '0 0 10px',
+                  }}
+                >
+                  {timeline[i]?.title}
+                </h2>
+                <p style={{ fontFamily: C.D, fontSize: 15, lineHeight: 1.6, color: C.sub, margin: 0 }}>
+                  {i === 0 ? linkifyBaseScan(timeline[i]?.body ?? '') : timeline[i]?.body}
+                </p>
               </div>
             </div>
           ))}

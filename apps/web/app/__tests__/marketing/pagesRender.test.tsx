@@ -59,7 +59,7 @@ const CONTRACT_URL = `https://sepolia.basescan.org/address/${ROUTER_ADDRESS}`
 const props = (locale: string) => ({ params: Promise.resolve({ locale }) })
 
 describe.each(LOCALES)('/%s/vision', locale => {
-  it('renders headline, cards, timeline and the cross-link to /team', async () => {
+  it('renders headline, cards, phase timeline and the cross-link to /team', async () => {
     const { container } = render(await VisionPage(props(locale)))
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const m = require(`@/messages/${locale}.json`).vision
@@ -68,11 +68,34 @@ describe.each(LOCALES)('/%s/vision', locale => {
     for (const card of m.cards) {
       expect(screen.getByText(card.title)).toBeInTheDocument()
     }
-    // Timeline years/NEXT are locale-invariant DM Mono figures
-    for (const year of ['2025', '2026', 'NEXT']) {
-      expect(screen.getByText(year)).toBeInTheDocument()
+    // Three phase cards: label + title + body per locale, no calendar years
+    expect(m.timeline).toHaveLength(3)
+    for (const phase of m.timeline) {
+      expect(screen.getByText(phase.label)).toBeInTheDocument()
+      expect(screen.getByText(phase.title)).toBeInTheDocument()
+      // Phase 01's body is split by the BaseScan anchor; match on a fragment
+      expect(
+        screen.getByText((_, el) => el?.tagName === 'P' && el.textContent === phase.body),
+      ).toBeInTheDocument()
     }
+    expect(container.textContent).not.toMatch(/\b20\d{2}\b/)
     expect(container.querySelector('a[href="/team"]')).not.toBeNull()
+  })
+
+  it('links BaseScan in the first phase card to the contract page', async () => {
+    const { container } = render(await VisionPage(props(locale)))
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const m = require(`@/messages/${locale}.json`).vision
+
+    // Every locale's phase-01 body must carry the literal brand name so the
+    // linkifier can anchor it.
+    expect(m.timeline[0].body).toContain('BaseScan')
+    const contractLinks = container.querySelectorAll(`a[href="${CONTRACT_URL}"]`)
+    expect(contractLinks.length).toBeGreaterThanOrEqual(1)
+    for (const a of Array.from(contractLinks)) {
+      expect(a).toHaveAttribute('target', '_blank')
+      expect(a).toHaveAttribute('rel', 'noopener noreferrer')
+    }
   })
 
   it('renders the video hero with poster and autoplay, and a pricing CTA', async () => {
