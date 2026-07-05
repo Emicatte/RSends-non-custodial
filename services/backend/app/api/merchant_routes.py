@@ -150,9 +150,11 @@ async def create_payment_intent(
     key_id = client.get("key_id") if client else None
     env = client.get("environment", "live") if client else "live"
 
-    # Environment enforcement: test keys ↔ testnet, live keys ↔ mainnet
-    TESTNET_CHAINS = {"base_sepolia", "sepolia", "goerli", "devnet"}
-    MAINNET_CHAINS = {"base", "ethereum", "eth", "arbitrum", "optimism", "polygon", "bnb", "avalanche", "solana"}
+    # Environment enforcement: test keys ↔ testnet, live keys ↔ mainnet.
+    # Only registry-real chains + their intended testnets belong here — anything
+    # else is rejected upstream by the categorical chain_is_supported() gate.
+    TESTNET_CHAINS = {"base_sepolia", "sepolia"}
+    MAINNET_CHAINS = {"base", "ethereum", "eth"}
     requested_chain = (payload.chain or "base").lower()
 
     # Categorical settlement gate: a chain that doesn't canonicalize into the
