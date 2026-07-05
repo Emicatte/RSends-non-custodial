@@ -95,7 +95,10 @@ export default async function VisionPage({ params }: PageProps) {
         />
         <div
           style={{
-            ...container,
+            // Full-width, not the centered 1160px container: on wide screens
+            // the block hugs the viewport gutter instead of drifting toward
+            // the optical center with the container.
+            width: '100%',
             position: 'relative',
             zIndex: 2,
             padding: `0 ${HPAD}`,
