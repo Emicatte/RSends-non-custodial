@@ -5,27 +5,43 @@ import { useEffect, useRef, useState } from 'react'
 const START_DELAY_MS = 300 // after document.fonts.ready
 const CARET_LINGER_MS = 2000 // keep blinking after the last character
 const CARET_FADE_MS = 400
+const SUBLINE_FADE_MS = 300
 
 /**
- * Progressive-enhancement typewriter for the /vision hero headline.
+ * Progressive-enhancement typewriter for the /vision hero headline, plus the
+ * optional hero subline.
  *
- * The full headline is always in the markup: server render, no-JS, and
- * prefers-reduced-motion all show it verbatim (the animation only starts from
- * a client effect). Layout can never shift: an invisible sizing ghost holds
- * the final box (including multi-line wraps) while the typed overlay fills in
- * on top. Screen readers get the full text immediately via the sr-only span;
+ * The full headline and subline are always in the markup: server render,
+ * no-JS, and prefers-reduced-motion all show them verbatim (the animation
+ * only starts from a client effect). Layout can never shift: an invisible
+ * sizing ghost holds the headline's final box (including multi-line wraps)
+ * while the typed overlay fills in on top, and the subline hides via
+ * visibility (never display), so its space is reserved from first paint.
+ * Screen readers get the full text immediately via the sr-only span;
  * everything animated is aria-hidden.
+ *
+ * The caret is a terminal-style block: solid while characters are being
+ * typed, blinking (1s steps) while idle — during the initial delay and after
+ * completion — then it lingers ~2s, fades out and unmounts. The subline
+ * fades in when typing completes.
  */
 export default function TypewriterHeadline({
   text,
   style,
+  subline,
+  sublineStyle,
 }: {
   text: string
   style?: React.CSSProperties
+  subline?: string
+  sublineStyle?: React.CSSProperties
 }) {
-  // 'static' until hydration; the overlay shows the full headline. Flips to
-  // 'typing' only when JS runs and the user hasn't asked for reduced motion.
-  const [phase, setPhase] = useState<'static' | 'typing' | 'done' | 'caret-fading' | 'finished'>('static')
+  // 'static' until hydration; the overlay shows the full headline and the
+  // subline is visible. The animation phases only start when JS runs and the
+  // user hasn't asked for reduced motion.
+  const [phase, setPhase] = useState<
+    'static' | 'waiting' | 'typing' | 'done' | 'caret-fading' | 'finished'
+  >('static')
   const [typed, setTyped] = useState('')
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -58,9 +74,13 @@ export default function TypewriterHeadline({
     const fontsReady: Promise<unknown> = document.fonts?.ready ?? Promise.resolve()
     fontsReady.then(() => {
       if (cancelled) return
-      setPhase('typing')
+      // idle before the first character: caret blinks over the empty line
+      setPhase('waiting')
       setTyped('')
-      schedule(() => typeFrom(1), START_DELAY_MS)
+      schedule(() => {
+        setPhase('typing')
+        typeFrom(1)
+      }, START_DELAY_MS)
     })
 
     return () => {
@@ -69,53 +89,76 @@ export default function TypewriterHeadline({
     }
   }, [text])
 
-  const showCaret = phase === 'typing' || phase === 'done' || phase === 'caret-fading'
+  const showCaret =
+    phase === 'waiting' || phase === 'typing' || phase === 'done' || phase === 'caret-fading'
+  const caretIdle = phase === 'waiting' || phase === 'done'
+  const sublineVisible = phase === 'static' || phase === 'done' || phase === 'caret-fading' || phase === 'finished'
 
   return (
-    <h1 style={{ ...style, position: 'relative' }}>
-      <style>{`
-        @keyframes rs-tw-blink { 50% { opacity: 0; } }
-        .rs-tw-caret {
-          display: inline-block;
-          width: 2px;
-          height: 0.85em;
-          margin-left: 3px;
-          vertical-align: -0.08em;
-          background: #C8512C;
-          animation: rs-tw-blink 1s steps(1, end) infinite;
-        }
-        .rs-tw-caret--fading {
-          opacity: 0;
-          transition: opacity ${CARET_FADE_MS}ms ease;
-          animation: none;
-        }
-      `}</style>
-      {/* Visually hidden, but immediately available to screen readers */}
-      <span
-        style={{
-          position: 'absolute',
-          width: 1,
-          height: 1,
-          padding: 0,
-          margin: -1,
-          overflow: 'hidden',
-          clip: 'rect(0, 0, 0, 0)',
-          whiteSpace: 'nowrap',
-          border: 0,
-        }}
-      >
-        {text}
-      </span>
-      <span aria-hidden="true" style={{ position: 'relative', display: 'block' }}>
-        {/* Sizing ghost: reserves the final box (incl. line wraps) at every width */}
-        <span style={{ visibility: 'hidden', display: 'block' }}>{text}</span>
-        <span style={{ position: 'absolute', inset: 0, display: 'block' }}>
-          {phase === 'static' ? text : typed}
-          {showCaret && (
-            <span className={`rs-tw-caret${phase === 'caret-fading' ? ' rs-tw-caret--fading' : ''}`} />
-          )}
+    <>
+      <h1 style={{ ...style, position: 'relative' }}>
+        <style>{`
+          @keyframes rs-tw-blink { 50% { opacity: 0; } }
+          .rs-tw-caret { opacity: 0.9; }
+          .rs-tw-caret--blink { animation: rs-tw-blink 1s steps(1, end) infinite; }
+          .rs-tw-caret--fading {
+            opacity: 0;
+            transition: opacity ${CARET_FADE_MS}ms ease;
+            animation: none;
+          }
+        `}</style>
+        {/* Visually hidden, but immediately available to screen readers */}
+        <span
+          style={{
+            position: 'absolute',
+            width: 1,
+            height: 1,
+            padding: 0,
+            margin: -1,
+            overflow: 'hidden',
+            clip: 'rect(0, 0, 0, 0)',
+            whiteSpace: 'nowrap',
+            border: 0,
+          }}
+        >
+          {text}
         </span>
-      </span>
-    </h1>
+        <span aria-hidden="true" style={{ position: 'relative', display: 'block' }}>
+          {/* Sizing ghost: reserves the final box (incl. line wraps) at every width */}
+          <span style={{ visibility: 'hidden', display: 'block' }}>{text}</span>
+          <span style={{ position: 'absolute', inset: 0, display: 'block' }}>
+            {phase === 'static' ? text : typed}
+            {showCaret && (
+              <span
+                className={`rs-tw-caret${caretIdle ? ' rs-tw-caret--blink' : ''}${
+                  phase === 'caret-fading' ? ' rs-tw-caret--fading' : ''
+                }`}
+                style={{
+                  display: 'inline-block',
+                  width: '0.55ch',
+                  height: '1em',
+                  marginLeft: 2,
+                  verticalAlign: 'text-bottom',
+                  background: '#E8A488',
+                }}
+              />
+            )}
+          </span>
+        </span>
+      </h1>
+      {subline && (
+        <p
+          aria-hidden={false}
+          style={{
+            ...sublineStyle,
+            visibility: sublineVisible ? 'visible' : 'hidden',
+            opacity: sublineVisible ? 1 : 0,
+            transition: `opacity ${SUBLINE_FADE_MS}ms ease`,
+          }}
+        >
+          {subline}
+        </p>
+      )}
+    </>
   )
 }

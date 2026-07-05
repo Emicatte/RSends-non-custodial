@@ -1325,6 +1325,9 @@
     }
   },
   "vision": {
+    "hero": {
+      "subline": "Perché RSends regola ogni pagamento direttamente dal wallet del cliente al wallet del merchant."
+    },
     "eyebrow": "VISIONE",
     "title": "Un pagamento dovrebbe muovere i soldi, non trattenerli.",
     "body1": "La maggior parte dei fornitori di pagamento si mette tra te e i tuoi soldi. Il tuo cliente paga loro, loro trattengono il saldo e a un certo punto pagano te. In quello spazio vivono i ritardi di liquidazione e i conti congelati.",
