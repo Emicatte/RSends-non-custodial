@@ -226,10 +226,9 @@ Production guards are active: `ENVIRONMENT=production`, `DEBUG=false`, TLS-only 
 mandatory `HMAC_SECRET` / `AUTH_JWT_SECRET` / `INTERNAL_PROXY_SECRET` /
 `ADMIN_API_TOKEN` with length checks.
 
-Operational docs: [`DEPLOY_CHECKLIST.md`](DEPLOY_CHECKLIST.md),
-[`DEPLOY_RUNBOOK.md`](DEPLOY_RUNBOOK.md), [`GO_LIVE_RUNBOOK.md`](GO_LIVE_RUNBOOK.md),
-and [`MIGRATION_REPORT.md`](MIGRATION_REPORT.md) (the custodial → non-custodial
-migration record).
+Operational docs: [`DEPLOY_RUNBOOK.md`](DEPLOY_RUNBOOK.md) — the single deploy +
+go-live reference — and [`MIGRATION_REPORT.md`](MIGRATION_REPORT.md) (the
+custodial → non-custodial migration record).
 
 Fee-change deploys are ordered: **frontend copy first, on-chain `SetFeeConfig`
 broadcast second**, so the displayed fee is never lower than the charged fee.

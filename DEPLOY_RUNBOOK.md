@@ -26,7 +26,7 @@ Legend: **[AUTO]** = done by Render/Vercel/CI · **[AZIONE UTENTE]** = you do it
 ## ⚠️ Read first
 
 1. **Fresh database.** The Render Postgres starts empty so `alembic upgrade head`
-   runs clean `0001 → 0004`. The old dev DB carried a **stale Classic stamp
+   runs clean `0001 → 0007`. The old dev DB carried a **stale Classic stamp
    (0038)** — **never** point this deploy at it.
 2. **True-prod guard posture.** This deploy runs `ENVIRONMENT=production` +
    `DEBUG=false`, so **every** prod guard in `config.py` is active. We satisfy
@@ -60,6 +60,7 @@ Legend: **[AUTO]** = done by Render/Vercel/CI · **[AZIONE UTENTE]** = you do it
 | `DEBUG` must not be true | ERROR | `DEBUG=false` |
 | `GOOGLE_OAUTH_CLIENT_ID` non-empty | ERROR | Google OAuth client |
 | `AUTH_JWT_SECRET` ≥64 chars | ERROR | manual `token_hex(32)` |
+| `ADMIN_API_TOKEN` non-empty/placeholder, ≥32 chars, ≠ `HMAC_SECRET` | ERROR | manual `openssl rand -hex 32` |
 | `INTERNAL_PROXY_SECRET` non-empty | ERROR | Render `generateValue` |
 | `WALLET_AUTH_ALLOW_LEGACY` not true | ERROR | `=false` |
 | `DATABASE_URL` not localhost | WARNING | real host |
@@ -195,6 +196,7 @@ In the `rsends-shared` env group (Render dashboard):
 | `CELERY_BROKER_URL` | `rediss://…/1` |
 | `CELERY_RESULT_BACKEND` | `rediss://…/2` |
 | `AUTH_JWT_SECRET` | **manual** — `python -c 'import secrets;print(secrets.token_hex(32))'` (≥64 chars; Render's generated value may be too short) |
+| `ADMIN_API_TOKEN` | **manual** — `openssl rand -hex 32` (≥32 chars, **must differ from `HMAC_SECRET`**; startup fails on empty/short/equal) |
 | `GOOGLE_OAUTH_CLIENT_ID` | **required** — create a Google OAuth client (free; works on `vercel.app`) |
 | `ALCHEMY_API_KEY` | your Alchemy key (always required) |
 | `INDEXER_RPC_URLS_JSON` | `{"84532":"https://base-sepolia.g.alchemy.com/v2/<KEY>"}` |
@@ -227,7 +229,7 @@ Render runs `preDeployCommand: alembic upgrade head` then starts the services.
 Migrations use Alembic's **async** engine (`async_engine_from_config`) reading
 `DATABASE_URL` directly — so the **same `postgresql+asyncpg://` URL works for
 migrations**; there is **no** separate sync/psycopg2 URL to configure (psycopg2
-isn't even installed). On the empty Render DB this runs clean `0001 → 0004`.
+isn't even installed). On the empty Render DB this runs clean `0001 → 0007`.
 Confirm `https://rsends-api.onrender.com/health` returns `{"status":"healthy"}`.
 
 ---
@@ -308,7 +310,7 @@ redeploy/restart resumes cleanly** — no rescan from zero, no missed blocks.
 `preDeployCommand`) uses Alembic's async engine reading `DATABASE_URL` directly —
 the same `postgresql+asyncpg://` URL the app uses. There is **no** psycopg2/sync
 URL to provide (psycopg2 is not installed). Idempotent across restarts: a
-re-deploy re-runs `upgrade head`, which is a no-op once at `0004`.
+re-deploy re-runs `upgrade head`, which is a no-op once at `0007`.
 
 ---
 
@@ -326,6 +328,7 @@ re-deploy re-runs `upgrade head`, which is a no-op once at `0004`.
 | `HMAC_SECRET` | inbound callback HMAC (≥32) | SECRET | Render generateValue | (auto) |
 | `INTERNAL_PROXY_SECRET` | gates `/api/internal/*` | SECRET | Render generateValue | (auto) |
 | `AUTH_JWT_SECRET` | session JWT (≥64) | SECRET | **manual** `token_hex(32)` | (64-char hex) |
+| `ADMIN_API_TOKEN` | admin surface bearer (≥32, ≠ `HMAC_SECRET`) | SECRET | **manual** `openssl rand -hex 32` | (64-char hex) |
 | `GOOGLE_OAUTH_CLIENT_ID` | Google login (**required**) | SECRET | Google Cloud Console | `<oauth_client_id>` |
 | `ALCHEMY_API_KEY` | RPC (always required) | SECRET | dashboard.alchemy.com | `<alchemy_key>` |
 | `RSENDS_ROUTER_ADDRESSES_JSON` | chain→router map | PUBLIC | Part 1 deploy output | `{"84532":"<FILL_AFTER_CONTRACT_DEPLOY>"}` |
@@ -348,3 +351,35 @@ re-deploy re-runs `upgrade head`, which is a no-op once at `0004`.
 | `ALLOWED_ORIGINS` | CORS for `/api/*` | PUBLIC | your Vercel URL | `https://<app>.vercel.app` |
 | `NEXTAUTH_URL` / `NEXTAUTH_SECRET` | NextAuth | SECRET | self / `openssl rand -base64 32` | (optional testnet) |
 | `ADMIN_SECRET` / `ADMIN_TOTP_SECRET` | admin dash | SECRET | `openssl rand -hex 32` / TOTP | (prod: required) |
+
+---
+
+## Go-live / external provisioning
+
+One-time provisioning that no deploy step above covers — do these before (or
+with) the first production-posture deploy:
+
+1. **`ADMIN_API_TOKEN` (Render, backend).** The admin surface
+   (`GET /api/v1/audit/log`, `/admin/aml/*`, `GET /health/config`) authenticates
+   with the `X-Admin-Token` header equal to this **dedicated** env var —
+   constant-time compare, denies everything when unset, and it is **not**
+   `HMAC_SECRET` (reusing it is rejected). The prod guard fails startup on
+   empty/placeholder, <32 chars, or `== HMAC_SECRET` (`app/config.py`).
+   Generate with `openssl rand -hex 32`. Verify after deploy:
+   ```bash
+   curl -s -o /dev/null -w "%{http_code}\n" https://rsends-api.onrender.com/health/config
+   # → 403 (anonymous denied)
+   curl -s -o /dev/null -w "%{http_code}\n" \
+     -H "X-Admin-Token: <ADMIN_API_TOKEN>" https://rsends-api.onrender.com/health/config
+   # → 200 (env var audit; values never exposed)
+   ```
+2. **Google OAuth consent screen.** Publish the consent screen for the OAuth
+   client behind `GOOGLE_OAUTH_CLIENT_ID` (Google Cloud Console). While it stays
+   in *Testing*, only allowlisted test users can sign in with Google.
+3. **GitHub OAuth production app.** Create the production GitHub OAuth app
+   (callback URL = the Vercel domain) and set `GITHUB_CLIENT_ID` /
+   `GITHUB_CLIENT_SECRET` on Vercel (NextAuth side — the backend only verifies
+   the resulting token).
+4. **Monitoring (optional).** Backend env: `SENTRY_DSN` (errors),
+   `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` / `TELEGRAM_ALERT_CHAT_ID`
+   (alerts), `ALERT_WEBHOOK_URL` (Slack/Discord webhook).
