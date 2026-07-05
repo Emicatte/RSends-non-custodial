@@ -19,6 +19,17 @@ Quarantined rather than deleted (reversible) per the verify-then-remove policy.
 - `test/FeeRouterV4.t.sol`, `FeeRouterV4_1.t.sol`, `FeeRouterV5.t.sol`,
   `FeeRouterV6.t.sol`, `Counter.t.sol`.
 
+## Clearly legacy — TRON port, never deployed (safe to delete later)
+- `tron/` — the whole TronBox project for `FeeRouterV4Tron.sol` (the FeeRouterV4
+  oracle/%-fee design ported to SunSwap/WTRX). A 2026-07 recon confirmed it is a
+  **dead stub**: never deployed on any TRON network (mainnet/Nile/Shasta) — the
+  frontend registry still holds the literal `T_INDIRIZZO_DAL_DEPLOY` placeholder,
+  the hardcoded owner/treasury accounts were never activated on-chain, no build
+  artifacts were ever committed, and its TronLink client (`tronFeeRouter.ts`,
+  zero importers) is archived under `apps/web/_archive/lib/`. Not an npm
+  workspace, never compiled by foundry, untouched by CI. (Includes a stray
+  `".gitignore 2"` duplicate, moved as-is.)
+
 ## ⚠️ FLAGGED — needs a product-owner decision (do NOT delete yet)
 The **RSend\*** family is RSend-branded and has tests, but is NOT part of the
 non-custodial RSendsRouter payment path. Confirm whether these are a separate
