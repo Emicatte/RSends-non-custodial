@@ -111,17 +111,23 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
 
 ### Known follow-ups (tracked here so they're not forgotten — do not fix as a drive-by)
 
-- **CI backend job has no Redis service** — `tests/test_api.py::test_health` and
-  `tests/test_circuit_breaker.py::TestExternalHealth::test_health_all_healthy` fail on every
-  CI run (`degraded != healthy`) while passing locally where Redis runs. Fix: add a `redis`
-  service container to the backend job in `.github/workflows/ci.yml`, or make the two tests
-  tolerate a degraded cache. Pre-dates all 2026-07 PRs.
+- **Redis-DOWN (degraded/fail-closed) path is untested** — with CI now running against a real
+  Redis, no active test exercises health-`degraded` or rate-limit fail-closed with Redis
+  absent (the in-memory-fallback test in `test_circuit_breaker.py` is skipped "pending
+  rewrite"). Fail-closed is security-relevant; add coverage in a dedicated pass.
 - **Error envelope inconsistency.** Middleware errors are flat `{error, message}` but route
   `HTTPException(detail={...})` responses get FastAPI-wrapped as `{detail: {...}}` — align in a
   dedicated docs/handler change.
 - **Render provisioning before go-live:** Redis must be provisioned and `DEBUG=false` set —
   fail-closed rate limiting depends on both. Also set **`ADMIN_API_TOKEN`** (≥32 chars,
   distinct from `HMAC_SECRET`) — the admin surface is fully denied without it.
+
+Closed (2026-07-05): **CI backend job now has a Redis service** (`redis:7`, health-checked,
+`REDIS_URL=redis://localhost:6379/0` — plain scheme is CI/test-scoped, the `rediss://` guard
+applies only when `is_prod`). `test_api.py::test_health` and
+`test_circuit_breaker.py::…::test_health_all_healthy` go green in CI, unchanged (they keep
+asserting `healthy`); CI matches the local baseline. Replaced in follow-ups by the
+degraded-path coverage gap above.
 
 Closed (2026-07-02): environment filter on intent reads/mutates (PR #2, migration 0005);
 webhook `environment` dimension incl. outbound dispatch (migration 0006); fail-closed
