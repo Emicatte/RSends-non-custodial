@@ -4,6 +4,8 @@ import { Link } from '@/i18n/navigation'
 import { C } from '@/app/designTokens'
 import ScrubReveal from '@/components/motion/ScrubReveal'
 import ScrubCascade from '@/components/motion/ScrubCascade'
+import MeshHeroVideo from '@/components/pricing/MeshHeroVideo'
+import TypewriterHeadline from '@/components/vision/TypewriterHeadline'
 
 export const metadata: Metadata = {
   title: 'Vision — RSends',
@@ -30,15 +32,6 @@ const container: React.CSSProperties = {
   width: '100%',
 }
 
-const eyebrow: React.CSSProperties = {
-  fontFamily: C.M,
-  fontSize: 11,
-  letterSpacing: '0.18em',
-  textTransform: 'uppercase',
-  color: C.purple,
-  fontWeight: 500,
-}
-
 const body: React.CSSProperties = {
   fontFamily: C.D,
   fontSize: 17,
@@ -51,40 +44,71 @@ const body: React.CSSProperties = {
 export default async function VisionPage({ params }: PageProps) {
   const { locale } = await params
   const t = await getTranslations({ locale, namespace: 'vision' })
+  const tHiw = await getTranslations({ locale, namespace: 'howItWorks' })
 
   const cards = t.raw('cards') as { title: string; body: string }[]
   const timeline = t.raw('timeline') as { label: string }[]
 
   return (
     <main style={{ background: C.bg }}>
-      {/* ── Eyebrow + headline + body ─────────────────────────────────── */}
-      <section style={{ ...container, padding: `clamp(96px, 16vh, 160px) ${HPAD} clamp(24px, 4vh, 48px)` }}>
-        <ScrubReveal scrub={0.5}>
-          <div className="rs-reveal" style={{ ...eyebrow, marginBottom: 18 }}>
+      {/* ── Hero — dark full-bleed video, typewriter headline (mirrors the
+             pricing / how-it-works mesh hero, incl. the no-flash pattern) ── */}
+      <section
+        style={{
+          position: 'relative',
+          width: '100%',
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          overflow: 'hidden',
+          background: '#0A0A0A',
+        }}
+      >
+        <MeshHeroVideo src="/vision/hero-bg.mp4" poster="/vision/hero-poster.jpg" />
+        <div
+          aria-hidden="true"
+          style={{ position: 'absolute', inset: 0, background: 'rgba(10,10,12,0.45)', zIndex: 1 }}
+        />
+        <div style={{ ...container, position: 'relative', zIndex: 2, padding: `0 ${HPAD}` }}>
+          <div
+            style={{
+              fontFamily: C.M,
+              fontSize: 13,
+              fontWeight: 500,
+              letterSpacing: '0.22em',
+              textTransform: 'uppercase',
+              color: '#E8A488',
+              marginBottom: 18,
+            }}
+          >
             {t('eyebrow')}
           </div>
-          <h1
-            className="rs-reveal"
+          <TypewriterHeadline
+            text={t('title')}
             style={{
               fontFamily: C.D,
-              fontSize: 'clamp(32px, 4.2vw, 58px)',
+              fontSize: 'clamp(34px, 4.6vw, 64px)',
               fontWeight: 400,
               lineHeight: 1.08,
               letterSpacing: '-0.5px',
-              color: C.text,
-              margin: '0 0 28px',
-              maxWidth: 820,
+              color: '#FFFFFF',
+              margin: 0,
+              maxWidth: 880,
             }}
-          >
-            {t('title')}
-          </h1>
+          />
+        </div>
+      </section>
+
+      {/* ── Editorial — the three paragraphs, on paper ─────────────────── */}
+      <section style={{ ...container, padding: `clamp(72px, 12vh, 128px) ${HPAD} clamp(24px, 4vh, 48px)` }}>
+        <ScrubReveal scrub={0.5}>
           <p className="rs-reveal" style={body}>{t('body1')}</p>
           <p className="rs-reveal" style={body}>{t('body2')}</p>
           <p className="rs-reveal" style={{ ...body, margin: 0 }}>{t('body3')}</p>
         </ScrubReveal>
       </section>
 
-      {/* ── Terracotta rule + pull line ───────────────────────────────── */}
+      {/* ── Terracotta rule + pull line, display scale ─────────────────── */}
       <section style={{ ...container, padding: `clamp(40px, 7vh, 80px) ${HPAD} clamp(28px, 5vh, 56px)` }}>
         <ScrubReveal scrub={0.5}>
           <div className="rs-reveal">
@@ -92,13 +116,13 @@ export default async function VisionPage({ params }: PageProps) {
             <p
               style={{
                 fontFamily: C.D,
-                fontSize: 'clamp(22px, 2.6vw, 30px)',
+                fontSize: 'clamp(28px, 3.2vw, 44px)',
                 fontWeight: 500,
                 letterSpacing: '-0.02em',
-                lineHeight: 1.3,
+                lineHeight: 1.25,
                 color: C.text,
                 margin: 0,
-                maxWidth: 640,
+                maxWidth: 760,
               }}
             >
               {t('pullLine')}
@@ -147,46 +171,46 @@ export default async function VisionPage({ params }: PageProps) {
         </ScrubCascade>
       </section>
 
-      {/* ── Timeline — 3 nodes, NEXT in terracotta ────────────────────── */}
-      <section style={{ ...container, padding: `clamp(40px, 7vh, 80px) ${HPAD} clamp(28px, 5vh, 56px)` }}>
-        {/* Three across everywhere, single column under ~520px — inline styles
-            can't express the breakpoint, so the rule lives with the page. */}
+      {/* ── Timeline — full-width rail, 3 nodes, NEXT in terracotta ───── */}
+      <section style={{ ...container, padding: `clamp(48px, 8vh, 96px) ${HPAD} clamp(28px, 5vh, 56px)` }}>
+        {/* Continuous rail across the container; vertical rail under 480px.
+            Inline styles can't express the breakpoint, so the rule lives with
+            the page. The rail is not a .rs-card, so ScrubCascade leaves it
+            static while the nodes cascade. */}
         <style>{`
-          .rs-vision-timeline { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(20px, 3vw, 36px); }
-          @media (max-width: 520px) { .rs-vision-timeline { grid-template-columns: 1fr; } }
+          .rs-vision-timeline { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(20px, 3vw, 36px); }
+          .rs-vision-timeline-rail { position: absolute; top: 5px; left: 0; right: 0; height: 1px; background: ${C.border}; }
+          .rs-vision-tl-item { position: relative; padding-top: 26px; }
+          .rs-vision-tl-dot { position: absolute; top: 0; left: 0; width: 11px; height: 11px; border-radius: 999px; }
+          @media (max-width: 480px) {
+            .rs-vision-timeline { grid-template-columns: 1fr; gap: 30px; padding-left: 24px; }
+            .rs-vision-timeline-rail { top: 2px; bottom: 2px; left: 5px; right: auto; width: 1px; height: auto; }
+            .rs-vision-tl-item { padding-top: 0; }
+            .rs-vision-tl-dot { left: -24px; top: 3px; }
+          }
         `}</style>
         <ScrubCascade className="rs-vision-timeline">
+          <div className="rs-vision-timeline-rail" aria-hidden="true" />
           {TIMELINE_YEARS.map((node, i) => (
-            <div
-              key={node.year}
-              className="rs-card"
-              style={{ position: 'relative', borderTop: `1px solid ${C.border}`, paddingTop: 20 }}
-            >
+            <div key={node.year} className="rs-card rs-vision-tl-item">
               <div
                 aria-hidden="true"
-                style={{
-                  position: 'absolute',
-                  top: -4,
-                  left: 0,
-                  width: 7,
-                  height: 7,
-                  borderRadius: 999,
-                  background: node.accent ? C.purple : C.text,
-                }}
+                className="rs-vision-tl-dot"
+                style={{ background: node.accent ? C.purple : C.text }}
               />
               <div
                 style={{
                   fontFamily: C.M,
-                  fontSize: 13,
+                  fontSize: 14,
                   fontWeight: 500,
                   letterSpacing: '0.14em',
                   color: node.accent ? C.purple : C.text,
-                  marginBottom: 8,
+                  marginBottom: 10,
                 }}
               >
                 {node.year}
               </div>
-              <div style={{ fontFamily: C.D, fontSize: 15, lineHeight: 1.5, color: C.sub }}>
+              <div style={{ fontFamily: C.D, fontSize: 15, lineHeight: 1.5, color: C.sub, maxWidth: 300 }}>
                 {timeline[i]?.label}
               </div>
             </div>
@@ -194,10 +218,35 @@ export default async function VisionPage({ params }: PageProps) {
         </ScrubCascade>
       </section>
 
-      {/* ── Quiet cross-link to /team ─────────────────────────────────── */}
+      {/* ── Closing band — pricing CTA + quiet team link ───────────────── */}
       <section style={{ ...container, padding: `clamp(32px, 5vh, 56px) ${HPAD} clamp(56px, 9vh, 96px)` }}>
         <ScrubReveal scrub={0.5}>
-          <div className="rs-reveal" style={{ borderTop: `1px solid ${C.border}`, paddingTop: 'clamp(24px, 4vh, 40px)' }}>
+          <div
+            className="rs-reveal"
+            style={{
+              borderTop: `1px solid ${C.border}`,
+              paddingTop: 'clamp(28px, 4vh, 44px)',
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              gap: 'clamp(16px, 3vw, 28px)',
+            }}
+          >
+            <Link
+              href="/pricing"
+              style={{
+                fontFamily: C.D,
+                fontSize: 15,
+                fontWeight: 600,
+                padding: '13px 24px',
+                borderRadius: 8,
+                textDecoration: 'none',
+                background: C.text,
+                color: C.bg,
+              }}
+            >
+              {tHiw('cta.pricing')}
+            </Link>
             <Link
               href="/team"
               style={{

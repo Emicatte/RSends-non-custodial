@@ -1,4 +1,9 @@
 {
+  "nav": {
+    "howItWorks": "How it works",
+    "pricing": "Pricing",
+    "vision": "Vision"
+  },
   "auth": {
     "signIn": "Log in",
     "signUp": "Sign up",

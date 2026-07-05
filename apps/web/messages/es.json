@@ -1,4 +1,9 @@
 {
+  "nav": {
+    "howItWorks": "Cómo funciona",
+    "pricing": "Precios",
+    "vision": "Visión"
+  },
   "_TODO": "Translations pending — currently showing English as placeholder. Replace before production launch.",
   "auth": {
     "signIn": "Iniciar sesión",

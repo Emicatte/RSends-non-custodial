@@ -74,6 +74,34 @@ describe.each(LOCALES)('/%s/vision', locale => {
     }
     expect(container.querySelector('a[href="/team"]')).not.toBeNull()
   })
+
+  it('renders the video hero with poster and autoplay, and a pricing CTA', async () => {
+    const { container } = render(await VisionPage(props(locale)))
+
+    const video = container.querySelector('video')
+    expect(video).not.toBeNull()
+    expect(video).toHaveAttribute('poster', '/vision/hero-poster.jpg')
+    expect(video).toHaveAttribute('autoplay')
+    expect(video).toHaveAttribute('loop')
+    expect(video).toHaveAttribute('playsinline')
+    expect(video).toHaveAttribute('preload', 'auto')
+    expect(
+      container.querySelector('video source[src="/vision/hero-bg.mp4"]'),
+    ).not.toBeNull()
+
+    expect(container.querySelector('a[href="/pricing"]')).not.toBeNull()
+  })
+
+  it('keeps the full headline in the pre-hydration markup (typewriter is progressive enhancement)', async () => {
+    const { container } = render(await VisionPage(props(locale)))
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const m = require(`@/messages/${locale}.json`).vision
+
+    // The verbatim headline must survive into the h1 regardless of the
+    // animation (sr-only text + sizing ghost carry it).
+    const h1 = container.querySelector('h1')
+    expect(h1?.textContent).toContain(m.title)
+  })
 })
 
 describe.each(LOCALES)('/%s/team', locale => {

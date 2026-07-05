@@ -80,6 +80,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
     return <>{children}</>
   }
 
+  // Marketing pages: same bypass. Nothing in their tree touches wagmi or
+  // react-query (session auth lives above in AuthSessionProvider), and the
+  // mounted gate below would otherwise blank their server-rendered HTML —
+  // these pages must SSR fully (SEO + they work with JS disabled).
+  if (pathname?.match(/^\/[a-z]{2}\/(pricing|how-it-works|vision|team)(\/|$)/)) {
+    return <>{children}</>
+  }
+
   // Landing pages: '/' or any /<two-letter-locale>. We do NOT load wallet
   // SDKs here — only after user clicks Connect (sets explicitlyRequested).
   // Inside /app and other deep routes we mount the full wallet stack from

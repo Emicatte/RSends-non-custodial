@@ -2,14 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-const POSTER = '/pricing/mesh-poster.jpg';
-
 /**
- * Full-bleed looping mesh-gradient background for the pricing / how-it-works hero.
+ * Full-bleed looping video background for the dark marketing heroes
+ * (pricing / how-it-works mesh, vision). Defaults to the pricing mesh asset.
  *
- * The asset (public/pricing/mesh-bg.mp4) is the AI-generated mesh clip with the
- * black pillarbox bars cropped off and the generator watermark removed (ffmpeg),
- * re-encoded muted + web-optimized. It sits behind the hero text via object-fit:
+ * The assets are AI-generated clips with the black pillarbox bars cropped off
+ * and the generator watermark removed (ffmpeg), re-encoded muted +
+ * web-optimized. It sits behind the hero text via object-fit:
  * cover. Respects prefers-reduced-motion: no autoplay, stays on the poster frame.
  *
  * Black-screen guard: a dedicated poster layer (mesh first-frame) is ALWAYS
@@ -22,7 +21,13 @@ const POSTER = '/pricing/mesh-poster.jpg';
  * Browser-only concern is just the reduced-motion read; rendered client-side so the
  * <video> never autoplays for users who asked for less motion.
  */
-export default function MeshHeroVideo() {
+export default function MeshHeroVideo({
+  src = '/pricing/mesh-bg.mp4',
+  poster = '/pricing/mesh-poster.jpg',
+}: {
+  src?: string;
+  poster?: string;
+}) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   // Read once before first paint to avoid an autoplay flash.
@@ -65,7 +70,7 @@ export default function MeshHeroVideo() {
           width: '100%',
           height: '100%',
           backgroundColor: '#0A0A0A',
-          backgroundImage: `url(${POSTER})`,
+          backgroundImage: `url(${poster})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           zIndex: 0,
@@ -78,7 +83,7 @@ export default function MeshHeroVideo() {
         loop
         playsInline
         preload="auto"
-        poster={POSTER}
+        poster={poster}
         aria-hidden="true"
         onPlaying={() => setPlaying(true)}
         style={{
@@ -92,7 +97,7 @@ export default function MeshHeroVideo() {
           transition: 'opacity 200ms ease',
         }}
       >
-        <source src="/pricing/mesh-bg.mp4" type="video/mp4" />
+        <source src={src} type="video/mp4" />
       </video>
     </>
   );

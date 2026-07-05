@@ -10,13 +10,11 @@ import type { Variants, Transition } from 'framer-motion'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useTranslations } from 'next-intl'
-import LanguageSwitcher from '@/components/LanguageSwitcher'
 
 // STATIC IMPORTS
 import AccountHeader from '../AccountHeader'
 const HeroGlobe = dynamic(() => import('@/components/HeroGlobe'), { ssr: false })
 import { useSweepWebSocket } from '../../lib/useSweepWebSocket'
-import { useSweepStats } from '../../lib/useSweepStats'
 import AntiPhishingSetup from '../AntiPhishingSetup'
 import { TokenRow } from '../TokenSelector'
 import { getNativeToken, getTokensForChain, type TokenInfo } from '../tokens/tokenRegistry'
@@ -36,7 +34,6 @@ import LandingSections from '../LandingSections'
 import { C, EASE } from '@/app/designTokens'
 import SplitText from '@/components/motion/SplitText'
 import SmoothScroll from '@/components/SmoothScroll'
-import { LandingAuthButtons } from '@/components/auth/LandingAuthButtons'
 import { WhySignInSection } from '@/components/landing/WhySignInSection'
 import SupportedNetworksCarousel from '@/components/landing/SupportedNetworksCarousel'
 
@@ -514,54 +511,6 @@ function NetworkTokenWidget({
   )
 }
 
-// ═══════════════════════════════════════════════════════════
-//  LIQUID GLASS NAVBAR
-// ═══════════════════════════════════════════════════════════
-function Navbar({
-  sweeps24h, vol24h,
-}: {
-  sweeps24h: number
-  vol24h: number
-}) {
-  const [isMobile, setIsMobile] = useState(false)
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768)
-    check()
-    window.addEventListener('resize', check)
-    return () => window.removeEventListener('resize', check)
-  }, [])
-
-  return (
-    <nav className="bf-blur-24s" style={{
-      position: 'fixed', top: 3, left: 0, right: 0, zIndex: 1000,
-      height: isMobile ? 52 : 60,
-      paddingTop: 'var(--sat, 0px)',
-      background: 'rgba(250,250,250,0.85)',
-      borderBottom: '1px solid rgba(10,10,10,0.08)',
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: isMobile ? '0 12px' : '0 24px',
-    }}>
-        {/* Left: Logo */}
-        <div
-          style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-          }}
-        >
-          <img src="/favicon.svg" alt="RSends" width={28} height={28} style={{ borderRadius: 7 }} />
-          <span style={{ fontFamily: C.D, fontSize: 16, fontWeight: 800, color: C.text, letterSpacing: '-0.03em' }}>
-            RSends
-          </span>
-        </div>
-
-        {/* Right: Language + Auth */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <LanguageSwitcher />
-          <LandingAuthButtons />
-        </div>
-    </nav>
-  )
-}
-
 // ════════��══════════════════════════════════════════════════
 //  ENGINE STATUS (compact for navbar)
 // ═══════════════════════════════════════════════════════════
@@ -791,12 +740,6 @@ export default function Home() {
     ? parseFloat(selTokenFmt) * tokenPricesPage[selectedToken.coingeckoId].eur
     : null
 
-  // Sweep stats for top bar
-  const { daily } = useSweepStats(address)
-  const today = daily.length > 0 ? daily[daily.length - 1] : null
-  const sweeps24h = today?.sweep_count ?? 0
-  const vol24h = today?.volume_eth ?? 0
-
   // Track unseen sweep events for Flow badge
   const { events: sweepEvents } = useSweepWebSocket(address)
   const [unseenCount, setUnseenCount] = useState(0)
@@ -856,10 +799,7 @@ export default function Home() {
         <div className="rp-bg__noise" />
       </div>
 
-      {/* Navbar */}
-      <Navbar sweeps24h={sweeps24h} vol24h={vol24h} />
-
-      {/* Main content — padded below navbar */}
+      {/* Main content — padded below the navbar (mounted globally via HeaderMount) */}
       <main className="main-content" style={{
         minHeight: '100dvh',
         paddingTop: isMobileHome ? '72px' : 'clamp(64px, 5vh, 76px)',

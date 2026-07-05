@@ -659,7 +659,7 @@ export default function FooterGlobe() {
 
         <div className={styles.bottomBar}>
           <div className={styles.bottomLeft}>
-            <span className={styles.brandName}>RSends Inc.</span>
+            <span className={styles.brandName}>RPagos S.R.L.</span>
             <span>&copy; 2026</span>
             <span style={{ opacity: 0.3 }}>&middot;</span>
             <Link href="/docs/terms" className={styles.bottomTextLink} style={{ textDecoration: 'none', color: 'inherit' }}>Terms</Link>

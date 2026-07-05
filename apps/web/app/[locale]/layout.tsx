@@ -3,6 +3,7 @@ import { getMessages } from 'next-intl/server'
 import { notFound } from 'next/navigation'
 import { routing, type Locale } from '@/i18n/routing'
 import FooterMount from '@/components/FooterMount'
+import HeaderMount from '@/components/marketing/HeaderMount'
 import { OAuthConflictListener } from '@/components/auth/OAuthConflictListener'
 
 export function generateStaticParams() {
@@ -26,6 +27,7 @@ export default async function LocaleLayout({
 
   return (
     <NextIntlClientProvider locale={locale} messages={messages}>
+      <HeaderMount />
       {children}
       <FooterMount />
       {/* OAuth email-collision (409) → AccountLinkingModal; needs the i18n
