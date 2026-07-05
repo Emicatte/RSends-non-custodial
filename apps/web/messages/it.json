@@ -1350,13 +1350,19 @@
     ],
     "timeline": [
       {
-        "label": "Avvio del progetto"
+        "label": "FASE 01",
+        "title": "Costruito",
+        "body": "Il contratto router è deployato ed è immutabile. Il sorgente è verificato su BaseScan, quindi chiunque può leggere esattamente come viene suddiviso un pagamento."
       },
       {
-        "label": "Demo pubblica su testnet"
+        "label": "FASE 02",
+        "title": "Attivo su testnet",
+        "body": "Oggi i pagamenti reali passano dal contratto su Base Sepolia. Ogni regolamento è una transazione pubblica che puoi aprire e controllare."
       },
       {
-        "label": "Integrazioni merchant"
+        "label": "PROSSIMO",
+        "title": "Integrazioni merchant",
+        "body": "Il prossimo passo è portare a bordo i primi merchant e collegare il loro flusso API e webhook."
       }
     ],
     "crossLink": "Conosci il team"

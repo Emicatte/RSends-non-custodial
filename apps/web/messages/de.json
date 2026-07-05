@@ -1351,13 +1351,19 @@
     ],
     "timeline": [
       {
-        "label": "Projektstart"
+        "label": "PHASE 01",
+        "title": "Gebaut",
+        "body": "Der Router-Vertrag ist deployt und unveränderlich. Sein Quellcode ist auf BaseScan verifiziert, jeder kann also genau nachlesen, wie eine Zahlung aufgeteilt wird."
       },
       {
-        "label": "Öffentliche Testnet-Demo"
+        "label": "PHASE 02",
+        "title": "Live im Testnet",
+        "body": "Echte Zahlungen laufen heute über den Vertrag auf Base Sepolia. Jede Abwicklung ist eine öffentliche Transaktion, die sich öffnen und prüfen lässt."
       },
       {
-        "label": "Händler-Integrationen"
+        "label": "ALS NÄCHSTES",
+        "title": "Händler-Integrationen",
+        "body": "Der nächste Schritt ist das Onboarding der ersten Händler und die Anbindung ihres API- und Webhook-Flows."
       }
     ],
     "crossLink": "Lerne das Team kennen"

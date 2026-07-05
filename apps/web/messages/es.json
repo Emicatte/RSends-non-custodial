@@ -1351,13 +1351,19 @@
     ],
     "timeline": [
       {
-        "label": "Inicio del proyecto"
+        "label": "FASE 01",
+        "title": "Construido",
+        "body": "El contrato router está desplegado y es inmutable. Su código está verificado en BaseScan, así que cualquiera puede leer exactamente cómo se reparte un pago."
       },
       {
-        "label": "Demo pública en testnet"
+        "label": "FASE 02",
+        "title": "Activo en testnet",
+        "body": "Hoy los pagos reales pasan por el contrato en Base Sepolia. Cada liquidación es una transacción pública que puedes abrir y comprobar."
       },
       {
-        "label": "Integraciones con comercios"
+        "label": "SIGUIENTE",
+        "title": "Integraciones con comercios",
+        "body": "El siguiente paso es incorporar a los primeros comercios y conectar su flujo de API y webhooks."
       }
     ],
     "crossLink": "Conoce al equipo"

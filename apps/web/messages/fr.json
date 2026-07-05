@@ -1351,13 +1351,19 @@
     ],
     "timeline": [
       {
-        "label": "Lancement du projet"
+        "label": "PHASE 01",
+        "title": "Construit",
+        "body": "Le contrat routeur est déployé et immuable. Son code est vérifié sur BaseScan, donc chacun peut lire exactement comment un paiement est réparti."
       },
       {
-        "label": "Démo publique sur testnet"
+        "label": "PHASE 02",
+        "title": "Actif sur testnet",
+        "body": "Des paiements réels passent déjà par le contrat sur Base Sepolia. Chaque règlement est une transaction publique que vous pouvez ouvrir et vérifier."
       },
       {
-        "label": "Intégrations marchands"
+        "label": "ENSUITE",
+        "title": "Intégrations marchands",
+        "body": "La prochaine étape consiste à intégrer les premiers marchands et à brancher leur flux API et webhooks."
       }
     ],
     "crossLink": "Rencontrer l'équipe"
