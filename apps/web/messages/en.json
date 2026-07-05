@@ -1325,6 +1325,9 @@
     }
   },
   "vision": {
+    "hero": {
+      "subline": "Why RSends settles every payment directly from the customer's wallet to the merchant's wallet."
+    },
     "eyebrow": "VISION",
     "title": "A payment should move money, not hold it.",
     "body1": "Most payment providers sit between you and your money. Your customer pays them, they hold the balance, and at some point they pay you. That gap is where settlement delays and frozen accounts live.",

@@ -102,6 +102,15 @@ describe.each(LOCALES)('/%s/vision', locale => {
     const h1 = container.querySelector('h1')
     expect(h1?.textContent).toContain(m.title)
   })
+
+  it('renders the localized hero subline', async () => {
+    render(await VisionPage(props(locale)))
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const m = require(`@/messages/${locale}.json`).vision
+
+    expect(m.hero.subline).toEqual(expect.any(String))
+    expect(screen.getByText(m.hero.subline)).toBeInTheDocument()
+  })
 })
 
 describe.each(LOCALES)('/%s/team', locale => {

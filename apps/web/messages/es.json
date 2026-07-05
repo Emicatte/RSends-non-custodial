@@ -1326,6 +1326,9 @@
     }
   },
   "vision": {
+    "hero": {
+      "subline": "Por qué RSends liquida cada pago directamente desde la wallet del cliente hasta la wallet del comercio."
+    },
     "eyebrow": "VISIÓN",
     "title": "Un pago debería mover el dinero, no retenerlo.",
     "body1": "La mayoría de los proveedores de pago se colocan entre tú y tu dinero. Tu cliente les paga a ellos, ellos retienen el saldo y en algún momento te pagan a ti. En ese hueco viven los retrasos de liquidación y las cuentas congeladas.",

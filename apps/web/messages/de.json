@@ -1326,6 +1326,9 @@
     }
   },
   "vision": {
+    "hero": {
+      "subline": "Warum RSends jede Zahlung direkt von der Wallet des Kunden an die Wallet des Händlers abwickelt."
+    },
     "eyebrow": "VISION",
     "title": "Eine Zahlung sollte Geld bewegen, nicht festhalten.",
     "body1": "Die meisten Zahlungsanbieter stehen zwischen dir und deinem Geld. Dein Kunde zahlt an sie, sie halten das Guthaben, und irgendwann zahlen sie an dich. In dieser Lücke wohnen Auszahlungsverzögerungen und eingefrorene Konten.",
