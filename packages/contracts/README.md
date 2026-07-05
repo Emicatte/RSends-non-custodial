@@ -73,6 +73,19 @@ The full step-by-step (keystore setup, verification, wiring the address into
 backend and frontend env) lives in the repo-root
 [`DEPLOY_RUNBOOK.md`](../../DEPLOY_RUNBOOK.md), Part 1.
 
+### Deployed reference (Base Sepolia — testnet)
+
+| | |
+|---|---|
+| Router | [`0x2Ec353815F2Cd382628d0D399F8d80959C1758CA`](https://sepolia.basescan.org/address/0x2Ec353815F2Cd382628d0D399F8d80959C1758CA) |
+| Deploy block | `43196381` — also the `INDEXER_START_BLOCKS_JSON` backfill safety-net value |
+
+Verified on-chain (`eth_getCode` returns no code at block 43196380 and the
+router bytecode at 43196381), targeted by the `SetFeeConfig` broadcast under
+`broadcast/SetFeeConfig.s.sol/84532/`, and pinned by the frontend test
+`apps/web/app/__tests__/pay/payTokens.test.ts`. Testnet only — there is no
+mainnet deployment of this contract.
+
 ## Dependencies
 
 - OpenZeppelin Contracts v5 (`SafeERC20`, `IERC20Permit`, `ReentrancyGuard`,
