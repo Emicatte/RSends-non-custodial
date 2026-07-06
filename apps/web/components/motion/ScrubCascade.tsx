@@ -22,6 +22,8 @@ type Props = {
   endBase?: number
   /** per-index offset (%) applied to both start and end — the cascade tightness. */
   stagger?: number
+  /** motion-blur amount (px) while a card is in flight; sharpens to 0 as it lands */
+  blur?: number
 }
 
 /**
@@ -41,6 +43,7 @@ export default function ScrubCascade({
   startBase = 88,
   endBase = 93,
   stagger = 6,
+  blur = 8,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null)
 
@@ -56,10 +59,15 @@ export default function ScrubCascade({
         cards.forEach((el, i) => {
           gsap.fromTo(
             el,
-            { autoAlpha: 0, y },
+            // Motion blur rides the same scrub: max while the card is in
+            // flight, 0 when it lands — reverses with the scroll like y/alpha.
+            // Only the tween ever sets `filter`, so reduced-motion and no-JS
+            // render stay sharp via the `.rs-card { opacity: 1 }` base CSS.
+            { autoAlpha: 0, y, filter: `blur(${blur}px)` },
             {
               autoAlpha: 1,
               y: 0,
+              filter: 'blur(0px)',
               ease: 'none',
               scrollTrigger: {
                 trigger: el,
@@ -78,7 +86,7 @@ export default function ScrubCascade({
       return () => ctx.revert()
     })
     return () => mm.revert()
-  }, [y, startBase, endBase, stagger])
+  }, [y, startBase, endBase, stagger, blur])
 
   return (
     <div ref={ref} className={className} style={style}>

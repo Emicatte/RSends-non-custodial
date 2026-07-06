@@ -22,6 +22,8 @@ type Props = {
   end?: string
   /** ScrollTrigger scrub smoothing (seconds). Lower = tighter tracking. */
   scrub?: number
+  /** motion-blur amount (px) while the element is in flight; sharpens to 0 as it lands */
+  blur?: number
 }
 
 /**
@@ -41,6 +43,7 @@ export default function ScrubReveal({
   start = 'top 92%',
   end = 'top 40%',
   scrub = 0.9,
+  blur = 8,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null)
 
@@ -57,10 +60,15 @@ export default function ScrubReveal({
         items.forEach((el) => {
           gsap.fromTo(
             el,
-            { autoAlpha: 0, y },
+            // Motion blur rides the same scrub: max while the element is in
+            // flight, 0 when it lands — reverses with the scroll like y/alpha.
+            // Only the tween ever sets `filter`, so reduced-motion and no-JS
+            // render stay sharp via the `.rs-reveal { opacity: 1 }` base CSS.
+            { autoAlpha: 0, y, filter: `blur(${blur}px)` },
             {
               autoAlpha: 1,
               y: 0,
+              filter: 'blur(0px)',
               ease: 'none',
               scrollTrigger: { trigger: el, start, end, scrub },
             },
@@ -74,7 +82,7 @@ export default function ScrubReveal({
       return () => ctx.revert()
     })
     return () => mm.revert()
-  }, [y, start, end, scrub])
+  }, [y, start, end, scrub, blur])
 
   return (
     <div ref={ref} className={className} style={style}>
