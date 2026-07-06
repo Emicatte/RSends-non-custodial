@@ -1401,6 +1401,10 @@
         "body": "Zahlungsinfrastruktur zählt nur, wenn sie in fünf Jahren noch läuft. Dafür bauen wir."
       }
     ],
+    "contractBand": {
+      "text": "Der Contract, der jede Zahlung abwickelt, ist auf BaseScan im Quellcode verifiziert. Du kannst genau nachlesen, wie eine Zahlung aufgeteilt wird, bevor du uns irgendetwas anvertraust.",
+      "cta": "Den Contract lesen"
+    },
     "crossLink": "Lies die Vision"
   }
 }

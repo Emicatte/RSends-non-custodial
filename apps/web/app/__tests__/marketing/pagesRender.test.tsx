@@ -149,13 +149,61 @@ describe.each(LOCALES)('/%s/team', locale => {
     for (const num of ['01', '02', '03', '04']) {
       expect(screen.getByText(num)).toBeInTheDocument()
     }
-    // BaseScan mentions link the contract page
+    // Frozen copy: every bio and philosophy card must survive the rebuild
+    for (const profile of m.profiles) {
+      expect(screen.getByText(profile.bio)).toBeInTheDocument()
+    }
+    for (const item of m.philosophy) {
+      expect(screen.getByText(item.title)).toBeInTheDocument()
+    }
+    // BaseScan mentions link the contract page (body2 anchor + band CTA at least)
     const contractLinks = container.querySelectorAll(`a[href="${CONTRACT_URL}"]`)
-    expect(contractLinks.length).toBeGreaterThanOrEqual(1)
+    expect(contractLinks.length).toBeGreaterThanOrEqual(2)
     for (const a of Array.from(contractLinks)) {
       expect(a).toHaveAttribute('target', '_blank')
       expect(a).toHaveAttribute('rel', 'noopener noreferrer')
     }
     expect(container.querySelector('a[href="/vision"]')).not.toBeNull()
+  })
+
+  it('renders the shared video hero with poster and autoplay', async () => {
+    const { container } = render(await TeamPage(props(locale)))
+
+    const video = container.querySelector('video')
+    expect(video).not.toBeNull()
+    expect(video).toHaveAttribute('poster', '/vision/hero-poster.jpg')
+    expect(video).toHaveAttribute('autoplay')
+    expect(video).toHaveAttribute('loop')
+    expect(video).toHaveAttribute('playsinline')
+    expect(video).toHaveAttribute('preload', 'auto')
+    expect(
+      container.querySelector('video source[src="/vision/hero-bg.mp4"]'),
+    ).not.toBeNull()
+  })
+
+  it('keeps the full headline in the pre-hydration markup and body1 as the hero subline', async () => {
+    const { container } = render(await TeamPage(props(locale)))
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const m = require(`@/messages/${locale}.json`).team
+
+    // The verbatim headline must survive into the h1 regardless of the
+    // animation (sr-only text + sizing ghost carry it).
+    const h1 = container.querySelector('h1')
+    expect(h1?.textContent).toContain(m.title)
+    expect(screen.getByText(m.body1)).toBeInTheDocument()
+  })
+
+  it('renders the contract band with the truncated address and a BaseScan CTA', async () => {
+    render(await TeamPage(props(locale)))
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const m = require(`@/messages/${locale}.json`).team
+
+    expect(screen.getByText('0x2Ec3…58CA')).toBeInTheDocument()
+    expect(screen.getByText(m.contractBand.text)).toBeInTheDocument()
+    const cta = screen.getByText(m.contractBand.cta).closest('a')
+    expect(cta).not.toBeNull()
+    expect(cta).toHaveAttribute('href', CONTRACT_URL)
+    expect(cta).toHaveAttribute('target', '_blank')
+    expect(cta).toHaveAttribute('rel', 'noopener noreferrer')
   })
 })

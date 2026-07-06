@@ -4,8 +4,7 @@ import { Link } from '@/i18n/navigation'
 import { C } from '@/app/designTokens'
 import ScrubReveal from '@/components/motion/ScrubReveal'
 import ScrubCascade from '@/components/motion/ScrubCascade'
-import MeshHeroVideo from '@/components/pricing/MeshHeroVideo'
-import TypewriterHeadline from '@/components/vision/TypewriterHeadline'
+import MediaHero from '@/components/marketing/MediaHero'
 
 export const metadata: Metadata = {
   title: 'Vision — RSends',
@@ -72,84 +71,15 @@ export default async function VisionPage({ params }: PageProps) {
 
   return (
     <main style={{ background: C.bg }}>
-      {/* ── Hero — dark full-bleed video, typewriter headline (mirrors the
-             pricing / how-it-works mesh hero, incl. the no-flash pattern) ── */}
-      <section
-        style={{
-          position: 'relative',
-          width: '100%',
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          overflow: 'hidden',
-          background: '#0A0A0A',
-        }}
-      >
-        <MeshHeroVideo src="/vision/hero-bg.mp4" poster="/vision/hero-poster.jpg" />
-        {/* Ink scrim at 0.50: brightest glyph-scale patch behind the text
-            column measures ~gray-121 on the re-graded footage; composited it
-            gives the 68%-white subline 5.7:1 (AA needs 4.5:1). */}
-        <div
-          aria-hidden="true"
-          style={{ position: 'absolute', inset: 0, background: 'rgba(10,10,12,0.50)', zIndex: 1 }}
-        />
-        <div
-          style={{
-            // Full-width, not the centered 1160px container: on wide screens
-            // the block hugs the viewport gutter instead of drifting toward
-            // the optical center with the container.
-            width: '100%',
-            position: 'relative',
-            zIndex: 2,
-            padding: `0 ${HPAD}`,
-            // Static offset: optical anchor sits ~56% down instead of dead
-            // center. Applied identically SSR/client, outside the typewriter's
-            // sizing ghost, so the type cycle stays CLS-free.
-            marginTop: 'clamp(40px, 12vh, 120px)',
-          }}
-        >
-          {/* Three levels, left-aligned: eyebrow / typed headline / subline */}
-          <div style={{ maxWidth: 640 }}>
-            <div
-              style={{
-                fontFamily: C.M,
-                fontSize: 13,
-                fontWeight: 500,
-                letterSpacing: '0.18em',
-                textTransform: 'uppercase',
-                color: '#E8A488',
-                marginBottom: 18,
-              }}
-            >
-              {t('eyebrow')}
-            </div>
-            <TypewriterHeadline
-              text={t('title')}
-              style={{
-                fontFamily: C.D,
-                fontSize: 'clamp(38px, 4.6vw, 64px)',
-                fontWeight: 400,
-                lineHeight: 1.08,
-                letterSpacing: '-0.5px',
-                color: '#FFFFFF',
-                margin: 0,
-              }}
-              subline={t('hero.subline')}
-              sublineStyle={{
-                fontFamily: C.D,
-                fontSize: 16.5,
-                lineHeight: 1.6,
-                color: 'rgba(255,255,255,0.68)',
-                // ~52ch in loaded General Sans; px so the box doesn't reflow
-                // when the webfont swaps in (ch resolves against the fallback
-                // font first).
-                maxWidth: 500,
-                margin: '20px 0 0',
-              }}
-            />
-          </div>
-        </div>
-      </section>
+      {/* ── Hero — shared dark video hero (see components/marketing/MediaHero,
+             mirrors the pricing / how-it-works mesh hero incl. no-flash) ──── */}
+      <MediaHero
+        eyebrow={t('eyebrow')}
+        title={t('title')}
+        subline={t('hero.subline')}
+        videoSrc="/vision/hero-bg.mp4"
+        poster="/vision/hero-poster.jpg"
+      />
 
       {/* ── Editorial — the three paragraphs, on paper ─────────────────── */}
       <section style={{ ...container, padding: `clamp(72px, 12vh, 128px) ${HPAD} clamp(24px, 4vh, 48px)` }}>

@@ -1400,6 +1400,10 @@
         "body": "Payment infrastructure only matters if it's still running in five years. We build for that."
       }
     ],
+    "contractBand": {
+      "text": "The contract that settles every payment is source-verified on BaseScan. You can read exactly how a payment is split before you trust us with anything.",
+      "cta": "Read the contract"
+    },
     "crossLink": "Read the vision"
   }
 }

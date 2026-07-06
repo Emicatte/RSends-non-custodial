@@ -4,6 +4,7 @@ import { Link } from '@/i18n/navigation'
 import { C } from '@/app/designTokens'
 import ScrubReveal from '@/components/motion/ScrubReveal'
 import ScrubCascade from '@/components/motion/ScrubCascade'
+import MediaHero from '@/components/marketing/MediaHero'
 
 export const metadata: Metadata = {
   title: 'Team — RSends',
@@ -18,6 +19,8 @@ const CONTAINER = 1160
 
 const ROUTER_ADDRESS = '0x2Ec353815F2Cd382628d0D399F8d80959C1758CA'
 const CONTRACT_URL = `https://sepolia.basescan.org/address/${ROUTER_ADDRESS}`
+// Derived, not hardcoded: the display can never drift from CONTRACT_URL.
+const SHORT_ADDRESS = `${ROUTER_ADDRESS.slice(0, 6)}…${ROUTER_ADDRESS.slice(-4)}`
 
 // Names, initials, role labels and philosophy numbers are DM Mono / identity
 // figures rendered identically in every locale; only bios and card copy are
@@ -90,30 +93,87 @@ export default async function TeamPage({ params }: PageProps) {
 
   return (
     <main style={{ background: C.bg }}>
-      {/* ── Eyebrow + headline + body ─────────────────────────────────── */}
-      <section style={{ ...container, padding: `clamp(96px, 16vh, 160px) ${HPAD} clamp(24px, 4vh, 48px)` }}>
+      {/* ── Hero — shared dark video hero, sibling of /vision. body1 is the
+             frozen first body line, promoted to the typed-headline subline.
+             Shorter than /vision's 100vh: /team is a supporting page. ─────── */}
+      <MediaHero
+        eyebrow={t('eyebrow')}
+        title={t('title')}
+        subline={t('body1')}
+        videoSrc="/vision/hero-bg.mp4"
+        poster="/vision/hero-poster.jpg"
+        minHeight="max(480px, 70vh)"
+        contentOffset="clamp(24px, 6vh, 64px)"
+      />
+
+      {/* ── Editorial — the remaining paragraphs, on paper ─────────────── */}
+      <section style={{ ...container, padding: `clamp(72px, 12vh, 128px) ${HPAD} clamp(24px, 4vh, 48px)` }}>
         <ScrubReveal scrub={0.5}>
-          <div className="rs-reveal" style={{ ...eyebrow, marginBottom: 18 }}>
-            {t('eyebrow')}
-          </div>
-          <h1
-            className="rs-reveal"
-            style={{
-              fontFamily: C.D,
-              fontSize: 'clamp(32px, 4.2vw, 58px)',
-              fontWeight: 400,
-              lineHeight: 1.08,
-              letterSpacing: '-0.5px',
-              color: C.text,
-              margin: '0 0 28px',
-              maxWidth: 820,
-            }}
-          >
-            {t('title')}
-          </h1>
-          <p className="rs-reveal" style={body}>{t('body1')}</p>
           <p className="rs-reveal" style={body}>{linkifyBaseScan(t('body2'))}</p>
           <p className="rs-reveal" style={{ ...body, margin: 0 }}>{t('body3')}</p>
+        </ScrubReveal>
+      </section>
+
+      {/* ── Contract band — terracotta rule, then the emphasis moment on
+             ink: the address is the argument. Maps to /vision's pull line. ── */}
+      <section style={{ ...container, padding: `clamp(40px, 7vh, 80px) ${HPAD} clamp(28px, 5vh, 56px)` }}>
+        <ScrubReveal scrub={0.5}>
+          <div className="rs-reveal">
+            <div style={{ width: 26, height: 2, background: C.purple, marginBottom: 18 }} />
+            <div
+              style={{
+                background: '#0A0A0A',
+                borderRadius: 16,
+                padding: 'clamp(28px, 4vw, 44px)',
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: C.M,
+                  fontSize: 13,
+                  fontWeight: 500,
+                  letterSpacing: '0.14em',
+                  color: '#E8A488',
+                  marginBottom: 14,
+                }}
+              >
+                {SHORT_ADDRESS}
+              </div>
+              {/* "BaseScan" deliberately not linkified here: the ink-on-paper
+                  link treatment is illegible on the dark band; the CTA below
+                  is the single link out. */}
+              <p
+                style={{
+                  fontFamily: C.D,
+                  fontSize: 17,
+                  lineHeight: 1.65,
+                  color: 'rgba(255,255,255,0.78)',
+                  maxWidth: 640,
+                  margin: '0 0 24px',
+                }}
+              >
+                {t('contractBand.text')}
+              </p>
+              <a
+                href={CONTRACT_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-block',
+                  fontFamily: C.D,
+                  fontSize: 15,
+                  fontWeight: 600,
+                  padding: '13px 24px',
+                  borderRadius: 8,
+                  textDecoration: 'none',
+                  background: C.bg,
+                  color: '#0A0A0A',
+                }}
+              >
+                {t('contractBand.cta')}
+              </a>
+            </div>
+          </div>
         </ScrubReveal>
       </section>
 
@@ -229,20 +289,31 @@ export default async function TeamPage({ params }: PageProps) {
         </ScrubCascade>
       </section>
 
-      {/* ── Quiet cross-link to /vision ───────────────────────────────── */}
+      {/* ── Closing band — primary cross-link to /vision, on paper ───────── */}
       <section style={{ ...container, padding: `clamp(32px, 5vh, 56px) ${HPAD} clamp(56px, 9vh, 96px)` }}>
         <ScrubReveal scrub={0.5}>
-          <div className="rs-reveal" style={{ borderTop: `1px solid ${C.border}`, paddingTop: 'clamp(24px, 4vh, 40px)' }}>
+          <div
+            className="rs-reveal"
+            style={{
+              borderTop: `1px solid ${C.border}`,
+              paddingTop: 'clamp(28px, 4vh, 44px)',
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              gap: 'clamp(16px, 3vw, 28px)',
+            }}
+          >
             <Link
               href="/vision"
               style={{
                 fontFamily: C.D,
                 fontSize: 15,
-                fontWeight: 500,
-                color: C.text,
+                fontWeight: 600,
+                padding: '13px 24px',
+                borderRadius: 8,
                 textDecoration: 'none',
-                borderBottom: `1px solid ${C.border}`,
-                paddingBottom: 2,
+                background: C.text,
+                color: C.bg,
               }}
             >
               {t('crossLink')} →

@@ -1401,6 +1401,10 @@
         "body": "Une infrastructure de paiement ne compte que si elle fonctionne encore dans cinq ans. Nous construisons pour ça."
       }
     ],
+    "contractBand": {
+      "text": "Le contrat qui règle chaque paiement est vérifié au niveau du code source sur BaseScan. Vous pouvez lire exactement comment un paiement est réparti avant de nous confier quoi que ce soit.",
+      "cta": "Lire le contrat"
+    },
     "crossLink": "Lire la vision"
   }
 }
