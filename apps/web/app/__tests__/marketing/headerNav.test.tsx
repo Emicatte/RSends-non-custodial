@@ -1,9 +1,10 @@
 /**
  * The marketing header must render the flat nav (How it works · Pricing ·
- * Vision — Team deliberately excluded) with per-locale labels, and mount only
- * on the marketing routes, never on the app/dashboard shell.
+ * Vision · Team) with per-locale labels — in the desktop row AND the mobile
+ * disclosure panel — and mount only on the marketing routes, never on the
+ * app/dashboard shell.
  */
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 
 let currentLocale = 'en'
 let currentPathname = '/'
@@ -53,8 +54,8 @@ describe.each(LOCALES)('MarketingNav (%s)', locale => {
     currentPathname = '/'
   })
 
-  it('renders localized links to how-it-works, pricing and vision — and none to team', () => {
-    const { container } = render(<MarketingNav />)
+  it('renders localized links to how-it-works, pricing, vision and team', () => {
+    render(<MarketingNav />)
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const nav = require(`@/messages/${locale}.json`).nav
 
@@ -62,13 +63,23 @@ describe.each(LOCALES)('MarketingNav (%s)', locale => {
       ['howItWorks', '/how-it-works'],
       ['pricing', '/pricing'],
       ['vision', '/vision'],
+      ['team', '/team'],
     ] as const) {
       const link = screen.getByText(nav[key]).closest('a')
       expect(link).not.toBeNull()
       expect(link).toHaveAttribute('href', href)
     }
+  })
 
-    expect(container.querySelector('a[href="/team"]')).toBeNull()
+  it('includes all four links, team included, in the mobile disclosure panel', () => {
+    const { container } = render(<MarketingNav />)
+    fireEvent.click(screen.getByLabelText('Menu'))
+
+    const panel = container.querySelector('#rs-mnav-panel')
+    expect(panel).not.toBeNull()
+    for (const href of ['/how-it-works', '/pricing', '/vision', '/team']) {
+      expect(panel!.querySelector(`a[href="${href}"]`)).not.toBeNull()
+    }
   })
 
   it('links the logo to the home page and keeps the right-side controls', () => {

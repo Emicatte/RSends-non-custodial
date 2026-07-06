@@ -2,7 +2,8 @@
   "nav": {
     "howItWorks": "How it works",
     "pricing": "Pricing",
-    "vision": "Vision"
+    "vision": "Vision",
+    "team": "Team"
   },
   "auth": {
     "signIn": "Log in",
