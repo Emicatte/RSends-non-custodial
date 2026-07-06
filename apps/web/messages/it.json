@@ -1400,6 +1400,10 @@
         "body": "L'infrastruttura di pagamento conta solo se funziona ancora tra cinque anni. Costruiamo per questo."
       }
     ],
+    "contractBand": {
+      "text": "Il contratto che liquida ogni pagamento è verificato a livello di codice sorgente su BaseScan. Puoi leggere esattamente come viene diviso un pagamento prima di affidarci qualsiasi cosa.",
+      "cta": "Leggi il contratto"
+    },
     "crossLink": "Leggi la visione"
   }
 }

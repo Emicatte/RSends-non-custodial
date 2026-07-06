@@ -1,0 +1,14 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`vision hero markup is stable across the MediaHero extraction 1`] = `
+"<section style="position: relative; width: 100%; min-height: 100vh; display: flex; align-items: center; overflow: hidden; background: rgb(10, 10, 10);"><div aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%; background-color: rgb(10, 10, 10); background-image: url(&quot;/vision/hero-poster.jpg&quot;); background-size: cover; background-position: center; z-index: 0;"></div><video autoplay="" loop="" playsinline="" preload="auto" poster="/vision/hero-poster.jpg" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; opacity: 0; transition: opacity 200ms ease;"><source src="/vision/hero-bg.mp4" type="video/mp4"></video><div aria-hidden="true" style="position: absolute; inset: 0; background: rgba(10, 10, 12, 0.5); z-index: 1;"></div><div style="width: 100%; position: relative; z-index: 2; padding: 0px clamp(20px, 6vw, 96px); margin-top: clamp(40px, 12vh, 120px);"><div style="max-width: 640px;"><div style="font-family: var(--font-mono); font-size: 13px; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: rgb(232, 164, 136); margin-bottom: 18px;">VISION</div><h1 style="font-family: var(--font-display); font-size: clamp(38px, 4.6vw, 64px); font-weight: 400; line-height: 1.08; letter-spacing: -0.5px; color: rgb(255, 255, 255); margin: 0px; position: relative;"><style>
+          @keyframes rs-tw-blink { 50% { opacity: 0; } }
+          .rs-tw-caret { opacity: 0.9; }
+          .rs-tw-caret--blink { animation: rs-tw-blink 1s steps(1, end) infinite; }
+          .rs-tw-caret--fading {
+            opacity: 0;
+            transition: opacity 400ms ease;
+            animation: none;
+          }
+        </style><span style="position: absolute; width: 1px; height: 1px; padding: 0px; margin: -1px; overflow: hidden; clip: rect(0px, 0px, 0px, 0px); white-space: nowrap; border: 0px;">A payment should move money, not hold it.</span><span aria-hidden="true" style="position: relative; display: block;"><span style="visibility: hidden; display: block;">A payment should move money, not hold it.</span><span style="position: absolute; inset: 0; display: block;">A payment should move money, not hold it.</span></span></h1><p aria-hidden="false" style="font-family: var(--font-display); font-size: 16.5px; line-height: 1.6; color: rgba(255, 255, 255, 0.68); max-width: 500px; margin: 20px 0px 0px; visibility: visible; opacity: 1; transition: opacity 300ms ease;">Why RSends settles every payment directly from the customer's wallet to the merchant's wallet.</p></div></div></section>"
+`;

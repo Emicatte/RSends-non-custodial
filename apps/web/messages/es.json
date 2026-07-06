@@ -1401,6 +1401,10 @@
         "body": "La infraestructura de pagos solo importa si sigue funcionando dentro de cinco años. Construimos para eso."
       }
     ],
+    "contractBand": {
+      "text": "El contrato que liquida cada pago está verificado a nivel de código fuente en BaseScan. Puedes leer exactamente cómo se divide un pago antes de confiarnos nada.",
+      "cta": "Lee el contrato"
+    },
     "crossLink": "Lee la visión"
   }
 }
