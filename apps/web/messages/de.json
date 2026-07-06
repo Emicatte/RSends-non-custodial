@@ -2,7 +2,8 @@
   "nav": {
     "howItWorks": "So funktioniert es",
     "pricing": "Preise",
-    "vision": "Vision"
+    "vision": "Vision",
+    "team": "Team"
   },
   "_TODO": "Translations pending — currently showing English as placeholder. Replace before production launch.",
   "auth": {

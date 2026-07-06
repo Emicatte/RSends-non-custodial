@@ -2,7 +2,8 @@
   "nav": {
     "howItWorks": "Come funziona",
     "pricing": "Prezzi",
-    "vision": "Visione"
+    "vision": "Visione",
+    "team": "Team"
   },
   "auth": {
     "signIn": "Accedi",

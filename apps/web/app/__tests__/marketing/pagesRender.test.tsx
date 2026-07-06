@@ -181,6 +181,16 @@ describe.each(LOCALES)('/%s/team', locale => {
     ).not.toBeNull()
   })
 
+  it('sizes the hero identically to /vision (MediaHero defaults, no overrides)', async () => {
+    const team = render(await TeamPage(props(locale)))
+    const vision = render(await VisionPage(props(locale)))
+    const teamHero = team.container.querySelector('main > section') as HTMLElement
+    const visionHero = vision.container.querySelector('main > section') as HTMLElement
+
+    expect(teamHero.style.minHeight).toBe('100vh')
+    expect(teamHero.style.minHeight).toBe(visionHero.style.minHeight)
+  })
+
   it('keeps the full headline in the pre-hydration markup and body1 as the hero subline', async () => {
     const { container } = render(await TeamPage(props(locale)))
     // eslint-disable-next-line @typescript-eslint/no-require-imports

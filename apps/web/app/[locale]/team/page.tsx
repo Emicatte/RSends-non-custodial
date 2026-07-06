@@ -93,17 +93,15 @@ export default async function TeamPage({ params }: PageProps) {
 
   return (
     <main style={{ background: C.bg }}>
-      {/* ── Hero — shared dark video hero, sibling of /vision. body1 is the
-             frozen first body line, promoted to the typed-headline subline.
-             Shorter than /vision's 100vh: /team is a supporting page. ─────── */}
+      {/* ── Hero — shared dark video hero, identical sizing to /vision
+             (MediaHero defaults). body1 is the frozen first body line,
+             promoted to the typed-headline subline. ─────────────────────── */}
       <MediaHero
         eyebrow={t('eyebrow')}
         title={t('title')}
         subline={t('body1')}
         videoSrc="/vision/hero-bg.mp4"
         poster="/vision/hero-poster.jpg"
-        minHeight="max(480px, 70vh)"
-        contentOffset="clamp(24px, 6vh, 64px)"
       />
 
       {/* ── Editorial — the remaining paragraphs, on paper ─────────────── */}
