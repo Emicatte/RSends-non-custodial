@@ -4,6 +4,7 @@ import './globals.css'
 import { Providers } from './providers'
 import { AuthSessionProvider } from '@/components/auth/AuthSessionProvider'
 import { AuthBootstrap } from '@/components/auth/AuthBootstrap'
+import { Analytics } from '@vercel/analytics/next'
 
 const dmMono = DM_Mono({
   subsets:  ['latin'],
@@ -55,6 +56,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             {children}
           </Providers>
         </AuthSessionProvider>
+        <Analytics />
       </body>
     </html>
   )
