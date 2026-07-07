@@ -1,4 +1,7 @@
 import type { Metadata } from 'next'
+import { getServerSession } from 'next-auth'
+import { redirect } from 'next/navigation'
+import { authOptions } from '@/lib/auth-options'
 import AppNav from '@/components/app/AppNav'
 import AppSidebar from '@/components/app/AppSidebar'
 import AppBottomNav from '@/components/app/AppBottomNav'
@@ -13,7 +16,18 @@ export const metadata: Metadata = {
   description: 'Send, swap and manage crypto payments.',
 }
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+export default async function AppLayout({
+  children,
+  params,
+}: {
+  children: React.ReactNode
+  params: Promise<{ locale: string }>
+}) {
+  const { locale } = await params
+  const session = await getServerSession(authOptions)
+  if (!session) {
+    redirect(`/${locale}/login`)
+  }
   return (
     <>
       <AppNav />
