@@ -58,7 +58,7 @@ export function AccountLinkingModal({
           {scenario === 'existing-google' ? (
             <button
               type="button"
-              onClick={() => signIn('google', { callbackUrl: `/${locale}/settings` })}
+              onClick={() => signIn('google', { callbackUrl: `/${locale}/app` })}
               className="rounded-lg px-4 py-2 text-sm font-medium text-white"
               style={{ background: '#C8512C', border: 'none', cursor: 'pointer' }}
             >
@@ -67,7 +67,7 @@ export function AccountLinkingModal({
           ) : scenario === 'existing-github' ? (
             <button
               type="button"
-              onClick={() => signIn('github', { callbackUrl: `/${locale}/settings` })}
+              onClick={() => signIn('github', { callbackUrl: `/${locale}/app` })}
               className="rounded-lg px-4 py-2 text-sm font-medium text-white"
               style={{ background: '#C8512C', border: 'none', cursor: 'pointer' }}
             >

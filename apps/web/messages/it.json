@@ -1187,8 +1187,14 @@
     "heading": "Inizia",
     "subcopy": "Inizia ad accettare pagamenti in stablecoin che si liquidano direttamente nel tuo wallet. Demo testnet attiva su Base Sepolia.",
     "features": {
-      "noncustodial": { "title": "Non-custodial by design", "desc": "I fondi vengono liquidati on-chain nel tuo wallet; RSends non li detiene mai." },
-      "developers": { "title": "Pensato per gli sviluppatori", "desc": "Crea richieste di pagamento dalla dashboard o via API, con webhook." }
+      "noncustodial": {
+        "title": "Non-custodial by design",
+        "desc": "I fondi vengono liquidati on-chain nel tuo wallet; RSends non li detiene mai."
+      },
+      "developers": {
+        "title": "Pensato per gli sviluppatori",
+        "desc": "Crea richieste di pagamento dalla dashboard o via API, con webhook."
+      }
     },
     "cta": "Inizia",
     "secondary": "Parla con noi"
@@ -1217,25 +1223,67 @@
     "details": {
       "title": "Dettagli della fee",
       "items": [
-        { "label": "Gas", "value": "pagato dal pagatore; il merchant riceve il pagamento meno la sola fee fissa" },
-        { "label": "Transazioni fallite", "value": "mai addebitate (atomica — un revert non instrada nulla e non costa nulla)" },
-        { "label": "Costo di setup", "value": "nessuno" },
-        { "label": "Minimo mensile", "value": "nessuno (il piano Free è €0/mese)" },
-        { "label": "Custodia", "value": "nessuna (pagatore → merchant diretto)" },
-        { "label": "Settlement", "value": "on-chain, atomico, una sola transazione" }
+        {
+          "label": "Gas",
+          "value": "pagato dal pagatore; il merchant riceve il pagamento meno la sola fee fissa"
+        },
+        {
+          "label": "Transazioni fallite",
+          "value": "mai addebitate (atomica — un revert non instrada nulla e non costa nulla)"
+        },
+        {
+          "label": "Costo di setup",
+          "value": "nessuno"
+        },
+        {
+          "label": "Minimo mensile",
+          "value": "nessuno (il piano Free è €0/mese)"
+        },
+        {
+          "label": "Custodia",
+          "value": "nessuna (pagatore → merchant diretto)"
+        },
+        {
+          "label": "Settlement",
+          "value": "on-chain, atomico, una sola transazione"
+        }
       ]
     },
     "faq": {
       "title": "Domande",
       "items": [
-        { "q": "Quali chain e token sono supportati?", "a": "USDC, USDT ed EURC su Base ed Ethereum. Il prodotto è attualmente una demo su testnet Base Sepolia." },
-        { "q": "Chi paga il gas?", "a": "Il gas è pagato dal pagatore, in quanto soggetto che avvia la transazione on-chain. Il merchant riceve il pagamento meno la sola fee fissa RSends — nessun costo di gas per il merchant." },
-        { "q": "La fee è mai una percentuale dell'importo?", "a": "No. È una fee fissa di €0.60 per transazione fino a €1.000, e di €3.00 fissi oltre tale soglia — un cap rigido. Non è mai una percentuale del volume." },
-        { "q": "Le transazioni fallite hanno un costo?", "a": "No. La fee è prelevata atomicamente all'interno della transazione di settlement, quindi se va in revert non viene instradato nulla e non viene addebitato nulla." },
-        { "q": "Come vengono gestiti i rimborsi?", "a": "RSends è non-custodial e non detiene mai i fondi, quindi non può annullare un pagamento. La restituzione dei fondi è un nuovo pagamento avviato dal merchant e prevede la stessa fee fissa di qualsiasi pagamento." },
-        { "q": "Ci sono costi di setup o un minimo mensile?", "a": "Nessun costo di setup e nessun minimo mensile per iniziare — il piano Free è €0/mese. I piani a pagamento aggiungono funzioni, non una fee per transazione diversa." },
-        { "q": "RSends detiene mai i miei fondi?", "a": "No. I pagamenti vengono regolati on-chain direttamente dal pagatore al merchant; RSends non prende mai in custodia e non può spostare o congelare i fondi." },
-        { "q": "Quando viene regolato un pagamento?", "a": "On-chain e in modo atomico — una sola transazione, confermata nel blocco. Il blocco è la ricevuta; non c'è alcun ledger nascosto da riconciliare." }
+        {
+          "q": "Quali chain e token sono supportati?",
+          "a": "USDC, USDT ed EURC su Base ed Ethereum. Il prodotto è attualmente una demo su testnet Base Sepolia."
+        },
+        {
+          "q": "Chi paga il gas?",
+          "a": "Il gas è pagato dal pagatore, in quanto soggetto che avvia la transazione on-chain. Il merchant riceve il pagamento meno la sola fee fissa RSends — nessun costo di gas per il merchant."
+        },
+        {
+          "q": "La fee è mai una percentuale dell'importo?",
+          "a": "No. È una fee fissa di €0.60 per transazione fino a €1.000, e di €3.00 fissi oltre tale soglia — un cap rigido. Non è mai una percentuale del volume."
+        },
+        {
+          "q": "Le transazioni fallite hanno un costo?",
+          "a": "No. La fee è prelevata atomicamente all'interno della transazione di settlement, quindi se va in revert non viene instradato nulla e non viene addebitato nulla."
+        },
+        {
+          "q": "Come vengono gestiti i rimborsi?",
+          "a": "RSends è non-custodial e non detiene mai i fondi, quindi non può annullare un pagamento. La restituzione dei fondi è un nuovo pagamento avviato dal merchant e prevede la stessa fee fissa di qualsiasi pagamento."
+        },
+        {
+          "q": "Ci sono costi di setup o un minimo mensile?",
+          "a": "Nessun costo di setup e nessun minimo mensile per iniziare — il piano Free è €0/mese. I piani a pagamento aggiungono funzioni, non una fee per transazione diversa."
+        },
+        {
+          "q": "RSends detiene mai i miei fondi?",
+          "a": "No. I pagamenti vengono regolati on-chain direttamente dal pagatore al merchant; RSends non prende mai in custodia e non può spostare o congelare i fondi."
+        },
+        {
+          "q": "Quando viene regolato un pagamento?",
+          "a": "On-chain e in modo atomico — una sola transazione, confermata nel blocco. Il blocco è la ricevuta; non c'è alcun ledger nascosto da riconciliare."
+        }
       ]
     },
     "split": {
@@ -1406,5 +1454,452 @@
       "cta": "Leggi il contratto"
     },
     "crossLink": "Leggi la visione"
+  },
+  "app": {
+    "sidebar": {
+      "overview": "Panoramica",
+      "actions": "Azioni",
+      "management": "Gestione",
+      "dashboard": "Dashboard",
+      "send": "Invia",
+      "swap": "Converti",
+      "flow": "Flow",
+      "transactions": "Transazioni",
+      "balances": "Saldi",
+      "clients": "Clienti",
+      "commandCenter": "Command Center",
+      "reports": "Report",
+      "settings": "Impostazioni"
+    },
+    "dashboard": {
+      "title": "Dashboard",
+      "mainnetBadge": "Mainnet",
+      "metrics": {
+        "volume24h": "Volume 24h",
+        "transactions24h": "Transazioni 24h",
+        "totalBalance": "Saldo totale",
+        "activeClients": "Clienti attivi",
+        "chainsLabel": "su {count} chain",
+        "thisWeek": "+{count} questa settimana"
+      },
+      "volumeTrend": {
+        "title": "Andamento volume (7g)",
+        "comingSoon": "Grafico in arrivo"
+      },
+      "recentTransactions": {
+        "title": "Transazioni recenti",
+        "viewAll": "Vedi tutte",
+        "time": "Ora",
+        "type": "Tipo",
+        "amount": "Importo",
+        "chain": "Chain",
+        "status": "Stato",
+        "statusConfirmed": "Confermata",
+        "statusPending": "In attesa",
+        "statusFailed": "Fallita"
+      }
+    },
+    "balances": {
+      "title": "Saldi",
+      "banner": "Saldi live in arrivo — visualizzazione dati di esempio",
+      "metrics": {
+        "total": "Totale",
+        "settled": "Saldato",
+        "pending": "In sospeso"
+      },
+      "breakdown": {
+        "title": "Distribuzione per token",
+        "subtitle": "{assets} asset · {chains} chain"
+      }
+    },
+    "settings": {
+      "title": "Impostazioni",
+      "boxes": {
+        "api": "API",
+        "merchant": "Merchant",
+        "security": "Sicurezza",
+        "notifications": "Notifiche"
+      },
+      "fields": {
+        "apiKey": "API key",
+        "webhookUrl": "Webhook URL",
+        "rateLimit": "Rate limit",
+        "companyName": "Ragione sociale",
+        "contactEmail": "Email contatto",
+        "kybStatus": "Stato KYB",
+        "authMethod": "Metodo autenticazione",
+        "twoFa": "2FA",
+        "ipWhitelist": "IP whitelist",
+        "failedTxAlerts": "Alert tx fallite",
+        "dailyDigest": "Riepilogo giornaliero",
+        "thresholdAlerts": "Alert soglia"
+      },
+      "values": {
+        "verified": "Verificato",
+        "enabled": "Attivo",
+        "disabled": "Disattivato",
+        "addresses": "{count} indirizzi"
+      }
+    },
+    "reports": {
+      "title": "Report",
+      "metrics": {
+        "volumeApr": "Volume Apr",
+        "feesCollected": "Commissioni incassate",
+        "avgTxSize": "Importo medio tx"
+      },
+      "monthlyVolume": {
+        "title": "Volume mensile 2026",
+        "comingSoon": "Grafico in arrivo"
+      },
+      "export": {
+        "taxIt": "Report fiscale (IT)",
+        "customPeriod": "Periodo personalizzato",
+        "comingSoon": "In arrivo"
+      }
+    },
+    "commandCenter": {
+      "title": "Command Center",
+      "tabs": {
+        "forwarding": "Forwarding",
+        "splits": "Split",
+        "sweeper": "Sweeper"
+      },
+      "actions": {
+        "newRule": "+ Nuova regola",
+        "newSplit": "+ Nuovo split"
+      },
+      "status": {
+        "active": "Attivo",
+        "paused": "In pausa"
+      }
+    },
+    "clients": {
+      "title": "Clienti",
+      "card": {
+        "title": "Clienti",
+        "subtitle": "{count} attivi"
+      },
+      "rowSubtitle": "{chain} · {count} tx",
+      "status": {
+        "active": "Attivo",
+        "onboarding": "In onboarding"
+      }
+    },
+    "transactions": {
+      "title": "Transazioni",
+      "exportCsv": "Esporta CSV",
+      "exportPdf": "Esporta PDF",
+      "filters": {
+        "all": "Tutti",
+        "status": "Stato",
+        "chain": "Chain",
+        "token": "Token",
+        "date": "Data",
+        "searchPlaceholder": "Cerca hash o indirizzo..."
+      },
+      "columns": {
+        "date": "Data",
+        "hash": "Hash",
+        "type": "Tipo",
+        "to": "A",
+        "amount": "Importo",
+        "chain": "Chain",
+        "status": "Stato"
+      },
+      "status": {
+        "confirmed": "Confermata",
+        "pending": "In attesa",
+        "failed": "Fallita"
+      },
+      "pagination": {
+        "showing": "{from}-{to} di {total}",
+        "prev": "Indietro",
+        "next": "Avanti"
+      },
+      "empty": "Nessuna transazione corrisponde ai filtri"
+    }
+  },
+  "commandCenter": {
+    "connectWallet": "Connetti wallet",
+    "toAccessFlow": "Per accedere a Flow",
+    "stats": {
+      "volume": "Volume",
+      "sweeps": "Sweep",
+      "routes": "Route"
+    },
+    "tabs": {
+      "routes": "Route",
+      "splits": "Split",
+      "monitor": "Monitor",
+      "history": "Cronologia",
+      "analytics": "Analisi",
+      "groups": "Gruppi",
+      "settings": "Impostazioni"
+    },
+    "routes": {
+      "nonEvmTitle": "Auto-forwarding su {chain}",
+      "nonEvmDesc": "Automazione cross-chain in arrivo. Attualmente disponibile su catene EVM.",
+      "newRoute": "+ Nuova Route",
+      "noRoutesYet": "Nessuna route",
+      "createFirstRoute": "Crea la tua prima route",
+      "autoForward": "Auto-Forward",
+      "autoForwardDesc": "I fondi in arrivo vengono automaticamente inoltrati ai wallet scelti",
+      "splitRouting": "Split Routing",
+      "splitRoutingDesc": "Dividi i pagamenti tra più wallet con proporzioni personalizzate",
+      "smartGas": "Smart Gas",
+      "smartGasDesc": "Commissioni ottimizzate con velocità e limiti configurabili"
+    },
+    "monitor": {
+      "nonEvmTitle": "Monitoraggio live su {chain}",
+      "nonEvmDesc": "Monitoraggio cross-chain in arrivo. Attualmente disponibile su catene EVM.",
+      "optimal": "Ottimale",
+      "normal": "Normale",
+      "high": "Alto",
+      "gas": "Gas",
+      "sweeps24h": "Sweep 24h",
+      "volume24h": "Volume 24h",
+      "activeRoutes": "Route attive",
+      "pipeline": "Pipeline",
+      "live": "Live",
+      "offline": "Offline"
+    },
+    "history": {
+      "totalRouted": "Totale inoltrato",
+      "fees": "Commissioni",
+      "gasSpent": "Gas speso",
+      "successRate": "Tasso di successo",
+      "columns": {
+        "id": "#",
+        "time": "Ora",
+        "token": "Token",
+        "amount": "Importo",
+        "route": "Route",
+        "tx": "TX",
+        "status": "Stato"
+      }
+    },
+    "analytics": {
+      "totalRouted": "Totale inoltrato",
+      "feesSaved": "Commissioni risparmiate",
+      "successRate": "Tasso di successo",
+      "avgTime": "Tempo medio",
+      "perForward": "per inoltro",
+      "completed": "Completati",
+      "failed": "Falliti",
+      "other": "Altro",
+      "all": "Tutti",
+      "allTime": "Tutti i tempi",
+      "volume": "Volume",
+      "gasEfficiency": "Efficienza gas"
+    },
+    "splits": {
+      "nonEvmTitle": "Split N-wallet su {chain}",
+      "nonEvmDesc": "Split cross-chain in arrivo. Attualmente disponibile su catene EVM.",
+      "hideAuditTrail": "Nascondi audit trail",
+      "viewAuditTrail": "Mostra audit trail",
+      "deactivating": "Disattivazione…",
+      "deactivate": "Disattiva"
+    },
+    "groups": {
+      "nonEvmTitle": "Gruppi di distribuzione su {chain}",
+      "nonEvmDesc": "Distribuzione cross-chain in arrivo. Attualmente disponibile su catene EVM.",
+      "saveGroup": "Salva gruppo",
+      "saving": "Salvataggio...",
+      "deleting": "Eliminazione...",
+      "confirm": "Conferma"
+    },
+    "settings": {
+      "security": "Sicurezza",
+      "notifications": "Notifiche",
+      "distributionLists": "Liste di distribuzione",
+      "exportCompliance": "Esportazione e conformità",
+      "dangerZone": "Zona pericolosa",
+      "perHour": "Per ora",
+      "perDay": "Per giorno",
+      "globalDaily": "Giornaliero globale",
+      "closedActive": "Chiuso (Attivo)",
+      "openIdle": "Aperto (Inattivo)",
+      "savePreferences": "Salva preferenze",
+      "saved": "✓ Salvato",
+      "saving": "Salvataggio...",
+      "createList": "Crea lista",
+      "generateKey": "Genera chiave",
+      "generating": "Generazione...",
+      "copied": "Copiato!",
+      "copy": "Copia",
+      "revoke": "Revoca",
+      "generateXml": "Genera XML",
+      "reportDownloaded": "Report scaricato",
+      "networkError": "Errore di rete",
+      "stopping": "Arresto...",
+      "confirmStopAll": "Conferma arresto totale",
+      "failedToGenerateKey": "Generazione chiave fallita",
+      "yes": "Sì"
+    },
+    "wizard": {
+      "source": "Sorgente",
+      "destinations": "Destinazioni",
+      "review": "Revisione",
+      "quickSetup": "Setup rapido",
+      "csvImport": "Importa CSV",
+      "signAndCreateRoute": "Firma e crea route",
+      "checkWalletToSign": "Controlla il wallet per firmare...",
+      "duplicateAddressError": "Indirizzi destinatario duplicati non ammessi in uno split",
+      "oracleRequestFailed": "Richiesta firma oracle fallita",
+      "oracleDenied": "Oracle ha rifiutato la transazione",
+      "failedToCreateRoute": "Creazione route fallita",
+      "tipMinAmount": "Importo minimo per attivare l'auto-forwarding",
+      "tipTokenFilter": "Inoltra solo questi token (lascia vuoto per tutti)",
+      "tipGasStrategy": "Strategia prezzo gas — Economy risparmia, Fast dà priorità alla velocità",
+      "tipMaxGas": "Prezzo gas massimo in gwei",
+      "tipCooldown": "Tempo minimo tra i forward (secondi)",
+      "tipDailyLimit": "Volume massimo giornaliero di forwarding",
+      "tipAutoSwap": "Converti automaticamente i token ricevuti prima del forwarding",
+      "tipSchedule": "Inoltra solo in giorni e orari specifici",
+      "tipNotifications": "Ricevi notifica quando i fondi vengono inoltrati",
+      "economy": "Economy",
+      "lowerFees": "Commissioni ridotte",
+      "normal": "Normale",
+      "balanced": "Bilanciato",
+      "fast": "Fast",
+      "priority": "Priorità",
+      "economySpeed": "Velocità economy",
+      "fastSpeed": "Velocità fast",
+      "normalSpeed": "Velocità normale",
+      "autoSwap": "Auto-swap",
+      "scheduled": "Pianificato"
+    }
+  },
+  "networkSelector": {
+    "title": "Seleziona Rete",
+    "comingSoon": "Prossimamente",
+    "confirmInWallet": "Conferma nel wallet…"
+  },
+  "send": {
+    "searchPlaceholder": "Cerca token o chain...",
+    "currentChain": "Chain attuale",
+    "receive": "Ricevi",
+    "to": "A",
+    "useAddress": "Usa",
+    "poolInsufficient": "Pool con liquidità insufficiente",
+    "quoteUnavailable": "Quotazione non disponibile",
+    "recipientReceives": "Il destinatario riceverà ~",
+    "minSlippage": "Slippage minimo garantito",
+    "gatewayFee": "Gateway fee (0.5%)",
+    "estimatedGas": "Gas stimato swap",
+    "routeDirect": "Trasferimento diretto",
+    "routeSwap": "Swap",
+    "routeBridge": "Bridge via Chainlink CCIP",
+    "routeSwapAndBridge": "Swap & Bridge",
+    "quoteUnavailableDot": "Quotazione non disponibile.",
+    "crossChainUnavailable": "Cross-chain non disponibile per questa rotta",
+    "tokenOutUnavailable": "Token out address non disponibile.",
+    "complianceInQueue": "Compliance in coda.",
+    "transactionCancelled": "Transazione annullata.",
+    "oracleSignatureInvalid": "Firma Oracle non valida: il signer on-chain non corrisponde. Verifica ORACLE_PRIVATE_KEY.",
+    "deadlineExpired": "Deadline scaduto. Riprova.",
+    "nonceAlreadyUsed": "Nonce già usato. Riprova.",
+    "insufficientLiquidity": "Liquidità insufficiente nel pool. Riduci l'importo.",
+    "slippageExceeded": "Slippage superato. Riprova.",
+    "transactionBlocked": "Transazione bloccata dal controllo compliance",
+    "transactionInProgress": "Transazione in corso su un'altra scheda",
+    "invalidAddress": "Indirizzo non valido",
+    "paymentRefPlaceholder": "Rif. pagamento (es. INV-001)",
+    "fiscalId": "ID Fiscale",
+    "approving": "Approvazione…",
+    "finalizing": "Finalizzazione…",
+    "transactionBlockedCta": "Transazione Bloccata",
+    "insufficientLiquidityCta": "Liquidità insufficiente",
+    "networkUnavailable": "{chain} non disponibile",
+    "switchNetwork": "Cambia rete",
+    "enterRecipient": "Inserisci destinatario",
+    "enterAmount": "Inserisci un importo",
+    "selectInputToken": "Seleziona token di input",
+    "selectOutputToken": "Seleziona token di output",
+    "error": "Errore: {message}",
+    "calculatingQuote": "Calcolando quotazione Uniswap V3…",
+    "paymentConfirmed": "Pagamento Confermato",
+    "blockedAml": "Bloccata — AML",
+    "connectWallet": "Connetti wallet",
+    "ctaApprove": "Approva {symbol}",
+    "ctaSend": "Invia {symbol}",
+    "ctaSendDirect": "Invia Direct {symbol}",
+    "ctaSwapSend": "Swap & Invia {from} → {to}",
+    "ctaSwapDirect": "Swap Direct {from} → {to}",
+    "ctaBridge": "Bridge {from} → {to}",
+    "ctaSwapBridge": "Swap & Bridge {from} → {to} ({dest})",
+    "ctaInsufficient": "{symbol} insufficiente",
+    "estimatedTimeL2": "~4 secondi",
+    "estimatedTimeL1": "~15 secondi"
+  },
+  "swap": {
+    "flip": "Inverti token",
+    "pay": "Paga",
+    "receive": "Ricevi",
+    "receiveChain": "Ricevi su",
+    "sameChain": "Stessa catena",
+    "max": "Max",
+    "route": "Percorso",
+    "fee": "Commissione (0.5%)",
+    "minReceived": "Min. ricevuto",
+    "slippage": "Slippage",
+    "maxSlippage": "Max slippage",
+    "priceImpact": "Impatto sul prezzo",
+    "gasEstimate": "Gas stimato",
+    "networkFee": "Commissione di rete",
+    "input": "Input",
+    "output": "Output",
+    "swapCompleted": "Swap completato ✓",
+    "viewOnExplorer": "Vedi su Explorer ↗",
+    "newSwap": "Nuovo Swap",
+    "amlCheck": "AML Check…",
+    "approving": "Approvazione…",
+    "swapping": "Swapping…",
+    "insufficientBalance": "Saldo insufficiente",
+    "selectDifferentTokens": "Seleziona token diversi",
+    "insufficientLiquidity": "Liquidità insufficiente",
+    "enterAmount": "Inserisci importo",
+    "selectToken": "Seleziona token",
+    "oracleRejected": "Oracle ha rifiutato la transazione"
+  },
+  "txConfirmation": {
+    "confirmTransaction": "Conferma Transazione",
+    "recipient": "Destinatario",
+    "firstSendWarning": "Primo invio a questo indirizzo",
+    "token": "Token",
+    "network": "Rete",
+    "feeRSends": "Fee RSends",
+    "netRecipient": "Netto dest.",
+    "gasFee": "Gas Fee",
+    "time": "Tempo",
+    "highAmountWarning": "Importo elevato. Verifica attentamente i dati.",
+    "antiPhishingCode": "Codice anti-phishing:",
+    "holdToConfirm": "Tieni premuto per confermare (3s)",
+    "refreshQuote": "↻ Aggiorna Quotazione",
+    "confirmSend": "✓ Conferma Invio",
+    "cancel": "Annulla",
+    "expired": "⏱ Scaduto",
+    "gasLow": "Low",
+    "gasNormal": "Normal",
+    "gasHigh": "High",
+    "gasExtreme": "Extreme"
+  },
+  "txStatus": {
+    "amlChecking": "Verifica AML in corso…",
+    "amlClean": "Indirizzo verificato · AML clean",
+    "smartContract": "Smart Contract · Verifica manuale",
+    "addressFlagged": "Indirizzo segnalato · Alto rischio",
+    "permit2Approving": "Permit2 · Approvazione one-time…",
+    "permit2OneSig": "⚡ Permit2 · 1 sola firma richiesta",
+    "paymentConfirmed": "Pagamento Confermato",
+    "copied": "✓ Copiato",
+    "receiptPdf": "📄 Ricevuta PDF + QR",
+    "newPayment": "+ Nuovo pagamento",
+    "retry": "Riprova",
+    "userCancelled": "Annullata dall'utente",
+    "insufficientGas": "Gas insufficiente",
+    "sequencerDown": "Sequencer L2 non disponibile",
+    "txFailed": "TX Fallita"
   }
 }
