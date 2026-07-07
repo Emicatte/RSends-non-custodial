@@ -176,6 +176,18 @@ class StartupValidationError(SystemExit):
     pass
 
 
+def is_prod_posture(settings: Settings) -> bool:
+    """Unified production-posture check (see H6): prod unless DEBUG=true AND
+    ENVIRONMENT does not start with 'prod'. This is the single definition of
+    the expression validate_settings() gates the Redis-TLS / OAuth /
+    JWT-secret prod guards on — any runtime dev-only relaxation (e.g. email
+    auto-verify in email_auth_service) must use this same check so it can
+    never diverge from the prod guards.
+    """
+    env = os.getenv("ENVIRONMENT", "").lower()
+    return (not settings.debug) or env.startswith("prod")
+
+
 def validate_settings(settings: Settings) -> None:
     """Validate critical env vars at startup.
 
@@ -194,8 +206,7 @@ def validate_settings(settings: Settings) -> None:
     # Production posture. The documented deploy sets DEBUG=false but NOT
     # ENVIRONMENT, so derive `is_prod` from not-DEBUG (the strong-tier checks
     # below previously gated ONLY on ENVIRONMENT=prod and never ran in prod — H6).
-    env = os.getenv("ENVIRONMENT", "").lower()
-    is_prod = (not settings.debug) or env.startswith("prod")
+    is_prod = is_prod_posture(settings)
 
     # NON-CUSTODIAL: no SWEEP_PRIVATE_KEY / SIGNER_MODE / KMS / Vault validation.
     # The platform holds no keys and signs nothing.

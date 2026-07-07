@@ -30,7 +30,7 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_settings
+from app.config import get_settings, is_prod_posture
 from app.models.auth_models import User, UserSession
 from app.models.email_auth_models import EmailVerificationToken, PasswordResetToken
 from app.services.auth_audit import record_auth_event
@@ -175,6 +175,16 @@ async def signup(
     loc = _safe_locale(locale)
     now = datetime.now(timezone.utc)
     derived_name = (display_name or f"{first_name} {last_name}").strip()[:100]
+    # Dev-posture only (same is_prod check as the config prod guards): no mailer
+    # is configured outside production, so the verification email can never be
+    # delivered — stamp the account verified at creation. In prod posture this
+    # is always False and verification is enforced exactly as before.
+    dev_autoverify = not is_prod_posture(get_settings())
+    if dev_autoverify:
+        log.warning(
+            "email_verified_dev_autoverify: non-prod posture, stamping account "
+            "verified at signup"
+        )
     user = User(
         id=str(uuid4()),
         email=email,
@@ -186,8 +196,8 @@ async def signup(
         display_name=derived_name,
         password_hash=hash_password(password),
         password_set_at=now,
-        email_verified=False,
-        email_verified_at=None,
+        email_verified=dev_autoverify,
+        email_verified_at=now if dev_autoverify else None,
         locale=loc,
         # TODO(account_type): post-verification onboarding diverges on this —
         # 'individual' -> KYC, 'merchant' -> KYB. Only persisted here for now.
@@ -293,6 +303,18 @@ async def login(
         now = datetime.now(timezone.utc)
         if user.deletion_scheduled_for < now:
             raise EmailAuthError("account_deleted")
+
+    # Dev-posture only (same is_prod check as the config prod guards): backfill
+    # verification for accounts created before dev auto-verify existed — no
+    # mailer is configured outside production, so they could never verify.
+    # Rides the same route-level commit as last_login_at below. No-op in prod.
+    if not user.email_verified and not is_prod_posture(get_settings()):
+        user.email_verified = True
+        user.email_verified_at = datetime.now(timezone.utc)
+        log.warning(
+            "email_verified_dev_autoverify: non-prod posture, backfilled "
+            "verification at login"
+        )
 
     session_id, access_token, refresh_token, refresh_hash = await create_session(
         user_id=str(user.id),
