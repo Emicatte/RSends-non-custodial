@@ -91,12 +91,14 @@ const nextConfig = {
             // (per-request nonce from middleware injected into Next's scripts +
             // script-src 'nonce-…' 'strict-dynamic'). Tracked as a follow-up;
             // do NOT drop 'unsafe-inline' without that, it breaks the app.
-            `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : ''}`,
+            // https://challenges.cloudflare.com is Cloudflare Turnstile (signup
+            // captcha): script-src for api.js, frame-src for the challenge iframe.
+            `script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com${process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : ''}`,
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://api.fontshare.com",
             "font-src 'self' data: https://fonts.gstatic.com https://cdn.fontshare.com",
             "img-src 'self' data: blob: https:",
             `connect-src 'self' https://rpagos-backend.onrender.com wss://rpagos-backend.onrender.com https://*.infura.io https://*.alchemy.com https://*.llamarpc.com https://*.publicnode.com https://rpc.ankr.com https://mainnet.base.org https://sepolia.base.org https://arb1.arbitrum.io https://mainnet.optimism.io https://polygon-rpc.com https://bsc-dataseed.binance.org https://api.avax.network https://mainnet.era.zksync.io https://forno.celo.org https://rpc.blast.io https://api.trongrid.io https://api.shasta.trongrid.io wss://*.walletconnect.com wss://*.walletconnect.org https://*.walletconnect.org https://*.web3modal.org https://api.coingecko.com https://ipapi.co${devConnect}`,
-            "frame-src 'self' https://verify.walletconnect.com https://verify.walletconnect.org",
+            "frame-src 'self' https://verify.walletconnect.com https://verify.walletconnect.org https://challenges.cloudflare.com",
             "worker-src 'self' blob:",
             "object-src 'none'",
             "base-uri 'self'",
