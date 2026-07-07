@@ -536,6 +536,20 @@
         "invalid_email": "Invalid email address.",
         "no_token": "Sign in to continue.",
         "unknown": "Something went wrong. Please try again."
+      },
+      "settlement": {
+        "title": "Settlement wallet",
+        "help": "The wallet where your organization receives payments. Every invoice settles on-chain to this address unless you override it per invoice.",
+        "placeholder": "0x…",
+        "saveCta": "Save",
+        "cancelCta": "Cancel",
+        "editCta": "Edit",
+        "setCta": "Set wallet",
+        "notSet": "No settlement wallet set — you can’t receive payments until you set one.",
+        "errors": {
+          "invalidAddress": "Enter a valid EVM address (0x…).",
+          "saveFailed": "Couldn’t save the settlement wallet. Try again."
+        }
       }
     },
     "billing": {

@@ -383,6 +383,7 @@ function CreateIntentModal({ onClose, onCreated }: { onClose: () => void; onCrea
   const [currency, setCurrency] = useState('USDC')
   const [chain, setChain] = useState('BASE')
   const [expiry, setExpiry] = useState(30)
+  const [recipient, setRecipient] = useState('')
   const [meta, setMeta] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -393,6 +394,11 @@ function CreateIntentModal({ onClose, onCreated }: { onClose: () => void; onCrea
     setError('')
     const amt = parseFloat(amount)
     if (!amt || amt <= 0) { setError('Amount must be > 0'); return }
+
+    const recip = recipient.trim()
+    if (recip && !/^0x[a-fA-F0-9]{40}$/.test(recip)) {
+      setError('Recipient must be a valid 0x address'); return
+    }
 
     let metadata: Record<string, unknown> | undefined
     if (meta.trim()) {
@@ -406,13 +412,23 @@ function CreateIntentModal({ onClose, onCreated }: { onClose: () => void; onCrea
       body: JSON.stringify({
         amount: amt, currency, chain,
         expires_in_minutes: expiry,
+        ...(recip ? { recipient: recip } : {}),
         ...(metadata ? { metadata } : {}),
       }),
     })
     setLoading(false)
 
     if (!res.ok) {
-      setError((res.data as { detail?: string })?.detail || 'Failed to create intent')
+      // The recipient gate (and other create-time gates) return a structured
+      // detail: { error, message }. Surface the message, not "[object Object]".
+      const detail = (res.data as { detail?: unknown })?.detail
+      let msg = 'Failed to create intent'
+      if (typeof detail === 'string') msg = detail
+      else if (detail && typeof detail === 'object') {
+        const d = detail as { message?: string; error?: string }
+        msg = d.message || d.error || msg
+      }
+      setError(msg)
       return
     }
     setResult(res.data)
@@ -463,6 +479,14 @@ function CreateIntentModal({ onClose, onCreated }: { onClose: () => void; onCrea
                     {EXPIRY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="text-xs text-zinc-500 block mb-1">Recipient (optional — defaults to your organization&apos;s settlement wallet)</label>
+                <input type="text" value={recipient} onChange={e => setRecipient(e.target.value)}
+                  placeholder="0x… — leave blank to use the org settlement wallet"
+                  spellCheck={false}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:border-blue-500 focus:outline-none" />
               </div>
 
               <div>

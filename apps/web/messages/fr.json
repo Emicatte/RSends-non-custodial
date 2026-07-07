@@ -537,6 +537,20 @@
         "invalid_email": "Adresse e-mail invalide.",
         "no_token": "Connectez-vous pour continuer.",
         "unknown": "Une erreur s'est produite. Veuillez réessayer."
+      },
+      "settlement": {
+        "title": "Portefeuille de règlement",
+        "help": "Le portefeuille sur lequel votre organisation reçoit les paiements. Chaque facture est réglée on-chain vers cette adresse, sauf remplacement par facture.",
+        "placeholder": "0x…",
+        "saveCta": "Enregistrer",
+        "cancelCta": "Annuler",
+        "editCta": "Modifier",
+        "setCta": "Définir le portefeuille",
+        "notSet": "Aucun portefeuille de règlement défini — vous ne pouvez pas recevoir de paiements tant que vous n’en définissez pas un.",
+        "errors": {
+          "invalidAddress": "Saisissez une adresse EVM valide (0x…).",
+          "saveFailed": "Impossible d’enregistrer le portefeuille de règlement. Réessayez."
+        }
       }
     },
     "billing": {

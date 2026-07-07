@@ -13,6 +13,7 @@ export interface OrganizationListItem {
   owner_user_id: string
   is_personal: boolean
   plan: string
+  settlement_wallet: string | null
   role: OrgRole
   member_count: number
   created_at: string
@@ -29,6 +30,7 @@ export interface CreateOrgInput {
 
 export interface UpdateOrgInput {
   name?: string
+  settlement_wallet?: string
 }
 
 export function useOrganizations() {

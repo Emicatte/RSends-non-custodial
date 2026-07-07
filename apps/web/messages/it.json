@@ -536,6 +536,20 @@
         "invalid_email": "Indirizzo email non valido.",
         "no_token": "Accedi per continuare.",
         "unknown": "Qualcosa è andato storto. Riprova."
+      },
+      "settlement": {
+        "title": "Wallet di regolamento",
+        "help": "Il wallet su cui la tua organizzazione riceve i pagamenti. Ogni fattura viene regolata on-chain su questo indirizzo, salvo override per singola fattura.",
+        "placeholder": "0x…",
+        "saveCta": "Salva",
+        "cancelCta": "Annulla",
+        "editCta": "Modifica",
+        "setCta": "Imposta wallet",
+        "notSet": "Nessun wallet di regolamento impostato — non puoi ricevere pagamenti finché non ne imposti uno.",
+        "errors": {
+          "invalidAddress": "Inserisci un indirizzo EVM valido (0x…).",
+          "saveFailed": "Impossibile salvare il wallet di regolamento. Riprova."
+        }
       }
     },
     "billing": {

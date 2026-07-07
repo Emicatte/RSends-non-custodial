@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { isAddress } from 'viem'
 import { useSession } from 'next-auth/react'
 import { useTranslations } from 'next-intl'
 import { useOrganizations, type OrgRole } from '@/hooks/useOrganizations'
@@ -56,9 +57,20 @@ export function OrganizationSettings() {
   const [nameSaving, setNameSaving] = useState(false)
   const [nameError, setNameError] = useState<string | null>(null)
 
+  const [walletDraft, setWalletDraft] = useState('')
+  const [editingWallet, setEditingWallet] = useState(false)
+  const [walletSaving, setWalletSaving] = useState(false)
+  const [walletError, setWalletError] = useState<string | null>(null)
+
   useEffect(() => {
     setNameDraft(activeOrg?.name ?? '')
   }, [activeOrg?.id, activeOrg?.name])
+
+  useEffect(() => {
+    setWalletDraft(activeOrg?.settlement_wallet ?? '')
+    setEditingWallet(false)
+    setWalletError(null)
+  }, [activeOrg?.id, activeOrg?.settlement_wallet])
 
   const resolvedError = useMemo(() => {
     const code = orgError ?? membersError
@@ -88,6 +100,33 @@ export function OrganizationSettings() {
       setNameError(code)
     } finally {
       setNameSaving(false)
+    }
+  }
+
+  async function commitWallet() {
+    if (!activeOrg) return
+    const next = walletDraft.trim()
+    if (!next || next.toLowerCase() === (activeOrg.settlement_wallet ?? '')) {
+      setEditingWallet(false)
+      setWalletDraft(activeOrg.settlement_wallet ?? '')
+      setWalletError(null)
+      return
+    }
+    // Client-side mirror of the server validator (server remains the authority):
+    // valid EVM address, non-zero.
+    if (!isAddress(next) || /^0x0{40}$/i.test(next)) {
+      setWalletError(t('settlement.errors.invalidAddress'))
+      return
+    }
+    setWalletSaving(true)
+    setWalletError(null)
+    try {
+      await updateOrganization(activeOrg.id, { settlement_wallet: next })
+      setEditingWallet(false)
+    } catch {
+      setWalletError(t('settlement.errors.saveFailed'))
+    } finally {
+      setWalletSaving(false)
     }
   }
 
@@ -288,6 +327,163 @@ export function OrganizationSettings() {
               {t('general.freeBadge')}
             </span>
           </div>
+        </div>
+      </section>
+
+      {/* ─── Settlement wallet ─── */}
+      <section>
+        <h2
+          style={{
+            fontSize: 16,
+            fontWeight: 600,
+            color: INK,
+            margin: '0 0 12px',
+          }}
+        >
+          {t('settlement.title')}
+        </h2>
+        <div
+          style={{
+            background: '#FFFFFF',
+            border: '1px solid rgba(200,81,44,0.12)',
+            borderRadius: 12,
+            padding: 20,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+          }}
+        >
+          <p style={{ fontSize: 13, color: MUTED, margin: 0 }}>
+            {t('settlement.help')}
+          </p>
+
+          {editingWallet && isAdmin ? (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                type="text"
+                value={walletDraft}
+                onChange={(e) => setWalletDraft(e.target.value)}
+                placeholder={t('settlement.placeholder')}
+                autoFocus
+                spellCheck={false}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    void commitWallet()
+                  } else if (e.key === 'Escape') {
+                    setEditingWallet(false)
+                    setWalletDraft(activeOrg.settlement_wallet ?? '')
+                    setWalletError(null)
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  minWidth: 320,
+                  padding: '8px 10px',
+                  fontSize: 13,
+                  fontFamily: 'monospace',
+                  border: '1px solid rgba(200,81,44,0.25)',
+                  borderRadius: 8,
+                  color: INK,
+                  outline: 'none',
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => void commitWallet()}
+                disabled={walletSaving}
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: '#FFFFFF',
+                  background: ORANGE,
+                  border: 'none',
+                  borderRadius: 8,
+                  padding: '8px 14px',
+                  cursor: walletSaving ? 'default' : 'pointer',
+                  opacity: walletSaving ? 0.6 : 1,
+                }}
+              >
+                {walletSaving ? '…' : t('settlement.saveCta')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingWallet(false)
+                  setWalletDraft(activeOrg.settlement_wallet ?? '')
+                  setWalletError(null)
+                }}
+                style={{
+                  fontSize: 13,
+                  color: MUTED,
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                {t('settlement.cancelCta')}
+              </button>
+            </div>
+          ) : activeOrg.settlement_wallet ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 13, fontFamily: 'monospace', color: INK, wordBreak: 'break-all' }}>
+                {activeOrg.settlement_wallet}
+              </span>
+              {isAdmin ? (
+                <button
+                  type="button"
+                  onClick={() => setEditingWallet(true)}
+                  style={{
+                    fontSize: 12,
+                    color: ORANGE,
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: 0,
+                    textDecoration: 'underline',
+                  }}
+                >
+                  {t('settlement.editCta')}
+                </button>
+              ) : null}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <span
+                style={{
+                  fontSize: 13,
+                  color: DANGER,
+                  background: 'rgba(192,57,43,0.06)',
+                  borderRadius: 6,
+                  padding: '6px 10px',
+                }}
+              >
+                {t('settlement.notSet')}
+              </span>
+              {isAdmin ? (
+                <button
+                  type="button"
+                  onClick={() => setEditingWallet(true)}
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: '#FFFFFF',
+                    background: ORANGE,
+                    border: 'none',
+                    borderRadius: 8,
+                    padding: '8px 14px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {t('settlement.setCta')}
+                </button>
+              ) : null}
+            </div>
+          )}
+
+          {walletError ? (
+            <div style={{ fontSize: 12, color: DANGER }}>{walletError}</div>
+          ) : null}
         </div>
       </section>
 

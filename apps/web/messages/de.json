@@ -537,6 +537,20 @@
         "invalid_email": "Ungültige E-Mail-Adresse.",
         "no_token": "Zur Fortsetzung anmelden.",
         "unknown": "Etwas ist schiefgelaufen. Bitte versuche es erneut."
+      },
+      "settlement": {
+        "title": "Abrechnungs-Wallet",
+        "help": "Das Wallet, auf dem deine Organisation Zahlungen empfängt. Jede Rechnung wird on-chain an diese Adresse abgerechnet, sofern du sie nicht pro Rechnung überschreibst.",
+        "placeholder": "0x…",
+        "saveCta": "Speichern",
+        "cancelCta": "Abbrechen",
+        "editCta": "Bearbeiten",
+        "setCta": "Wallet festlegen",
+        "notSet": "Kein Abrechnungs-Wallet festgelegt — du kannst keine Zahlungen empfangen, bis du eines festlegst.",
+        "errors": {
+          "invalidAddress": "Gib eine gültige EVM-Adresse ein (0x…).",
+          "saveFailed": "Abrechnungs-Wallet konnte nicht gespeichert werden. Versuche es erneut."
+        }
       }
     },
     "billing": {
