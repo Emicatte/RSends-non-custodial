@@ -96,7 +96,7 @@ export function LoginForm() {
         setError({ code: 'invalid_credentials', status: 401 })
         return
       }
-      const redirect = params.get('redirect') ?? `/${locale}/settings`
+      const redirect = params.get('redirect') ?? `/${locale}/app`
       router.push(redirect)
     } catch (err) {
       setError(err as EmailAuthErrorShape)
@@ -199,9 +199,9 @@ export function LoginForm() {
       </form>
 
       <OAuthDivider />
-      <GoogleSignInButton callbackUrl={`/${locale}/settings`} disabled={loading} />
+      <GoogleSignInButton callbackUrl={`/${locale}/app`} disabled={loading} />
       <div className="mt-2">
-        <GitHubSignInButton callbackUrl={`/${locale}/settings`} disabled={loading} />
+        <GitHubSignInButton callbackUrl={`/${locale}/app`} disabled={loading} />
       </div>
 
       <p className="mt-6 text-center text-sm" style={{ color: '#888780' }}>

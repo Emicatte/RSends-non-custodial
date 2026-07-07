@@ -89,7 +89,7 @@ export function LandingAuthButtons() {
             style={{ border: "1px solid rgba(200,81,44,0.2)" }}
           >
             <Link
-              href={`/${locale}/settings`}
+              href={`/${locale}/app`}
               className="block px-4 py-2 text-sm transition-colors"
               style={{ color: "#2C2C2A" }}
               onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(200,81,44,0.06)")}

@@ -12,7 +12,7 @@ export function GitHubSignInButton({
 }) {
   const t = useTranslations('auth')
   const locale = useLocale()
-  const target = callbackUrl ?? `/${locale}/settings`
+  const target = callbackUrl ?? `/${locale}/app`
 
   return (
     <button
