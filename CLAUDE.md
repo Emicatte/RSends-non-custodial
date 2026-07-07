@@ -121,6 +121,13 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
 - **Render provisioning before go-live:** Redis must be provisioned and `DEBUG=false` set —
   fail-closed rate limiting depends on both. Also set **`ADMIN_API_TOKEN`** (≥32 chars,
   distinct from `HMAC_SECRET`) — the admin surface is fully denied without it.
+- **Classic dashboard restored at `/app` (2026-07-07) as a base to adapt to non-custodial.**
+  To re-evaluate: `apps/web/app/api/oracle/sign` (custodial-era oracle co-sign; fail-closed
+  today since `/api/internal/signing/*` never existed backend-side — remove it or replace
+  with on-chain reads); widgets pointing at removed backend endpoints (transactions log,
+  flow routes/splits, API-keys tab via proxy deny-list, send/swap signing) — rewire to the
+  non-custodial flow or remove. The Classic `/app/settings` mock coexists with the live
+  `/settings` — repoint the sidebar item.
 
 Closed (2026-07-05): **CI backend job now has a Redis service** (`redis:7`, health-checked,
 `REDIS_URL=redis://localhost:6379/0` — plain scheme is CI/test-scoped, the `rediss://` guard
