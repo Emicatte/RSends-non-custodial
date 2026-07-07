@@ -12,18 +12,10 @@ const COLORS = {
   greenLight: 'rgba(45, 134, 89, 0.08)',
 }
 
-// Map app pathname → app.sidebar.* translation key
-const PATH_TO_KEY: ReadonlyArray<{ prefix: string; key: string }> = [
-  { prefix: '/app/transactions',   key: 'transactions' },
-  { prefix: '/app/balances',       key: 'balances' },
-  { prefix: '/app/clients',        key: 'clients' },
-  { prefix: '/app/command-center', key: 'commandCenter' },
-  { prefix: '/app/reports',        key: 'reports' },
-  { prefix: '/app/settings',       key: 'settings' },
-  { prefix: '/app/send',           key: 'send' },
-  { prefix: '/app/swap',           key: 'swap' },
-  { prefix: '/app/flow',           key: 'flow' },
-]
+// Map app pathname → app.sidebar.* translation key. Phase A left only /app
+// (dashboard) reachable in the app layout; the custodial/mock subroutes were
+// removed. Later phases re-add entries here (e.g. /app/payments) as they ship.
+const PATH_TO_KEY: ReadonlyArray<{ prefix: string; key: string }> = []
 
 function resolveTitleKey(pathname: string): string {
   if (pathname === '/app') return 'dashboard'

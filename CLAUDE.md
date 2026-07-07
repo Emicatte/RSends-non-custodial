@@ -121,13 +121,20 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
 - **Render provisioning before go-live:** Redis must be provisioned and `DEBUG=false` set —
   fail-closed rate limiting depends on both. Also set **`ADMIN_API_TOKEN`** (≥32 chars,
   distinct from `HMAC_SECRET`) — the admin surface is fully denied without it.
-- **Classic dashboard restored at `/app` (2026-07-07) as a base to adapt to non-custodial.**
-  To re-evaluate: `apps/web/app/api/oracle/sign` (custodial-era oracle co-sign; fail-closed
-  today since `/api/internal/signing/*` never existed backend-side — remove it or replace
-  with on-chain reads); widgets pointing at removed backend endpoints (transactions log,
-  flow routes/splits, API-keys tab via proxy deny-list, send/swap signing) — rewire to the
-  non-custodial flow or remove. The Classic `/app/settings` mock coexists with the live
-  `/settings` — repoint the sidebar item.
+- **Non-custodial `/app` residue after Phase A (2026-07-08).** Phase A removed the custodial
+  dashboard surface (send/swap/flow, command-center, both `app/api/oracle/*` routes, the
+  `forwarding/logs` transactions shell, the balances/clients/reports mocks, the `/app/settings`
+  mock; sidebar/bottom-nav/topbar pruned and `settings` repointed to the live `/settings`).
+  Still to clean in later passes (kept in A to stay subtractive/build-safe):
+  (a) **custodial-tx-history plumbing** — `components/TransactionPersistence.tsx` (mounted in
+  the `/app` layout) + `lib/tx-events.ts` + `components/auth/PostLoginMerge.tsx` +
+  `hooks/useUserTransactions` persist send/swap tx history; now a dead listener (no emitters)
+  but entangled with the auth/layout shell — remove once non-custodial payment-tracking is
+  settled; (b) **root `app/page.tsx`** (non-locale `/`) is a legacy custodial consumer landing
+  (`useSweepWebSocket`/`useSweepStats`, multi-chain Solana/Tron wiring) — out of the `/app`
+  surface, needs its own decision; (c) **backend janitor leftovers** now caller-less from the
+  web app — `EXEMPT_PATHS` entries `api/internal/signing` / `api/internal/oracle`,
+  `/api/v1/forwarding` (sweeper), `/api/v1/distributions` (`app/security/api_keys.py`).
 
 Closed (2026-07-05): **CI backend job now has a Redis service** (`redis:7`, health-checked,
 `REDIS_URL=redis://localhost:6379/0` — plain scheme is CI/test-scoped, the `rediss://` guard

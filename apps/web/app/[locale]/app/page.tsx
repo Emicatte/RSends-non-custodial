@@ -1,6 +1,5 @@
 'use client'
 
-import { Link } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
 import { useEffect, useState } from 'react'
 import { useAccount } from 'wagmi'
@@ -304,18 +303,8 @@ export default function AppDashboardPage() {
           >
             {t('recentTransactions.title')}
           </h2>
-          <Link
-            href="/app/transactions"
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: 12,
-              fontWeight: 600,
-              color: COLORS.accent,
-              textDecoration: 'none',
-            }}
-          >
-            {t('recentTransactions.viewAll')} →
-          </Link>
+          {/* "View all" link removed in Phase A (custodial /app/transactions gone);
+              Phase C re-adds it pointing at the real /app/payments list. */}
         </header>
         <div style={{ overflowX: 'auto' }}>
           <table

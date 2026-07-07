@@ -35,78 +35,6 @@ const DashboardIcon = () => (
   </svg>
 )
 
-const SendIcon = () => (
-  <svg {...iconBase}>
-    <path d="M22 2L11 13" />
-    <path d="M22 2l-7 20-4-9-9-4 20-7z" />
-  </svg>
-)
-
-const SwapIcon = () => (
-  <svg {...iconBase}>
-    <path d="M7 16l-4-4 4-4" />
-    <path d="M17 8l4 4-4 4" />
-    <path d="M3 12h18" />
-  </svg>
-)
-
-const FlowIcon = () => (
-  <svg {...iconBase}>
-    <circle cx="6" cy="6" r="2" />
-    <circle cx="18" cy="6" r="2" />
-    <circle cx="18" cy="18" r="2" />
-    <path d="M8 6h8" />
-    <path d="M18 8v8" />
-    <path d="M16 18l-8-8" />
-  </svg>
-)
-
-const TransactionsIcon = () => (
-  <svg {...iconBase}>
-    <line x1="3" y1="6" x2="21" y2="6" />
-    <line x1="3" y1="12" x2="21" y2="12" />
-    <line x1="3" y1="18" x2="21" y2="18" />
-  </svg>
-)
-
-const BalancesIcon = () => (
-  <svg {...iconBase}>
-    <rect x="2" y="6" width="20" height="14" rx="2" />
-    <path d="M2 10h20" />
-  </svg>
-)
-
-const ClientsIcon = () => (
-  <svg {...iconBase}>
-    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-    <circle cx="9" cy="7" r="4" />
-    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-  </svg>
-)
-
-const CommandCenterIcon = () => (
-  <svg {...iconBase}>
-    <line x1="4" y1="21" x2="4" y2="14" />
-    <line x1="4" y1="10" x2="4" y2="3" />
-    <line x1="12" y1="21" x2="12" y2="12" />
-    <line x1="12" y1="8" x2="12" y2="3" />
-    <line x1="20" y1="21" x2="20" y2="16" />
-    <line x1="20" y1="12" x2="20" y2="3" />
-    <line x1="1" y1="14" x2="7" y2="14" />
-    <line x1="9" y1="8" x2="15" y2="8" />
-    <line x1="17" y1="16" x2="23" y2="16" />
-  </svg>
-)
-
-const ReportsIcon = () => (
-  <svg {...iconBase}>
-    <line x1="6" y1="20" x2="6" y2="16" />
-    <line x1="12" y1="20" x2="12" y2="10" />
-    <line x1="18" y1="20" x2="18" y2="4" />
-  </svg>
-)
-
 const SettingsIcon = () => (
   <svg {...iconBase}>
     <circle cx="12" cy="12" r="3" />
@@ -116,16 +44,20 @@ const SettingsIcon = () => (
 
 type SidebarItem = {
   key: string
-  href: '/app' | '/app/send' | '/app/swap' | '/app/flow' | '/app/transactions' | '/app/balances' | '/app/clients' | '/app/command-center' | '/app/reports' | '/app/settings'
+  href: '/app' | '/settings'
   Icon: () => JSX.Element
   hover: string
 }
 
 type SidebarSection = {
-  section: 'overview' | 'actions' | 'management'
+  section: 'overview' | 'management'
   items: ReadonlyArray<SidebarItem>
 }
 
+// Non-custodial dashboard nav. Custodial surfaces (send/swap/flow/command-center)
+// and the mock management pages (transactions/balances/clients/reports) were
+// removed in Phase A; the operational Payments/Invoices/Webhooks entries land in
+// later phases. `settings` points at the live session-guarded /settings area.
 const SECTIONS: ReadonlyArray<SidebarSection> = [
   {
     section: 'overview',
@@ -134,22 +66,9 @@ const SECTIONS: ReadonlyArray<SidebarSection> = [
     ],
   },
   {
-    section: 'actions',
-    items: [
-      { key: 'send', href: '/app/send', Icon: SendIcon, hover: 'translateX(3px) translateY(-3px) rotate(-8deg)' },
-      { key: 'swap', href: '/app/swap', Icon: SwapIcon, hover: 'rotate(180deg)' },
-      { key: 'flow', href: '/app/flow', Icon: FlowIcon, hover: 'rotate(-15deg) scale(1.1)' },
-    ],
-  },
-  {
     section: 'management',
     items: [
-      { key: 'transactions', href: '/app/transactions', Icon: TransactionsIcon, hover: 'translateY(-2px)' },
-      { key: 'balances', href: '/app/balances', Icon: BalancesIcon, hover: 'scaleY(1.15) translateY(-1px)' },
-      { key: 'clients', href: '/app/clients', Icon: ClientsIcon, hover: 'translateX(2px)' },
-      { key: 'commandCenter', href: '/app/command-center', Icon: CommandCenterIcon, hover: 'translateX(3px)' },
-      { key: 'reports', href: '/app/reports', Icon: ReportsIcon, hover: 'scaleY(1.2) translateY(-2px)' },
-      { key: 'settings', href: '/app/settings', Icon: SettingsIcon, hover: 'rotate(60deg)' },
+      { key: 'settings', href: '/settings', Icon: SettingsIcon, hover: 'rotate(60deg)' },
     ],
   },
 ]
