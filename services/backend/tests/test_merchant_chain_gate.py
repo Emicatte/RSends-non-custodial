@@ -55,7 +55,13 @@ def _req(environment: str, *, owner: str = OWNER):
 
 
 def _payload(chain: str) -> CreatePaymentIntentRequest:
-    return CreatePaymentIntentRequest(amount=10.0, currency="USDC", chain=chain)
+    # Explicit recipient: these tests exercise the chain gate, not the recipient
+    # gate (Phase B). The recipient satisfies the gate so create reaches the
+    # chain/env logic under test. Rejection cases fail the chain gate first.
+    return CreatePaymentIntentRequest(
+        amount=10.0, currency="USDC", chain=chain,
+        recipient="0x1111111111111111111111111111111111111111",
+    )
 
 
 async def _intent_count(session) -> int:

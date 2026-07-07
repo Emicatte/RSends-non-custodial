@@ -48,6 +48,11 @@ class Organization(Base):
     is_personal = Column(Boolean, nullable=False, default=False)
     plan = Column(Text, nullable=False, default="free")
 
+    # Org-level settlement address: the wallet where the org receives on-chain
+    # payments, shared across team members. NULL until an admin sets it in
+    # Settings (never auto-derived). Stored lowercase. Migration 0008.
+    settlement_wallet = Column(Text, nullable=True)
+
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,

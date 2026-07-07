@@ -37,6 +37,7 @@ from app.models.merchant_models import (
 )
 from app.services.webhook_service import send_test_event, _dispatch_event
 from app.services.audit_service import log_event
+from app.services.intent_service import resolve_recipient
 from app.services.router_registry import (
     derive_invoice_id,
     build_onchain_payment,
@@ -207,6 +208,12 @@ async def create_payment_intent(
     reference_id = generate_reference_id(merchant_id)
     onchain_invoice_id = derive_invoice_id(reference_id)
 
+    # RECIPIENT GATE (Phase B): an intent cannot be created without a resolvable
+    # recipient — explicit override OR the org's settlement_wallet default. This
+    # is the single PaymentIntent construction site, so a recipient-less intent
+    # is structurally impossible. Fail-closed 422 when unresolvable.
+    recipient = await resolve_recipient(db, merchant_id, payload.recipient)
+
     intent = PaymentIntent(
         intent_id=intent_id,
         reference_id=reference_id,
@@ -215,7 +222,7 @@ async def create_payment_intent(
         amount=payload.amount,
         currency=payload.currency,
         chain=payload.chain,
-        recipient=payload.recipient,
+        recipient=recipient,
         network=payload.network,
         expected_sender=payload.expected_sender,
         onchain_invoice_id=onchain_invoice_id,

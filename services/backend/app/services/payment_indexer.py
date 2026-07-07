@@ -154,7 +154,13 @@ def _validate_event_against_intent(ev: dict, intent) -> list:
     reasons = []
 
     expected_merchant = (intent.recipient or "").lower()
-    if expected_merchant and ev["merchant"].lower() != expected_merchant:
+    if not expected_merchant:
+        # FAIL-CLOSED (Phase B): an intent with no recipient/settlement wallet
+        # cannot be validated against a payee. Post-gate this can only be a
+        # pre-gate legacy row (its /pay link never worked) — record it rejected
+        # rather than silently settling against an arbitrary merchant.
+        reasons.append("intent has no recipient/settlement wallet — cannot validate merchant")
+    elif ev["merchant"].lower() != expected_merchant:
         reasons.append(f"merchant {ev['merchant']} != expected {expected_merchant}")
 
     tok = token_for(intent.chain or "base", intent.currency)

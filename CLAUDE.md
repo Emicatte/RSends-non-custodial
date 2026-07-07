@@ -81,7 +81,7 @@ Merchant routes (base `/api/v1/merchant`, defined in `app/api/merchant_routes.py
 
 | Route | Required scope | Environment-scoped | Tenant-scoped |
 |---|---|---|---|
-| `POST /payment-intent` (create) | write | Y — chain↔env check + env stamped on the intent | Y |
+| `POST /payment-intent` (create) | write | Y — chain↔env check + env stamped on the intent | Y — **recipient gate**: resolves override → org `settlement_wallet`; 422 if unresolvable |
 | `GET /payment-intent/{id}` | read | Y — `PaymentIntent.environment` filter | Y |
 | `GET /transactions` (list) | read | Y — `PaymentIntent.environment` filter | Y |
 | `POST /payment-intent/{id}/resolve` | write | Y — `PaymentIntent.environment` filter | Y |
@@ -92,6 +92,20 @@ Merchant routes (base `/api/v1/merchant`, defined in `app/api/merchant_routes.py
 Outbound webhook dispatch (`webhook_service.py`) also filters
 `MerchantWebhook.environment == intent.environment` — test endpoints never receive live
 events and vice versa.
+
+**Recipient gate (non-custodial invariant, Phase B).** A `PaymentIntent` **cannot** be
+created without a resolvable on-chain recipient — the single construction site
+(`merchant_routes.py`, one `PaymentIntent(...)`) calls `resolve_recipient`
+(`app/services/intent_service.py`) first: per-intent override (Pydantic-validated) →
+else the org's `settlement_wallet` (session path by `org_id`; API-key path by reverse
+lookup of the owner wallet → its org). Fail-closed **422** when unresolvable
+(`SETTLEMENT_WALLET_MISSING`) or when the owner wallet maps to >1 org
+(`SETTLEMENT_WALLET_AMBIGUOUS`) — never silently default a recipient. `settlement_wallet`
+is an org-level column (admin-set in Settings via `PATCH /api/v1/organizations/{id}`,
+replace-only, EVM-address + non-zero validated, stored lowercase; migration 0008, nullable,
+no backfill). The indexer (`payment_indexer.py`) now records a settlement **rejected** when a
+matched intent has no recipient (was a silent skip) — a legacy pre-gate row can't settle
+against an arbitrary payee.
 
 Public (unauthenticated, payer-facing) surface — `app/api/public_routes.py`:
 

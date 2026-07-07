@@ -126,8 +126,11 @@ async def test_create_stamps_key_environment(session, monkeypatch):
     monkeypatch.setattr(mr, "build_onchain_payment", _no_onchain)
     monkeypatch.setattr(mr, "log_event", _no_log)
 
+    # Explicit recipient satisfies the Phase B recipient gate — this test pins
+    # environment stamping, not the gate.
     payload = CreatePaymentIntentRequest(
         amount=10.0, currency="USDC", chain="base_sepolia",
+        recipient="0x1111111111111111111111111111111111111111",
     )
     resp = await create_payment_intent(payload, _req("test"), db=session)
 

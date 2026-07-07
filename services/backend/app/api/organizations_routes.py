@@ -113,6 +113,7 @@ async def list_my_orgs(
                 owner_user_id=org.owner_user_id,
                 is_personal=org.is_personal,
                 plan=org.plan,
+                settlement_wallet=org.settlement_wallet,
                 role=entry["role"],
                 member_count=entry["member_count"],
                 created_at=org.created_at,
@@ -142,6 +143,7 @@ async def create_new_org(
         owner_user_id=org.owner_user_id,
         is_personal=org.is_personal,
         plan=org.plan,
+        settlement_wallet=org.settlement_wallet,
         role="admin",
         member_count=1,
         created_at=org.created_at,
@@ -187,6 +189,10 @@ async def update_org(
 
     if payload.name is not None:
         org.name = payload.name[:100]
+    # Replace-only: None means "unchanged". The validator already rejected empty/
+    # malformed/zero addresses, so a non-None value is a valid lowercase address.
+    if payload.settlement_wallet is not None:
+        org.settlement_wallet = payload.settlement_wallet
     org.updated_at = datetime.now(timezone.utc)
 
     await db.commit()
@@ -198,6 +204,7 @@ async def update_org(
         owner_user_id=org.owner_user_id,
         is_personal=org.is_personal,
         plan=org.plan,
+        settlement_wallet=org.settlement_wallet,
         created_at=org.created_at,
     )
 

@@ -23,6 +23,23 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 OrgRole = Literal["admin", "operator", "viewer"]
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+_EVM_ADDR_RE = re.compile(r"^0x[a-fA-F0-9]{40}$")
+
+
+def _validate_settlement_wallet(value: Optional[str]) -> Optional[str]:
+    """Reject-never-coerce EVM address for the org settlement wallet. `None`
+    means "field omitted → leave unchanged"; any provided value must be a valid,
+    non-zero EVM address (a zero settlement wallet would burn funds). Stored
+    lowercase to match on-chain merchant comparisons. Replace-only: there is no
+    clear-to-empty path — an empty string fails validation."""
+    if value is None:
+        return None
+    value = value.strip()
+    if not _EVM_ADDR_RE.match(value):
+        raise ValueError("settlement_wallet must be a valid EVM address")
+    if int(value, 16) == 0:
+        raise ValueError("settlement_wallet cannot be the zero address")
+    return value.lower()
 
 
 def _validate_email(value: str) -> str:
@@ -42,6 +59,12 @@ class OrganizationCreate(BaseModel):
 
 class OrganizationPatchRequest(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    settlement_wallet: Optional[str] = Field(default=None, max_length=42)
+
+    @field_validator("settlement_wallet")
+    @classmethod
+    def _check_settlement_wallet(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_settlement_wallet(v)
 
 
 class OrganizationResponse(BaseModel):
@@ -52,6 +75,7 @@ class OrganizationResponse(BaseModel):
     owner_user_id: UUID
     is_personal: bool
     plan: str
+    settlement_wallet: Optional[str] = None
     role: Optional[OrgRole] = None
     member_count: Optional[int] = None
     created_at: datetime

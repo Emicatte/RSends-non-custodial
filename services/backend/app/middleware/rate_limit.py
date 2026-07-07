@@ -42,18 +42,25 @@ logger = logging.getLogger(__name__)
 
 # (max_requests, window_seconds, key_type)
 # key_type: "api_key" = per merchant API key, "ip" = per IP
+# IMPORTANT: ordered MOST-SPECIFIC-PREFIX-FIRST. `_match_endpoint` returns the
+# FIRST matching prefix, so a bare prefix placed before its trailing-slash
+# subpath would shadow the stricter subpath limit (dead code). The
+# `payment-intent/` (cancel/resolve, 10/60) entry MUST precede the bare
+# `payment-intent` (create, 100/60) entry for that reason.
 ENDPOINT_LIMITS: list[tuple[str, str, int, int, str]] = [
     # method, path_prefix,                          max,  window, key_type
-    ("POST", "/api/v1/merchant/payment-intent",     100,    60,  "api_key"),
+    ("POST", "/api/v1/merchant/payment-intent/",     10,    60,  "api_key"),  # cancel, resolve (before the bare create prefix)
+    ("POST", "/api/v1/merchant/payment-intent",     100,    60,  "api_key"),  # create
     ("POST", "/api/v1/merchant/webhook/register",     5,  3600,  "api_key"),
     ("POST", "/api/v1/merchant/webhook/test",        10,    60,  "api_key"),
-    ("POST", "/api/v1/merchant/payment-intent/",     10,    60,  "api_key"),  # cancel, resolve
     ("GET",  "/api/v1/merchant/payment-intent/",     60,    60,  "api_key"),  # get by id
     ("GET",  "/api/v1/merchant/transactions",        60,    60,  "api_key"),
     ("GET",  "/api/v1/public/payment-intent",        20,    60,  "ip"),  # hosted checkout polling (unauthenticated → per-IP)
     ("POST", "/api/v1/tx/callback",                  10,    60,  "ip"),
     ("POST", "/api/v1/webhooks/alchemy",           1000,    60,  "ip"),
     ("GET",  "/api/v1/audit/log",                    30,    60,  "ip"),
+    # Org admin mutations (settlement_wallet, member roles, …) — per-IP.
+    ("PATCH", "/api/v1/organizations",               30,    60,  "ip"),
     # End-user auth (Google OAuth + session mgmt)
     ("POST", "/api/v1/auth/google",                  100,    60,  "ip"),   # 5 per 10min
     ("POST", "/api/v1/auth/refresh",                 20,    60,  "ip"),   # 20/min
