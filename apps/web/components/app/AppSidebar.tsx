@@ -49,9 +49,27 @@ const SettingsIcon = () => (
   </svg>
 )
 
+const WebhooksIcon = () => (
+  <svg {...iconBase}>
+    <path d="M18 16.98h-5.99c-1.66 0-3.01-1.34-3.01-3s1.35-3 3.01-3H18" />
+    <path d="m14 13 4 4-4 4" />
+    <circle cx="6" cy="7" r="3" />
+    <path d="M6 10v4" />
+  </svg>
+)
+
+const ApiKeysIcon = () => (
+  <svg {...iconBase}>
+    <circle cx="7.5" cy="15.5" r="4.5" />
+    <path d="m10.5 12.5 8-8" />
+    <path d="m16.5 6.5 3 3" />
+    <path d="m13.5 9.5 3 3" />
+  </svg>
+)
+
 type SidebarItem = {
   key: string
-  href: '/app' | '/app/payments' | '/settings'
+  href: '/app' | '/app/payments' | '/app/webhooks' | '/app/api-keys' | '/settings'
   Icon: () => JSX.Element
   hover: string
 }
@@ -72,11 +90,13 @@ const SECTIONS: ReadonlyArray<SidebarSection> = [
     items: [
       { key: 'dashboard', href: '/app', Icon: DashboardIcon, hover: 'scale(1.12) rotate(5deg)' },
       { key: 'payments', href: '/app/payments', Icon: PaymentsIcon, hover: 'scale(1.12)' },
+      { key: 'webhooks', href: '/app/webhooks', Icon: WebhooksIcon, hover: 'scale(1.12)' },
     ],
   },
   {
     section: 'management',
     items: [
+      { key: 'apiKeys', href: '/app/api-keys', Icon: ApiKeysIcon, hover: 'scale(1.12)' },
       { key: 'settings', href: '/settings', Icon: SettingsIcon, hover: 'rotate(60deg)' },
     ],
   },

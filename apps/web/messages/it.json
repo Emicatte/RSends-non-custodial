@@ -1475,7 +1475,9 @@
       "management": "Gestione",
       "dashboard": "Dashboard",
       "settings": "Impostazioni",
-      "payments": "Pagamenti"
+      "payments": "Pagamenti",
+      "webhooks": "Webhook",
+      "apiKeys": "Chiavi API"
     },
     "dashboard": {
       "title": "Dashboard",

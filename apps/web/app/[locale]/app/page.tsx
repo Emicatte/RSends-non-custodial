@@ -1,9 +1,7 @@
 'use client'
 
 import { useTranslations } from 'next-intl'
-import { useEffect, useState } from 'react'
-import { useAccount } from 'wagmi'
-import { useWalletAuth } from '@/lib/walletAuth'
+import { useOrgStats } from '@/hooks/useOrgStats'
 
 const COLORS = {
   ink: '#1a1a1a',
@@ -27,29 +25,6 @@ const CHAIN_BADGE: Record<string, { bg: string; text: string }> = {
   Sol: { bg: 'rgba(153, 69, 255, 0.08)', text: '#7c2dc7' },
 }
 
-interface RecentTransactionDTO {
-  id: number
-  tx_hash: string | null
-  type: string
-  amount_usd: number
-  currency: string
-  chain: string
-  status: string
-  recipient: string
-  timestamp_iso: string
-}
-
-interface DashboardStats {
-  volume_24h: number
-  volume_24h_delta_pct: number
-  transactions_24h: number
-  transactions_24h_delta: number
-  total_balance: number
-  total_balance_chains: number
-  active_clients: number
-  active_clients_this_week: number
-  recent_transactions: RecentTransactionDTO[]
-}
 
 type TxStatus = 'confirmed' | 'pending' | 'failed'
 
@@ -100,44 +75,10 @@ function relTime(iso: string, nowMs: number): string {
 export default function AppDashboardPage() {
   const t = useTranslations('app.dashboard')
 
-  const { address } = useAccount()
-  const { getAuthHeaders } = useWalletAuth(address)
-  const [stats, setStats] = useState<DashboardStats | null>(null)
-  const [loading, setLoading] = useState<boolean>(true)
-  const [error, setError] = useState<boolean>(false)
-
-  useEffect(() => {
-    let cancelled = false
-    if (!address) {
-      setLoading(false)
-      setStats(null)
-      setError(false)
-      return
-    }
-    async function load(): Promise<void> {
-      try {
-        const headers = await getAuthHeaders()
-        const res = await fetch('/api/backend/api/v1/dashboard/stats', { headers, cache: 'no-store' })
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = (await res.json()) as DashboardStats
-        if (!cancelled) {
-          setStats(data)
-          setError(false)
-        }
-      } catch {
-        if (!cancelled) setError(true)
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    setLoading(true)
-    void load()
-    const intervalId = window.setInterval(() => { void load() }, 30_000)
-    return () => {
-      cancelled = true
-      window.clearInterval(intervalId)
-    }
-  }, [address, getAuthHeaders])
+  // Phase E: the home widget now reads the session-authed, correctly-scoped
+  // org stats (settlement_wallet join + USD conversion) instead of the
+  // wallet-signature `dashboard/stats` whose primary-wallet scope broke post-B.
+  const { stats, loading, error } = useOrgStats()
 
   const showErr = error || !stats
   const pct = stats?.volume_24h_delta_pct ?? 0

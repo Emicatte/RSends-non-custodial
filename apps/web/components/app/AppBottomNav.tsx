@@ -39,19 +39,40 @@ const SettingsIcon = () => (
   </svg>
 )
 
-type BottomNavHref = '/app' | '/app/payments' | '/settings'
+const WebhooksIcon = () => (
+  <svg {...iconBase}>
+    <path d="M18 16.98h-5.99c-1.66 0-3.01-1.34-3.01-3s1.35-3 3.01-3H18" />
+    <path d="m14 13 4 4-4 4" />
+    <circle cx="6" cy="7" r="3" />
+    <path d="M6 10v4" />
+  </svg>
+)
+
+const ApiKeysIcon = () => (
+  <svg {...iconBase}>
+    <circle cx="7.5" cy="15.5" r="4.5" />
+    <path d="m10.5 12.5 8-8" />
+    <path d="m16.5 6.5 3 3" />
+    <path d="m13.5 9.5 3 3" />
+  </svg>
+)
+
+type BottomNavHref = '/app' | '/app/payments' | '/app/webhooks' | '/app/api-keys' | '/settings'
 
 type BottomNavItem = {
-  key: 'dashboard' | 'payments' | 'settings'
+  key: 'dashboard' | 'payments' | 'webhooks' | 'apiKeys' | 'settings'
   href: BottomNavHref
   Icon: () => JSX.Element
 }
 
 // Custodial/mock entries (transactions/balances/clients) removed in Phase A;
-// `payments` (Phase C) is the org payments view; `settings` → live /settings area.
+// `payments` (Phase C) is the org payments view; `webhooks`/`apiKeys` (Phase E)
+// are the operational management pages; `settings` → live /settings area.
 const ITEMS: ReadonlyArray<BottomNavItem> = [
   { key: 'dashboard', href: '/app',          Icon: DashboardIcon },
   { key: 'payments',  href: '/app/payments', Icon: PaymentsIcon },
+  { key: 'webhooks',  href: '/app/webhooks', Icon: WebhooksIcon },
+  { key: 'apiKeys',   href: '/app/api-keys', Icon: ApiKeysIcon },
   { key: 'settings',  href: '/settings',     Icon: SettingsIcon },
 ]
 
@@ -64,7 +85,7 @@ export default function AppBottomNav() {
 
   return (
     <nav
-      className="md:hidden fixed bottom-0 left-0 right-0 z-[1000] bg-white border-t border-black/[0.06] grid grid-cols-3"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-[1000] bg-white border-t border-black/[0.06] grid grid-cols-5"
       style={{
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
