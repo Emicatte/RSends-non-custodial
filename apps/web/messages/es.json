@@ -1475,7 +1475,8 @@
       "overview": "Overview",
       "management": "Management",
       "dashboard": "Dashboard",
-      "settings": "Settings"
+      "settings": "Settings",
+      "payments": "Pagos"
     },
     "dashboard": {
       "title": "Dashboard",
@@ -1503,6 +1504,42 @@
         "statusConfirmed": "Confirmed",
         "statusPending": "Pending",
         "statusFailed": "Failed"
+      }
+    },
+    "payments": {
+      "title": "Pagos",
+      "subtitle": "Pagos on-chain recibidos por tu organización",
+      "loading": "Cargando pagos…",
+      "errorLoading": "No se pudieron cargar los pagos. Inténtalo de nuevo.",
+      "columns": {
+        "date": "Fecha",
+        "amount": "Importe",
+        "network": "Red",
+        "status": "Estado",
+        "recipient": "Destinatario",
+        "tx": "Transacción"
+      },
+      "status": {
+        "pending": "Pendiente",
+        "paid": "Pagado",
+        "completed": "Completado",
+        "expired": "Expirado",
+        "cancelled": "Cancelado",
+        "review": "En revisión",
+        "refunded": "Reembolsado",
+        "partial": "Parcial",
+        "overpaid": "Sobrepagado"
+      },
+      "txView": "Ver",
+      "empty": {
+        "title": "Aún no hay pagos",
+        "hint": "Los pagos a tu organización aparecerán aquí."
+      },
+      "pagination": {
+        "prev": "Anterior",
+        "next": "Siguiente",
+        "page": "Página",
+        "results": "resultados"
       }
     }
   },

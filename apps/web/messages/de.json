@@ -1475,7 +1475,8 @@
       "overview": "Overview",
       "management": "Management",
       "dashboard": "Dashboard",
-      "settings": "Settings"
+      "settings": "Settings",
+      "payments": "Zahlungen"
     },
     "dashboard": {
       "title": "Dashboard",
@@ -1503,6 +1504,42 @@
         "statusConfirmed": "Confirmed",
         "statusPending": "Pending",
         "statusFailed": "Failed"
+      }
+    },
+    "payments": {
+      "title": "Zahlungen",
+      "subtitle": "On-Chain-Zahlungen, die Ihre Organisation erhält",
+      "loading": "Zahlungen werden geladen…",
+      "errorLoading": "Zahlungen konnten nicht geladen werden. Bitte erneut versuchen.",
+      "columns": {
+        "date": "Datum",
+        "amount": "Betrag",
+        "network": "Netzwerk",
+        "status": "Status",
+        "recipient": "Empfänger",
+        "tx": "Transaktion"
+      },
+      "status": {
+        "pending": "Ausstehend",
+        "paid": "Bezahlt",
+        "completed": "Abgeschlossen",
+        "expired": "Abgelaufen",
+        "cancelled": "Storniert",
+        "review": "In Prüfung",
+        "refunded": "Erstattet",
+        "partial": "Teilweise",
+        "overpaid": "Überzahlt"
+      },
+      "txView": "Ansehen",
+      "empty": {
+        "title": "Noch keine Zahlungen",
+        "hint": "Zahlungen an Ihre Organisation erscheinen hier."
+      },
+      "pagination": {
+        "prev": "Zurück",
+        "next": "Weiter",
+        "page": "Seite",
+        "results": "Ergebnisse"
       }
     }
   },

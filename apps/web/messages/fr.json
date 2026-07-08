@@ -1475,7 +1475,8 @@
       "overview": "Overview",
       "management": "Management",
       "dashboard": "Dashboard",
-      "settings": "Settings"
+      "settings": "Settings",
+      "payments": "Paiements"
     },
     "dashboard": {
       "title": "Dashboard",
@@ -1503,6 +1504,42 @@
         "statusConfirmed": "Confirmed",
         "statusPending": "Pending",
         "statusFailed": "Failed"
+      }
+    },
+    "payments": {
+      "title": "Paiements",
+      "subtitle": "Paiements on-chain reçus par votre organisation",
+      "loading": "Chargement des paiements…",
+      "errorLoading": "Impossible de charger les paiements. Réessayez.",
+      "columns": {
+        "date": "Date",
+        "amount": "Montant",
+        "network": "Réseau",
+        "status": "Statut",
+        "recipient": "Destinataire",
+        "tx": "Transaction"
+      },
+      "status": {
+        "pending": "En attente",
+        "paid": "Payé",
+        "completed": "Terminé",
+        "expired": "Expiré",
+        "cancelled": "Annulé",
+        "review": "En révision",
+        "refunded": "Remboursé",
+        "partial": "Partiel",
+        "overpaid": "Trop-perçu"
+      },
+      "txView": "Voir",
+      "empty": {
+        "title": "Aucun paiement",
+        "hint": "Les paiements à votre organisation apparaîtront ici."
+      },
+      "pagination": {
+        "prev": "Précédent",
+        "next": "Suivant",
+        "page": "Page",
+        "results": "résultats"
       }
     }
   },

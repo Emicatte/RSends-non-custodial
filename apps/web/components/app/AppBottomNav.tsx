@@ -25,6 +25,13 @@ const DashboardIcon = () => (
   </svg>
 )
 
+const PaymentsIcon = () => (
+  <svg {...iconBase}>
+    <rect x="2" y="5" width="20" height="14" rx="2" />
+    <line x1="2" y1="10" x2="22" y2="10" />
+  </svg>
+)
+
 const SettingsIcon = () => (
   <svg {...iconBase}>
     <circle cx="12" cy="12" r="3" />
@@ -32,19 +39,20 @@ const SettingsIcon = () => (
   </svg>
 )
 
-type BottomNavHref = '/app' | '/settings'
+type BottomNavHref = '/app' | '/app/payments' | '/settings'
 
 type BottomNavItem = {
-  key: 'dashboard' | 'settings'
+  key: 'dashboard' | 'payments' | 'settings'
   href: BottomNavHref
   Icon: () => JSX.Element
 }
 
 // Custodial/mock entries (transactions/balances/clients) removed in Phase A;
-// operational entries arrive in later phases. `settings` → live /settings area.
+// `payments` (Phase C) is the org payments view; `settings` → live /settings area.
 const ITEMS: ReadonlyArray<BottomNavItem> = [
-  { key: 'dashboard', href: '/app',      Icon: DashboardIcon },
-  { key: 'settings',  href: '/settings', Icon: SettingsIcon },
+  { key: 'dashboard', href: '/app',          Icon: DashboardIcon },
+  { key: 'payments',  href: '/app/payments', Icon: PaymentsIcon },
+  { key: 'settings',  href: '/settings',     Icon: SettingsIcon },
 ]
 
 export default function AppBottomNav() {
@@ -56,7 +64,7 @@ export default function AppBottomNav() {
 
   return (
     <nav
-      className="md:hidden fixed bottom-0 left-0 right-0 z-[1000] bg-white border-t border-black/[0.06] grid grid-cols-2"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-[1000] bg-white border-t border-black/[0.06] grid grid-cols-3"
       style={{
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}

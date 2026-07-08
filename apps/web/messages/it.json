@@ -1474,7 +1474,8 @@
       "overview": "Panoramica",
       "management": "Gestione",
       "dashboard": "Dashboard",
-      "settings": "Impostazioni"
+      "settings": "Impostazioni",
+      "payments": "Pagamenti"
     },
     "dashboard": {
       "title": "Dashboard",
@@ -1502,6 +1503,42 @@
         "statusConfirmed": "Confermata",
         "statusPending": "In attesa",
         "statusFailed": "Fallita"
+      }
+    },
+    "payments": {
+      "title": "Pagamenti",
+      "subtitle": "Pagamenti on-chain ricevuti dalla tua organizzazione",
+      "loading": "Caricamento pagamenti…",
+      "errorLoading": "Impossibile caricare i pagamenti. Riprova.",
+      "columns": {
+        "date": "Data",
+        "amount": "Importo",
+        "network": "Rete",
+        "status": "Stato",
+        "recipient": "Destinatario",
+        "tx": "Transazione"
+      },
+      "status": {
+        "pending": "In attesa",
+        "paid": "Pagato",
+        "completed": "Completato",
+        "expired": "Scaduto",
+        "cancelled": "Annullato",
+        "review": "In revisione",
+        "refunded": "Rimborsato",
+        "partial": "Parziale",
+        "overpaid": "Sovrapagato"
+      },
+      "txView": "Vedi",
+      "empty": {
+        "title": "Nessun pagamento",
+        "hint": "I pagamenti alla tua organizzazione appariranno qui."
+      },
+      "pagination": {
+        "prev": "Precedente",
+        "next": "Successivo",
+        "page": "Pagina",
+        "results": "risultati"
       }
     }
   },

@@ -35,6 +35,13 @@ const DashboardIcon = () => (
   </svg>
 )
 
+const PaymentsIcon = () => (
+  <svg {...iconBase}>
+    <rect x="2" y="5" width="20" height="14" rx="2" />
+    <line x1="2" y1="10" x2="22" y2="10" />
+  </svg>
+)
+
 const SettingsIcon = () => (
   <svg {...iconBase}>
     <circle cx="12" cy="12" r="3" />
@@ -44,7 +51,7 @@ const SettingsIcon = () => (
 
 type SidebarItem = {
   key: string
-  href: '/app' | '/settings'
+  href: '/app' | '/app/payments' | '/settings'
   Icon: () => JSX.Element
   hover: string
 }
@@ -56,13 +63,15 @@ type SidebarSection = {
 
 // Non-custodial dashboard nav. Custodial surfaces (send/swap/flow/command-center)
 // and the mock management pages (transactions/balances/clients/reports) were
-// removed in Phase A; the operational Payments/Invoices/Webhooks entries land in
-// later phases. `settings` points at the live session-guarded /settings area.
+// removed in Phase A; the operational Invoices/Webhooks entries land in later
+// phases. `payments` (Phase C) is the session-authed org payments view;
+// `settings` points at the live session-guarded /settings area.
 const SECTIONS: ReadonlyArray<SidebarSection> = [
   {
     section: 'overview',
     items: [
       { key: 'dashboard', href: '/app', Icon: DashboardIcon, hover: 'scale(1.12) rotate(5deg)' },
+      { key: 'payments', href: '/app/payments', Icon: PaymentsIcon, hover: 'scale(1.12)' },
     ],
   },
   {
