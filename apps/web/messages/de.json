@@ -1517,7 +1517,8 @@
         "network": "Netzwerk",
         "status": "Status",
         "recipient": "Empfänger",
-        "tx": "Transaktion"
+        "tx": "Transaktion",
+        "actions": "Aktionen"
       },
       "status": {
         "pending": "Ausstehend",
@@ -1540,6 +1541,44 @@
         "next": "Weiter",
         "page": "Seite",
         "results": "Ergebnisse"
+      },
+      "newButton": "Neue Zahlungsanforderung",
+      "filter": {
+        "all": "Alle Status"
+      },
+      "row": {
+        "copyLink": "Link kopieren",
+        "copied": "Kopiert",
+        "cancel": "Stornieren",
+        "cancelConfirm": "Diese Zahlungsanforderung stornieren?"
+      },
+      "create": {
+        "title": "Neue Zahlungsanforderung",
+        "successTitle": "Zahlungsanforderung erstellt",
+        "linkLabel": "Teilen Sie diesen Link mit dem Zahler",
+        "copy": "Kopieren",
+        "copied": "Kopiert",
+        "done": "Fertig",
+        "settlesTo": "Zahlungen gehen an",
+        "noWallet": "Hinterlegen Sie die Settlement-Wallet Ihrer Organisation, um Zahlungen zu empfangen.",
+        "setWalletCta": "Wallet festlegen",
+        "amount": "Betrag",
+        "token": "Token",
+        "network": "Netzwerk",
+        "expiry": "Läuft ab in",
+        "expiry30m": "30 Minuten",
+        "expiry1h": "1 Stunde",
+        "expiry24h": "24 Stunden",
+        "recipient": "Empfänger (optional)",
+        "recipientHelp": "Leer lassen, um Ihre Settlement-Wallet zu verwenden.",
+        "invalidRecipient": "Geben Sie eine gültige 0x-Adresse ein.",
+        "close": "Abbrechen",
+        "submit": "Anforderung erstellen",
+        "submitting": "Wird erstellt…",
+        "errors": {
+          "gate": "Hinterlegen Sie Ihre Settlement-Wallet oder geben Sie einen Empfänger an.",
+          "generic": "Zahlungsanforderung konnte nicht erstellt werden. Bitte erneut versuchen."
+        }
       }
     }
   },

@@ -1517,7 +1517,8 @@
         "network": "Red",
         "status": "Estado",
         "recipient": "Destinatario",
-        "tx": "Transacción"
+        "tx": "Transacción",
+        "actions": "Acciones"
       },
       "status": {
         "pending": "Pendiente",
@@ -1540,6 +1541,44 @@
         "next": "Siguiente",
         "page": "Página",
         "results": "resultados"
+      },
+      "newButton": "Nueva solicitud de pago",
+      "filter": {
+        "all": "Todos los estados"
+      },
+      "row": {
+        "copyLink": "Copiar enlace",
+        "copied": "Copiado",
+        "cancel": "Cancelar",
+        "cancelConfirm": "¿Cancelar esta solicitud de pago?"
+      },
+      "create": {
+        "title": "Nueva solicitud de pago",
+        "successTitle": "Solicitud de pago creada",
+        "linkLabel": "Comparte este enlace con quien paga",
+        "copy": "Copiar",
+        "copied": "Copiado",
+        "done": "Listo",
+        "settlesTo": "Los pagos se liquidan en",
+        "noWallet": "Configura la billetera de liquidación de tu organización para recibir pagos.",
+        "setWalletCta": "Configurar billetera",
+        "amount": "Importe",
+        "token": "Token",
+        "network": "Red",
+        "expiry": "Expira en",
+        "expiry30m": "30 minutos",
+        "expiry1h": "1 hora",
+        "expiry24h": "24 horas",
+        "recipient": "Destinatario (opcional)",
+        "recipientHelp": "Déjalo vacío para usar tu billetera de liquidación.",
+        "invalidRecipient": "Introduce una dirección 0x válida.",
+        "close": "Cancelar",
+        "submit": "Crear solicitud",
+        "submitting": "Creando…",
+        "errors": {
+          "gate": "Configura tu billetera de liquidación o introduce un destinatario.",
+          "generic": "No se pudo crear la solicitud de pago. Inténtalo de nuevo."
+        }
       }
     }
   },

@@ -1516,7 +1516,8 @@
         "network": "Network",
         "status": "Status",
         "recipient": "Recipient",
-        "tx": "Transaction"
+        "tx": "Transaction",
+        "actions": "Actions"
       },
       "status": {
         "pending": "Pending",
@@ -1539,6 +1540,44 @@
         "next": "Next",
         "page": "Page",
         "results": "results"
+      },
+      "newButton": "New payment request",
+      "filter": {
+        "all": "All statuses"
+      },
+      "row": {
+        "copyLink": "Copy link",
+        "copied": "Copied",
+        "cancel": "Cancel",
+        "cancelConfirm": "Cancel this payment request?"
+      },
+      "create": {
+        "title": "New payment request",
+        "successTitle": "Payment request created",
+        "linkLabel": "Share this link with your payer",
+        "copy": "Copy",
+        "copied": "Copied",
+        "done": "Done",
+        "settlesTo": "Payments settle to",
+        "noWallet": "Set your organization's settlement wallet to receive payments.",
+        "setWalletCta": "Set settlement wallet",
+        "amount": "Amount",
+        "token": "Token",
+        "network": "Network",
+        "expiry": "Expires in",
+        "expiry30m": "30 minutes",
+        "expiry1h": "1 hour",
+        "expiry24h": "24 hours",
+        "recipient": "Recipient (optional)",
+        "recipientHelp": "Leave empty to use your settlement wallet.",
+        "invalidRecipient": "Enter a valid 0x address.",
+        "close": "Cancel",
+        "submit": "Create payment request",
+        "submitting": "Creating…",
+        "errors": {
+          "gate": "Set your settlement wallet or enter a recipient first.",
+          "generic": "Couldn't create the payment request. Please try again."
+        }
       }
     }
   },

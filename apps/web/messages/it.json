@@ -1516,7 +1516,8 @@
         "network": "Rete",
         "status": "Stato",
         "recipient": "Destinatario",
-        "tx": "Transazione"
+        "tx": "Transazione",
+        "actions": "Azioni"
       },
       "status": {
         "pending": "In attesa",
@@ -1539,6 +1540,44 @@
         "next": "Successivo",
         "page": "Pagina",
         "results": "risultati"
+      },
+      "newButton": "Nuova richiesta di pagamento",
+      "filter": {
+        "all": "Tutti gli stati"
+      },
+      "row": {
+        "copyLink": "Copia link",
+        "copied": "Copiato",
+        "cancel": "Annulla",
+        "cancelConfirm": "Annullare questa richiesta di pagamento?"
+      },
+      "create": {
+        "title": "Nuova richiesta di pagamento",
+        "successTitle": "Richiesta di pagamento creata",
+        "linkLabel": "Condividi questo link con chi deve pagare",
+        "copy": "Copia",
+        "copied": "Copiato",
+        "done": "Fatto",
+        "settlesTo": "I pagamenti arrivano a",
+        "noWallet": "Imposta il wallet di liquidazione della tua organizzazione per ricevere pagamenti.",
+        "setWalletCta": "Imposta wallet",
+        "amount": "Importo",
+        "token": "Token",
+        "network": "Rete",
+        "expiry": "Scade tra",
+        "expiry30m": "30 minuti",
+        "expiry1h": "1 ora",
+        "expiry24h": "24 ore",
+        "recipient": "Destinatario (facoltativo)",
+        "recipientHelp": "Lascia vuoto per usare il tuo wallet di liquidazione.",
+        "invalidRecipient": "Inserisci un indirizzo 0x valido.",
+        "close": "Annulla",
+        "submit": "Crea richiesta",
+        "submitting": "Creazione…",
+        "errors": {
+          "gate": "Imposta il wallet di liquidazione o inserisci un destinatario.",
+          "generic": "Impossibile creare la richiesta di pagamento. Riprova."
+        }
       }
     }
   },

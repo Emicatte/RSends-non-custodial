@@ -1517,7 +1517,8 @@
         "network": "Réseau",
         "status": "Statut",
         "recipient": "Destinataire",
-        "tx": "Transaction"
+        "tx": "Transaction",
+        "actions": "Actions"
       },
       "status": {
         "pending": "En attente",
@@ -1540,6 +1541,44 @@
         "next": "Suivant",
         "page": "Page",
         "results": "résultats"
+      },
+      "newButton": "Nouvelle demande de paiement",
+      "filter": {
+        "all": "Tous les statuts"
+      },
+      "row": {
+        "copyLink": "Copier le lien",
+        "copied": "Copié",
+        "cancel": "Annuler",
+        "cancelConfirm": "Annuler cette demande de paiement ?"
+      },
+      "create": {
+        "title": "Nouvelle demande de paiement",
+        "successTitle": "Demande de paiement créée",
+        "linkLabel": "Partagez ce lien avec le payeur",
+        "copy": "Copier",
+        "copied": "Copié",
+        "done": "Terminé",
+        "settlesTo": "Les paiements sont versés à",
+        "noWallet": "Configurez le portefeuille de règlement de votre organisation pour recevoir des paiements.",
+        "setWalletCta": "Configurer le portefeuille",
+        "amount": "Montant",
+        "token": "Jeton",
+        "network": "Réseau",
+        "expiry": "Expire dans",
+        "expiry30m": "30 minutes",
+        "expiry1h": "1 heure",
+        "expiry24h": "24 heures",
+        "recipient": "Destinataire (facultatif)",
+        "recipientHelp": "Laissez vide pour utiliser votre portefeuille de règlement.",
+        "invalidRecipient": "Saisissez une adresse 0x valide.",
+        "close": "Annuler",
+        "submit": "Créer la demande",
+        "submitting": "Création…",
+        "errors": {
+          "gate": "Configurez votre portefeuille de règlement ou saisissez un destinataire.",
+          "generic": "Impossible de créer la demande de paiement. Réessayez."
+        }
       }
     }
   },

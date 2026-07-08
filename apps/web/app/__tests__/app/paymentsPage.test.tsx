@@ -1,15 +1,15 @@
 /**
- * Phase C — the /app payments view.
+ * Phase C/D — the /app payments list view.
  *
- * Exercises the real page + useOrgPayments + apiCall stack with only fetch,
- * next-auth, and next-intl mocked. Proves three things:
+ * Exercises the real page + useOrgPayments + useCurrentOrg + apiCall stack with
+ * only fetch, next-auth, next-intl and i18n navigation mocked. Proves:
  *   1. rows render from the session fetch (with the explorer link on paid rows),
  *   2. the empty state shows when there are none,
- *   3. the request carries a Bearer token and NO wallet-signature headers, and
- *      never asks for the `live` environment (the UI is hard-locked to test).
+ *   3. the list request carries a Bearer token and NO wallet-signature headers,
+ *      and never asks for the `live` environment (hard-locked to test).
  *
- * The next-intl mock throws on any missing key, so this also guards that the
- * page references no dangling app.payments.* i18n key (in en).
+ * The next-intl mock throws on any missing key → also guards that the page
+ * references no dangling app.payments.* i18n key (in en).
  */
 import { render, screen, waitFor } from '@testing-library/react'
 
@@ -32,6 +32,14 @@ jest.mock('next-intl', () => ({
   },
 }))
 
+jest.mock('@/i18n/navigation', () => ({
+  Link: ({ href, children, ...rest }: any) => (
+    <a href={typeof href === 'string' ? href : String(href)} {...rest}>
+      {children}
+    </a>
+  ),
+}))
+
 jest.mock('next-auth/react', () => ({
   useSession: () => ({
     data: { access_token: 'tok' },
@@ -41,11 +49,30 @@ jest.mock('next-auth/react', () => ({
 
 import AppPaymentsPage from '@/app/[locale]/app/payments/page'
 
-function mockFetch(payload: unknown) {
-  const fn = jest.fn().mockResolvedValue({
-    ok: true,
-    status: 200,
-    json: async () => payload,
+const ORG_PAYLOAD = {
+  organizations: [
+    {
+      id: 'o1',
+      name: 'Org',
+      slug: 'org',
+      owner_user_id: 'u1',
+      is_personal: false,
+      plan: 'free',
+      settlement_wallet: '0xabc0000000000000000000000000000000000001',
+      role: 'admin',
+      member_count: 1,
+      created_at: '2026-07-01T00:00:00Z',
+    },
+  ],
+  active_org_id: 'o1',
+}
+
+// Route by URL: the org lookup (useCurrentOrg) vs the payments list.
+function mockFetch(paymentsPayload: unknown) {
+  const fn = jest.fn().mockImplementation((url: unknown) => {
+    const u = String(url)
+    const body = u.includes('/organizations') ? ORG_PAYLOAD : paymentsPayload
+    return Promise.resolve({ ok: true, status: 200, json: async () => body })
   })
   global.fetch = fn as unknown as typeof fetch
   return fn
@@ -85,19 +112,13 @@ it('renders payment rows from the session fetch, with a BaseScan link on paid ro
 
   render(<AppPaymentsPage />)
 
-  // Both rows render with their status chips.
-  await waitFor(() => expect(screen.getByText('Paid')).toBeInTheDocument())
-  expect(screen.getByText('Pending')).toBeInTheDocument()
-
   // Paid row → explorer link to Base Sepolia, built from chain + matched hash.
-  const link = screen.getByRole('link', { name: 'View' })
-  expect(link).toHaveAttribute(
-    'href',
-    'https://sepolia.basescan.org/tx/0xhash1',
-  )
+  const link = await screen.findByRole('link', { name: 'View' })
+  expect(link).toHaveAttribute('href', 'https://sepolia.basescan.org/tx/0xhash1')
 
-  // Recipient is shown truncated; the null-recipient row shows a dash.
+  // Truncated recipient (paid row) + header + 2 data rows proves both rendered.
   expect(screen.getByText('0xabcd…1234')).toBeInTheDocument()
+  expect(screen.getAllByRole('row')).toHaveLength(3)
 })
 
 it('shows the empty state when there are no payments', async () => {
@@ -110,15 +131,23 @@ it('shows the empty state when there are no payments', async () => {
   )
 })
 
-it('fetches with a Bearer token and NO wallet-signature headers, never asking for live', async () => {
+it('lists with a Bearer token and NO wallet-signature headers, never asking for live', async () => {
   const fn = mockFetch({ total: 0, page: 1, per_page: 20, records: [] })
 
   render(<AppPaymentsPage />)
 
-  await waitFor(() => expect(fn).toHaveBeenCalled())
+  await waitFor(() =>
+    expect(
+      fn.mock.calls.some(([u]: any[]) =>
+        String(u).includes('/user/org/payment-intents'),
+      ),
+    ).toBe(true),
+  )
 
-  const [url, options] = fn.mock.calls[0] as [string, RequestInit]
-  expect(String(url)).toContain('/api/v1/user/org/payment-intents')
+  const call = fn.mock.calls.find(([u]: any[]) =>
+    String(u).includes('/user/org/payment-intents'),
+  ) as [string, RequestInit]
+  const [url, options] = call
   // Hard-lock: the browser never requests the live environment.
   expect(String(url)).not.toContain('environment')
 

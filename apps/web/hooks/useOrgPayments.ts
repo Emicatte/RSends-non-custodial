@@ -2,13 +2,13 @@
 
 import { useSession } from 'next-auth/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { apiCall } from '@/lib/auth-client'
+import { apiCall, waitForToken } from '@/lib/auth-client'
 
 /**
- * Phase C — session-authed org payments list.
+ * Phase C/D — session-authed org payments: list (C) + create/cancel (D).
  *
- * Reads the active org's payment intents from the browser/session path
- * (`GET /api/v1/user/org/payment-intents`) via the `/api/backend` proxy + the
+ * Reads AND mutates the active org's payment intents from the browser/session
+ * path (`/api/v1/user/org/payment-intents`) via the `/api/backend` proxy + the
  * `apiCall` Bearer/refresh helper. NO wallet-signature auth, NO API key in the
  * browser. The UI is hard-locked to `test`: this hook never sends an
  * `environment` param, so the backend serves its `test` default and there is no
@@ -35,6 +35,24 @@ export interface OrgPaymentsPayload {
   records: OrgPaymentRecord[]
 }
 
+export interface CreateInvoiceInput {
+  amount: number
+  currency: string
+  chain: string
+  expires_in_minutes: number
+  recipient?: string
+}
+
+/** Slice of PaymentIntentResponse the /app create flow needs (the pay link). */
+export interface CreatedInvoice {
+  intent_id: string
+  recipient: string | null
+  amount: number
+  currency: string
+  chain: string
+  status: string
+}
+
 const PER_PAGE = 20
 
 export function useOrgPayments() {
@@ -45,6 +63,7 @@ export function useOrgPayments() {
   const [records, setRecords] = useState<OrgPaymentRecord[]>([])
   const [total, setTotal] = useState<number>(0)
   const [page, setPage] = useState<number>(1)
+  const [statusFilter, setStatusFilterState] = useState<string>('') // '' = all
   // Bumped on active-org switch to force a refetch even when page is already 1.
   const [nonce, setNonce] = useState<number>(0)
   const [loading, setLoading] = useState<boolean>(false)
@@ -74,8 +93,11 @@ export function useOrgPayments() {
     setLoading(true)
     setError(null)
     try {
+      const q =
+        `page=${page}&per_page=${PER_PAGE}` +
+        (statusFilter ? `&status=${encodeURIComponent(statusFilter)}` : '')
       const data = await apiCall<OrgPaymentsPayload>(
-        `/api/v1/user/org/payment-intents?page=${page}&per_page=${PER_PAGE}`,
+        `/api/v1/user/org/payment-intents?${q}`,
         tokenRef.current,
       )
       setRecords(data.records)
@@ -90,7 +112,7 @@ export function useOrgPayments() {
       setLoading(false)
     }
     // `nonce` is intentionally a dep: an org switch bumps it to refetch.
-  }, [status, accessToken, page, nonce])
+  }, [status, accessToken, page, nonce, statusFilter])
 
   useEffect(() => {
     void reload()
@@ -107,6 +129,58 @@ export function useOrgPayments() {
       window.removeEventListener('rsends:active-org-changed', onOrgChange)
   }, [])
 
+  const setStatusFilter = useCallback((s: string) => {
+    setStatusFilterState(s)
+    setPage(1)
+  }, [])
+
+  // Create an invoice (payment request) via the session path. No `environment`
+  // param → the backend's `test` default (hard-lock). Throws the apiCall error
+  // code on failure (the modal maps it, e.g. HTTP 422 → the recipient gate).
+  const createIntent = useCallback(
+    async (input: CreateInvoiceInput): Promise<CreatedInvoice> => {
+      const token = await waitForToken(tokenRef)
+      const result = await apiCall<CreatedInvoice>(
+        '/api/v1/user/org/payment-intents',
+        token,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            amount: input.amount,
+            currency: input.currency,
+            chain: input.chain,
+            expires_in_minutes: input.expires_in_minutes,
+            ...(input.recipient ? { recipient: input.recipient } : {}),
+          }),
+        },
+      )
+      try {
+        await reload()
+      } catch (e) {
+        console.warn('[useOrgPayments] reload after create failed', e)
+      }
+      return result
+    },
+    [reload],
+  )
+
+  const cancelIntent = useCallback(
+    async (intentId: string): Promise<void> => {
+      const token = await waitForToken(tokenRef)
+      await apiCall<unknown>(
+        `/api/v1/user/org/payment-intents/${intentId}/cancel`,
+        token,
+        { method: 'POST' },
+      )
+      try {
+        await reload()
+      } catch (e) {
+        console.warn('[useOrgPayments] reload after cancel failed', e)
+      }
+    },
+    [reload],
+  )
+
   return {
     records,
     total,
@@ -117,7 +191,11 @@ export function useOrgPayments() {
     loading,
     error,
     isAuthed: status === 'authenticated',
+    statusFilter,
+    setStatusFilter,
     setPage,
     reload,
+    createIntent,
+    cancelIntent,
   }
 }

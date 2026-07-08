@@ -1,6 +1,9 @@
 'use client'
 
+import { useState } from 'react'
 import { useTranslations } from 'next-intl'
+import { useCurrentOrg } from '@/hooks/useCurrentOrg'
+import { CreatePaymentModal } from '@/components/app/CreatePaymentModal'
 import { useOrgPayments, type OrgPaymentRecord } from '@/hooks/useOrgPayments'
 
 // Visual language mirrors the /app home (app/[locale]/app/page.tsx) so the
@@ -12,6 +15,7 @@ const COLORS = {
   paper: '#f7f6f3',
   white: '#ffffff',
   border: '#e5e4e0',
+  accent: '#C45A3C',
   green: '#2D8659',
   greenLight: 'rgba(45, 134, 89, 0.08)',
   orange: '#D97A2E',
@@ -38,6 +42,8 @@ const KNOWN_STATUS = new Set([
   'pending', 'paid', 'completed', 'expired', 'cancelled',
   'review', 'refunded', 'partial', 'overpaid',
 ])
+// The status values offered in the filter dropdown (the operational set).
+const FILTER_STATUSES = ['pending', 'paid', 'expired', 'cancelled'] as const
 
 const CHAIN_LABEL: Record<string, string> = {
   base_sepolia: 'Base Sepolia',
@@ -76,8 +82,43 @@ function fmtDate(iso: string): string {
 
 const AMOUNT_FMT = new Intl.NumberFormat(undefined, { maximumFractionDigits: 6 })
 
+const btnStyle: React.CSSProperties = {
+  padding: '8px 14px',
+  borderRadius: 8,
+  border: 'none',
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: 'pointer',
+}
+
+// ── Per-row "copy pay link" button (self-contained copied state) ──
+function CopyLinkButton({ intentId }: { intentId: string }) {
+  const t = useTranslations('app.payments')
+  const [copied, setCopied] = useState(false)
+  function copy() {
+    if (typeof window === 'undefined' || !navigator.clipboard) return
+    navigator.clipboard.writeText(`${window.location.origin}/pay/${intentId}`).then(
+      () => {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1500)
+      },
+      () => {},
+    )
+  }
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      style={{ ...btnStyle, background: 'transparent', color: COLORS.accent, padding: '4px 8px', fontSize: 12 }}
+    >
+      {copied ? t('row.copied') : t('row.copyLink')}
+    </button>
+  )
+}
+
 export default function AppPaymentsPage() {
   const t = useTranslations('app.payments')
+  const { role, activeOrg } = useCurrentOrg()
   const {
     records,
     total,
@@ -86,8 +127,25 @@ export default function AppPaymentsPage() {
     hasNext,
     loading,
     error,
+    statusFilter,
+    setStatusFilter,
     setPage,
+    createIntent,
+    cancelIntent,
   } = useOrgPayments()
+
+  const [modalOpen, setModalOpen] = useState(false)
+  const canManage = role === 'operator' || role === 'admin'
+  const settlementWallet = activeOrg?.settlement_wallet ?? null
+
+  async function onCancel(intentId: string) {
+    if (typeof window !== 'undefined' && !window.confirm(t('row.cancelConfirm'))) return
+    try {
+      await cancelIntent(intentId)
+    } catch (e) {
+      console.error('[payments] cancel failed', e)
+    }
+  }
 
   const cellStyle: React.CSSProperties = {
     padding: '12px 14px',
@@ -126,6 +184,45 @@ export default function AppPaymentsPage() {
         </p>
       </div>
 
+      {/* Toolbar: status filter + create */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          marginBottom: 14,
+        }}
+      >
+        <select
+          aria-label={t('columns.status')}
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          style={{
+            padding: '8px 11px',
+            borderRadius: 8,
+            border: `1px solid ${COLORS.border}`,
+            fontSize: 13,
+            background: COLORS.white,
+            color: COLORS.ink,
+          }}
+        >
+          <option value="">{t('filter.all')}</option>
+          {FILTER_STATUSES.map((s) => (
+            <option key={s} value={s}>{t(`status.${s}`)}</option>
+          ))}
+        </select>
+        {canManage && (
+          <button
+            type="button"
+            onClick={() => setModalOpen(true)}
+            style={{ ...btnStyle, background: COLORS.accent, color: COLORS.white }}
+          >
+            {t('newButton')}
+          </button>
+        )}
+      </div>
+
       <div
         style={{
           background: COLORS.white,
@@ -144,6 +241,7 @@ export default function AppPaymentsPage() {
                 <th style={headStyle}>{t('columns.status')}</th>
                 <th style={headStyle}>{t('columns.recipient')}</th>
                 <th style={headStyle}>{t('columns.tx')}</th>
+                <th style={headStyle}>{t('columns.actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -214,6 +312,20 @@ export default function AppPaymentsPage() {
                       ) : (
                         '—'
                       )}
+                    </td>
+                    <td style={cellStyle}>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <CopyLinkButton intentId={r.intent_id} />
+                        {canManage && r.status === 'pending' && (
+                          <button
+                            type="button"
+                            onClick={() => onCancel(r.intent_id)}
+                            style={{ ...btnStyle, background: 'transparent', color: COLORS.red, padding: '4px 8px', fontSize: 12 }}
+                          >
+                            {t('row.cancel')}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 )
@@ -294,6 +406,14 @@ export default function AppPaymentsPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {modalOpen && (
+        <CreatePaymentModal
+          settlementWallet={settlementWallet}
+          onCreate={createIntent}
+          onClose={() => setModalOpen(false)}
+        />
       )}
     </main>
   )
