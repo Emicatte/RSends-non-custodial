@@ -93,12 +93,16 @@ Outbound webhook dispatch (`webhook_service.py`) also filters
 `MerchantWebhook.environment == intent.environment` — test endpoints never receive live
 events and vice versa.
 
-**Recipient gate (non-custodial invariant, Phase B).** A `PaymentIntent` **cannot** be
-created without a resolvable on-chain recipient — the single construction site
-(`merchant_routes.py`, one `PaymentIntent(...)`) calls `resolve_recipient`
-(`app/services/intent_service.py`) first: per-intent override (Pydantic-validated) →
-else the org's `settlement_wallet` (session path by `org_id`; API-key path by reverse
-lookup of the owner wallet → its org). Fail-closed **422** when unresolvable
+**Recipient gate (non-custodial invariant, Phase B; construction site moved in Phase D).** A
+`PaymentIntent` **cannot** be created without a resolvable on-chain recipient — the single
+construction site is now `intent_service.create_intent` (one `PaymentIntent(...)`,
+`grep "PaymentIntent(" services/backend/app` = one hit), shared by BOTH the API-key create route
+(`merchant_routes.create_payment_intent`, a thin wrapper passing `key_id` for monthly-limit +
+usage-increment) and the session create route
+(`user_org_payments_routes.create_org_payment_intent`, passing `org_id`). It calls
+`resolve_recipient` first: per-intent override (Pydantic-validated) → else the org's
+`settlement_wallet` (session path by `org_id`; API-key path by reverse lookup of the owner
+wallet → its org). Fail-closed **422** when unresolvable
 (`SETTLEMENT_WALLET_MISSING`) or when the owner wallet maps to >1 org
 (`SETTLEMENT_WALLET_AMBIGUOUS`) — never silently default a recipient. `settlement_wallet`
 is an org-level column (admin-set in Settings via `PATCH /api/v1/organizations/{id}`,
@@ -117,19 +121,27 @@ This is what the hosted checkout `/pay` polls (via `apps/web/app/api/pay/[intent
 The merchant GET is fully authenticated — its old `GET_PUBLIC_PREFIXES` exception and the
 `X-Checkout-Public` rate-limit special case were removed when this route replaced them.
 
-Session (dashboard) surface — org-scoped JWT reads under `/api/v1/user/org/*`
-(`app/api/user_org_payments_routes.py`; JWT-exempt from the API-key middleware via the
-`/api/v1/user/` `EXEMPT_PATHS` entry — auth perimeter untouched):
+Session (dashboard) surface — org-scoped JWT payments read (C) + create/cancel (D) under
+`/api/v1/user/org/*` (`app/api/user_org_payments_routes.py`; JWT-exempt from the API-key
+middleware via the `/api/v1/user/` `EXEMPT_PATHS` entry — auth perimeter untouched). Every route
+derives `owner = _resolve_owner_address(org_id)` == `PaymentIntent.merchant_id` and is
+environment-scoped (`Literal["test","live"]`, default `test`):
 
-| Route | Auth | Scoping | Rate limit |
+| Route | Required role | Scoping | Rate limit |
 |---|---|---|---|
-| `GET /api/v1/user/org/payment-intents` | session JWT — `require_org_role("viewer")` | org_id server-derived from JWT → `_resolve_owner_address(org_id)` == `PaymentIntent.merchant_id`; **environment-scoped** (`Literal["test","live"]`, default `test`) IN the query; reuses the shared `intent_service.list_org_intents` (identical query to the API-key `GET /merchant/transactions` — no divergent second list); read-only; **404-free** but 409 `no_primary_wallet` when the org has no primary EVM wallet | 120/min **per IP** |
+| `GET /api/v1/user/org/payment-intents` | `viewer` | reuses `intent_service.list_org_intents` (identical query to API-key `GET /merchant/transactions` — no divergent list); read-only; 409 `no_primary_wallet` if none | 120/min **per IP** |
+| `POST /api/v1/user/org/payment-intents` (create) | `operator` | goes through the SAME `intent_service.create_intent` as the API-key path (B's recipient gate applies via `org_id`; 422 unresolvable); `merchant_id == owner` so it lands in this org's read scope | 30/min **per IP** |
+| `POST /api/v1/user/org/payment-intents/{id}/cancel` | `operator` | scoped `(id, owner, env)` IN the query → **404** on miss/cross-tenant; pending-only → `cancelled` (400 else) | 30/min **per IP** |
 
-Browser/session counterpart of the API-key transactions list. The `/app` payments UI
-(`/[locale]/app/payments`) reads it and is **hard-locked to `test`** — it sends no `environment`
-param and shows no test/live toggle (mainnet routers are undeployed → `live` unpayable). Org
-isolation (a session never sees another org's intents) is enforced in the SQL and pinned by
-`tests/test_user_org_payments.py::test_cross_org_isolation_no_leak`.
+Browser/session counterpart of the API-key merchant API. The `/app` payments UI
+(`/[locale]/app/payments`) reads + creates here and is **hard-locked to `test`** — it sends no
+`environment` param and shows no test/live toggle (mainnet routers undeployed → `live` unpayable);
+the create form fixes chain = Base Sepolia (token USDC/ETH). Org isolation (a session never
+sees/creates into another org's intents) is enforced in the SQL and pinned by
+`test_user_org_payments.py::test_cross_org_isolation_no_leak` (read) and
+`test_user_org_intent_create.py::test_session_create_isolation` (create). The create/cancel rate
+entries are inserted most-specific-first (the `/{id}/cancel` trailing-slash prefix precedes the
+bare create prefix).
 
 Admin surface (server-to-server only; the web proxy denylists these paths):
 

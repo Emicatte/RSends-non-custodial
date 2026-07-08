@@ -9,18 +9,36 @@ never silently default a recipient.
 
 from __future__ import annotations
 
+import logging
+import secrets
+from datetime import datetime, timedelta, timezone
+
 from fastapi import HTTPException
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.merchant_models import (
+    CreatePaymentIntentRequest,
     IntentStatus,
     MerchantTransactionItem,
     MerchantTransactionListResponse,
     PaymentIntent,
+    generate_reference_id,
 )
 from app.models.org_models import Organization
 from app.models.user_wallets_models import UserWallet
+from app.services.audit_service import log_event
+from app.services.key_usage_service import (
+    check_monthly_limits,
+    increment_intent_count,
+)
+from app.services.router_registry import (
+    chain_is_supported,
+    derive_invoice_id,
+    token_is_enabled,
+)
+
+logger = logging.getLogger(__name__)
 
 _MISSING = {
     "error": "SETTLEMENT_WALLET_MISSING",
@@ -197,3 +215,143 @@ async def list_org_intents(
         per_page=per_page,
         records=[_intent_to_item(i) for i in intents],
     )
+
+
+# ── The single intent construction site (Phase D) ────────────────
+#
+# BOTH the API-key path (merchant_routes.create_payment_intent) and the session
+# path (user_org_payments_routes.create_org_payment_intent) call `create_intent`,
+# so Phase B's recipient gate and every validation apply uniformly — no second
+# construction path can bypass them. `key_id` gates the two API-key-only steps
+# (monthly limits + usage increment); the session path passes key_id=None.
+# `org_id` (session) makes resolve_recipient use the org's settlement_wallet
+# directly instead of the reverse wallet→org lookup.
+
+_TESTNET_CHAINS = {"base_sepolia", "sepolia"}
+_MAINNET_CHAINS = {"base", "ethereum", "eth"}
+
+
+async def create_intent(
+    db: AsyncSession,
+    merchant_id: str,
+    environment: str,
+    payload: CreatePaymentIntentRequest,
+    org_id: str | None = None,
+    key_id: str | None = None,
+) -> PaymentIntent:
+    """Create + persist a PaymentIntent, or raise the appropriate 4xx.
+
+    Order (preserved from the original API-key handler): chain gate → env↔chain →
+    token gate → (monthly limit, key only) → id gen → recipient gate → construct →
+    add/flush → audit → (usage increment, key only) → commit. Returns the intent;
+    the caller serializes it with `_intent_to_response`.
+    """
+    requested_chain = (payload.chain or "base").lower()
+
+    # Categorical settlement gate: a chain that doesn't canonicalize into the
+    # token registry has no settlement path at all. Reject before the env check.
+    if not chain_is_supported(requested_chain):
+        raise HTTPException(400, {
+            "error": "UNSUPPORTED_CHAIN",
+            "message": f"Unsupported chain for settlement: {requested_chain}.",
+        })
+
+    if environment == "test" and requested_chain in _MAINNET_CHAINS:
+        raise HTTPException(400, {
+            "error": "TESTNET_ONLY",
+            "message": f"Test API keys can only create intents on testnet chains. Requested: {requested_chain}.",
+            "allowed_chains": sorted(_TESTNET_CHAINS),
+        })
+    if environment == "live" and requested_chain in _TESTNET_CHAINS:
+        raise HTTPException(400, {
+            "error": "MAINNET_ONLY",
+            "message": f"Live API keys cannot create intents on testnet chains. Requested: {requested_chain}.",
+        })
+
+    # Token policy gate (single source of truth: app/token_registry.json).
+    if not token_is_enabled(requested_chain, payload.currency):
+        raise HTTPException(400, {
+            "error": "UNSUPPORTED_TOKEN",
+            "message": f"Token {payload.currency} is not enabled on chain {requested_chain}.",
+        })
+
+    # Monthly limits — API-key path only.
+    if key_id:
+        limit_check = await check_monthly_limits(db, key_id)
+        if not limit_check["allowed"]:
+            raise HTTPException(429, {
+                "error": "MONTHLY_LIMIT_EXCEEDED",
+                "message": limit_check["reason"],
+            })
+
+    now = datetime.now(timezone.utc)
+    intent_id = f"pi_{secrets.token_hex(16)}"
+    reference_id = generate_reference_id(merchant_id)
+    onchain_invoice_id = derive_invoice_id(reference_id)
+
+    # RECIPIENT GATE (Phase B): explicit override OR settlement_wallet default —
+    # org_id set (session) resolves the org's wallet directly. Fail-closed 422.
+    recipient = await resolve_recipient(
+        db, merchant_id, payload.recipient, org_id=org_id
+    )
+
+    intent = PaymentIntent(
+        intent_id=intent_id,
+        reference_id=reference_id,
+        merchant_id=merchant_id,
+        environment=environment,
+        amount=payload.amount,
+        currency=payload.currency,
+        chain=payload.chain,
+        recipient=recipient,
+        network=payload.network,
+        expected_sender=payload.expected_sender,
+        onchain_invoice_id=onchain_invoice_id,
+        late_payment_policy=payload.late_payment_policy,
+        amount_tolerance_percent=payload.amount_tolerance_percent,
+        allow_partial=payload.allow_partial,
+        allow_overpayment=payload.allow_overpayment,
+        status=IntentStatus.pending,
+        metadata_=payload.metadata,
+        expires_at=now + timedelta(minutes=payload.expires_in_minutes),
+    )
+    db.add(intent)
+    await db.flush()
+
+    await log_event(
+        db,
+        "INTENT_CREATED",
+        "payment_intent",
+        intent.intent_id,
+        actor_type="merchant",
+        actor_id=merchant_id,
+        changes={
+            "amount": str(payload.amount),
+            "currency": payload.currency,
+            "chain": payload.chain,
+            "reference_id": intent.reference_id,
+            "onchain_invoice_id": onchain_invoice_id,
+            "expected_sender": payload.expected_sender,
+            "late_payment_policy": payload.late_payment_policy,
+            "amount_tolerance_percent": payload.amount_tolerance_percent,
+            "allow_partial": payload.allow_partial,
+            "allow_overpayment": payload.allow_overpayment,
+            "expires_in_minutes": payload.expires_in_minutes,
+        },
+    )
+
+    # Usage tracking — API-key path only.
+    if key_id:
+        await increment_intent_count(db, key_id)
+
+    await db.commit()
+
+    logger.info(
+        "PaymentIntent created: %s ref=%s invoiceId=%s (merchant=%s, %.6f %s, chain=%s, sender=%s, expires=%s)",
+        intent.intent_id, intent.reference_id, onchain_invoice_id,
+        merchant_id, payload.amount, payload.currency, payload.chain,
+        payload.expected_sender or "any",
+        intent.expires_at.isoformat(),
+    )
+
+    return intent

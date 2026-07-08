@@ -37,7 +37,11 @@ from app.models.merchant_models import (
 )
 from app.services.webhook_service import send_test_event, _dispatch_event
 from app.services.audit_service import log_event
-from app.services.intent_service import resolve_recipient, list_org_intents
+from app.services.intent_service import (
+    resolve_recipient,
+    list_org_intents,
+    create_intent,
+)
 from app.services.router_registry import (
     derive_invoice_id,
     build_onchain_payment,
@@ -146,133 +150,19 @@ async def create_payment_intent(
     Riceve un intent_id da passare al pagatore per completare il pagamento.
     L'intent scade dopo expires_in_minutes (default 30 min).
     """
+    # Thin wrapper over the shared constructor (intent_service.create_intent) —
+    # the single PaymentIntent construction site + Phase B recipient gate live
+    # there, shared with the session path. Only the key-scoped bits (merchant_id
+    # + environment from the API key, monthly-limit + usage-increment via key_id)
+    # are resolved here; the session path passes org_id instead.
     merchant_id = _get_merchant_id(request)
     client = getattr(request.state, "client", None)
     key_id = client.get("key_id") if client else None
     env = client.get("environment", "live") if client else "live"
 
-    # Environment enforcement: test keys ↔ testnet, live keys ↔ mainnet.
-    # Only registry-real chains + their intended testnets belong here — anything
-    # else is rejected upstream by the categorical chain_is_supported() gate.
-    TESTNET_CHAINS = {"base_sepolia", "sepolia"}
-    MAINNET_CHAINS = {"base", "ethereum", "eth"}
-    requested_chain = (payload.chain or "base").lower()
-
-    # Categorical settlement gate: a chain that doesn't canonicalize into the
-    # token registry has no settlement path at all (no tokens, no router, no
-    # indexer). Reject before the env-binding check — the verdict must not
-    # depend on the key's environment.
-    if not chain_is_supported(requested_chain):
-        raise HTTPException(400, {
-            "error": "UNSUPPORTED_CHAIN",
-            "message": f"Unsupported chain for settlement: {requested_chain}.",
-        })
-
-    if env == "test" and requested_chain in MAINNET_CHAINS:
-        raise HTTPException(400, {
-            "error": "TESTNET_ONLY",
-            "message": f"Test API keys can only create intents on testnet chains. Requested: {requested_chain}.",
-            "allowed_chains": sorted(TESTNET_CHAINS),
-        })
-    if env == "live" and requested_chain in TESTNET_CHAINS:
-        raise HTTPException(400, {
-            "error": "MAINNET_ONLY",
-            "message": f"Live API keys cannot create intents on testnet chains. Requested: {requested_chain}.",
-        })
-
-    # Token policy gate: reject any token not in the registry / not enabled for
-    # this chain (single source of truth: app/token_registry.json). This is the
-    # off-chain mirror of the contract's FeeConfig.enabled whitelist.
-    if not token_is_enabled(requested_chain, payload.currency):
-        raise HTTPException(400, {
-            "error": "UNSUPPORTED_TOKEN",
-            "message": f"Token {payload.currency} is not enabled on chain {requested_chain}.",
-        })
-
-    # Monthly limits
-    if key_id:
-        limit_check = await check_monthly_limits(db, key_id)
-        if not limit_check["allowed"]:
-            raise HTTPException(429, {
-                "error": "MONTHLY_LIMIT_EXCEEDED",
-                "message": limit_check["reason"],
-            })
-
-    now = datetime.now(timezone.utc)
-    intent_id = _generate_intent_id()
-
-    # NON-CUSTODIAL: derive the on-chain invoiceId (bytes32) from the reference.
-    # The payer passes this to RSendsRouter.pay(); the indexer matches the
-    # emitted PaymentMade.invoiceId back to this intent. No deposit address,
-    # no custodial key — funds go payer -> merchant atomically on-chain.
-    reference_id = generate_reference_id(merchant_id)
-    onchain_invoice_id = derive_invoice_id(reference_id)
-
-    # RECIPIENT GATE (Phase B): an intent cannot be created without a resolvable
-    # recipient — explicit override OR the org's settlement_wallet default. This
-    # is the single PaymentIntent construction site, so a recipient-less intent
-    # is structurally impossible. Fail-closed 422 when unresolvable.
-    recipient = await resolve_recipient(db, merchant_id, payload.recipient)
-
-    intent = PaymentIntent(
-        intent_id=intent_id,
-        reference_id=reference_id,
-        merchant_id=merchant_id,
-        environment=env,
-        amount=payload.amount,
-        currency=payload.currency,
-        chain=payload.chain,
-        recipient=recipient,
-        network=payload.network,
-        expected_sender=payload.expected_sender,
-        onchain_invoice_id=onchain_invoice_id,
-        late_payment_policy=payload.late_payment_policy,
-        amount_tolerance_percent=payload.amount_tolerance_percent,
-        allow_partial=payload.allow_partial,
-        allow_overpayment=payload.allow_overpayment,
-        status=IntentStatus.pending,
-        metadata_=payload.metadata,
-        expires_at=now + timedelta(minutes=payload.expires_in_minutes),
+    intent = await create_intent(
+        db, merchant_id, env, payload, org_id=None, key_id=key_id
     )
-    db.add(intent)
-    await db.flush()
-
-    await log_event(
-        db,
-        "INTENT_CREATED",
-        "payment_intent",
-        intent.intent_id,
-        actor_type="merchant",
-        actor_id=merchant_id,
-        changes={
-            "amount": str(payload.amount),
-            "currency": payload.currency,
-            "chain": payload.chain,
-            "reference_id": intent.reference_id,
-            "onchain_invoice_id": onchain_invoice_id,
-            "expected_sender": payload.expected_sender,
-            "late_payment_policy": payload.late_payment_policy,
-            "amount_tolerance_percent": payload.amount_tolerance_percent,
-            "allow_partial": payload.allow_partial,
-            "allow_overpayment": payload.allow_overpayment,
-            "expires_in_minutes": payload.expires_in_minutes,
-        },
-    )
-
-    # Track usage
-    if key_id:
-        await increment_intent_count(db, key_id)
-
-    await db.commit()
-
-    logger.info(
-        "PaymentIntent created: %s ref=%s invoiceId=%s (merchant=%s, %.6f %s, chain=%s, sender=%s, expires=%s)",
-        intent.intent_id, intent.reference_id, onchain_invoice_id,
-        merchant_id, payload.amount, payload.currency, payload.chain,
-        payload.expected_sender or "any",
-        intent.expires_at.isoformat(),
-    )
-
     return await _intent_to_response(intent)
 
 

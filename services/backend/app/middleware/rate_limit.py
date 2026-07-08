@@ -65,7 +65,11 @@ ENDPOINT_LIMITS: list[tuple[str, str, int, int, str]] = [
     ("POST", "/api/v1/auth/google",                  100,    60,  "ip"),   # 5 per 10min
     ("POST", "/api/v1/auth/refresh",                 20,    60,  "ip"),   # 20/min
     ("POST", "/api/v1/auth/logout",                  30,    60,  "ip"),   # 30/min
-    # Session-authed org payments read view (Phase C) — per-IP (JWT, no API key).
+    # Session-authed org payments (Phase C read / Phase D create+cancel) — per-IP
+    # (JWT, no API key). Most-specific-prefix-first: the cancel subpath (trailing
+    # slash) MUST precede the bare create prefix so _match_endpoint doesn't shadow it.
+    ("POST",   "/api/v1/user/org/payment-intents/", 30,     60,  "ip"),  # cancel
+    ("POST",   "/api/v1/user/org/payment-intents",  30,     60,  "ip"),  # create
     ("GET",    "/api/v1/user/org/payment-intents",  120,    60,  "ip"),
     # User-scoped saved-routes CRUD (defense in depth over the auth gate)
     ("POST",   "/api/v1/user/routes",                30,    60,  "ip"),
