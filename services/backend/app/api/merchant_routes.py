@@ -37,7 +37,7 @@ from app.models.merchant_models import (
 )
 from app.services.webhook_service import send_test_event, _dispatch_event
 from app.services.audit_service import log_event
-from app.services.intent_service import resolve_recipient
+from app.services.intent_service import resolve_recipient, list_org_intents
 from app.services.router_registry import (
     derive_invoice_id,
     build_onchain_payment,
@@ -458,77 +458,20 @@ async def list_merchant_transactions(
     """
     Lista paginata dei payment intents del merchant.
 
-    Supporta filtri per status e currency per la riconciliazione.
+    Supporta filtri per status e currency per la riconciliazione. Delega alla
+    query condivisa `list_org_intents` (stessa logica del path session-authed
+    /api/v1/user/org/payment-intents) — scoped al merchant dell'API key E al suo
+    environment (test/live condividono il merchant_id, servono entrambi).
     """
     merchant_id = _get_merchant_id(request)
-
-    # Base query — scoped to the key's merchant AND environment (test/live
-    # share the same merchant_id, so both predicates are required for isolation).
-    filters = [
-        PaymentIntent.merchant_id == merchant_id,
-        PaymentIntent.environment == _get_environment(request),
-    ]
-
-    if status:
-        try:
-            status_enum = IntentStatus(status)
-            filters.append(PaymentIntent.status == status_enum)
-        except ValueError:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "INVALID_STATUS",
-                    "message": f"Status '{status}' non valido. Validi: pending, completed, expired, cancelled, review, refunded, partial, overpaid",
-                },
-            )
-
-    if currency:
-        filters.append(PaymentIntent.currency == currency)
-
-    # Count totale
-    count_result = await db.execute(
-        select(func.count(PaymentIntent.id)).where(and_(*filters))
-    )
-    total = count_result.scalar() or 0
-
-    # Fetch pagina
-    offset = (page - 1) * per_page
-    result = await db.execute(
-        select(PaymentIntent)
-        .where(and_(*filters))
-        .order_by(PaymentIntent.created_at.desc())
-        .offset(offset)
-        .limit(per_page)
-    )
-    intents = result.scalars().all()
-
-    records = [
-        MerchantTransactionItem(
-            intent_id=i.intent_id,
-            onchain_invoice_id=i.onchain_invoice_id,
-            amount=i.amount,
-            currency=i.currency,
-            chain=i.chain or "BASE",
-            status=i.status.value,
-            tx_hash=i.tx_hash,
-            matched_tx_hash=i.matched_tx_hash,
-            metadata=i.metadata_,
-            completed_late=i.completed_late,
-            late_minutes=i.late_minutes,
-            amount_received=i.amount_received,
-            overpaid_amount=i.overpaid_amount,
-            underpaid_amount=i.underpaid_amount,
-            created_at=i.created_at.isoformat(),
-            completed_at=i.completed_at.isoformat() if i.completed_at else None,
-        )
-        for i in intents
-    ]
-
-    return MerchantTransactionListResponse(
-        total=total,
+    return await list_org_intents(
+        db,
+        merchant_id,
+        _get_environment(request),
+        status=status,
+        currency=currency,
         page=page,
         per_page=per_page,
-        records=records,
     )
 
 

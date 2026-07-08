@@ -117,6 +117,20 @@ This is what the hosted checkout `/pay` polls (via `apps/web/app/api/pay/[intent
 The merchant GET is fully authenticated — its old `GET_PUBLIC_PREFIXES` exception and the
 `X-Checkout-Public` rate-limit special case were removed when this route replaced them.
 
+Session (dashboard) surface — org-scoped JWT reads under `/api/v1/user/org/*`
+(`app/api/user_org_payments_routes.py`; JWT-exempt from the API-key middleware via the
+`/api/v1/user/` `EXEMPT_PATHS` entry — auth perimeter untouched):
+
+| Route | Auth | Scoping | Rate limit |
+|---|---|---|---|
+| `GET /api/v1/user/org/payment-intents` | session JWT — `require_org_role("viewer")` | org_id server-derived from JWT → `_resolve_owner_address(org_id)` == `PaymentIntent.merchant_id`; **environment-scoped** (`Literal["test","live"]`, default `test`) IN the query; reuses the shared `intent_service.list_org_intents` (identical query to the API-key `GET /merchant/transactions` — no divergent second list); read-only; **404-free** but 409 `no_primary_wallet` when the org has no primary EVM wallet | 120/min **per IP** |
+
+Browser/session counterpart of the API-key transactions list. The `/app` payments UI
+(`/[locale]/app/payments`) reads it and is **hard-locked to `test`** — it sends no `environment`
+param and shows no test/live toggle (mainnet routers are undeployed → `live` unpayable). Org
+isolation (a session never sees another org's intents) is enforced in the SQL and pinned by
+`tests/test_user_org_payments.py::test_cross_org_isolation_no_leak`.
+
 Admin surface (server-to-server only; the web proxy denylists these paths):
 
 | Surface | Auth | Notes |
@@ -135,6 +149,18 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
 - **Render provisioning before go-live:** Redis must be provisioned and `DEBUG=false` set —
   fail-closed rate limiting depends on both. Also set **`ADMIN_API_TOKEN`** (≥32 chars,
   distinct from `HMAC_SECRET`) — the admin surface is fully denied without it.
+- **Phase C deferrals + a known-broken scope (2026-07-08).** Phase C shipped the session-authed
+  org **payments read** view only (`GET /api/v1/user/org/payment-intents` +
+  `/[locale]/app/payments`, session hook `useOrgPayments`). Narrowed out of C, still to build:
+  the session `/api/v1/user/org/settlements` and `/api/v1/user/org/stats` endpoints and
+  re-pointing the `/app` home stats widget off the wallet-sig `dashboard/stats`. **`dashboard_routes.py`
+  scope is broken post-B**: it filters `PaymentSettlement.merchant == owner` (the org's *primary*
+  wallet), so once an org's `settlement_wallet ≠ primary wallet` the home stats read **zero** — fix
+  by scoping through the settlements→intents join (as the deferred `/stats` will); the widget is
+  left untouched until then. **Pre-existing (plan anchor 10):** `/api/v1/merchant/profile` and
+  `/api/v1/merchant/invoices` are `require_org_role`/JWT-authed but NOT in `EXEMPT_PATHS`, so
+  they're unreachable in prod without `RSEND_DEV_AUTH_BYPASS` — new session routes correctly live
+  under the exempt `/api/v1/user/org/` prefix instead.
 - **Non-custodial `/app` residue after Phase A (2026-07-08).** Phase A removed the custodial
   dashboard surface (send/swap/flow, command-center, both `app/api/oracle/*` routes, the
   `forwarding/logs` transactions shell, the balances/clients/reports mocks, the `/app/settings`

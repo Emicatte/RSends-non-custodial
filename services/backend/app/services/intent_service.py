@@ -10,9 +10,15 @@ never silently default a recipient.
 from __future__ import annotations
 
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.merchant_models import (
+    IntentStatus,
+    MerchantTransactionItem,
+    MerchantTransactionListResponse,
+    PaymentIntent,
+)
 from app.models.org_models import Organization
 from app.models.user_wallets_models import UserWallet
 
@@ -95,3 +101,99 @@ async def resolve_recipient(
     if wallet:
         return wallet.lower()
     raise HTTPException(status_code=422, detail=_MISSING)
+
+
+# ── Shared intent-list query (Phase C) ───────────────────────────
+#
+# One query, two callers: the API-key `GET /merchant/transactions` path and the
+# session `GET /user/org/payment-intents` path both delegate here, so the list
+# view can never drift between the programmatic and browser surfaces. Tenant +
+# environment isolation live IN the query (both predicates required — an owner's
+# test and live keys share the same merchant_id).
+
+def _intent_to_item(i: PaymentIntent) -> MerchantTransactionItem:
+    """Serialize an intent to the allowlisted transaction record (both paths)."""
+    return MerchantTransactionItem(
+        intent_id=i.intent_id,
+        onchain_invoice_id=i.onchain_invoice_id,
+        amount=i.amount,
+        currency=i.currency,
+        chain=i.chain or "BASE",
+        status=i.status.value,
+        recipient=i.recipient,
+        tx_hash=i.tx_hash,
+        matched_tx_hash=i.matched_tx_hash,
+        metadata=i.metadata_,
+        completed_late=i.completed_late,
+        late_minutes=i.late_minutes,
+        amount_received=i.amount_received,
+        overpaid_amount=i.overpaid_amount,
+        underpaid_amount=i.underpaid_amount,
+        created_at=i.created_at.isoformat(),
+        expires_at=i.expires_at.isoformat() if i.expires_at else None,
+        completed_at=i.completed_at.isoformat() if i.completed_at else None,
+    )
+
+
+async def list_org_intents(
+    db: AsyncSession,
+    merchant_id: str,
+    environment: str,
+    status: str | None = None,
+    currency: str | None = None,
+    page: int = 1,
+    per_page: int = 20,
+) -> MerchantTransactionListResponse:
+    """Paginated payment-intents for `merchant_id` within `environment`.
+
+    Most-recent-first. Optional `status` (validated against IntentStatus — an
+    unknown value is rejected 400 INVALID_STATUS, never coerced) and `currency`
+    filters. The single source of truth for the merchant transaction list.
+    """
+    filters = [
+        PaymentIntent.merchant_id == merchant_id,
+        PaymentIntent.environment == environment,
+    ]
+
+    if status:
+        try:
+            filters.append(PaymentIntent.status == IntentStatus(status))
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "INVALID_STATUS",
+                    "message": (
+                        f"Status '{status}' non valido. Validi: pending, "
+                        "completed, expired, cancelled, review, refunded, "
+                        "partial, overpaid"
+                    ),
+                },
+            )
+
+    if currency:
+        filters.append(PaymentIntent.currency == currency)
+
+    total = (
+        await db.execute(
+            select(func.count(PaymentIntent.id)).where(and_(*filters))
+        )
+    ).scalar() or 0
+
+    offset = (page - 1) * per_page
+    intents = (
+        await db.execute(
+            select(PaymentIntent)
+            .where(and_(*filters))
+            .order_by(PaymentIntent.created_at.desc())
+            .offset(offset)
+            .limit(per_page)
+        )
+    ).scalars().all()
+
+    return MerchantTransactionListResponse(
+        total=total,
+        page=page,
+        per_page=per_page,
+        records=[_intent_to_item(i) for i in intents],
+    )

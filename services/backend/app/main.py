@@ -347,6 +347,8 @@ from app.api.merchant_profile_routes import router as merchant_profile_router
 app.include_router(merchant_profile_router)
 from app.api.merchant_invoice_routes import router as merchant_invoice_router
 app.include_router(merchant_invoice_router)
+from app.api.user_org_payments_routes import router as user_org_payments_router
+app.include_router(user_org_payments_router)
 
 
 # ── Health checks ────────────────────────────────────────

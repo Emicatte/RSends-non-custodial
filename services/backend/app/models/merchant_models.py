@@ -433,6 +433,7 @@ class MerchantTransactionItem(BaseModel):
     currency: str
     chain: str = "BASE"
     status: str
+    recipient: Optional[str] = None  # Phase C: on-chain payee (settlement wallet or override)
     tx_hash: Optional[str]
     matched_tx_hash: Optional[str] = None
     metadata: Optional[dict]
@@ -442,6 +443,7 @@ class MerchantTransactionItem(BaseModel):
     overpaid_amount: Optional[str] = None
     underpaid_amount: Optional[str] = None
     created_at: str
+    expires_at: Optional[str] = None  # Phase C: ISO-8601; drives the pending-expiry display
     completed_at: Optional[str]
 
 
