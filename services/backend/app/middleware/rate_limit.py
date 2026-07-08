@@ -71,6 +71,13 @@ ENDPOINT_LIMITS: list[tuple[str, str, int, int, str]] = [
     ("POST",   "/api/v1/user/org/payment-intents/", 30,     60,  "ip"),  # cancel
     ("POST",   "/api/v1/user/org/payment-intents",  30,     60,  "ip"),  # create
     ("GET",    "/api/v1/user/org/payment-intents",  120,    60,  "ip"),
+    # Session-authed org webhooks (Phase E) — per-IP. Trailing-slash prefix
+    # (test-fire under /webhooks/{id}/test) MUST precede the bare register entry.
+    ("POST",   "/api/v1/user/org/webhooks/",         10,    60,  "ip"),  # {id}/test
+    ("POST",   "/api/v1/user/org/webhooks",           5,  3600,  "ip"),  # register
+    ("GET",    "/api/v1/user/org/webhooks",          120,    60,  "ip"),  # list + deliveries
+    # Session-authed org stats (Phase E) — per-IP.
+    ("GET",    "/api/v1/user/org/stats",             120,    60,  "ip"),
     # User-scoped saved-routes CRUD (defense in depth over the auth gate)
     ("POST",   "/api/v1/user/routes",                30,    60,  "ip"),
     ("PATCH",  "/api/v1/user/routes",                60,    60,  "ip"),

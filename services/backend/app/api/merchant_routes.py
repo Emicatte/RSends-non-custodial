@@ -35,7 +35,12 @@ from app.models.merchant_models import (
     MerchantTransactionListResponse,
     generate_reference_id,
 )
-from app.services.webhook_service import send_test_event, _dispatch_event
+from app.services.webhook_service import (
+    send_test_event,
+    _dispatch_event,
+    create_merchant_webhook,
+    WebhookEgressError,
+)
 from app.services.audit_service import log_event
 from app.services.intent_service import (
     resolve_recipient,
@@ -234,18 +239,23 @@ async def register_webhook(
     su ogni evento ricevuto.
     """
     merchant_id = _get_merchant_id(request)
-    webhook_secret = secrets.token_hex(32)
 
-    webhook = MerchantWebhook(
-        merchant_id=merchant_id,
-        environment=_get_environment(request),
-        url=payload.url,
-        secret=webhook_secret,
-        events=payload.events,
-        is_active=True,
-    )
-    db.add(webhook)
-    await db.flush()
+    try:
+        webhook = await create_merchant_webhook(
+            db,
+            merchant_id=merchant_id,
+            environment=_get_environment(request),
+            url=payload.url,
+            events=payload.events,
+        )
+    except WebhookEgressError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "WEBHOOK_URL_FORBIDDEN",
+                "message": f"Webhook URL is not an allowed target ({exc.reason})",
+            },
+        )
 
     await log_event(
         db,
@@ -270,7 +280,7 @@ async def register_webhook(
     return RegisterWebhookResponse(
         webhook_id=webhook.id,
         url=webhook.url,
-        secret=webhook_secret,
+        secret=webhook.secret,
         events=webhook.events,
         is_active=webhook.is_active,
     )

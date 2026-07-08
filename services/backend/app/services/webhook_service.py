@@ -21,14 +21,19 @@ Backoff schedule:
   Retry 1 → 30s, Retry 2 → 2min, Retry 3 → 8min, Retry 4 → 32min, Retry 5 → 2h
 """
 
+import asyncio
 import hashlib
 import hmac
+import ipaddress
 import json
 import logging
 import re
+import secrets
+import socket
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Optional
+from urllib.parse import urlparse
 
 import httpx
 from sqlalchemy import select, and_
@@ -51,6 +56,116 @@ BASE_BACKOFF_SECONDS = 30       # 30s * 4^retry → 30s, 2m, 8m, 32m, 2h
 DELIVERY_TIMEOUT = 10.0         # httpx timeout per singolo attempt
 WEBHOOK_USER_AGENT = "RSend-Webhook/1.0"
 REDIS_IDEM_TTL = 7 * 86400              # 7 giorni TTL per chiave idempotenza Redis
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Egress / SSRF guard (Phase E)
+# ═══════════════════════════════════════════════════════════════
+#
+# Every outbound webhook POST (real delivery AND test-fire) targets a
+# merchant-supplied URL. Without a guard, a merchant could point a webhook at
+# `http://169.254.169.254/…` (cloud metadata), `https://127.0.0.1`, or an
+# internal host and use our server as an SSRF proxy. Phase E exposed test-fire
+# to session `operator`s, widening the trigger surface, so the guard lives on
+# the SHARED path here (protecting the pre-existing API-key routes too).
+#
+# Posture: reject non-HTTPS; reject literal private/loopback/link-local/
+# reserved/multicast/non-global IPs (v4, v6, and IPv4-mapped v6); for
+# hostnames, resolve and reject if ANY resolved address is in those ranges.
+# A DNS-resolution FAILURE is NOT treated as forbidden — an unresolvable host
+# can't reach anything internal and the POST fails on its own; this also keeps
+# reserved test domains (`*.example`) working. Because validation and the
+# actual httpx connect share one resolver, a host that CAN reach a private IP
+# is seen as private here → caught. Re-checked immediately before each POST to
+# narrow the DNS-rebinding window (see send_test_event / _attempt_delivery).
+
+
+class WebhookEgressError(Exception):
+    """Raised when a webhook URL is not a safe public HTTPS egress target."""
+
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
+        super().__init__(reason)
+
+
+def _ip_is_forbidden(ip_str: str) -> bool:
+    """True when an IP literal is loopback/private/link-local/reserved/
+    multicast/unspecified/non-global. Unwraps IPv4-mapped IPv6 first so
+    `::ffff:127.0.0.1` can't smuggle a loopback past the check."""
+    ip = ipaddress.ip_address(ip_str)
+    if ip.version == 6 and ip.ipv4_mapped is not None:
+        ip = ip.ipv4_mapped
+    return (
+        ip.is_loopback
+        or ip.is_private
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_multicast
+        or ip.is_unspecified
+        or not ip.is_global
+    )
+
+
+async def check_webhook_egress(url: str) -> Optional[str]:
+    """Return a short rejection reason if `url` is an unsafe egress target,
+    else None. Never raises for DNS failure — see the posture note above."""
+    parsed = urlparse(url)
+    if parsed.scheme != "https":
+        return "scheme_not_https"
+    host = parsed.hostname
+    if not host:
+        return "no_host"
+
+    # Host is a literal IP? Decide without DNS.
+    try:
+        return "private_or_reserved_ip" if _ip_is_forbidden(host) else None
+    except ValueError:
+        pass  # not a literal IP → resolve the hostname
+
+    port = parsed.port or 443
+    try:
+        loop = asyncio.get_running_loop()
+        infos = await loop.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
+    except (socket.gaierror, OSError, UnicodeError):
+        return None  # unresolvable → not an SSRF vector; POST will fail naturally
+
+    for info in infos:
+        addr = info[4][0]
+        try:
+            if _ip_is_forbidden(addr):
+                return "resolves_to_private_ip"
+        except ValueError:
+            continue
+    return None
+
+
+async def create_merchant_webhook(
+    db: AsyncSession,
+    *,
+    merchant_id: str,
+    environment: str,
+    url: str,
+    events: list[str],
+) -> MerchantWebhook:
+    """Shared webhook-registration core for BOTH the API-key and the session
+    (Phase E) register routes. Egress-validates the URL, generates the HMAC
+    secret, and inserts the row (flushed, not committed — the caller owns the
+    transaction + audit log). Raises WebhookEgressError on an unsafe URL."""
+    reason = await check_webhook_egress(url)
+    if reason is not None:
+        raise WebhookEgressError(reason)
+
+    webhook = MerchantWebhook(
+        merchant_id=merchant_id,
+        environment=environment,
+        url=url,
+        secret=secrets.token_hex(32),
+        events=events,
+        is_active=True,
+    )
+    db.add(webhook)
+    await db.flush()
+    return webhook
 REDIS_IDEM_PREFIX = "wh:delivery:idem:"  # Prefisso Redis per idempotenza delivery
 
 # ── Matching thresholds (legacy — used by match_and_complete_intent) ─
@@ -1002,6 +1117,20 @@ async def _attempt_delivery(delivery: WebhookDelivery, webhook: MerchantWebhook)
     Returns:
         True se consegnato con successo (2xx), False altrimenti.
     """
+    # Re-validate egress before every attempt (a URL clean at registration
+    # could rebind to a private IP later). Fail the delivery permanently — the
+    # target is not a legitimate public endpoint.
+    reason = await check_webhook_egress(webhook.url)
+    if reason is not None:
+        delivery.status = DeliveryStatus.failed
+        delivery.response_code = None
+        delivery.response_body = f"blocked_egress:{reason}"
+        logger.error(
+            "Webhook delivery blocked (egress): %s → %s reason=%s",
+            delivery.idempotency_key, webhook.url, reason,
+        )
+        return False
+
     payload_bytes = json.dumps(delivery.payload, default=str).encode("utf-8")
     # Timestamp per-attempt (ricalcolato su ogni retry); la firma copre i byte
     # esatti inviati + il timestamp → anti-replay lato merchant.
@@ -1109,6 +1238,15 @@ async def send_test_event(webhook: MerchantWebhook) -> tuple:
         "created_at": datetime.now(timezone.utc).isoformat(),
         "completed_at": datetime.now(timezone.utc).isoformat(),
     }
+
+    # Re-validate egress immediately before the POST (DNS-rebinding window).
+    reason = await check_webhook_egress(webhook.url)
+    if reason is not None:
+        logger.warning(
+            "Webhook test blocked (egress): id=%s url=%s reason=%s",
+            webhook.id, webhook.url, reason,
+        )
+        return False, None, f"Blocked: URL is not an allowed target ({reason})"
 
     payload_bytes = json.dumps(test_payload, default=str).encode("utf-8")
     timestamp = str(int(datetime.now(timezone.utc).timestamp()))

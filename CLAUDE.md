@@ -121,27 +121,54 @@ This is what the hosted checkout `/pay` polls (via `apps/web/app/api/pay/[intent
 The merchant GET is fully authenticated — its old `GET_PUBLIC_PREFIXES` exception and the
 `X-Checkout-Public` rate-limit special case were removed when this route replaced them.
 
-Session (dashboard) surface — org-scoped JWT payments read (C) + create/cancel (D) under
-`/api/v1/user/org/*` (`app/api/user_org_payments_routes.py`; JWT-exempt from the API-key
+Session (dashboard) surface — org-scoped JWT routes under `/api/v1/user/org/*`
+(`app/api/user_org_payments_routes.py` — read (C) + create/cancel (D);
+`user_org_webhooks_routes.py`, `user_org_stats_routes.py` — Phase E; JWT-exempt from the API-key
 middleware via the `/api/v1/user/` `EXEMPT_PATHS` entry — auth perimeter untouched). Every route
-derives `owner = _resolve_owner_address(org_id)` == `PaymentIntent.merchant_id` and is
-environment-scoped (`Literal["test","live"]`, default `test`):
+derives `owner = _resolve_owner_address(org_id)` (org_id server-derived from the JWT, never
+client-supplied) and is environment-scoped (`Literal["test","live"]`, default `test`) IN the query:
 
 | Route | Required role | Scoping | Rate limit |
 |---|---|---|---|
-| `GET /api/v1/user/org/payment-intents` | `viewer` | reuses `intent_service.list_org_intents` (identical query to API-key `GET /merchant/transactions` — no divergent list); read-only; 409 `no_primary_wallet` if none | 120/min **per IP** |
-| `POST /api/v1/user/org/payment-intents` (create) | `operator` | goes through the SAME `intent_service.create_intent` as the API-key path (B's recipient gate applies via `org_id`; 422 unresolvable); `merchant_id == owner` so it lands in this org's read scope | 30/min **per IP** |
-| `POST /api/v1/user/org/payment-intents/{id}/cancel` | `operator` | scoped `(id, owner, env)` IN the query → **404** on miss/cross-tenant; pending-only → `cancelled` (400 else) | 30/min **per IP** |
+| `GET /api/v1/user/org/payment-intents` | `viewer` | `owner == PaymentIntent.merchant_id`; reuses shared `intent_service.list_org_intents` (identical query to API-key `GET /merchant/transactions` — no divergent list); read-only; 409 `no_primary_wallet` if none | 120/min **per IP** |
+| `POST /api/v1/user/org/payment-intents` (create, D) | `operator` | goes through the SAME `intent_service.create_intent` as the API-key path (B's recipient gate via `org_id`; 422 unresolvable); `merchant_id == owner` so it lands in this org's read scope | 30/min **per IP** |
+| `POST /api/v1/user/org/payment-intents/{id}/cancel` (D) | `operator` | scoped `(id, owner, env)` IN the query → **404** on miss/cross-tenant; pending-only → `cancelled` (400 else) | 30/min **per IP** |
+| `GET /api/v1/user/org/webhooks` (Phase E) | `viewer` | `owner == MerchantWebhook.merchant_id` + env; response **never includes `secret`** (register-time one-shot only); read-only | 120/min **per IP** |
+| `GET /api/v1/user/org/webhooks/{id}/deliveries` (Phase E) | `viewer` | webhook resolved with owner+env filter FIRST → **404** on empty (cross-tenant/cross-env/missing); paginated; **excludes `payload`/`response_body`** (OQ-E2, PII/secret avoidance) | 120/min **per IP** |
+| `POST /api/v1/user/org/webhooks` (Phase E) | `operator` | register mirror — SAME `create_merchant_webhook` as the API-key path (SSRF egress guard + env stamp); returns `secret` **once**; 422 `WEBHOOK_URL_FORBIDDEN` on unsafe URL | 5/hour **per IP** |
+| `POST /api/v1/user/org/webhooks/{id}/test` (Phase E) | `operator` | scoped `(id, owner, env)` → **404**/400; SAME `send_test_event` (egress-guarded) | 10/min **per IP** |
+| `GET /api/v1/user/org/stats` (Phase E) | `viewer` | settlements attributed via the **intent join** (`settlement.intent_id → intent`, `intent.merchant_id == owner` + env) — NOT the broken primary-wallet filter; USD conversion via `price_service` + `app.tokens.registry`; read-only; 409 `no_primary_wallet` | 120/min **per IP** |
 
-Browser/session counterpart of the API-key merchant API. The `/app` payments UI
-(`/[locale]/app/payments`) reads + creates here and is **hard-locked to `test`** — it sends no
-`environment` param and shows no test/live toggle (mainnet routers undeployed → `live` unpayable);
-the create form fixes chain = Base Sepolia (token USDC/ETH). Org isolation (a session never
-sees/creates into another org's intents) is enforced in the SQL and pinned by
-`test_user_org_payments.py::test_cross_org_isolation_no_leak` (read) and
-`test_user_org_intent_create.py::test_session_create_isolation` (create). The create/cancel rate
-entries are inserted most-specific-first (the `/{id}/cancel` trailing-slash prefix precedes the
-bare create prefix).
+Browser/session counterpart of the API-key merchant API. The `/app` UI
+(`/[locale]/app/{payments,webhooks,api-keys}` + the home stats widget) reads/writes here and is
+**hard-locked to `test`** — it sends no `environment` param and shows no test/live toggle (mainnet
+routers undeployed → `live` unpayable); the payments create form fixes chain = Base Sepolia (token
+USDC/ETH). The webhook register/test session mirrors reuse the SAME service core as the API-key
+routes (no divergent path). Org isolation is enforced in the SQL and pinned by
+`test_user_org_payments.py::test_cross_org_isolation_no_leak` (read),
+`test_user_org_intent_create.py::test_session_create_isolation` (create),
+`test_webhook_reads.py::test_list_org_isolation` + `test_deliveries_cross_tenant_404` (webhooks),
+and `test_org_stats_usd.py::test_stats_org_isolation_no_leak` (stats). The create/cancel and webhook
+rate entries are inserted most-specific-first (each `/{id}/…` trailing-slash prefix precedes its
+bare parent).
+
+**Webhook test-fire SSRF guard (Phase E, shared path).** `send_test_event` and the real-delivery
+`_attempt_delivery` (`webhook_service.py`) POST to a merchant-supplied URL. `check_webhook_egress`
+now guards BOTH: reject non-HTTPS; reject literal/resolved loopback/private/link-local/reserved/
+multicast/non-global IPs (v4, v6, IPv4-mapped v6); re-checked immediately before each POST
+(DNS-rebinding window). A DNS-resolution *failure* is not treated as forbidden (unreachable host
+can't hit anything internal; keeps reserved `*.example` test domains working) — and because
+validation and the httpx connect share a resolver, a host that *can* reach a private IP is caught.
+`create_merchant_webhook` rejects unsafe URLs at registration (422). This is the sanctioned touch
+to the otherwise-frozen webhook pipeline; it also hardened the pre-existing API-key routes.
+
+**`rsend_` vs `rsusr_` interop gap (OQ-E3 = A, product decision).** The `/app` API-keys tab
+mounts the existing session `rsusr_` CRUD (`ApiKeysSettings`) + a documented link to
+`/merchant/dashboard` for `rsend_` management. `rsusr_` user keys authenticate the session/dashboard
+APIs but **cannot call the merchant payment API** (`verify_api_key` accepts only `rsend_`); minting
+`rsend_` keys stays wallet-authenticated. The gap is surfaced in-UI (a note on `/app/api-keys`), not
+hidden. Session-authed `rsend_` management (Option B) and accepting `rsusr_` on the merchant API
+(Option C) were both rejected — they'd widen/rewire the auth perimeter.
 
 Admin surface (server-to-server only; the web proxy denylists these paths):
 
@@ -161,15 +188,16 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
 - **Render provisioning before go-live:** Redis must be provisioned and `DEBUG=false` set —
   fail-closed rate limiting depends on both. Also set **`ADMIN_API_TOKEN`** (≥32 chars,
   distinct from `HMAC_SECRET`) — the admin surface is fully denied without it.
-- **Phase C deferrals + a known-broken scope (2026-07-08).** Phase C shipped the session-authed
-  org **payments read** view only (`GET /api/v1/user/org/payment-intents` +
-  `/[locale]/app/payments`, session hook `useOrgPayments`). Narrowed out of C, still to build:
-  the session `/api/v1/user/org/settlements` and `/api/v1/user/org/stats` endpoints and
-  re-pointing the `/app` home stats widget off the wallet-sig `dashboard/stats`. **`dashboard_routes.py`
-  scope is broken post-B**: it filters `PaymentSettlement.merchant == owner` (the org's *primary*
-  wallet), so once an org's `settlement_wallet ≠ primary wallet` the home stats read **zero** — fix
-  by scoping through the settlements→intents join (as the deferred `/stats` will); the widget is
-  left untouched until then. **Pre-existing (plan anchor 10):** `/api/v1/merchant/profile` and
+- **Phase C deferrals — mostly closed by Phase E (2026-07-08).** Phase C shipped the session-authed
+  org **payments read** view (`GET /api/v1/user/org/payment-intents` + `/[locale]/app/payments`,
+  hook `useOrgPayments`). **Phase E built `GET /api/v1/user/org/stats`** (settlements→intents join
+  by `settlement_wallet`, USD conversion via `price_service`/`app.tokens.registry`) **and
+  re-pointed the `/app` home stats widget** off the wallet-sig `dashboard/stats` to it (hook
+  `useOrgStats`). Legacy **`dashboard_routes.py` stays frozen and scope-broken** — it filters
+  `PaymentSettlement.merchant == owner` (the org's *primary* wallet), reading **zero** once
+  `settlement_wallet ≠ primary wallet`; the new `/stats` route (correct intent-join scope) is its
+  replacement, `dashboard_routes.py` itself is intentionally left untouched. **Still deferred:** the
+  session `/api/v1/user/org/settlements` endpoint. **Pre-existing (plan anchor 10):** `/api/v1/merchant/profile` and
   `/api/v1/merchant/invoices` are `require_org_role`/JWT-authed but NOT in `EXEMPT_PATHS`, so
   they're unreachable in prod without `RSEND_DEV_AUTH_BYPASS` — new session routes correctly live
   under the exempt `/api/v1/user/org/` prefix instead.

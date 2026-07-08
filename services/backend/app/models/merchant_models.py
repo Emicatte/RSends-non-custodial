@@ -410,6 +410,45 @@ class TestWebhookResponse(BaseModel):
     message: str
 
 
+# ── Webhook Reads (Phase E) ───────────────────────────────────
+
+class WebhookItem(BaseModel):
+    """A registered webhook endpoint. NEVER carries `secret` — the HMAC secret
+    is a register-time one-shot (RegisterWebhookResponse) and is never re-read."""
+    webhook_id: int
+    url: str
+    events: list[str]
+    is_active: bool
+    created_at: str
+
+
+class WebhookListResponse(BaseModel):
+    total: int
+    records: list[WebhookItem]
+
+
+class WebhookDeliveryItem(BaseModel):
+    """One delivery attempt row. Deliberately EXCLUDES `payload` and
+    `response_body` (OQ-E2): the payload can carry customer PII and the
+    response body is arbitrary merchant-server output — neither belongs in a
+    session-authed browser view."""
+    id: int
+    event_type: str
+    status: str
+    response_code: Optional[int] = None
+    retries: int
+    next_retry_at: Optional[str] = None
+    created_at: str
+    delivered_at: Optional[str] = None
+
+
+class WebhookDeliveryListResponse(BaseModel):
+    total: int
+    page: int
+    per_page: int
+    records: list[WebhookDeliveryItem]
+
+
 # ── Resolve Late Payment ─────────────────────────────────────
 
 class ResolvePaymentRequest(BaseModel):
