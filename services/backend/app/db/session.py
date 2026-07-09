@@ -19,6 +19,7 @@ from app.models import settlement_models as _settlement_models  # noqa: F401 —
 from app.models import aml_models as _aml_models            # noqa: F401 — registra tabella blacklisted_wallets in Base.metadata
 from app.models import api_key_models as _apikey_models      # noqa: F401 — registra tabella api_keys in Base.metadata
 from app.models import auth_models as _auth_models            # noqa: F401 — registra tabelle users / user_sessions / auth_audit_log in Base.metadata
+from app.models import onboarding_models as _onboarding_models  # noqa: F401 — registra tabelle company_profiles / consent_records in Base.metadata
 from app.models import org_models as _org_models              # noqa: F401 — registra tabelle organizations / memberships / org_invites in Base.metadata (referenziata da users.active_org_id)
 from app.models import user_routes_models as _user_routes_models  # noqa: F401 — registra tabella user_routes in Base.metadata
 

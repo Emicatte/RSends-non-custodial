@@ -191,7 +191,15 @@ async def update_org(
         org.name = payload.name[:100]
     # Replace-only: None means "unchanged". The validator already rejected empty/
     # malformed/zero addresses, so a non-None value is a valid lowercase address.
+    # Staged onboarding: the settlement-wallet WRITE is an operational action,
+    # gated on company-profile submission (rename stays allowed — orgs must be
+    # manageable during onboarding).
     if payload.settlement_wallet is not None:
+        if org.onboarding_status != "company_submitted":
+            raise HTTPException(
+                status_code=403,
+                detail={"code": "company_profile_required"},
+            )
         org.settlement_wallet = payload.settlement_wallet
     org.updated_at = datetime.now(timezone.utc)
 

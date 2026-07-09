@@ -78,6 +78,14 @@ ENDPOINT_LIMITS: list[tuple[str, str, int, int, str]] = [
     ("GET",    "/api/v1/user/org/webhooks",          120,    60,  "ip"),  # list + deliveries
     # Session-authed org stats (Phase E) — per-IP.
     ("GET",    "/api/v1/user/org/stats",             120,    60,  "ip"),
+    # Session-authed onboarding (state, consents, company profile) — per-IP
+    # (JWT, no API key). The submit subpath MUST precede the bare
+    # company-profile prefix (most-specific-prefix-first).
+    ("POST",   "/api/v1/user/org/company-profile/submit", 10, 60, "ip"),
+    ("PATCH",  "/api/v1/user/org/company-profile",   60,    60,  "ip"),  # debounced autosave
+    ("GET",    "/api/v1/user/org/company-profile",  120,    60,  "ip"),
+    ("GET",    "/api/v1/user/onboarding",           120,    60,  "ip"),
+    ("POST",   "/api/v1/user/consents",              10,    60,  "ip"),
     # User-scoped saved-routes CRUD (defense in depth over the auth gate)
     ("POST",   "/api/v1/user/routes",                30,    60,  "ip"),
     ("PATCH",  "/api/v1/user/routes",                60,    60,  "ip"),

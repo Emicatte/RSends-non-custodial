@@ -30,6 +30,7 @@ from app.models import invoice_models as _inv       # noqa: F401 — commission 
 from app.models import merchant_models as _merch    # noqa: F401 — merchant B2B tables
 from app.models import merchant_profile_models as _mprof  # noqa: F401 — merchant billing profile
 from app.models import notification_models as _notif # noqa: F401 — notifications
+from app.models import onboarding_models as _onb    # noqa: F401 — company profile / consents
 from app.models import org_models as _org           # noqa: F401 — organizations / memberships
 from app.models import user_api_keys_models as _uak # noqa: F401 — user-managed api keys
 from app.models import user_contacts_models as _uc  # noqa: F401 — user contacts

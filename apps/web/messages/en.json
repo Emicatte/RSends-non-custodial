@@ -68,9 +68,9 @@
       "errorTitle": "Verification failed",
       "ctaLogin": "Go to login",
       "sentTitle": "Check your inbox",
-      "sentBody": "We sent a verification link to {email}. Click it to activate your account.",
+      "sentBody": "We sent a verification link to {email}.",
       "sentBodyNoEmail": "We sent you a verification link. Click it to activate your account.",
-      "resendCta": "Resend verification email",
+      "resendCta": "Send the link again",
       "resendSent": "Email sent",
       "resendEmailLabel": "Your email"
     },
@@ -1014,7 +1014,8 @@
           ]
         }
       }
-    }
+    },
+    "draftNotice": "Draft. This document is a placeholder and will be replaced before production launch."
   },
   "features": {
     "backToHome": "Back to home",
@@ -1587,5 +1588,86 @@
     "title": "Select Network",
     "comingSoon": "Coming Soon",
     "confirmInWallet": "Confirm in wallet…"
+  },
+  "onboarding": {
+    "steps": {
+      "account": "Account",
+      "verifyEmail": "Verify email",
+      "companyInfo": "Company info",
+      "dashboard": "Dashboard"
+    },
+    "gate": {
+      "loading": "Checking your account status...",
+      "error": "Could not load your account status. Retry.",
+      "retry": "Retry"
+    },
+    "consent": {
+      "heading": "Before you continue",
+      "body": "RSends needs your acceptance of the legal terms to activate your account.",
+      "documents": "I have read and accept the <termsLink>Terms of Service</termsLink> and <privacyLink>Privacy Policy</privacyLink>.",
+      "age": "I confirm that I am at least 18 years old.",
+      "submit": "Continue",
+      "error": "Something went wrong. Try again."
+    },
+    "company": {
+      "intro": "Tell us about your company. This unlocks the test dashboard and prepares your account for mainnet verification.",
+      "sections": {
+        "identity": "Company identity",
+        "operations": "Operations",
+        "declarations": "Declarations"
+      },
+      "fields": {
+        "legalName": "Legal name",
+        "tradingName": "Trading name (optional)",
+        "country": "Country of registration",
+        "registrationNumber": "Registration number",
+        "taxOrVatNumber": "Tax or VAT number",
+        "website": "Website (optional)",
+        "businessCategory": "Business category",
+        "expectedMonthlyVolume": "Expected monthly volume",
+        "countriesServed": "Countries served",
+        "primaryStablecoin": "Primary stablecoin",
+        "selectPlaceholder": "Select",
+        "addCountry": "Add a country",
+        "removeCountry": "Remove {country}"
+      },
+      "categories": {
+        "ecommerce": "E-commerce",
+        "saas": "SaaS",
+        "marketplace": "Marketplace",
+        "professional_services": "Professional services",
+        "legal_corporate_services": "Legal and corporate services",
+        "travel": "Travel",
+        "education": "Education",
+        "gaming": "Gaming",
+        "nonprofit": "Nonprofit",
+        "other": "Other"
+      },
+      "volumes": {
+        "lt_10k": "Under 10,000 EUR",
+        "10k_100k": "10,000 to 100,000 EUR",
+        "100k_1m": "100,000 to 1,000,000 EUR",
+        "gt_1m": "Over 1,000,000 EUR"
+      },
+      "declaration1": "My business does not operate in or serve sanctioned countries.",
+      "declaration2": "My business does not involve gambling, adult content, weapons, drugs, or money services that require a license.",
+      "pepQuestion": "Is any beneficial owner of the company a politically exposed person?",
+      "yes": "Yes",
+      "no": "No",
+      "submit": "Submit company profile",
+      "successToast": "Company profile submitted. Your test dashboard is ready.",
+      "incomplete": "Complete all required fields before submitting.",
+      "saving": "Saving...",
+      "saved": "Saved",
+      "loadError": "Could not load your draft. Retry."
+    },
+    "blocked": "Complete your company profile to use this feature.",
+    "banner": "Test environment. Payments run on Base Sepolia with test tokens. Mainnet access requires business verification.",
+    "checklist": {
+      "title": "Get started",
+      "wallet": "Add your settlement wallet",
+      "apiKey": "Create an API key",
+      "testPayment": "Send a test payment"
+    }
   }
 }

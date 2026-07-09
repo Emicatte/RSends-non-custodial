@@ -33,7 +33,12 @@ export async function middleware(req: NextRequest) {
 
   const isDashboard =
     bare === '/app' || bare.startsWith('/app/') ||
-    bare === '/settings' || bare.startsWith('/settings/')
+    bare === '/settings' || bare.startsWith('/settings/') ||
+    // Onboarding wizard: session-required like the dashboard (no-token →
+    // login; unverified → verify page), but NOT in AUTHED_BOUNCE — authed
+    // users must be able to sit on it. The consent/company gating itself is
+    // server-side in the /app and /settings layouts (lib/onboarding-guard).
+    bare === '/onboarding' || bare.startsWith('/onboarding/')
 
   // Only locale-prefixed URLs bounce: a bare '/' or '/login' first passes
   // through intlMiddleware's locale negotiation (/ → /it), then bounces on

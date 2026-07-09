@@ -2,6 +2,7 @@ import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
 import { authOptions } from '@/lib/auth-options'
+import { enforceOnboarding } from '@/lib/onboarding-guard'
 import { SettingsSidebar } from '@/components/settings/SettingsSidebar'
 import { OrgSwitcher } from '@/components/settings/OrgSwitcher'
 import AuthHeader from '@/components/auth/AuthHeader'
@@ -18,6 +19,9 @@ export default async function SettingsLayout({
   if (!session) {
     redirect(`/${locale}`)
   }
+  // Staged onboarding, enforced server-side (same guard as /app): settings
+  // hosts the settlement-wallet write and org management surfaces.
+  await enforceOnboarding(session, locale)
   const t = await getTranslations({ locale, namespace: 'settings' })
 
   return (

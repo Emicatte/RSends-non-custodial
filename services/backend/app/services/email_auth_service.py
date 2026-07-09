@@ -33,10 +33,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings, is_prod_posture
 from app.models.auth_models import User, UserSession
 from app.models.email_auth_models import EmailVerificationToken, PasswordResetToken
+from app.models.org_models import Organization
 from app.services.auth_audit import record_auth_event
 from app.services.auth_service import create_session, revoke_session
 from app.services.cache_service import get_redis
 from app.services.email_service import send_email
+from app.services.onboarding_service import advance_onboarding_status, record_consents
 from app.services.password_service import (
     hash_password, verify_password, validate_policy, PasswordPolicyError,
 )
@@ -199,12 +201,15 @@ async def signup(
         email_verified=dev_autoverify,
         email_verified_at=now if dev_autoverify else None,
         locale=loc,
-        # TODO(account_type): post-verification onboarding diverges on this —
-        # 'individual' -> KYC, 'merchant' -> KYB. Only persisted here for now.
         account_type=account_type,
     )
     db.add(user)
     await db.flush()
+
+    # Persist the legal consents this signup just gave (SignupRequest already
+    # guarantees terms_accepted is True) and derive the 18+ attestation from
+    # the >=18-validated date_of_birth.
+    await record_consents(db, user, age_attested=True)
 
     token = secrets.token_urlsafe(32)
     verification = EmailVerificationToken(
@@ -377,6 +382,29 @@ async def verify_email(
     user.email_verified = True
     user.email_verified_at = now
     vt.used_at = now
+
+    # The account just became usable: create the personal org (idempotent),
+    # mirroring the OAuth first-login hook in auth_routes.py, and advance any
+    # owned org still sitting at 'created'. The email login handler carries an
+    # idempotent recovery hook for accounts verified outside this path (dev
+    # auto-verify, legacy users).
+    from app.services.org_service import create_personal_org
+
+    await create_personal_org(db, user)
+    owned_orgs = (
+        (
+            await db.execute(
+                select(Organization).where(
+                    Organization.owner_user_id == user.id,
+                    Organization.onboarding_status == "created",
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for org in owned_orgs:
+        advance_onboarding_status(org, "email_verified")
 
     settings = get_settings()
     await send_email(

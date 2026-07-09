@@ -53,6 +53,19 @@ class Organization(Base):
     # Settings (never auto-derived). Stored lowercase. Migration 0008.
     settlement_wallet = Column(Text, nullable=True)
 
+    # Staged onboarding (migration 0009). Two INDEPENDENT status fields:
+    # onboarding_status: 'created' -> 'email_verified' -> 'company_submitted'.
+    #   Forward-only (onboarding_service.advance_onboarding_status);
+    #   'company_submitted' = full testnet access. Default is the earliest
+    #   state (fail-closed); org_service sets the real initial state per the
+    #   owner's email verification.
+    # activation_status: 'not_started' | 'kyb_pending' | 'active' | 'rejected'.
+    #   Slot for the future external business-verification provider and admin
+    #   tooling; nothing transitions it in-app today. The chain-access guard
+    #   (app/services/chain_access.py) requires 'active' for mainnet chains.
+    onboarding_status = Column(Text, nullable=False, default="created")
+    activation_status = Column(Text, nullable=False, default="not_started")
+
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,

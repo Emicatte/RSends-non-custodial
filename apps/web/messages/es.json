@@ -69,9 +69,9 @@
       "errorTitle": "Verificación fallida",
       "ctaLogin": "Ir al inicio de sesión",
       "sentTitle": "Revisa tu bandeja",
-      "sentBody": "Enviamos un enlace de verificación a {email}. Haz clic para activar tu cuenta.",
+      "sentBody": "Enviamos un enlace de verificación a {email}.",
       "sentBodyNoEmail": "Te enviamos un enlace de verificación. Haz clic para activar tu cuenta.",
-      "resendCta": "Reenviar email de verificación",
+      "resendCta": "Enviar el enlace de nuevo",
       "resendSent": "Email enviado",
       "resendEmailLabel": "Tu correo"
     },
@@ -1015,7 +1015,8 @@
           ]
         }
       }
-    }
+    },
+    "draftNotice": "Borrador. Este documento es provisional y será reemplazado antes del lanzamiento a producción."
   },
   "features": {
     "backToHome": "Volver al inicio",
@@ -1588,5 +1589,86 @@
     "title": "Seleccionar Red",
     "comingSoon": "Próximamente",
     "confirmInWallet": "Confirmar en el wallet…"
+  },
+  "onboarding": {
+    "steps": {
+      "account": "Cuenta",
+      "verifyEmail": "Verificar email",
+      "companyInfo": "Datos de la empresa",
+      "dashboard": "Panel"
+    },
+    "gate": {
+      "loading": "Comprobando el estado de tu cuenta...",
+      "error": "No se pudo cargar el estado de la cuenta. Reintenta.",
+      "retry": "Reintentar"
+    },
+    "consent": {
+      "heading": "Antes de continuar",
+      "body": "RSends necesita tu aceptación de los términos legales para activar tu cuenta.",
+      "documents": "He leído y acepto los <termsLink>Términos de Servicio</termsLink> y la <privacyLink>Política de Privacidad</privacyLink>.",
+      "age": "Confirmo que tengo al menos 18 años.",
+      "submit": "Continuar",
+      "error": "Algo salió mal. Inténtalo de nuevo."
+    },
+    "company": {
+      "intro": "Cuéntanos sobre tu empresa. Esto desbloquea el panel de pruebas y prepara tu cuenta para la verificación en mainnet.",
+      "sections": {
+        "identity": "Identidad de la empresa",
+        "operations": "Operaciones",
+        "declarations": "Declaraciones"
+      },
+      "fields": {
+        "legalName": "Razón social",
+        "tradingName": "Nombre comercial (opcional)",
+        "country": "País de registro",
+        "registrationNumber": "Número de registro",
+        "taxOrVatNumber": "Número fiscal o de IVA",
+        "website": "Sitio web (opcional)",
+        "businessCategory": "Categoría de negocio",
+        "expectedMonthlyVolume": "Volumen mensual esperado",
+        "countriesServed": "Países atendidos",
+        "primaryStablecoin": "Stablecoin principal",
+        "selectPlaceholder": "Selecciona",
+        "addCountry": "Añadir un país",
+        "removeCountry": "Quitar {country}"
+      },
+      "categories": {
+        "ecommerce": "Comercio electrónico",
+        "saas": "SaaS",
+        "marketplace": "Marketplace",
+        "professional_services": "Servicios profesionales",
+        "legal_corporate_services": "Servicios legales y corporativos",
+        "travel": "Viajes",
+        "education": "Educación",
+        "gaming": "Gaming",
+        "nonprofit": "Sin ánimo de lucro",
+        "other": "Otro"
+      },
+      "volumes": {
+        "lt_10k": "Menos de 10.000 EUR",
+        "10k_100k": "De 10.000 a 100.000 EUR",
+        "100k_1m": "De 100.000 a 1.000.000 EUR",
+        "gt_1m": "Más de 1.000.000 EUR"
+      },
+      "declaration1": "Mi negocio no opera en países sancionados ni les presta servicio.",
+      "declaration2": "Mi negocio no involucra juegos de azar, contenido para adultos, armas, drogas ni servicios monetarios que requieran licencia.",
+      "pepQuestion": "¿Algún titular real de la empresa es una persona políticamente expuesta?",
+      "yes": "Sí",
+      "no": "No",
+      "submit": "Enviar perfil de empresa",
+      "successToast": "Perfil de empresa enviado. Tu panel de pruebas está listo.",
+      "incomplete": "Completa todos los campos obligatorios antes de enviar.",
+      "saving": "Guardando...",
+      "saved": "Guardado",
+      "loadError": "No se pudo cargar el borrador. Reintenta."
+    },
+    "blocked": "Completa el perfil de tu empresa para usar esta función.",
+    "banner": "Entorno de pruebas. Los pagos se ejecutan en Base Sepolia con tokens de prueba. El acceso a mainnet requiere verificación de la empresa.",
+    "checklist": {
+      "title": "Primeros pasos",
+      "wallet": "Añade tu cartera de liquidación",
+      "apiKey": "Crea una clave API",
+      "testPayment": "Envía un pago de prueba"
+    }
   }
 }

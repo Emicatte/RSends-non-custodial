@@ -21,12 +21,15 @@ export default async function TermsPage({ params }: PageProps) {
   const obligationsItems = t.raw('sections.obligations.items') as string[]
   const contactLines = t.raw('sections.contact.lines') as string[]
 
+  const tLegal = await getTranslations({ locale, namespace: 'legal' })
+
   return (
     <LegalShell
       eyebrow={t('eyebrow')}
       title={t('title')}
       lastUpdated={t('lastUpdated')}
       breadcrumbLabel={t('breadcrumbLabel')}
+      draftNotice={tLegal('draftNotice')}
     >
       <p>{t.rich('intro1', richElements)}</p>
       <p>{t.rich('intro2', richElements)}</p>
