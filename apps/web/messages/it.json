@@ -1669,5 +1669,48 @@
       "apiKey": "Crea una chiave API",
       "testPayment": "Invia un pagamento di prova"
     }
+  },
+  "pay": {
+    "summary": {
+      "amount": "Importo",
+      "fee": "Commissione RSends",
+      "total": "Totale",
+      "gasNote": "Il tuo wallet aggiunge una piccola commissione di rete (gas)."
+    },
+    "trust": {
+      "nonCustodial": "I fondi vanno direttamente al wallet del merchant. RSends non detiene mai il tuo denaro.",
+      "contract": "Eseguito da uno smart contract immutabile.",
+      "viewContract": "Vedi il contratto"
+    },
+    "button": {
+      "connect": "Connetti il wallet",
+      "switch": "Cambia rete",
+      "approve": "Approva {token}",
+      "pay": "Paga {amount} {token}",
+      "viewTx": "Vedi la transazione",
+      "retry": "Riprova"
+    },
+    "steps": {
+      "approve": "Passo 1 di 2: Approva {token}",
+      "confirm": "Passo 2 di 2: Conferma il pagamento"
+    },
+    "approveExplainer": "Prima autorizza il contratto a usare i tuoi {token}, poi conferma il pagamento. Due conferme nel wallet in totale.",
+    "wrongNetwork": "Questo pagamento avviene su {network}. Cambia rete nel tuo wallet per continuare.",
+    "insufficient": "Non hai abbastanza {token} in questo wallet. Servono {amount} {token} piu il gas.",
+    "waitingWallet": "In attesa della conferma nel tuo wallet.",
+    "txPending": "Transazione inviata. In attesa della rete.",
+    "syncing": "Confermato on-chain. Aggiornamento dei registri del merchant.",
+    "success": {
+      "title": "Pagamento completato",
+      "body": "{amount} {token} inviati a {merchant}."
+    },
+    "rejected": "Hai annullato la richiesta nel tuo wallet. Non è stato inviato nulla.",
+    "failed": "La transazione non è andata a buon fine. Nessun pagamento è uscito dal tuo wallet. Controlla i dettagli sull'explorer.",
+    "expired": "Questo link di pagamento è scaduto. Chiedi al merchant un nuovo link.",
+    "alreadyPaid": "Questo pagamento è già stato completato.",
+    "notFound": "Non troviamo questo pagamento. Controlla il link e riprova.",
+    "loadingRetry": "Ci sta mettendo più del solito. Nuovo tentativo in corso.",
+    "payTo": "Paga a",
+    "expiresIn": "Scade tra"
   }
 }

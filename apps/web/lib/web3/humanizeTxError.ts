@@ -5,10 +5,20 @@
  * balance, insufficient allowance, the contract's FeeTooHigh / UnsupportedToken
  * custom errors, wrong-network, and generic RPC/network failures.
  */
+const USER_REJECT_RE =
+  /user rejected|user denied|denied (the )?(transaction|request|signature)|rejected the request/i
+
+/** True when the error is the payer canceling in their wallet (recoverable). */
+export function isUserRejection(err: unknown): boolean {
+  if (err == null) return false
+  const raw = err instanceof Error ? err.message : String(err)
+  return USER_REJECT_RE.test(raw)
+}
+
 export function humanizeTxError(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err)
 
-  if (/user rejected|user denied|denied (the )?(transaction|request|signature)|rejected the request/i.test(raw)) {
+  if (isUserRejection(err)) {
     return 'Transaction rejected in wallet.'
   }
   if (/FeeTooHigh/i.test(raw)) {

@@ -1669,5 +1669,48 @@
       "apiKey": "Create an API key",
       "testPayment": "Send a test payment"
     }
+  },
+  "pay": {
+    "summary": {
+      "amount": "Amount",
+      "fee": "RSends fee",
+      "total": "Total",
+      "gasNote": "Your wallet adds a small network gas fee on top."
+    },
+    "trust": {
+      "nonCustodial": "Funds go directly to the merchant's wallet. RSends never holds your money.",
+      "contract": "Executed by an immutable smart contract.",
+      "viewContract": "View contract"
+    },
+    "button": {
+      "connect": "Connect wallet",
+      "switch": "Switch network",
+      "approve": "Approve {token}",
+      "pay": "Pay {amount} {token}",
+      "viewTx": "View transaction",
+      "retry": "Try again"
+    },
+    "steps": {
+      "approve": "Step 1 of 2: Approve {token}",
+      "confirm": "Step 2 of 2: Confirm payment"
+    },
+    "approveExplainer": "First allow the contract to use your {token}, then confirm the payment. Two wallet confirmations in total.",
+    "wrongNetwork": "This payment runs on {network}. Switch your wallet to continue.",
+    "insufficient": "Not enough {token} in this wallet. You need {amount} {token} plus gas.",
+    "waitingWallet": "Waiting for confirmation in your wallet.",
+    "txPending": "Transaction sent. Waiting for the network.",
+    "syncing": "Confirmed on-chain. Updating the merchant's records.",
+    "success": {
+      "title": "Payment complete",
+      "body": "{amount} {token} sent to {merchant}."
+    },
+    "rejected": "You canceled the request in your wallet. Nothing was sent.",
+    "failed": "The transaction did not complete. No payment left your wallet. Check the details on the explorer.",
+    "expired": "This payment link has expired. Ask the merchant for a new one.",
+    "alreadyPaid": "This payment was already completed.",
+    "notFound": "We could not find this payment. Check the link and try again.",
+    "loadingRetry": "Taking longer than usual. Retrying.",
+    "payTo": "Pay to",
+    "expiresIn": "Expires in"
   }
 }

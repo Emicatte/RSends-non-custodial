@@ -1670,5 +1670,48 @@
       "apiKey": "Créez une clé API",
       "testPayment": "Envoyez un paiement de test"
     }
+  },
+  "pay": {
+    "summary": {
+      "amount": "Montant",
+      "fee": "Frais RSends",
+      "total": "Total",
+      "gasNote": "Votre portefeuille ajoute de petits frais de réseau (gas)."
+    },
+    "trust": {
+      "nonCustodial": "Les fonds vont directement au portefeuille du marchand. RSends ne détient jamais votre argent.",
+      "contract": "Exécuté par un contrat intelligent immuable.",
+      "viewContract": "Voir le contrat"
+    },
+    "button": {
+      "connect": "Connecter le portefeuille",
+      "switch": "Changer de réseau",
+      "approve": "Approuver {token}",
+      "pay": "Payer {amount} {token}",
+      "viewTx": "Voir la transaction",
+      "retry": "Réessayer"
+    },
+    "steps": {
+      "approve": "Étape 1 sur 2 : Approuver {token}",
+      "confirm": "Étape 2 sur 2 : Confirmer le paiement"
+    },
+    "approveExplainer": "Autorisez d'abord le contrat à utiliser vos {token}, puis confirmez le paiement. Deux confirmations dans le portefeuille au total.",
+    "wrongNetwork": "Ce paiement s'exécute sur {network}. Changez le réseau de votre portefeuille pour continuer.",
+    "insufficient": "Pas assez de {token} dans ce portefeuille. Il vous faut {amount} {token} plus le gas.",
+    "waitingWallet": "En attente de la confirmation dans votre portefeuille.",
+    "txPending": "Transaction envoyée. En attente du réseau.",
+    "syncing": "Confirmé on-chain. Mise à jour des registres du marchand.",
+    "success": {
+      "title": "Paiement effectué",
+      "body": "{amount} {token} envoyés à {merchant}."
+    },
+    "rejected": "Vous avez annulé la demande dans votre portefeuille. Rien n'a été envoyé.",
+    "failed": "La transaction n'a pas abouti. Aucun paiement n'a quitté votre portefeuille. Consultez les détails sur l'explorateur.",
+    "expired": "Ce lien de paiement a expiré. Demandez-en un nouveau au marchand.",
+    "alreadyPaid": "Ce paiement a déjà été effectué.",
+    "notFound": "Nous ne trouvons pas ce paiement. Vérifiez le lien et réessayez.",
+    "loadingRetry": "C'est plus long que d'habitude. Nouvelle tentative en cours.",
+    "payTo": "Payer à",
+    "expiresIn": "Expire dans"
   }
 }
