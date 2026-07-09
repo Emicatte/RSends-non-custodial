@@ -35,8 +35,9 @@ logger = logging.getLogger(__name__)
 
 AUTH_WINDOW_SECONDS = 300  # 5 minutes
 
-# Testnet chain IDs — debug bypass only allowed here
-TESTNET_CHAIN_IDS = frozenset({84532, 11155111, 421614, 5, 80002})
+# Testnet chain IDs — debug bypass only allowed here. Single definition
+# lives in app.services.chain_access (also used by the org chain guard).
+from app.services.chain_access import TESTNET_CHAIN_IDS  # noqa: E402
 
 _ETH_ADDR_RE = re.compile(r"^0x[0-9a-fA-F]{40}$")
 

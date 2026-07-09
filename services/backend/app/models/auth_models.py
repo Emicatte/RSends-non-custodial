@@ -114,8 +114,6 @@ class User(Base):
     # account_type: 'individual' | 'merchant'. Required, no default — set
     # explicitly at signup (see email_auth_service.signup). DB CHECK constraint
     # `ck_users_account_type` (migration 0037) enforces the allowed values.
-    # TODO(account_type): the post-verification onboarding path diverges here —
-    # 'individual' -> KYC, 'merchant' -> KYB. Not branched yet; only persisted.
     account_type = Column(String(20), nullable=False)
 
     # Signup profile fields (migration 0038). NULLABLE — existing accounts
@@ -127,6 +125,12 @@ class User(Base):
     date_of_birth = Column(Date, nullable=True)            # age >= 18 enforced at signup
     country_of_residence = Column(String(2), nullable=True)  # ISO 3166-1 alpha-2
     newsletter_opt_in = Column(Boolean, nullable=True)      # optional opt-in
+
+    # 18+ attestation (migration 0009). Stamped by onboarding_service.
+    # record_consents: credentials signups derive it from the >=18-validated
+    # date_of_birth; OAuth users attest explicitly at the consent interstitial.
+    age_attested = Column(Boolean, nullable=False, default=False)
+    age_attested_at = Column(TIMESTAMP(timezone=True), nullable=True)
 
     # NOTE: renamed from `metadata` to avoid clash with SQLAlchemy's
     # `Base.metadata` class attribute. Column stays `metadata_json`.

@@ -35,7 +35,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import and_, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps.require_org_role import require_org_role
+from app.api.deps.require_company_submitted import require_org_company_submitted
 from app.api.merchant_profile_routes import _resolve_owner_address
 from app.db.session import get_db
 from app.models.dashboard_schemas import DashboardStats, RecentTransaction
@@ -76,7 +76,7 @@ async def _usd_value(chain_id, token_addr, amount_base) -> Optional[float]:
 
 @router.get("/stats", response_model=DashboardStats)
 async def get_org_stats(
-    ctx: Tuple[str, str, str] = Depends(require_org_role("viewer")),
+    ctx: Tuple[str, str, str] = Depends(require_org_company_submitted("viewer")),
     environment: Literal["test", "live"] = Query("test"),
     db: AsyncSession = Depends(get_db),
 ) -> DashboardStats:

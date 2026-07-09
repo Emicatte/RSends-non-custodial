@@ -181,6 +181,23 @@ async def login_route(
     db.add(session_row)
     await db.commit()
 
+    # Recovery hook for the email path: verified users whose personal org was
+    # never created (dev-posture auto-verify bypasses verify_email; legacy
+    # accounts). Idempotent and commit-isolated like the OAuth first-login
+    # hook (auth_routes.py) — a failure here never rolls back the login.
+    if user.email_verified and user.active_org_id is None:
+        try:
+            from app.services.org_service import create_personal_org
+
+            await create_personal_org(db, user)
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            log.exception(
+                "personal_org_creation_failed",
+                extra={"user_id": str(user.id)},
+            )
+
     _set_auth_cookies(response, session_id=session_id, refresh_token=refresh_token)
 
     return LoginResponse(

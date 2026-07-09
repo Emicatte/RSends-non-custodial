@@ -34,6 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.auth_models import User
 from app.models.org_models import Membership, Organization
 from app.services.auth_audit import record_auth_event
+from app.services.onboarding_service import initial_onboarding_status
 
 log = logging.getLogger(__name__)
 
@@ -114,6 +115,11 @@ async def create_personal_org(db: AsyncSession, user: User) -> Organization:
         owner_user_id=user.id,
         is_personal=True,
         plan="free",
+        # Fresh orgs enter staged onboarding: past 'created' iff the owner is
+        # already email-verified. Always explicit (never the column default)
+        # so the initial state is deterministic per owner.
+        onboarding_status=initial_onboarding_status(user),
+        activation_status="not_started",
     )
     db.add(org)
     await db.flush()
@@ -147,6 +153,10 @@ async def create_org(db: AsyncSession, user: User, name: str) -> Organization:
         owner_user_id=user.id,
         is_personal=False,
         plan="free",
+        # Every org needs its own company-profile submission before
+        # operational access — later orgs of onboarded users included.
+        onboarding_status=initial_onboarding_status(user),
+        activation_status="not_started",
     )
     db.add(org)
     await db.flush()

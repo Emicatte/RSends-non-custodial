@@ -4,7 +4,9 @@ The `/app` dashboard reads AND creates a merchant's payment intents here, scoped
 by the logged-in user's ACTIVE ORG — the browser/session counterpart of the
 API-key merchant API, authed differently:
 
-    session JWT → require_org_role(...) → active org_id (server-derived, never
+    session JWT → require_org_company_submitted(...) (wraps require_org_role +
+    the staged-onboarding gate: 403 company_profile_required until the org's
+    company profile is submitted) → active org_id (server-derived, never
     client-supplied) → _resolve_owner_address(org_id) → owner address
     == PaymentIntent.merchant_id
 
@@ -27,7 +29,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps.require_org_role import require_org_role
+from app.api.deps.require_company_submitted import require_org_company_submitted
 from app.api.merchant_profile_routes import _resolve_owner_address
 from app.api.merchant_routes import _intent_to_response
 from app.db.session import get_db
@@ -38,7 +40,13 @@ from app.models.merchant_models import (
     PaymentIntent,
     PaymentIntentResponse,
 )
+from app.models.org_models import Organization
 from app.services.audit_service import log_event
+from app.services.chain_access import (
+    CHAIN_ID_BY_NAME,
+    ChainAccessError,
+    check_org_chain_access,
+)
 from app.services.intent_service import create_intent, list_org_intents
 
 router = APIRouter(prefix="/api/v1/user/org", tags=["user-org-payments"])
@@ -46,7 +54,7 @@ router = APIRouter(prefix="/api/v1/user/org", tags=["user-org-payments"])
 
 @router.get("/payment-intents", response_model=MerchantTransactionListResponse)
 async def list_org_payment_intents(
-    ctx: Tuple[str, str, str] = Depends(require_org_role("viewer")),
+    ctx: Tuple[str, str, str] = Depends(require_org_company_submitted("viewer")),
     environment: Literal["test", "live"] = Query("test"),
     status: Optional[str] = Query(
         None, description="pending, completed, expired, cancelled, review, refunded, partial, overpaid"
@@ -79,7 +87,7 @@ async def list_org_payment_intents(
 @router.post("/payment-intents", response_model=PaymentIntentResponse)
 async def create_org_payment_intent(
     payload: CreatePaymentIntentRequest,
-    ctx: Tuple[str, str, str] = Depends(require_org_role("operator")),
+    ctx: Tuple[str, str, str] = Depends(require_org_company_submitted("operator")),
     environment: Literal["test", "live"] = Query("test"),
     db: AsyncSession = Depends(get_db),
 ) -> PaymentIntentResponse:
@@ -94,6 +102,27 @@ async def create_org_payment_intent(
     has no primary EVM wallet.
     """
     _user_id, org_id, _role = ctx
+
+    # Central chain guard (defense in depth on top of the route gate): testnet
+    # chains need 'company_submitted'; mainnet chains additionally need
+    # activation_status == 'active' — which nothing sets in-app yet, so mainnet
+    # is uniformly denied here. Unknown chain names fall through to
+    # create_intent's existing 422 UNSUPPORTED_CHAIN.
+    requested_chain = (payload.chain or "base").lower()
+    chain_id = CHAIN_ID_BY_NAME.get(requested_chain)
+    if chain_id is not None:
+        org = (
+            await db.execute(
+                select(Organization).where(Organization.id == org_id)
+            )
+        ).scalar_one()
+        try:
+            check_org_chain_access(
+                org.onboarding_status, org.activation_status, chain_id
+            )
+        except ChainAccessError as e:
+            raise HTTPException(status_code=403, detail={"code": e.code})
+
     owner = await _resolve_owner_address(db, org_id)
     intent = await create_intent(
         db, owner, environment, payload, org_id=org_id, key_id=None
@@ -106,7 +135,7 @@ async def create_org_payment_intent(
 )
 async def cancel_org_payment_intent(
     intent_id: str,
-    ctx: Tuple[str, str, str] = Depends(require_org_role("operator")),
+    ctx: Tuple[str, str, str] = Depends(require_org_company_submitted("operator")),
     environment: Literal["test", "live"] = Query("test"),
     db: AsyncSession = Depends(get_db),
 ) -> PaymentIntentResponse:

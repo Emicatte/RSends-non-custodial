@@ -15,6 +15,25 @@ fixtures are modified.
 """
 
 import pytest_asyncio
+from sqlalchemy import event
+
+from app.models.org_models import Organization
+
+
+@event.listens_for(Organization, "init")
+def _default_onboarded_org(target, args, kwargs):
+    """Mirror migration 0009's backfill for inline-constructed test orgs.
+
+    Existing test files construct `Organization(...)` directly (pre-dating the
+    onboarding gates); in production every org that predates migration 0009 was
+    backfilled to onboarding_status='company_submitted'. This listener gives
+    inline test orgs the same grandfathered state so the
+    `require_org_company_submitted` gate doesn't 403 pre-existing suites.
+    App code paths are unaffected: org_service always passes onboarding_status
+    explicitly, so tests exercising real initial states still see them; new
+    onboarding tests opt out by passing the kwarg.
+    """
+    kwargs.setdefault("onboarding_status", "company_submitted")
 
 
 @pytest_asyncio.fixture(autouse=True)
