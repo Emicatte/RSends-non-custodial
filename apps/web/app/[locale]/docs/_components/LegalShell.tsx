@@ -11,10 +11,13 @@ type Props = {
   title: string
   lastUpdated: string
   breadcrumbLabel: string
+  // Visible draft banner for placeholder documents (terms/privacy carry it
+  // until the final legal texts land — a pre-production launch blocker).
+  draftNotice?: string
   children: ReactNode
 }
 
-export default function LegalShell({ eyebrow, title, lastUpdated, breadcrumbLabel, children }: Props) {
+export default function LegalShell({ eyebrow, title, lastUpdated, breadcrumbLabel, draftNotice, children }: Props) {
   const isMobile = useIsMobile()
   const t = useTranslations('legal.shell')
 
@@ -61,6 +64,25 @@ export default function LegalShell({ eyebrow, title, lastUpdated, breadcrumbLabe
             <li style={{ color: C.text, fontWeight: 500 }}>{breadcrumbLabel}</li>
           </ol>
         </nav>
+
+        {draftNotice && (
+          <div
+            role="alert"
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: '#8A3A1F',
+              background: '#FDF3EF',
+              padding: '12px 16px',
+              border: '1px solid #E8A488',
+              borderRadius: 8,
+              marginBottom: 16,
+              lineHeight: 1.6,
+            }}
+          >
+            {draftNotice}
+          </div>
+        )}
 
         <div
           role="note"

@@ -1,6 +1,7 @@
 'use client'
 
 import { useTranslations } from 'next-intl'
+import { GetStartedChecklist } from '@/components/app/GetStartedChecklist'
 import { useOrgStats } from '@/hooks/useOrgStats'
 
 const COLORS = {
@@ -110,6 +111,10 @@ export default function AppDashboardPage() {
   return (
     <main className="rp-app-page">
       <style>{`@keyframes rsendsPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
+      {/* Get started checklist (links to existing surfaces only) */}
+      <div style={{ marginBottom: 24 }}>
+        <GetStartedChecklist />
+      </div>
       {/* Metric cards */}
       <div
         className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"

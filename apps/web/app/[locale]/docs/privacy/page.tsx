@@ -23,12 +23,15 @@ export default async function PrivacyPage({ params }: PageProps) {
   const addressLines = t.raw('sections.controller.addressLines') as string[]
   const contactLines = t.raw('sections.contact.lines') as string[]
 
+  const tLegal = await getTranslations({ locale, namespace: 'legal' })
+
   return (
     <LegalShell
       eyebrow={t('eyebrow')}
       title={t('title')}
       lastUpdated={t('lastUpdated')}
       breadcrumbLabel={t('breadcrumbLabel')}
+      draftNotice={tLegal('draftNotice')}
     >
       <p>{t.rich('intro', richElements)}</p>
 

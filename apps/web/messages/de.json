@@ -69,9 +69,9 @@
       "errorTitle": "Verifizierung fehlgeschlagen",
       "ctaLogin": "Zur Anmeldung",
       "sentTitle": "Prüfen Sie Ihren Posteingang",
-      "sentBody": "Wir haben einen Bestätigungslink an {email} gesendet. Klicken Sie darauf, um Ihr Konto zu aktivieren.",
+      "sentBody": "Wir haben einen Bestätigungslink an {email} gesendet.",
       "sentBodyNoEmail": "Wir haben Ihnen einen Bestätigungslink gesendet. Klicken Sie darauf, um Ihr Konto zu aktivieren.",
-      "resendCta": "Bestätigungsmail erneut senden",
+      "resendCta": "Link erneut senden",
       "resendSent": "E-Mail gesendet",
       "resendEmailLabel": "Ihre E-Mail"
     },
@@ -1015,7 +1015,8 @@
           ]
         }
       }
-    }
+    },
+    "draftNotice": "Entwurf. Dieses Dokument ist ein Platzhalter und wird vor dem Produktionsstart ersetzt."
   },
   "features": {
     "backToHome": "Zurück zur Startseite",
@@ -1588,5 +1589,86 @@
     "title": "Netzwerk auswählen",
     "comingSoon": "Demnächst",
     "confirmInWallet": "Im Wallet bestätigen…"
+  },
+  "onboarding": {
+    "steps": {
+      "account": "Konto",
+      "verifyEmail": "E-Mail bestätigen",
+      "companyInfo": "Unternehmensdaten",
+      "dashboard": "Dashboard"
+    },
+    "gate": {
+      "loading": "Kontostatus wird geprüft...",
+      "error": "Kontostatus konnte nicht geladen werden. Erneut versuchen.",
+      "retry": "Erneut versuchen"
+    },
+    "consent": {
+      "heading": "Bevor Sie fortfahren",
+      "body": "RSends benötigt Ihre Zustimmung zu den rechtlichen Bedingungen, um Ihr Konto zu aktivieren.",
+      "documents": "Ich habe die <termsLink>Nutzungsbedingungen</termsLink> und die <privacyLink>Datenschutzerklärung</privacyLink> gelesen und akzeptiere sie.",
+      "age": "Ich bestätige, dass ich mindestens 18 Jahre alt bin.",
+      "submit": "Weiter",
+      "error": "Etwas ist schiefgelaufen. Versuchen Sie es erneut."
+    },
+    "company": {
+      "intro": "Erzählen Sie uns von Ihrem Unternehmen. Das schaltet das Test-Dashboard frei und bereitet Ihr Konto auf die Mainnet-Verifizierung vor.",
+      "sections": {
+        "identity": "Unternehmensidentität",
+        "operations": "Geschäftstätigkeit",
+        "declarations": "Erklärungen"
+      },
+      "fields": {
+        "legalName": "Firmenname",
+        "tradingName": "Handelsname (optional)",
+        "country": "Registrierungsland",
+        "registrationNumber": "Registernummer",
+        "taxOrVatNumber": "Steuer- oder USt-Nummer",
+        "website": "Website (optional)",
+        "businessCategory": "Geschäftskategorie",
+        "expectedMonthlyVolume": "Erwartetes Monatsvolumen",
+        "countriesServed": "Bediente Länder",
+        "primaryStablecoin": "Primärer Stablecoin",
+        "selectPlaceholder": "Auswählen",
+        "addCountry": "Land hinzufügen",
+        "removeCountry": "{country} entfernen"
+      },
+      "categories": {
+        "ecommerce": "E-Commerce",
+        "saas": "SaaS",
+        "marketplace": "Marktplatz",
+        "professional_services": "Professionelle Dienstleistungen",
+        "legal_corporate_services": "Rechts- und Unternehmensdienstleistungen",
+        "travel": "Reisen",
+        "education": "Bildung",
+        "gaming": "Gaming",
+        "nonprofit": "Gemeinnützig",
+        "other": "Sonstiges"
+      },
+      "volumes": {
+        "lt_10k": "Unter 10.000 EUR",
+        "10k_100k": "10.000 bis 100.000 EUR",
+        "100k_1m": "100.000 bis 1.000.000 EUR",
+        "gt_1m": "Über 1.000.000 EUR"
+      },
+      "declaration1": "Mein Unternehmen ist nicht in sanktionierten Ländern tätig und bedient diese nicht.",
+      "declaration2": "Mein Unternehmen umfasst kein Glücksspiel, keine Inhalte für Erwachsene, keine Waffen, keine Drogen und keine lizenzpflichtigen Gelddienstleistungen.",
+      "pepQuestion": "Ist ein wirtschaftlich Berechtigter des Unternehmens eine politisch exponierte Person?",
+      "yes": "Ja",
+      "no": "Nein",
+      "submit": "Unternehmensprofil einreichen",
+      "successToast": "Unternehmensprofil eingereicht. Ihr Test-Dashboard ist bereit.",
+      "incomplete": "Füllen Sie vor dem Einreichen alle Pflichtfelder aus.",
+      "saving": "Wird gespeichert...",
+      "saved": "Gespeichert",
+      "loadError": "Entwurf konnte nicht geladen werden. Erneut versuchen."
+    },
+    "blocked": "Vervollständigen Sie Ihr Unternehmensprofil, um diese Funktion zu nutzen.",
+    "banner": "Testumgebung. Zahlungen laufen auf Base Sepolia mit Test-Token. Der Mainnet-Zugang erfordert eine Unternehmensverifizierung.",
+    "checklist": {
+      "title": "Erste Schritte",
+      "wallet": "Fügen Sie Ihr Abrechnungs-Wallet hinzu",
+      "apiKey": "Erstellen Sie einen API-Schlüssel",
+      "testPayment": "Senden Sie eine Testzahlung"
+    }
   }
 }

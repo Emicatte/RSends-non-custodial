@@ -69,9 +69,9 @@
       "errorTitle": "Échec de la vérification",
       "ctaLogin": "Aller à la connexion",
       "sentTitle": "Vérifiez votre boîte",
-      "sentBody": "Nous avons envoyé un lien de vérification à {email}. Cliquez-y pour activer votre compte.",
+      "sentBody": "Nous avons envoyé un lien de vérification à {email}.",
       "sentBodyNoEmail": "Nous vous avons envoyé un lien de vérification. Cliquez-y pour activer votre compte.",
-      "resendCta": "Renvoyer l'e-mail de vérification",
+      "resendCta": "Renvoyer le lien",
       "resendSent": "E-mail envoyé",
       "resendEmailLabel": "Votre e-mail"
     },
@@ -1015,7 +1015,8 @@
           ]
         }
       }
-    }
+    },
+    "draftNotice": "Brouillon. Ce document est provisoire et sera remplacé avant le lancement en production."
   },
   "features": {
     "backToHome": "Retour à l'accueil",
@@ -1588,5 +1589,86 @@
     "title": "Sélectionner le réseau",
     "comingSoon": "Bientôt disponible",
     "confirmInWallet": "Confirmer dans le wallet…"
+  },
+  "onboarding": {
+    "steps": {
+      "account": "Compte",
+      "verifyEmail": "Vérifier l'e-mail",
+      "companyInfo": "Informations société",
+      "dashboard": "Tableau de bord"
+    },
+    "gate": {
+      "loading": "Vérification de l'état de votre compte...",
+      "error": "Impossible de charger l'état du compte. Réessayez.",
+      "retry": "Réessayer"
+    },
+    "consent": {
+      "heading": "Avant de continuer",
+      "body": "RSends a besoin de votre acceptation des conditions légales pour activer votre compte.",
+      "documents": "J'ai lu et j'accepte les <termsLink>Conditions d'Utilisation</termsLink> et la <privacyLink>Politique de Confidentialité</privacyLink>.",
+      "age": "Je confirme avoir au moins 18 ans.",
+      "submit": "Continuer",
+      "error": "Une erreur est survenue. Réessayez."
+    },
+    "company": {
+      "intro": "Parlez-nous de votre société. Cela débloque le tableau de bord de test et prépare votre compte pour la vérification mainnet.",
+      "sections": {
+        "identity": "Identité de la société",
+        "operations": "Opérations",
+        "declarations": "Déclarations"
+      },
+      "fields": {
+        "legalName": "Raison sociale",
+        "tradingName": "Nom commercial (facultatif)",
+        "country": "Pays d'immatriculation",
+        "registrationNumber": "Numéro d'immatriculation",
+        "taxOrVatNumber": "Numéro fiscal ou de TVA",
+        "website": "Site web (facultatif)",
+        "businessCategory": "Catégorie d'activité",
+        "expectedMonthlyVolume": "Volume mensuel attendu",
+        "countriesServed": "Pays desservis",
+        "primaryStablecoin": "Stablecoin principal",
+        "selectPlaceholder": "Sélectionner",
+        "addCountry": "Ajouter un pays",
+        "removeCountry": "Retirer {country}"
+      },
+      "categories": {
+        "ecommerce": "E-commerce",
+        "saas": "SaaS",
+        "marketplace": "Place de marché",
+        "professional_services": "Services professionnels",
+        "legal_corporate_services": "Services juridiques et d'entreprise",
+        "travel": "Voyages",
+        "education": "Éducation",
+        "gaming": "Jeux vidéo",
+        "nonprofit": "Association à but non lucratif",
+        "other": "Autre"
+      },
+      "volumes": {
+        "lt_10k": "Moins de 10 000 EUR",
+        "10k_100k": "De 10 000 à 100 000 EUR",
+        "100k_1m": "De 100 000 à 1 000 000 EUR",
+        "gt_1m": "Plus de 1 000 000 EUR"
+      },
+      "declaration1": "Mon activité n'opère pas dans des pays sous sanctions et ne les dessert pas.",
+      "declaration2": "Mon activité n'implique ni jeux d'argent, ni contenu pour adultes, ni armes, ni drogues, ni services monétaires nécessitant une licence.",
+      "pepQuestion": "Un bénéficiaire effectif de la société est-il une personne politiquement exposée ?",
+      "yes": "Oui",
+      "no": "Non",
+      "submit": "Envoyer le profil de la société",
+      "successToast": "Profil de la société envoyé. Votre tableau de bord de test est prêt.",
+      "incomplete": "Remplissez tous les champs obligatoires avant d'envoyer.",
+      "saving": "Enregistrement...",
+      "saved": "Enregistré",
+      "loadError": "Impossible de charger le brouillon. Réessayez."
+    },
+    "blocked": "Complétez le profil de votre société pour utiliser cette fonctionnalité.",
+    "banner": "Environnement de test. Les paiements s'exécutent sur Base Sepolia avec des jetons de test. L'accès au mainnet nécessite la vérification de la société.",
+    "checklist": {
+      "title": "Premiers pas",
+      "wallet": "Ajoutez votre portefeuille de règlement",
+      "apiKey": "Créez une clé API",
+      "testPayment": "Envoyez un paiement de test"
+    }
   }
 }
