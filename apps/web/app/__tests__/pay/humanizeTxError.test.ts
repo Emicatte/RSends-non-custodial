@@ -1,4 +1,4 @@
-import { humanizeTxError } from '@/lib/web3/humanizeTxError'
+import { humanizeTxError, isUserRejection } from '@/lib/web3/humanizeTxError'
 
 describe('humanizeTxError', () => {
   it('maps a user rejection', () => {
@@ -25,5 +25,21 @@ describe('humanizeTxError', () => {
   it('falls back to the first line of an unknown error, truncated', () => {
     const out = humanizeTxError(new Error('Something weird\nstack line'))
     expect(out).toBe('Something weird')
+  })
+})
+
+describe('isUserRejection', () => {
+  it('recognizes the wallet-reject family', () => {
+    expect(isUserRejection(new Error('User rejected the request.'))).toBe(true)
+    expect(
+      isUserRejection(new Error('MetaMask Tx Signature: User denied transaction signature.')),
+    ).toBe(true)
+    expect(isUserRejection(new Error('User denied message signature'))).toBe(true)
+  })
+
+  it('does not classify other failures as rejection', () => {
+    expect(isUserRejection(new Error('execution reverted: FeeTooHigh()'))).toBe(false)
+    expect(isUserRejection(new Error('insufficient funds for gas'))).toBe(false)
+    expect(isUserRejection(null)).toBe(false)
   })
 })

@@ -1,0 +1,207 @@
+'use client'
+
+/**
+ * HostedCheckout — the thin orchestrator of the hosted checkout page.
+ *
+ * usePaymentIntent drives data (skeleton → not_found/terminal/active);
+ * useHostedCheckout drives the wallet flow. Terminal intent states render
+ * status cards INSTEAD of any wallet UI. This is the ONLY component (with
+ * CheckoutClient) that imports RainbowKit: the Connect button is passed
+ * into ActionArea as a slot so every tested unit stays wallet-lib-free.
+ */
+
+import { useEffect, useRef, useState } from 'react'
+import { useParams } from 'next/navigation'
+import { useTranslations } from 'next-intl'
+import { ConnectButton } from '@rainbow-me/rainbowkit'
+import { C } from '@/app/designTokens'
+import { Eyebrow, Mono } from '@/app/pay/_components/payUi'
+import { useHostedCheckout } from '@/lib/web3/useHostedCheckout'
+import { usePaymentIntent } from '@/lib/web3/usePaymentIntent'
+import { formatTokenAmount } from '@/lib/web3/feeMath'
+import {
+  formatCountdown,
+  merchantName,
+  terminalKind,
+  type PaymentIntent,
+} from '@/lib/web3/paymentIntent'
+import { ActionArea } from './ActionArea'
+import { CheckoutFrame } from './CheckoutFrame'
+import { CheckoutSkeleton } from './CheckoutSkeleton'
+import { SummarySection } from './SummarySection'
+import { TrustFooter } from './TrustFooter'
+import {
+  AlreadyPaidView,
+  ExpiredView,
+  NotFoundView,
+  SuccessView,
+} from './StatusViews'
+
+export default function HostedCheckout() {
+  const { intentId } = useParams<{ intentId: string }>()
+  const { phase, backendPaid, refresh, startSyncPolling } =
+    usePaymentIntent(intentId)
+
+  if (phase.kind === 'loading') return <CheckoutSkeleton slow={phase.slow} />
+  if (phase.kind === 'not_found') return <NotFoundView />
+
+  const intent = phase.intent
+
+  // An intent that is terminal on arrival never mounts wallet UI. Status
+  // flips DURING an active payment session are handled inside CheckoutActive
+  // (which knows whether a tx of ours is in flight).
+  if (!intent.onchain) {
+    const kind = terminalKind(intent.status)
+    if (kind === 'expired') return <ExpiredView />
+    if (kind === 'already_paid') {
+      return <AlreadyPaidView chainId={null} txHash={intent.txHash} />
+    }
+    // Pending but the on-chain payment block is missing: keep the reserved
+    // skeleton; the watch poll keeps refetching and recovers when the
+    // backend ships the fields.
+    return <CheckoutSkeleton slow={false} />
+  }
+
+  return (
+    <CheckoutActive
+      intent={intent}
+      backendPaid={backendPaid}
+      onMined={startSyncPolling}
+      onLocalExpiry={refresh}
+    />
+  )
+}
+
+function CheckoutActive({
+  intent,
+  backendPaid,
+  onMined,
+  onLocalExpiry,
+}: {
+  intent: PaymentIntent
+  backendPaid: boolean
+  onMined: () => void
+  onLocalExpiry: () => void
+}) {
+  const t = useTranslations('pay')
+  const onchain = intent.onchain!
+  const checkout = useHostedCheckout(onchain, { backendPaid, onMined })
+
+  const paymentInFlight =
+    checkout.payHash != null ||
+    checkout.step === 'paying' ||
+    checkout.step === 'syncing' ||
+    checkout.step === 'success'
+
+  // ── Expiry countdown (backend stays authoritative: local zero just
+  //    triggers a confirming refetch, which reports effective expiry) ──
+  const [remainingMs, setRemainingMs] = useState(() =>
+    Math.max(0, new Date(intent.expiresAt).getTime() - Date.now()),
+  )
+  const expiryNotifiedRef = useRef(false)
+  useEffect(() => {
+    const tick = () => {
+      const ms = Math.max(0, new Date(intent.expiresAt).getTime() - Date.now())
+      setRemainingMs(ms)
+      if (ms <= 0 && !expiryNotifiedRef.current) {
+        expiryNotifiedRef.current = true
+        onLocalExpiry()
+      }
+    }
+    tick()
+    const id = window.setInterval(tick, 1_000)
+    return () => window.clearInterval(id)
+  }, [intent.expiresAt, onLocalExpiry])
+
+  // ── Terminal outcomes ──
+  if (checkout.step === 'success') {
+    return (
+      <SuccessView
+        amount={formatTokenAmount(onchain.amount, onchain.decimals)}
+        currency={intent.currency}
+        merchant={merchantName(intent)}
+        chainId={onchain.chainId}
+        txHash={checkout.payHash ?? intent.txHash}
+      />
+    )
+  }
+  const kind = terminalKind(intent.status)
+  if (kind === 'expired' && !paymentInFlight) return <ExpiredView />
+  if (kind === 'already_paid' && !paymentInFlight) {
+    return <AlreadyPaidView chainId={onchain.chainId} txHash={intent.txHash} />
+  }
+
+  return (
+    <CheckoutFrame
+      header={
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'baseline',
+            gap: 12,
+            flexWrap: 'wrap',
+          }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <Eyebrow>{t('payTo')}</Eyebrow>
+            <span
+              style={{
+                fontFamily: C.D,
+                fontSize: 15,
+                fontWeight: 600,
+                color: C.text,
+              }}
+            >
+              {merchantName(intent)}
+            </span>
+          </div>
+          <span style={{ fontFamily: C.D, fontSize: 12, color: C.sub }}>
+            {t('expiresIn')}{' '}
+            <Mono style={{ fontSize: 12, color: C.text }}>
+              {formatCountdown(remainingMs)}
+            </Mono>
+          </span>
+        </div>
+      }
+      amount={
+        <Mono style={{ fontSize: 34, fontWeight: 500, color: C.text }}>
+          {formatTokenAmount(onchain.amount, onchain.decimals)}{' '}
+          <span style={{ fontSize: 18, color: C.sub }}>{intent.currency}</span>
+        </Mono>
+      }
+      summary={
+        <SummarySection
+          onchain={onchain}
+          currency={intent.currency}
+          fee={checkout.fee}
+          total={checkout.total}
+        />
+      }
+      action={
+        <ActionArea
+          step={checkout.step}
+          onchain={onchain}
+          currency={intent.currency}
+          total={checkout.total}
+          networkLabel={intent.chainLabel}
+          connectSlot={
+            <ConnectButton
+              label={t('button.connect')}
+              chainStatus="none"
+              showBalance={false}
+            />
+          }
+          approveHash={checkout.approveHash}
+          payHash={checkout.payHash}
+          onSwitch={checkout.switchNetwork}
+          onApprove={checkout.approve}
+          onPay={() => void checkout.pay()}
+          onRetry={checkout.retry}
+        />
+      }
+      notice={null}
+      footer={<TrustFooter chainId={onchain.chainId} router={onchain.router} />}
+    />
+  )
+}

@@ -1670,5 +1670,48 @@
       "apiKey": "Erstellen Sie einen API-Schlüssel",
       "testPayment": "Senden Sie eine Testzahlung"
     }
+  },
+  "pay": {
+    "summary": {
+      "amount": "Betrag",
+      "fee": "RSends-Gebühr",
+      "total": "Gesamt",
+      "gasNote": "Ihre Wallet fügt eine kleine Netzwerkgebühr (Gas) hinzu."
+    },
+    "trust": {
+      "nonCustodial": "Die Mittel gehen direkt an die Wallet des Händlers. RSends hält Ihr Geld zu keinem Zeitpunkt.",
+      "contract": "Ausgeführt von einem unveränderlichen Smart Contract.",
+      "viewContract": "Vertrag ansehen"
+    },
+    "button": {
+      "connect": "Wallet verbinden",
+      "switch": "Netzwerk wechseln",
+      "approve": "{token} freigeben",
+      "pay": "{amount} {token} zahlen",
+      "viewTx": "Transaktion ansehen",
+      "retry": "Erneut versuchen"
+    },
+    "steps": {
+      "approve": "Schritt 1 von 2: {token} freigeben",
+      "confirm": "Schritt 2 von 2: Zahlung bestätigen"
+    },
+    "approveExplainer": "Erlauben Sie zuerst dem Vertrag, Ihre {token} zu verwenden, und bestätigen Sie dann die Zahlung. Insgesamt zwei Bestätigungen in der Wallet.",
+    "wrongNetwork": "Diese Zahlung läuft auf {network}. Wechseln Sie das Netzwerk Ihrer Wallet, um fortzufahren.",
+    "insufficient": "Nicht genug {token} in dieser Wallet. Sie benötigen {amount} {token} plus Gas.",
+    "waitingWallet": "Warten auf die Bestätigung in Ihrer Wallet.",
+    "txPending": "Transaktion gesendet. Warten auf das Netzwerk.",
+    "syncing": "On-chain bestätigt. Die Aufzeichnungen des Händlers werden aktualisiert.",
+    "success": {
+      "title": "Zahlung abgeschlossen",
+      "body": "{amount} {token} an {merchant} gesendet."
+    },
+    "rejected": "Sie haben die Anfrage in Ihrer Wallet abgebrochen. Es wurde nichts gesendet.",
+    "failed": "Die Transaktion wurde nicht abgeschlossen. Keine Zahlung hat Ihre Wallet verlassen. Prüfen Sie die Details im Explorer.",
+    "expired": "Dieser Zahlungslink ist abgelaufen. Bitten Sie den Händler um einen neuen.",
+    "alreadyPaid": "Diese Zahlung wurde bereits abgeschlossen.",
+    "notFound": "Wir konnten diese Zahlung nicht finden. Prüfen Sie den Link und versuchen Sie es erneut.",
+    "loadingRetry": "Es dauert länger als üblich. Neuer Versuch läuft.",
+    "payTo": "Zahlen an",
+    "expiresIn": "Läuft ab in"
   }
 }
