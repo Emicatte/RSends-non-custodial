@@ -28,7 +28,7 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings, validate_settings, validate_dev_flags, is_prod_posture
-from app.db.session import init_db, close_db, async_session, _is_sqlite, engine
+from app.db.session import close_db, async_session, _is_sqlite, engine
 from app.api.routes import router
 from app.services.cache_service import close_redis
 from app.services.payment_indexer import start_indexer_if_needed, stop_indexer
@@ -69,9 +69,6 @@ async def lifespan(app: FastAPI):
     otel_enabled = setup_telemetry(app, engine)
     if otel_enabled:
         logger.info("OpenTelemetry tracing active")
-
-    # ── Init DB ──────────────────────────────────────
-    await init_db()
 
     # ── Verifica connessione DB ─────────────────────
     from sqlalchemy import text

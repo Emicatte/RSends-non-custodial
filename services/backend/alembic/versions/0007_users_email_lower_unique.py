@@ -19,7 +19,7 @@ Safe on populated databases, in three ordered steps:
      Base.metadata.create_all in the 0001 baseline).
 
 Revision ID: 0007_users_email_lower_unique
-Revises: 0006_merchant_webhook_environment
+Revises: 0006_merchant_webhook_env
 Create Date: 2026-07-03
 """
 
@@ -28,7 +28,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "0007_users_email_lower_unique"
-down_revision = "0006_merchant_webhook_environment"
+down_revision = "0006_merchant_webhook_env"
 branch_labels = None
 depends_on = None
 

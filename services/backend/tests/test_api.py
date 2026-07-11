@@ -10,7 +10,7 @@ from httpx import AsyncClient, ASGITransport
 from datetime import datetime, timezone
 
 from app.main import app
-from app.db.session import engine, async_session, init_db
+from app.db.session import engine, async_session
 from app.models.db_models import Base
 from app.services.hmac_service import compute_signature
 

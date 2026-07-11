@@ -14,7 +14,7 @@ the non-custodial baseline (0001) builds the schema from the live ORM via
 Base.metadata.create_all, so a DB created after the column was added to the model
 already has it; we add it only if missing.
 
-Revision ID: 0006_merchant_webhook_environment
+Revision ID: 0006_merchant_webhook_env
 Revises: 0005_payment_intent_environment
 Create Date: 2026-07-02
 """
@@ -23,7 +23,10 @@ from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision = "0006_merchant_webhook_environment"
+# NB: id kept ≤32 chars — Alembic hardcodes alembic_version.version_num as
+# VARCHAR(32); the original "0006_merchant_webhook_environment" (33) truncated on
+# Postgres (issue #17). Filename is unchanged; Alembic keys off this string.
+revision = "0006_merchant_webhook_env"
 down_revision = "0005_payment_intent_environment"
 branch_labels = None
 depends_on = None
