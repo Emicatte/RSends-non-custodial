@@ -101,6 +101,60 @@ def test_debug_true_skips_strong_tier():
         validate_settings(s)  # no raise
 
 
+# ── Render-internal plaintext Redis (guard narrowing) ─────────
+# Render Key Value exposes NO internal TLS endpoint; the internal hostname is a
+# bare `red-<id>` label on the private network. Plaintext is accepted ONLY for
+# that shape — plaintext toward any external/public host must still block.
+
+
+def test_plaintext_render_internal_redis_passes_in_prod():
+    """Plaintext redis:// to a bare Render-internal host must NOT block."""
+    s = _prod_settings(
+        redis_url="redis://red-d96eqdu7r5hc738ak230:6379/0",
+        celery_broker_url="redis://red-d96eqdu7r5hc738ak230:6379/1",
+    )
+    with patch.dict(os.environ, {"ENVIRONMENT": ""}, clear=False):
+        validate_settings(s)  # no raise
+
+
+def test_plaintext_render_internal_with_password_passes_in_prod():
+    """Render 'Internal Authentication' form (redis://:pw@red-…) must NOT block."""
+    s = _prod_settings(
+        redis_url="redis://:s3cret-pw@red-d96eqdu7r5hc738ak230:6379/0",
+        celery_broker_url="redis://:s3cret-pw@red-d96eqdu7r5hc738ak230:6379/1",
+    )
+    with patch.dict(os.environ, {"ENVIRONMENT": ""}, clear=False):
+        validate_settings(s)  # no raise
+
+
+@pytest.mark.parametrize(
+    "bad_url",
+    [
+        "redis://redis.example.com:6379/0",
+        "redis://203.0.113.7:6379/0",
+        "redis://red-x.evil.com:6379/0",
+        "redis://localhost:6379/0",
+        "redis://[2001:db8::1]:6379/0",
+        "redis://:6379/0",
+    ],
+    ids=["fqdn", "public-ip", "red-prefixed-fqdn", "localhost", "ipv6", "no-host"],
+)
+def test_plaintext_external_redis_still_blocks_in_prod(bad_url):
+    """Narrowing, not weakening: plaintext to anything non-internal still blocks."""
+    s = _prod_settings(redis_url=bad_url)
+    with patch.dict(os.environ, {"ENVIRONMENT": ""}, clear=False):
+        with pytest.raises(StartupValidationError):
+            validate_settings(s)
+
+
+def test_plaintext_external_celery_broker_blocks_in_prod():
+    """The broker URL gets the same treatment as REDIS_URL."""
+    s = _prod_settings(celery_broker_url="redis://broker.example.com:6379/1")
+    with patch.dict(os.environ, {"ENVIRONMENT": ""}, clear=False):
+        with pytest.raises(StartupValidationError):
+            validate_settings(s)
+
+
 # ── H4: wallet anti-replay ────────────────────────────────
 
 

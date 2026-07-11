@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import sys
+from urllib.parse import urlsplit
 
 from pydantic_settings import BaseSettings
 from functools import lru_cache
@@ -188,6 +189,25 @@ def is_prod_posture(settings: Settings) -> bool:
     return (not settings.debug) or env.startswith("prod")
 
 
+# Render Key Value internal hostnames are bare `red-<id>` labels (no dots) on
+# the private network — never internet-routable. Anything else (FQDNs, IP
+# literals, IPv6, localhost) must keep using rediss:// in prod.
+_RENDER_INTERNAL_REDIS_HOST = re.compile(r"^red-[a-z0-9]+$")
+
+
+def _is_render_internal_plaintext_redis_url(url: str) -> bool:
+    """True iff `url` is plaintext redis:// AND its host is a Render-internal
+    Key Value hostname. Malformed URLs return False (fail closed)."""
+    try:
+        parts = urlsplit(url)
+        host = parts.hostname  # may raise ValueError (invalid IPv6 literal)
+    except ValueError:
+        return False
+    if parts.scheme != "redis":
+        return False
+    return bool(host) and _RENDER_INTERNAL_REDIS_HOST.fullmatch(host) is not None
+
+
 def validate_settings(settings: Settings) -> None:
     """Validate critical env vars at startup.
 
@@ -286,10 +306,17 @@ def validate_settings(settings: Settings) -> None:
     # actually run on the documented deploy path (DEBUG=false), not only when
     # ENVIRONMENT=production (which is never set) — H6.
     if is_prod:
-        if settings.redis_url.startswith("redis://") and not settings.redis_url.startswith("rediss://"):
-            errors.append("Redis URL must use TLS (rediss://) in production")
-        if settings.celery_broker_url.startswith("redis://") and not settings.celery_broker_url.startswith("rediss://"):
-            errors.append("Celery broker URL must use TLS (rediss://) in production")
+        for _name, _url in (
+            ("REDIS_URL", settings.redis_url),
+            ("CELERY_BROKER_URL", settings.celery_broker_url),
+        ):
+            if _url.startswith("redis://") and not _is_render_internal_plaintext_redis_url(_url):
+                errors.append(
+                    f"{_name} uses plaintext redis:// toward a non-internal host "
+                    "in production. Plaintext is only allowed for Render-internal "
+                    "Key Value hostnames (redis://[:password@]red-xxxx:6379/N); "
+                    "use rediss:// (TLS) for any external/public endpoint."
+                )
 
         if "rpagos:password@" in settings.database_url:
             errors.append("Default placeholder database credentials detected in production")
