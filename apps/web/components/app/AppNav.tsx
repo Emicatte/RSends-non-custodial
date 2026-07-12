@@ -2,33 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { Link } from '@/i18n/navigation'
-import { ChainFamilySwitch } from '@/components/shared/ChainFamilySwitch'
-import NetworkSelector from '@/app/NetworkSelector'
-import AccountHeader, { type NonEvmWalletProps } from '@/app/AccountHeader'
-import { useUniversalWallet } from '@/hooks/useUniversalWallet'
-import { useWallet as useSolanaWallet } from '@solana/wallet-adapter-react'
-import { useTron } from '@/app/providers-tron'
 import { C } from '@/app/designTokens'
 
 export default function AppNav() {
   const [isMobile, setIsMobile] = useState(false)
-
-  const wallet = useUniversalWallet()
-  const activeFamily = wallet.activeFamily
-
-  const { disconnect: solanaDisconnect } = useSolanaWallet()
-  const tron = useTron()
-
-  const nonEvmWallet: NonEvmWalletProps | undefined = (() => {
-    if (activeFamily === 'evm') return undefined
-    const conn = activeFamily === 'tron' ? wallet.connections.tron : wallet.connections.solana
-    if (!conn?.address) return undefined
-    return {
-      family: activeFamily as 'tron' | 'solana',
-      address: conn.address,
-      disconnect: activeFamily === 'tron' ? tron.disconnect : solanaDisconnect,
-    }
-  })()
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
@@ -63,7 +40,8 @@ export default function AppNav() {
         />
       </div>
 
-      {/* Navbar — wallet-only */}
+      {/* Navbar — brand only. Non-custodial dashboard: the merchant operates
+          with a session; no wallet connect, no chain switcher. */}
       <nav
         className="fixed left-0 right-0 z-[1000] flex items-center justify-between gap-4 bg-white/85 border-b border-black/[0.06] backdrop-blur-md px-3 md:px-6"
         style={{
@@ -89,25 +67,6 @@ export default function AppNav() {
             </span>
           )}
         </Link>
-
-        <div className="flex items-center gap-2">
-          <div className="rp-chain-pills hidden md:flex">
-            <ChainFamilySwitch
-              active={activeFamily}
-              onSelect={(family) => {
-                wallet.setActiveFamily(family)
-                if (family === 'tron' && !wallet.connections.tron.isConnected) {
-                  void tron.connect()
-                }
-              }}
-              connections={wallet.connections}
-            />
-          </div>
-          <NetworkSelector />
-          <div className="rp-wallet">
-            <AccountHeader nonEvmWallet={nonEvmWallet} />
-          </div>
-        </div>
       </nav>
     </>
   )
