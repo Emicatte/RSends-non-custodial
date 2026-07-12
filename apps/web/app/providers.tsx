@@ -80,6 +80,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
     return <>{children}</>
   }
 
+  // /app merchant dashboard: same bypass. Non-custodial — the merchant operates
+  // with a session, never a wallet connection; nothing in the /app tree touches
+  // wagmi, Solana or Tron. Wallet linking (SIWE) lives under /settings/wallets,
+  // which keeps the full stack below.
+  if (pathname?.match(/^\/[a-z]{2}\/app(\/|$)/)) {
+    return <>{children}</>
+  }
+
   // Marketing pages: same bypass. Nothing in their tree touches wagmi or
   // react-query (session auth lives above in AuthSessionProvider), and the
   // mounted gate below would otherwise blank their server-rendered HTML —

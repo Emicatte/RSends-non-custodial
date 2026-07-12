@@ -126,7 +126,23 @@ Session (dashboard) surface — org-scoped JWT routes under `/api/v1/user/org/*`
 `user_org_webhooks_routes.py`, `user_org_stats_routes.py` — Phase E; JWT-exempt from the API-key
 middleware via the `/api/v1/user/` `EXEMPT_PATHS` entry — auth perimeter untouched). Every route
 derives `owner = _resolve_owner_address(org_id)` (org_id server-derived from the JWT, never
-client-supplied) and is environment-scoped (`Literal["test","live"]`, default `test`) IN the query:
+client-supplied) and is environment-scoped (`Literal["test","live"]`, default `test`) IN the query.
+
+**Owner-identity resolution (custodial-residue unblock, 2026-07-12).** The resolver lives in
+`app/services/owner_identity.py` (re-exported from `merchant_profile_routes` under the old name;
+16 call sites: payments/stats/webhooks/profile/invoice session routes). Precedence: (1) the org's
+primary EVM wallet (SIWE-linked in `/settings/wallets`) — always wins, orgs with a linked wallet
+resolve exactly as before; (2) fail-closed fallback to `organizations.settlement_wallet` — the
+email-onboarded merchant path — ONLY if the address has no competing claim anywhere: any
+`user_wallets` row (ANY org, **including unlinked/historical**), any other org's
+`settlement_wallet`, or any `api_keys.owner_address` (active OR revoked) → 409
+`settlement_wallet_conflict`, never a cross-tenant read (re-checked per request, so a later
+SIWE link by the real owner immediately revokes a squatter's fallback). Neither wallet → 409
+`no_primary_wallet` (kept for frontend compat). Accepted trade-off: linking a primary wallet
+that differs from the settlement wallet flips the dashboard identity and settlement-keyed
+intents drop out of view (still payable/settleable — checkout/indexer key by intent). Pinned by
+`test_owner_identity_fallback.py`. The 409 `no_primary_wallet` notes in the table below predate
+the fallback and now mean "neither primary wallet nor unclaimed settlement wallet".
 
 | Route | Required role | Scoping | Rate limit |
 |---|---|---|---|
@@ -178,6 +194,26 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
 
 ### Known follow-ups (tracked here so they're not forgotten — do not fix as a drive-by)
 
+- **Re-key session tenancy on `org_id` (durable fix for the owner-identity fallback).** The
+  wallet-address tenant key is custodial-era; the settlement-wallet fallback (2026-07-12) is a
+  safe interim but leaves identity flips and a DoS-not-leak griefing vector (an org copying a
+  wallet-less org's settlement address 409s both). Durable fix: nullable `org_id` on
+  `payment_intents`/`merchant_webhooks` + backfill + re-scope the session queries (~16 sites);
+  API-key visibility needs a union or org-bound keys. Est. 3-5 days, dedicated pass.
+- **Retire the wallet-authenticated Merchant Dashboard (approved direction, 2026-07-12).**
+  Supersedes OQ-E3's Option-B rejection: mint `rsend_` keys from `/app` with the session
+  (org-scoped, admin role, `owner_address = resolve_owner_address(org)` — same identity chain),
+  port list/revoke, then remove `/merchant/dashboard`, `/api/v1/keys/*` wallet-sig routes and
+  `require_wallet_auth`. `/pay` and `verify_api_key` untouched. Sequenced after the fallback
+  (shipped) — needs its own `ENDPOINT_LIMITS` entry and secret-shown-once UX.
+- **Dormant custodial residue (audit 2026-07-12, batch as one subtractive pass):**
+  `TransactionPersistence`/`ContactsPersistence`/`PostLoginMerge`/`lib/tx-events`/
+  `useUserTransactions` (listeners without emitters, mounted in the `/app` layout) + the now
+  caller-less `user_transactions`/`user_contacts`/`user_routes` APIs; `merchant_profiles`
+  (wallet-keyed, superseded by `company_profiles` — migrate billing fields first);
+  `blacklisted_wallets` (dead, superseded by `sanctions_list`); dead `EXEMPT_PATHS` entries;
+  root non-locale `app/page.tsx` legacy landing (own decision). DB-only orphan tables
+  (`anomaly_alerts`, `compliance_snapshots`) belong to the Alembic reconciliation (PR #18).
 - **Redis-DOWN (degraded/fail-closed) path is untested** — with CI now running against a real
   Redis, no active test exercises health-`degraded` or rate-limit fail-closed with Redis
   absent (the in-memory-fallback test in `test_circuit_breaker.py` is skipped "pending

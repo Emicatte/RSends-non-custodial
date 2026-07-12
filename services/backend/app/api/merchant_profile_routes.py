@@ -14,14 +14,16 @@ Endpoints:
   primario; ritorna il profilo o un oggetto vuoto (exists=False) se non esiste.
 - PUT /api/v1/merchant/profile  (operator+): upsert dei campi billing_*.
 
-Se l'org non ha un wallet primario EVM attivo → 409 {"code":"no_primary_wallet"}:
-il cliente deve prima collegare/verificare un wallet in Settings → Wallets.
+Identità: wallet primario EVM se collegato, altrimenti fallback fail-closed sul
+settlement_wallet dell'org (vedi app/services/owner_identity.py). Senza nessuno
+dei due → 409 {"code":"no_primary_wallet"}: il cliente collega un wallet in
+Settings → Wallets o imposta il settlement wallet.
 """
 
 from datetime import datetime, timezone
 from typing import Optional, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,32 +34,12 @@ from app.models.merchant_profile_schemas import (
     MerchantProfileResponse,
     MerchantProfileUpdateRequest,
 )
-from app.models.user_wallets_models import UserWallet
+# Resolver condiviso: wallet primario → fallback settlement_wallet (fail-closed).
+# Re-export sotto il vecchio nome — user_org_*_routes e merchant_invoice_routes
+# lo importano da qui.
+from app.services.owner_identity import resolve_owner_address as _resolve_owner_address
 
 router = APIRouter(prefix="/api/v1/merchant/profile", tags=["merchant-profile"])
-
-
-async def _resolve_owner_address(db: AsyncSession, org_id: str) -> str:
-    """Risolve l'owner_address (lowercase) dal wallet PRIMARIO EVM attivo
-    dell'org. 409 no_primary_wallet se assente — non si inventa un address."""
-    result = await db.execute(
-        select(UserWallet)
-        .where(
-            UserWallet.org_id == org_id,
-            UserWallet.is_primary.is_(True),
-            UserWallet.chain_family == "evm",
-            UserWallet.unlinked_at.is_(None),
-        )
-        .limit(1)
-    )
-    wallet = result.scalars().first()
-    if wallet is None:
-        raise HTTPException(
-            status_code=409,
-            detail={"code": "no_primary_wallet"},
-        )
-    # address è già lowercase in DB; normalizziamo difensivamente.
-    return (wallet.address or "").lower()
 
 
 def _to_response(owner_address: str, profile: Optional[MerchantProfile]) -> MerchantProfileResponse:

@@ -2,6 +2,7 @@
 
 import { usePathname } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
+import { useCurrentOrg } from '@/hooks/useCurrentOrg'
 
 const COLORS = {
   ink: '#1a1a1a',
@@ -30,6 +31,7 @@ function resolveTitleKey(pathname: string): string {
 export default function AppTopbar() {
   const pathname = usePathname()
   const t = useTranslations()
+  const { activeOrg } = useCurrentOrg()
 
   const titleKey = resolveTitleKey(pathname)
   const title = t(`app.sidebar.${titleKey}`)
@@ -67,16 +69,18 @@ export default function AppTopbar() {
           gap: 12,
         }}
       >
-        <span
-          style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: 13,
-            fontWeight: 600,
-            color: COLORS.muted,
-          }}
-        >
-          RPagos SRL
-        </span>
+        {activeOrg?.name && (
+          <span
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 13,
+              fontWeight: 600,
+              color: COLORS.muted,
+            }}
+          >
+            {activeOrg.name}
+          </span>
+        )}
       </div>
     </div>
   )
