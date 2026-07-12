@@ -1668,7 +1668,8 @@
       "title": "Primeros pasos",
       "wallet": "Añade tu cartera de liquidación",
       "apiKey": "Crea una clave API",
-      "testPayment": "Envía un pago de prueba"
+      "testPayment": "Envía un pago de prueba",
+      "completed": "Completado"
     }
   },
   "pay": {

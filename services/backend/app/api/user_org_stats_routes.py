@@ -31,17 +31,24 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Literal, Optional, Tuple
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps.require_company_submitted import require_org_company_submitted
 from app.api.merchant_profile_routes import _resolve_owner_address
 from app.db.session import get_db
-from app.models.dashboard_schemas import DashboardStats, RecentTransaction
-from app.models.merchant_models import PaymentIntent
+from app.models.dashboard_schemas import OrgDashboardStats, RecentTransaction
+from app.models.merchant_models import IntentStatus, PaymentIntent
+from app.models.org_models import Organization
 from app.models.settlement_models import PaymentSettlement, SettlementStatus
+
+# The route reads user_api_keys via count_active_keys_for_org, whose model
+# import is lazy — import it here so Base.metadata registers the table for
+# any consumer that create_all's after importing this module.
+from app.models.user_api_keys_models import UserApiKey  # noqa: F401
 from app.services.price_service import get_price
+from app.services.user_api_key_service import count_active_keys_for_org
 from app.tokens.registry import get_token
 
 router = APIRouter(prefix="/api/v1/user/org", tags=["user-org-stats"])
@@ -74,17 +81,73 @@ async def _usd_value(chain_id, token_addr, amount_base) -> Optional[float]:
     return float(human) * price
 
 
-@router.get("/stats", response_model=DashboardStats)
+@router.get("/stats", response_model=OrgDashboardStats)
 async def get_org_stats(
     ctx: Tuple[str, str, str] = Depends(require_org_company_submitted("viewer")),
     environment: Literal["test", "live"] = Query("test"),
     db: AsyncSession = Depends(get_db),
-) -> DashboardStats:
+) -> OrgDashboardStats:
     """Per-org KPI snapshot from on-chain settlements, scoped through the intent
-    join (owner + environment) with USD conversion. 409 `no_primary_wallet` if
-    the org has no primary EVM wallet yet."""
+    join (owner + environment) with USD conversion, plus the get-started
+    checklist facts (`settlement_wallet_set` / `has_api_key` /
+    `has_paid_payment`) for the /app home card. An org with no owner identity
+    at all (no primary EVM wallet, no settlement wallet — the fresh-merchant
+    state) gets 200 with zeroed KPIs and the org-scoped booleans, NOT the
+    resolver's 409 `no_primary_wallet`; a contested settlement wallet still
+    propagates 409 `settlement_wallet_conflict`."""
     _user_id, org_id, _role = ctx
-    owner = await _resolve_owner_address(db, org_id)
+
+    # Checklist facts that need no owner identity — computed FIRST so the
+    # fresh-merchant state (resolver 409) still reports them truthfully.
+    # Truthiness, not IS NOT NULL: the resolver treats "" as absent too.
+    settlement_wallet_set = bool(
+        (
+            await db.execute(
+                select(Organization.settlement_wallet).where(
+                    Organization.id == org_id
+                )
+            )
+        ).scalar_one_or_none()
+    )
+    has_api_key = (await count_active_keys_for_org(db, org_id)) > 0
+
+    try:
+        owner = await _resolve_owner_address(db, org_id)
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, dict) else {}
+        if detail.get("code") != "no_primary_wallet":
+            raise
+        # No identity yet → the org can't have attributable intents. Zeroed
+        # KPIs are the truthful fresh-org snapshot, not an error.
+        return OrgDashboardStats(
+            volume_24h=0.0,
+            volume_24h_delta_pct=0.0,
+            transactions_24h=0,
+            transactions_24h_delta=0,
+            total_balance=0.0,
+            total_balance_chains=0,
+            active_clients=0,
+            active_clients_this_week=0,
+            recent_transactions=[],
+            settlement_wallet_set=settlement_wallet_set,
+            has_api_key=has_api_key,
+            has_paid_payment=False,
+        )
+
+    has_paid_payment = (
+        (
+            await db.execute(
+                select(PaymentIntent.id)
+                .where(
+                    PaymentIntent.merchant_id == owner,
+                    PaymentIntent.environment == environment,
+                    PaymentIntent.status == IntentStatus.paid,
+                )
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        is not None
+    )
 
     now = datetime.now(timezone.utc)
     win_24h = now - timedelta(hours=24)
@@ -219,7 +282,7 @@ async def get_org_stats(
             )
         )
 
-    return DashboardStats(
+    return OrgDashboardStats(
         volume_24h=volume_24h,
         volume_24h_delta_pct=volume_24h_delta_pct,
         transactions_24h=transactions_24h,
@@ -229,4 +292,7 @@ async def get_org_stats(
         active_clients=active_clients,
         active_clients_this_week=active_clients_this_week,
         recent_transactions=recent,
+        settlement_wallet_set=settlement_wallet_set,
+        has_api_key=has_api_key,
+        has_paid_payment=has_paid_payment,
     )

@@ -1668,7 +1668,8 @@
       "title": "Erste Schritte",
       "wallet": "Fügen Sie Ihr Abrechnungs-Wallet hinzu",
       "apiKey": "Erstellen Sie einen API-Schlüssel",
-      "testPayment": "Senden Sie eine Testzahlung"
+      "testPayment": "Senden Sie eine Testzahlung",
+      "completed": "Abgeschlossen"
     }
   },
   "pay": {

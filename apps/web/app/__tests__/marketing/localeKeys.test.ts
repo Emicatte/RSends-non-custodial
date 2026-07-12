@@ -1,7 +1,8 @@
 /**
- * The /vision and /team marketing pages must have their full message
- * namespaces present in every locale file, with the same key shape as
- * English (the source of truth) — no missing-key fallbacks in any locale.
+ * Checked namespaces (marketing /vision + /team, and the onboarding flow
+ * incl. the /app Get-started checklist) must be present in every locale
+ * file with the same key shape as English (the source of truth) — no
+ * missing-key fallbacks in any locale.
  */
 import enMessages from '@/messages/en.json'
 import itMessages from '@/messages/it.json'
@@ -16,7 +17,7 @@ const LOCALES: Record<string, Record<string, unknown>> = {
   fr: frMessages,
   de: deMessages,
 }
-const NAMESPACES = ['vision', 'team'] as const
+const NAMESPACES = ['vision', 'team', 'onboarding'] as const
 
 /** Recursively collect dot-paths of every leaf, tagging arrays with length. */
 function keyShape(node: unknown, prefix = ''): string[] {

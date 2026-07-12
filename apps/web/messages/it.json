@@ -1667,7 +1667,8 @@
       "title": "Per iniziare",
       "wallet": "Aggiungi il tuo wallet di regolamento",
       "apiKey": "Crea una chiave API",
-      "testPayment": "Invia un pagamento di prova"
+      "testPayment": "Invia un pagamento di prova",
+      "completed": "Completato"
     }
   },
   "pay": {

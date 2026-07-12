@@ -31,3 +31,15 @@ class DashboardStats(BaseModel):
     active_clients: int
     active_clients_this_week: int
     recent_transactions: List[RecentTransaction]
+
+
+class OrgDashboardStats(DashboardStats):
+    """Session org-stats response: the KPI snapshot plus the get-started
+    checklist facts for the /app home card. ONLY `GET /api/v1/user/org/stats`
+    uses this — the frozen legacy dashboard_routes.py keeps plain
+    DashboardStats. All three required: a construction that forgets one must
+    fail loudly, not default."""
+
+    settlement_wallet_set: bool
+    has_api_key: bool
+    has_paid_payment: bool
