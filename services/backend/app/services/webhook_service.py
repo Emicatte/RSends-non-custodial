@@ -27,6 +27,7 @@ import hmac
 import ipaddress
 import json
 import logging
+import os
 import re
 import secrets
 import socket
@@ -106,13 +107,34 @@ def _ip_is_forbidden(ip_str: str) -> bool:
     )
 
 
+def _loopback_host(host: str) -> bool:
+    """True per host loopback: 'localhost' o IP literal 127.0.0.0/8 / ::1."""
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 async def check_webhook_egress(url: str) -> Optional[str]:
     """Return a short rejection reason if `url` is an unsafe egress target,
-    else None. Never raises for DNS failure — see the posture note above."""
+    else None. Never raises for DNS failure — see the posture note above.
+
+    E2E escape: RSEND_E2E_ALLOW_LOOPBACK_WEBHOOKS=1 allows LOOPBACK targets
+    only (any scheme) so the Anvil money-path E2E can deliver to its local
+    receiver. Everything non-loopback keeps the full guard. validate_dev_flags
+    refuses startup with this flag outside ENVIRONMENT=development/test."""
     parsed = urlparse(url)
+    host = parsed.hostname
+    if (
+        host
+        and os.getenv("RSEND_E2E_ALLOW_LOOPBACK_WEBHOOKS") == "1"
+        and _loopback_host(host)
+    ):
+        return None
     if parsed.scheme != "https":
         return "scheme_not_https"
-    host = parsed.hostname
     if not host:
         return "no_host"
 
