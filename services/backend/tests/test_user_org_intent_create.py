@@ -256,8 +256,10 @@ async def test_session_create_viewer_403(session, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_session_create_no_primary_wallet_409(session):
-    """An org with no primary EVM wallet cannot resolve an owner → 409."""
-    org = await _make_org(session, owner_address=None, settlement=SETTLE)
+    """An org with neither a primary EVM wallet nor a settlement wallet cannot
+    resolve an owner → 409. (An unclaimed settlement wallet now resolves via
+    the owner-identity fallback — see test_owner_identity_fallback.py.)"""
+    org = await _make_org(session, owner_address=None, settlement=None)
     with pytest.raises(HTTPException) as exc:
         await create_org_payment_intent(
             payload=_payload(), ctx=_ctx(org), environment="test", db=session,
