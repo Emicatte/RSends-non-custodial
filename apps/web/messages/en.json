@@ -1667,7 +1667,8 @@
       "title": "Get started",
       "wallet": "Add your settlement wallet",
       "apiKey": "Create an API key",
-      "testPayment": "Send a test payment"
+      "testPayment": "Send a test payment",
+      "completed": "Completed"
     }
   },
   "pay": {

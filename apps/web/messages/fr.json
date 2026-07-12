@@ -1668,7 +1668,8 @@
       "title": "Premiers pas",
       "wallet": "Ajoutez votre portefeuille de règlement",
       "apiKey": "Créez une clé API",
-      "testPayment": "Envoyez un paiement de test"
+      "testPayment": "Envoyez un paiement de test",
+      "completed": "Terminé"
     }
   },
   "pay": {

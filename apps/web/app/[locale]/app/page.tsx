@@ -111,10 +111,21 @@ export default function AppDashboardPage() {
   return (
     <main className="rp-app-page">
       <style>{`@keyframes rsendsPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
-      {/* Get started checklist (links to existing surfaces only) */}
-      <div style={{ marginBottom: 24 }}>
-        <GetStartedChecklist />
-      </div>
+      {/* Get started checklist — derived from the stats booleans; renders a
+          layout-reserving skeleton while loading, nothing when all done (the
+          component owns its bottom margin so a null render leaves no gap) */}
+      <GetStartedChecklist
+        loading={loading && !stats}
+        completed={
+          stats
+            ? {
+                wallet: stats.settlement_wallet_set,
+                apiKey: stats.has_api_key,
+                testPayment: stats.has_paid_payment,
+              }
+            : null
+        }
+      />
       {/* Metric cards */}
       <div
         className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"

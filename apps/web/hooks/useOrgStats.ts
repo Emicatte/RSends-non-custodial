@@ -37,6 +37,12 @@ export interface OrgStats {
   active_clients: number
   active_clients_this_week: number
   recent_transactions: RecentTransactionDTO[]
+  // Get-started checklist facts (drive the /app home card). The backend
+  // returns 200 with zeroed KPIs + these booleans even for an org with no
+  // owner identity yet (fresh merchant) — no 409 on this route anymore.
+  settlement_wallet_set: boolean
+  has_api_key: boolean
+  has_paid_payment: boolean
 }
 
 const POLL_MS = 30_000

@@ -142,7 +142,11 @@ SIWE link by the real owner immediately revokes a squatter's fallback). Neither 
 that differs from the settlement wallet flips the dashboard identity and settlement-keyed
 intents drop out of view (still payable/settleable — checkout/indexer key by intent). Pinned by
 `test_owner_identity_fallback.py`. The 409 `no_primary_wallet` notes in the table below predate
-the fallback and now mean "neither primary wallet nor unclaimed settlement wallet".
+the fallback and now mean "neither primary wallet nor unclaimed settlement wallet". Exception:
+`GET /user/org/stats` no longer 409s on `no_primary_wallet` — it computes the org-scoped
+checklist booleans first and returns 200 with zeroed KPIs (the fresh-merchant onboarding state,
+feeding the /app "Get started" card); `settlement_wallet_conflict` still propagates 409
+(pinned by `test_org_stats_checklist.py`).
 
 | Route | Required role | Scoping | Rate limit |
 |---|---|---|---|
@@ -153,7 +157,7 @@ the fallback and now mean "neither primary wallet nor unclaimed settlement walle
 | `GET /api/v1/user/org/webhooks/{id}/deliveries` (Phase E) | `viewer` | webhook resolved with owner+env filter FIRST → **404** on empty (cross-tenant/cross-env/missing); paginated; **excludes `payload`/`response_body`** (OQ-E2, PII/secret avoidance) | 120/min **per IP** |
 | `POST /api/v1/user/org/webhooks` (Phase E) | `operator` | register mirror — SAME `create_merchant_webhook` as the API-key path (SSRF egress guard + env stamp); returns `secret` **once**; 422 `WEBHOOK_URL_FORBIDDEN` on unsafe URL | 5/hour **per IP** |
 | `POST /api/v1/user/org/webhooks/{id}/test` (Phase E) | `operator` | scoped `(id, owner, env)` → **404**/400; SAME `send_test_event` (egress-guarded) | 10/min **per IP** |
-| `GET /api/v1/user/org/stats` (Phase E) | `viewer` | settlements attributed via the **intent join** (`settlement.intent_id → intent`, `intent.merchant_id == owner` + env) — NOT the broken primary-wallet filter; USD conversion via `price_service` + `app.tokens.registry`; read-only; 409 `no_primary_wallet` | 120/min **per IP** |
+| `GET /api/v1/user/org/stats` (Phase E) | `viewer` | settlements attributed via the **intent join** (`settlement.intent_id → intent`, `intent.merchant_id == owner` + env) — NOT the broken primary-wallet filter; USD conversion via `price_service` + `app.tokens.registry`; read-only; carries the get-started checklist booleans (`settlement_wallet_set`/`has_api_key`/`has_paid_payment`, response `OrgDashboardStats(DashboardStats)` — the shared `DashboardStats` untouched); fresh-merchant safe: `no_primary_wallet` caught → **200 with zeroed KPIs + booleans**; `settlement_wallet_conflict` still 409 | 120/min **per IP** |
 
 Browser/session counterpart of the API-key merchant API. The `/app` UI
 (`/[locale]/app/{payments,webhooks,api-keys}` + the home stats widget) reads/writes here and is
