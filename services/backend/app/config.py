@@ -412,6 +412,17 @@ def validate_dev_flags(settings: Settings) -> None:
             "Refusing to start — DEBUG must be False in production."
         )
 
+    if (
+        os.getenv("RSEND_E2E_ALLOW_LOOPBACK_WEBHOOKS") == "1"
+        and env not in ("development", "test")
+    ):
+        raise RuntimeError(
+            "RSEND_E2E_ALLOW_LOOPBACK_WEBHOOKS is set but ENVIRONMENT="
+            f"{env or '<unset>'!r} (must be 'development' or 'test'). "
+            "Refusing to start — this flag relaxes the webhook SSRF egress "
+            "guard for loopback targets (E2E harness only)."
+        )
+
 
 @lru_cache
 def get_settings() -> Settings:

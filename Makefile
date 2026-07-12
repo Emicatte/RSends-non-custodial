@@ -82,6 +82,7 @@ dev-web:
 e2e-anvil:
 	cd services/backend && python -m pip install -q -r requirements-e2e.txt && \
 	DATABASE_URL="sqlite+aiosqlite://" ENVIRONMENT=test \
+	RSEND_E2E_ALLOW_LOOPBACK_WEBHOOKS=1 \
 	python -m pytest -m e2e tests/e2e -v
 
 # Frontend gate: install + typecheck + production build.
