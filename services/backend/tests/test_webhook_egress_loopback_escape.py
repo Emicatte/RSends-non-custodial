@@ -59,8 +59,13 @@ async def test_flag_does_not_widen_beyond_loopback(monkeypatch):
 def test_flag_refused_in_prod_posture(monkeypatch):
     monkeypatch.setenv(FLAG, "1")
     monkeypatch.setenv("ENVIRONMENT", "production")
+    # Neutralize the earlier dev-flag clauses (CI runs with DEBUG=true) so the
+    # refusal we assert on is specifically the loopback-escape one.
+    settings = get_settings()
+    monkeypatch.setattr(settings, "debug", False)
+    monkeypatch.setattr(settings, "rsend_dev_auth_bypass", False)
     with pytest.raises(RuntimeError, match=FLAG):
-        validate_dev_flags(get_settings())
+        validate_dev_flags(settings)
 
 
 @pytest.mark.parametrize("env", ["development", "test"])
