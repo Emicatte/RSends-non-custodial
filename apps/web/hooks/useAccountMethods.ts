@@ -6,10 +6,6 @@ import { apiCall, waitForToken } from '@/lib/auth-client'
 
 export interface AuthMethods {
   has_password: boolean
-  has_google: boolean
-  has_github: boolean
-  google_email: string | null
-  github_username: string | null
 }
 
 export function useAccountMethods() {
@@ -99,16 +95,6 @@ export function useAccountMethods() {
     () => _mutate('remove-password'),
     [_mutate],
   )
-  const linkGoogle = useCallback(
-    (id_token: string) => _mutate('link-google', { id_token }),
-    [_mutate],
-  )
-  const unlinkGoogle = useCallback(() => _mutate('unlink-google'), [_mutate])
-  const linkGithub = useCallback(
-    (access_token: string) => _mutate('link-github', { access_token }),
-    [_mutate],
-  )
-  const unlinkGithub = useCallback(() => _mutate('unlink-github'), [_mutate])
 
   return {
     methods,
@@ -119,9 +105,5 @@ export function useAccountMethods() {
     reload,
     addPassword,
     removePassword,
-    linkGoogle,
-    unlinkGoogle,
-    linkGithub,
-    unlinkGithub,
   }
 }

@@ -61,8 +61,7 @@ ENDPOINT_LIMITS: list[tuple[str, str, int, int, str]] = [
     ("GET",  "/api/v1/audit/log",                    30,    60,  "ip"),
     # Org admin mutations (settlement_wallet, member roles, …) — per-IP.
     ("PATCH", "/api/v1/organizations",               30,    60,  "ip"),
-    # End-user auth (Google OAuth + session mgmt)
-    ("POST", "/api/v1/auth/google",                  100,    60,  "ip"),   # 5 per 10min
+    # End-user auth (session mgmt)
     ("POST", "/api/v1/auth/refresh",                 20,    60,  "ip"),   # 20/min
     ("POST", "/api/v1/auth/logout",                  30,    60,  "ip"),   # 30/min
     # Session-authed org payments (Phase C read / Phase D create+cancel) — per-IP

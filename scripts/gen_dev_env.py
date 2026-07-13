@@ -85,7 +85,6 @@ INTERNAL_PROXY_SECRET={proxy}
 ADMIN_API_TOKEN={admin}
 
 # Optional integrations stay empty in dev
-GOOGLE_OAUTH_CLIENT_ID=
 TELEGRAM_BOT_TOKEN=
 """
 

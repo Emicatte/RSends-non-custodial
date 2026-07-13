@@ -36,7 +36,6 @@ def _prod_settings(**over):
         telegram_bot_token="tg",
         redis_url="rediss://redis.internal:6379/0",
         celery_broker_url="rediss://redis.internal:6379/1",
-        google_oauth_client_id="gid",
         auth_jwt_secret="a" * 64,
         internal_proxy_secret="ips",  # required in prod since H3
         email_dev_mode=False,  # prod sends real email
@@ -91,6 +90,18 @@ def test_valid_prod_settings_pass():
     """A fully-valid prod config must NOT raise."""
     s = _prod_settings()
     with patch.dict(os.environ, {"ENVIRONMENT": ""}, clear=False):
+        validate_settings(s)  # no raise
+
+
+def test_prod_settings_pass_without_social_login_env():
+    """Social login was removed from the product: ENVIRONMENT=production with
+    NO social-login env vars at all must boot past validate_settings.
+
+    The `_prod_settings` stand-in deliberately has no social-login attribute —
+    if a provider check is ever reintroduced in validate_settings, reading the
+    missing attribute makes this test fail loudly (AttributeError)."""
+    s = _prod_settings()
+    with patch.dict(os.environ, {"ENVIRONMENT": "production"}, clear=False):
         validate_settings(s)  # no raise
 
 

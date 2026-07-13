@@ -6,7 +6,7 @@ export const maxDuration = 30
 /**
  * Cookie-aware proxy to the RPagos backend.
  *
- * Used exclusively by the auth flow (/api/v1/auth/google|refresh|logout|me).
+ * Used exclusively by the auth flow (/api/v1/auth/login|refresh|logout|me).
  *
  * Differences vs /api/backend/[...path]/route.ts:
  *   • Forwards the browser `cookie` header to the backend (rsends_refresh +

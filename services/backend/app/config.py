@@ -122,8 +122,7 @@ class Settings(BaseSettings):
     # NON-CUSTODIAL: platform-fee sweep config removed. Any protocol fee is taken
     # atomically on-chain by RSendsRouter (if enabled), never swept by RSends.
 
-    # ── End-user Auth (Google OAuth + Session JWT) ───────
-    google_oauth_client_id: str = ""          # Google OAuth 2.0 client ID (web) — `aud` claim of ID tokens
+    # ── End-user Auth (Session JWT) ──────────────────────
     auth_jwt_secret: str = ""                 # HS256 secret for access tokens; >=64 chars required in prod
 
     # ── Email (Resend) ───────────────────────────────────
@@ -325,11 +324,6 @@ def validate_settings(settings: Settings) -> None:
             errors.append("DEBUG=true is forbidden when ENVIRONMENT=production")
 
         # ── User-auth hardening ──
-        if not settings.google_oauth_client_id:
-            errors.append(
-                "GOOGLE_OAUTH_CLIENT_ID is empty in production. "
-                "End-user Google login cannot verify ID tokens without it."
-            )
         if len(settings.auth_jwt_secret) < 64:
             errors.append(
                 f"AUTH_JWT_SECRET is too short ({len(settings.auth_jwt_secret)} chars). "

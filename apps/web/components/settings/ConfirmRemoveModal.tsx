@@ -7,7 +7,7 @@ const INK = '#2C2C2A'
 const MUTED = '#888780'
 const DANGER = '#C0392B'
 
-export type RemovableMethod = 'password' | 'google' | 'github'
+export type RemovableMethod = 'password'
 
 export function ConfirmRemoveModal({
   method,

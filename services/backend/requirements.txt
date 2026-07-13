@@ -32,10 +32,7 @@ eth-utils==6.0.0
 cryptography==46.0.7
 bcrypt>=4.0,<5
 
-# ── User Auth (Google OAuth + JWT) ───────────
-# `[requests]` extra pulls in `requests`, required by
-# google.auth.transport.requests (ID token verification transport)
-google-auth[requests]==2.35.0
+# ── User Auth (Session JWT) ──────────────────
 PyJWT[crypto]==2.9.0
 
 # ── AWS (KMS signer — optional) ──────────────

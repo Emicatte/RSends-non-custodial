@@ -1,14 +1,14 @@
 """Email+password auth lifecycle: signup, login, verify, reset.
 
-Parallel path to Google OAuth. Both live in the same `users` table — a user
-may have google_sub, password_hash, or (after Prompt 15) both. Existing
-Google users are implicitly email_verified; new email signups must verify
-before they can log in.
+The only signup/login path (social login was removed from the product).
+Legacy social-created rows may still carry a provider sub with no
+password_hash — they cannot log in or self-reset (operator remediation is a
+separate decision). New email signups must verify before they can log in.
 
 Architectural notes:
 - Sessions are created via `auth_service.create_session` (unchanged). The
   tuple it returns is handed to the route, which persists the `UserSession`
-  audit row and sets cookies — mirroring the Google flow in `auth_routes.py`.
+  audit row and sets cookies.
 - Password reset invalidates every session by scanning `user_sessions`
   (active rows only) and calling `revoke_session` on each. Done here rather
   than in `auth_service` to keep that module untouched per Prompt 12
@@ -597,23 +597,15 @@ async def reset_password(
 async def check_email(db: AsyncSession, email: str) -> dict:
     """Expose which sign-in methods exist for this email.
 
-    Used by the frontend signup/login pages to offer account-linking UX
-    (e.g. "this email already has a Google account — log in instead").
-    No rate limit: low-risk read-only lookup.
+    Used by the frontend signup page to guide an already-registered email to
+    the login page. No rate limit: low-risk read-only lookup.
     """
     user = (
         await db.execute(select(User).where(User.email == email))
     ).scalar_one_or_none()
     if user is None:
-        return {
-            "exists": False,
-            "has_google": False,
-            "has_password": False,
-            "has_github": False,
-        }
+        return {"exists": False, "has_password": False}
     return {
         "exists": True,
-        "has_google": user.google_sub is not None,
         "has_password": user.password_hash is not None,
-        "has_github": user.github_sub is not None,
     }

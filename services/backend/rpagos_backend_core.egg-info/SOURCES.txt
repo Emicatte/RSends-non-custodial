@@ -109,7 +109,6 @@ app/services/device_fingerprint.py
 app/services/email_auth_service.py
 app/services/email_service.py
 app/services/external_health.py
-app/services/github_oauth_service.py
 app/services/hmac_service.py
 app/services/idempotency_service.py
 app/services/invoice_service.py
