@@ -2,8 +2,8 @@
 users.
 
 Mutates the existing `users` row (password_hash). No schema changes. Social
-login (Google/GitHub) was removed from the product; the orphan google_sub /
-github_sub / github_username columns stay in place untouched.
+login (Google/GitHub) was removed from the product; its orphan users columns
+(google_sub / github_sub / github_username) were dropped by migration 0010.
 
 Invariant: a user must always retain at least one active sign-in method.
 `remove_password` raises `last_auth_method` when the password is the only

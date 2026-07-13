@@ -34,6 +34,10 @@ def _default_onboarded_org(target, args, kwargs):
     onboarding tests opt out by passing the kwarg.
     """
     kwargs.setdefault("onboarding_status", "company_submitted")
+    # Same grandfathering for the approval gate (migration 0010 backfilled
+    # every pre-existing org to 'approved'); approval tests opt out by
+    # passing approval_status explicitly.
+    kwargs.setdefault("approval_status", "approved")
 
 
 @pytest_asyncio.fixture(autouse=True)

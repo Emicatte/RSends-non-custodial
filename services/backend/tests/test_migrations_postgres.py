@@ -36,7 +36,7 @@ import pytest
 _BACKEND_ROOT = Path(__file__).resolve().parents[1]
 _VERSIONS_DIR = _BACKEND_ROOT / "alembic" / "versions"
 
-HEAD = "0009_onboarding"
+HEAD = "0010_org_approval"
 # Alembic's hardcoded alembic_version.version_num width.
 _VERSION_NUM_MAX = 32
 
@@ -119,7 +119,7 @@ def clean_schema():
 
 
 @_needs_pg
-def test_upgrade_head_reaches_0009_on_postgres(clean_schema):
+def test_upgrade_head_reaches_head_on_postgres(clean_schema):
     """A from-scratch ``upgrade head`` runs the whole chain on Postgres.
 
     Before the id fix, writing 0006's 33-char id to ``alembic_version`` raised
@@ -166,3 +166,103 @@ def test_stamp_then_upgrade_is_noop(clean_schema):
     assert version == HEAD
     # +1 for the freshly (re)created alembic_version table; no schema tables added.
     assert _table_count() == before + 1
+
+
+@_needs_pg
+def test_0010_backfills_existing_orgs_and_drops_oauth_columns(clean_schema):
+    """Migration 0010 on a legacy (0009) DB with data:
+
+    * every pre-existing org is backfilled approval_status='approved' (nobody
+      already live gets locked out by the new gate);
+    * the column carries NO lingering server default afterwards (create_all
+      parity — env.py compares server defaults, see the 0009 reconciliation);
+    * the orphan OAuth columns are dropped from users;
+    * downgrade -1 reverses: approval columns gone, OAuth columns back nullable.
+    """
+    assert _alembic("upgrade", "0009_onboarding").returncode == 0
+    # 0001 is a create_all of the CURRENT ORM, so "at 0009" the schema already
+    # carries the 0010 columns (and lacks the dropped OAuth ones). Reshape it
+    # into the true legacy state production had before 0010 ran.
+    asyncio.run(
+        _exec(
+            "ALTER TABLE organizations DROP COLUMN approval_status",
+            "ALTER TABLE organizations DROP COLUMN approval_requested_at",
+            "ALTER TABLE organizations DROP COLUMN approval_decided_at",
+            "ALTER TABLE organizations DROP COLUMN approval_decided_by",
+            "ALTER TABLE organizations DROP COLUMN decline_reason",
+            "ALTER TABLE users ADD COLUMN google_sub text",
+            "ALTER TABLE users ADD COLUMN github_sub text",
+            "ALTER TABLE users ADD COLUMN github_username text",
+            "CREATE UNIQUE INDEX ix_users_google_sub ON users (google_sub)",
+            "CREATE UNIQUE INDEX ix_users_github_sub ON users (github_sub)",
+        )
+    )
+    asyncio.run(
+        _exec(
+            "INSERT INTO users (id, email, email_verified, created_at, updated_at,"
+            " status, account_type, metadata_json, age_attested)"
+            " VALUES ('11111111-1111-1111-1111-111111111111', 'pre@example.com',"
+            " true, now(), now(), 'active', 'merchant', '{}', false)",
+            "INSERT INTO organizations (id, name, slug, owner_user_id, is_personal,"
+            " plan, extra_metadata, onboarding_status, activation_status)"
+            " VALUES ('22222222-2222-2222-2222-222222222222', 'Pre', 'pre0010',"
+            " '11111111-1111-1111-1111-111111111111', true, 'free', '{}',"
+            " 'company_submitted', 'not_started')",
+        )
+    )
+
+    upgrade = _alembic("upgrade", "head")
+    assert upgrade.returncode == 0, upgrade.stderr
+
+    assert (
+        asyncio.run(
+            _fetchval(
+                "SELECT approval_status FROM organizations WHERE slug = 'pre0010'"
+            )
+        )
+        == "approved"
+    )
+    assert (
+        asyncio.run(
+            _fetchval(
+                "SELECT column_default FROM information_schema.columns"
+                " WHERE table_name = 'organizations'"
+                " AND column_name = 'approval_status'"
+            )
+        )
+        is None
+    )
+    assert (
+        asyncio.run(
+            _fetchval(
+                "SELECT count(*) FROM information_schema.columns"
+                " WHERE table_name = 'users' AND column_name IN"
+                " ('google_sub', 'github_sub', 'github_username')"
+            )
+        )
+        == 0
+    )
+
+    downgrade = _alembic("downgrade", "-1")
+    assert downgrade.returncode == 0, downgrade.stderr
+    assert (
+        asyncio.run(
+            _fetchval(
+                "SELECT count(*) FROM information_schema.columns"
+                " WHERE table_name = 'organizations'"
+                " AND column_name LIKE 'approval%'"
+            )
+        )
+        == 0
+    )
+    assert (
+        asyncio.run(
+            _fetchval(
+                "SELECT count(*) FROM information_schema.columns"
+                " WHERE table_name = 'users' AND column_name IN"
+                " ('google_sub', 'github_sub', 'github_username')"
+                " AND is_nullable = 'YES'"
+            )
+        )
+        == 3
+    )

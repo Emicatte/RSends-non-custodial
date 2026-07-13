@@ -120,6 +120,9 @@ async def create_personal_org(db: AsyncSession, user: User) -> Organization:
         # so the initial state is deterministic per owner.
         onboarding_status=initial_onboarding_status(user),
         activation_status="not_started",
+        # Manual review starts at creation; only the admin surface flips it.
+        approval_status="pending_approval",
+        approval_requested_at=datetime.now(timezone.utc),
     )
     db.add(org)
     await db.flush()
@@ -157,6 +160,9 @@ async def create_org(db: AsyncSession, user: User, name: str) -> Organization:
         # operational access — later orgs of onboarded users included.
         onboarding_status=initial_onboarding_status(user),
         activation_status="not_started",
+        # Manual review starts at creation; only the admin surface flips it.
+        approval_status="pending_approval",
+        approval_requested_at=datetime.now(timezone.utc),
     )
     db.add(org)
     await db.flush()
