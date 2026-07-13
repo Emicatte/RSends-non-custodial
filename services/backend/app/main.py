@@ -316,6 +316,8 @@ from app.api.ratelimit_routes import ratelimit_router
 app.include_router(ratelimit_router)
 from app.api.aml_routes import aml_router
 app.include_router(aml_router)
+from app.api.admin_approval_routes import admin_approval_router  # X-Admin-Token only
+app.include_router(admin_approval_router)
 from app.api.api_key_routes import api_key_router
 app.include_router(api_key_router)
 from app.api.auth_routes import router as auth_router

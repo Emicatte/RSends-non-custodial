@@ -177,4 +177,11 @@ async def submit_org_company_profile(
     except OnboardingError as e:
         raise _onboarding_error_to_http(e)
     await db.commit()
+
+    # Approval-queue notification (convenience only — the merchant is already
+    # queued in the DB and the admin page reads from there). Never raises.
+    from app.services.approval_notify import notify_merchant_pending
+
+    await notify_merchant_pending(org, profile)
+
     return _profile_response(profile)

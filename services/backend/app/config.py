@@ -101,6 +101,12 @@ class Settings(BaseSettings):
     # ── Alert Notifications (separate from sweep notifications) ──
     telegram_alert_chat_id: str = ""   # dedicated chat/group for critical alerts
 
+    # ── Merchant approval queue ───────────────────────────
+    # Chat that receives the "merchant pending approval" message at KYB submit
+    # (falls back to telegram_chat_id). Optional: unset → notification disabled
+    # (one startup WARNING), the admin approval page remains the source of truth.
+    telegram_approvals_chat_id: str = ""
+
     # ── Notification Rate Limit ───────────────────────────
     notification_rate_limit: int = 30          # max messages per minute per chat
     notification_rate_window: int = 60         # sliding window in seconds

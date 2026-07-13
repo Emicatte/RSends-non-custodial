@@ -43,6 +43,12 @@ EVENT_TYPES = frozenset({
     "ANOMALY_DETECTED",
     "ADMIN_ACTION",
     "AUTH_FAILURE",
+    # Payment-intent creation (emitted by intent_service since Phase B/D —
+    # was never registered, tripping the unknown-type warning on every intent).
+    "INTENT_CREATED",
+    # Manual merchant approval decisions (admin_approval_routes).
+    "APPROVAL_GRANTED",
+    "APPROVAL_DECLINED",
 })
 
 
