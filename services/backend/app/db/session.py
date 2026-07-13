@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from app.config import get_settings
-from app.models.db_models import Base
+from app.models.db_models import Base  # noqa: F401 — canonical declarative Base; model imports below register their tables on Base.metadata
 from app.models import audit_models as _audit_models        # noqa: F401 — registra tabella audit_log (tamper-evident) in Base.metadata
 from app.models import settlement_models as _settlement_models  # noqa: F401 — registra tabella payment_settlements (on-chain settlement, non-custodial) in Base.metadata
 from app.models import aml_models as _aml_models            # noqa: F401 — registra tabella blacklisted_wallets in Base.metadata
@@ -58,12 +58,6 @@ else:
 async_session = async_sessionmaker(
     engine, class_=AsyncSession, expire_on_commit=False
 )
-
-
-async def init_db() -> None:
-    """Crea tabelle. In produzione usa Alembic."""
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
 
 
 async def close_db() -> None:
