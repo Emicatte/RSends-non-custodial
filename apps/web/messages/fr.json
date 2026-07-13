@@ -64,17 +64,9 @@
       "successBody": "Votre compte est actif. Vous pouvez vous connecter.",
       "errorTitle": "Échec de la vérification",
       "ctaLogin": "Aller à la connexion",
-      "sentTitle": "Vérifiez votre boîte",
-      "sentBody": "Nous avons envoyé un lien de vérification à {email}.",
-      "sentBodyNoEmail": "Nous vous avons envoyé un lien de vérification. Cliquez-y pour activer votre compte.",
       "resendCta": "Renvoyer le lien",
       "resendSent": "E-mail envoyé",
       "resendEmailLabel": "Votre e-mail"
-    },
-    "verifyBanner": {
-      "message": "Vérifiez votre e-mail pour débloquer toutes les fonctionnalités. Consultez votre boîte de réception.",
-      "resend": "Renvoyer l'e-mail",
-      "sent": "E-mail envoyé"
     },
     "forgotPassword": {
       "title": "Réinitialisez votre mot de passe",
@@ -1554,8 +1546,8 @@
   "onboarding": {
     "steps": {
       "account": "Compte",
-      "verifyEmail": "Vérifier l'e-mail",
       "companyInfo": "Informations société",
+      "approval": "Validation",
       "dashboard": "Tableau de bord"
     },
     "gate": {
@@ -1636,6 +1628,17 @@
       "apiKey": "Créez une clé API",
       "testPayment": "Envoyez un paiement de test",
       "completed": "Terminé"
+    },
+    "pending": {
+      "title": "Votre compte est en cours de vérification",
+      "body": "Nous avons bien reçu les informations de votre société. Notre équipe examine chaque nouveau marchand avant d'activer les paiements — généralement sous un jour ouvré.",
+      "autoRefresh": "Cette page se met à jour automatiquement — inutile de recharger."
+    },
+    "declined": {
+      "title": "Votre demande a été refusée",
+      "body": "Après examen des informations de votre société, nous ne pouvons pas vous proposer de compte pour le moment.",
+      "reasonLabel": "Motif",
+      "contact": "Si vous pensez qu'il s'agit d'une erreur, contactez support@rsends.io."
     }
   },
   "pay": {

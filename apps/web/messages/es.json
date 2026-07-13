@@ -64,17 +64,9 @@
       "successBody": "Tu cuenta está activa. Ya puedes iniciar sesión.",
       "errorTitle": "Verificación fallida",
       "ctaLogin": "Ir al inicio de sesión",
-      "sentTitle": "Revisa tu bandeja",
-      "sentBody": "Enviamos un enlace de verificación a {email}.",
-      "sentBodyNoEmail": "Te enviamos un enlace de verificación. Haz clic para activar tu cuenta.",
       "resendCta": "Enviar el enlace de nuevo",
       "resendSent": "Email enviado",
       "resendEmailLabel": "Tu correo"
-    },
-    "verifyBanner": {
-      "message": "Verifica tu correo para desbloquear todas las funciones. Revisa tu bandeja de entrada.",
-      "resend": "Reenviar correo",
-      "sent": "Correo enviado"
     },
     "forgotPassword": {
       "title": "Restablece tu contraseña",
@@ -1554,8 +1546,8 @@
   "onboarding": {
     "steps": {
       "account": "Cuenta",
-      "verifyEmail": "Verificar email",
       "companyInfo": "Datos de la empresa",
+      "approval": "Aprobación",
       "dashboard": "Panel"
     },
     "gate": {
@@ -1636,6 +1628,17 @@
       "apiKey": "Crea una clave API",
       "testPayment": "Envía un pago de prueba",
       "completed": "Completado"
+    },
+    "pending": {
+      "title": "Tu cuenta está en revisión",
+      "body": "Hemos recibido los datos de tu empresa. Nuestro equipo revisa cada nuevo comercio antes de activar los pagos — normalmente en menos de un día laborable.",
+      "autoRefresh": "Esta página se actualiza automáticamente — no hace falta recargar."
+    },
+    "declined": {
+      "title": "Tu solicitud fue rechazada",
+      "body": "Tras revisar los datos de tu empresa, no podemos ofrecerte una cuenta en este momento.",
+      "reasonLabel": "Motivo",
+      "contact": "Si crees que es un error, escribe a support@rsends.io."
     }
   },
   "pay": {

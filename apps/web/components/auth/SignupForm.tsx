@@ -105,7 +105,9 @@ export function SignupForm() {
         turnstile_token: turnstileToken ?? '',
         locale,
       })
-      router.push(`/${locale}/verify-email-sent?email=${encodeURIComponent(lowerEmail)}`)
+      // Email verification no longer gates anything: go straight into the
+      // onboarding wizard (consent → company info → approval).
+      router.push(`/${locale}/onboarding`)
     } catch (err) {
       const ex = err as EmailAuthErrorShape
       if (ex?.code === 'email_already_exists') {

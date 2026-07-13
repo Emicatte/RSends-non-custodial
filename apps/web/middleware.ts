@@ -59,17 +59,13 @@ export async function middleware(req: NextRequest) {
         return NextResponse.redirect(url)
       }
 
-      // (b) Logged in but email EXPLICITLY unverified → verify page. A legacy
-      //     token without the claim leaves email_verified === undefined →
-      //     must NOT block (only an explicit false does).
-      if (token.email_verified === false) {
-        const url = req.nextUrl.clone()
-        url.pathname = `/${locale}/verify-email-sent`
-        url.search = ''
-        return NextResponse.redirect(url)
-      }
+      // (b) [removed 2026-07-13] The email-verification wall is gone. The
+      //     approval gate is enforced by the server onboarding guard
+      //     (lib/onboarding-guard.ts → resolveOnboardingRedirect) and the
+      //     backend's 403 approval_pending/approval_declined — never by a JWT
+      //     claim, which would go stale between the decision and a re-login.
 
-      // (c) Authenticated (verified, or legacy-undefined) → continue via intl middleware.
+      // (c) Authenticated → continue via intl middleware.
       //     Never NextResponse.next(): with next-intl v4 (and no setRequestLocale in the
       //     project) the middleware is what communicates the locale to getMessages();
       //     bypassing it would render /it/app in English. intlMiddleware passes
@@ -77,11 +73,10 @@ export async function middleware(req: NextRequest) {
       return intlMiddleware(req)
     }
 
-    // Marketing/auth page + authenticated → dashboard. Unverified users are
-    // deliberately NOT bounced: they still need /login and the marketing pages,
-    // and bouncing them would ping-pong via the verify-email-sent redirect in
-    // (b). An authed user on /login?redirect=X goes to /app (param dropped).
-    if (token && token.email_verified !== false) {
+    // Marketing/auth page + authenticated → dashboard (the server onboarding
+    // guard then routes un-onboarded/pending sessions to the right step).
+    // An authed user on /login?redirect=X goes to /app (param dropped).
+    if (token) {
       const url = req.nextUrl.clone()
       url.pathname = `/${locale}/app`
       url.search = ''

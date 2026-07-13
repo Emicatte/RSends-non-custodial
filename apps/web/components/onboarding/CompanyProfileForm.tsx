@@ -112,7 +112,7 @@ export function CompanyProfileForm() {
         const profile = await getCompanyProfile(tokenRef.current)
         if (cancelled) return
         if (profile.submitted_at) {
-          router.replace('/app')
+          router.replace('/onboarding/pending')
           return
         }
         setDraft({
@@ -206,7 +206,7 @@ export function CompanyProfileForm() {
       await flush()
       await submitCompanyProfile(tokenRef.current)
       toast.success(t('successToast'))
-      router.replace('/app')
+      router.replace('/onboarding/pending')
     } catch {
       setSubmitError(true)
       setSubmitting(false)

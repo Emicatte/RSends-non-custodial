@@ -15,6 +15,8 @@ function state(overrides: Partial<OnboardingState> = {}): OnboardingState {
     active_org_id: 'org-1',
     onboarding_status: 'company_submitted',
     activation_status: 'not_started',
+    approval_status: 'approved',
+    decline_reason: null,
     company_profile: { exists: true, submitted_at: '2026-07-09T00:00:00Z' },
     ...overrides,
   }
@@ -62,5 +64,24 @@ describe('resolveOnboardingRedirect', () => {
         'en',
       ),
     ).toBe('/en/onboarding/company')
+  })
+
+  it('routes a pending merchant to the waiting screen (never /app)', () => {
+    expect(
+      resolveOnboardingRedirect(state({ approval_status: 'pending_approval' }), 'en'),
+    ).toBe('/en/onboarding/pending')
+    // Unknown/missing approval state fails closed to the waiting screen too.
+    expect(
+      resolveOnboardingRedirect(state({ approval_status: null }), 'en'),
+    ).toBe('/en/onboarding/pending')
+  })
+
+  it('routes a declined merchant to the decline page', () => {
+    expect(
+      resolveOnboardingRedirect(
+        state({ approval_status: 'declined', decline_reason: 'nope' }),
+        'it',
+      ),
+    ).toBe('/it/onboarding/declined')
   })
 })

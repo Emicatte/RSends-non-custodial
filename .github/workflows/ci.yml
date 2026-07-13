@@ -98,6 +98,9 @@ jobs:
       - name: Type-check
         working-directory: apps/web
         run: npx tsc --noEmit
+      - name: Unit tests (jest)
+        working-directory: apps/web
+        run: npx jest --ci
       - name: Production build
         working-directory: apps/web
         run: npx next build

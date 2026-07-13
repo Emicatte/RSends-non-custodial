@@ -34,6 +34,8 @@ const ONBOARDED: OnboardingState = {
   active_org_id: 'org_1',
   onboarding_status: 'company_submitted',
   activation_status: 'active',
+  approval_status: 'approved',
+  decline_reason: null,
   company_profile: { exists: true, submitted_at: '2026-01-01T00:00:00Z' },
 }
 

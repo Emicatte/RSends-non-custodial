@@ -552,7 +552,11 @@
       "Bash(DATABASE_URL=\"sqlite+aiosqlite://\" DEBUG=true ENVIRONMENT=test REDIS_URL=\"redis://localhost:6379/0\" venv/bin/python -m pytest tests/test_org_approval.py -q)",
       "Bash(DATABASE_URL=\"sqlite+aiosqlite://\" DEBUG=true ENVIRONMENT=test REDIS_URL=\"redis://localhost:6379/0\" venv/bin/python -m pytest tests/test_org_approval.py tests/test_approval_gate.py tests/test_company_submitted_gate.py -q)",
       "Bash(DATABASE_URL=\"sqlite+aiosqlite://\" DEBUG=true ENVIRONMENT=test REDIS_URL=\"redis://localhost:6379/0\" venv/bin/python -m pytest tests/test_admin_approvals.py -q)",
-      "Bash(DATABASE_URL=\"sqlite+aiosqlite://\" DEBUG=true ENVIRONMENT=test REDIS_URL=\"redis://localhost:6379/0\" venv/bin/python -m pytest tests/test_admin_approvals.py::test_list_returns_only_pending_with_profile tests/test_admin_approvals.py::test_submit_fires_telegram_with_profile_and_link)"
+      "Bash(DATABASE_URL=\"sqlite+aiosqlite://\" DEBUG=true ENVIRONMENT=test REDIS_URL=\"redis://localhost:6379/0\" venv/bin/python -m pytest tests/test_admin_approvals.py::test_list_returns_only_pending_with_profile tests/test_admin_approvals.py::test_submit_fires_telegram_with_profile_and_link)",
+      "Bash(echo \"tsc_exit=$?\")",
+      "Bash(/opt/homebrew/opt/postgresql@16/bin/dropdb -h localhost -p 55433 -U probe --if-exists parity_probe)",
+      "Bash(/opt/homebrew/opt/postgresql@16/bin/createdb -h localhost -p 55433 -U probe parity_probe)",
+      "Bash(DATABASE_URL=postgresql+asyncpg://probe@localhost:55433/parity_probe venv/bin/python -c ' *)"
     ],
     "additionalDirectories": [
       "/Users/emi/dev/rsends-noncustodial/apps/web/public/globe",

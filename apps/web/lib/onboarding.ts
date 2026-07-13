@@ -29,6 +29,8 @@ export interface OnboardingState {
   active_org_id: string | null
   onboarding_status: 'created' | 'email_verified' | 'company_submitted' | null
   activation_status: string | null
+  approval_status: 'pending_approval' | 'approved' | 'declined' | null
+  decline_reason: string | null
   company_profile: CompanyProfileState | null
 }
 
@@ -63,6 +65,15 @@ export function resolveOnboardingRedirect(
   }
   if (state.onboarding_status !== 'company_submitted') {
     return `/${locale}/onboarding/company`
+  }
+  // Post-KYB manual approval: only an approved org reaches the dashboard —
+  // without this branch a pending merchant would slip into /app and see raw
+  // 403 approval_pending errors from every widget.
+  if (state.approval_status === 'declined') {
+    return `/${locale}/onboarding/declined`
+  }
+  if (state.approval_status !== 'approved') {
+    return `/${locale}/onboarding/pending`
   }
   return null
 }

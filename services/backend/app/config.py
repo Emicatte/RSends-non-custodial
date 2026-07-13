@@ -303,7 +303,9 @@ def validate_settings(settings: Settings) -> None:
     # ── Telegram (informational) ──────────────────────────
     if not settings.telegram_bot_token:
         warnings.append(
-            "TELEGRAM_BOT_TOKEN is empty. Sweep notifications are disabled."
+            "TELEGRAM_BOT_TOKEN is empty. Telegram notifications (merchant "
+            "approval queue, ops alerts) are disabled; the /admin/approvals "
+            "page remains the source of truth for pending merchants."
         )
 
     # ── Production hardening (F-BE-09, F-BE-13, F-BE-01) ──

@@ -57,7 +57,7 @@ async function proxyRequest(
   // oracle's AML check are server-only. (The oracle calls the backend directly,
   // not through this proxy, so it is unaffected.)
   const DENY = [
-    'api/internal', 'admin/aml', 'api/v1/keys',
+    'api/internal', 'admin/aml', 'admin/approvals', 'api/v1/keys',
     'api/v1/audit', 'api/v1/ledger', 'api/v1/aml/check',
   ]
   if (DENY.some((p) => subPath === p || subPath.startsWith(p + '/'))) {
