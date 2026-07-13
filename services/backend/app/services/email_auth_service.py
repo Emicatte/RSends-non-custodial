@@ -152,8 +152,16 @@ async def signup(
     display_name: Optional[str] = None,
     locale: Optional[str] = None,
     ip: Optional[str] = None,
-) -> User:
-    """Create a new user with email+password. Sends verification email.
+) -> tuple[User, str]:
+    """Create a new user with email+password AND their personal org.
+
+    Returns ``(user, verification_email_state)`` where the state is one of
+    ``sent`` / ``skipped_dev_mode`` / ``failed`` — the send outcome is surfaced
+    to the caller (and by the route to the client), never swallowed into a
+    bare 201.
+
+    The org is created here (pending approval): email verification no longer
+    gates anything, so it can't be the org-creation trigger anymore.
 
     display_name is derived from first/last name when not supplied. Age (>=18)
     and country validity are enforced upstream by SignupRequest (422).
@@ -226,7 +234,7 @@ async def signup(
     settings = get_settings()
     verify_url = f"{settings.app_url}/{loc}/verify-email?token={token}"
 
-    await send_email(
+    send_result = await send_email(
         to=email,
         template_name="verify_email",
         subject="Verify your rsend account",
@@ -236,6 +244,18 @@ async def signup(
             "expires_hours": VERIFICATION_TTL_HOURS,
         },
     )
+    if send_result == "dev-mode-skip":
+        email_state = "skipped_dev_mode"
+    elif send_result is None:
+        email_state = "failed"  # send_email already logged email_send_failed & co.
+    else:
+        email_state = "sent"
+
+    # Personal org, born pending approval (function-local import: org_service
+    # is a heavier module and this mirrors verify_email's old pattern).
+    from app.services.org_service import create_personal_org
+
+    await create_personal_org(db, user)
 
     await record_auth_event(
         event_type="email_signup",
@@ -244,7 +264,7 @@ async def signup(
         details={"email": email, "display_name": derived_name},
     )
 
-    return user
+    return user, email_state
 
 
 async def login(
@@ -383,14 +403,8 @@ async def verify_email(
     user.email_verified_at = now
     vt.used_at = now
 
-    # The account just became usable: create the personal org (idempotent),
-    # mirroring the OAuth first-login hook in auth_routes.py, and advance any
-    # owned org still sitting at 'created'. The email login handler carries an
-    # idempotent recovery hook for accounts verified outside this path (dev
-    # auto-verify, legacy users).
-    from app.services.org_service import create_personal_org
-
-    await create_personal_org(db, user)
+    # Orgs are created at signup now (the email wall is gone) — this path only
+    # advances onboarding bookkeeping for orgs still sitting at 'created'.
     owned_orgs = (
         (
             await db.execute(

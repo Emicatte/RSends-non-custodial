@@ -163,7 +163,7 @@ async def test_signup_records_consents_and_age_attestation(session):
     from app.services.email_auth_service import signup
 
     email = f"{secrets.token_hex(6)}@example.com"
-    user = await signup(
+    user, _ = await signup(
         session,
         email=email,
         password="longenough123",

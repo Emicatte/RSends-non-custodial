@@ -122,6 +122,9 @@ class SignupResponse(BaseModel):
     account_type: str
     display_name: Optional[str] = None
     created_at: datetime
+    # Outcome of the verification-email send — surfaced so a mail-less
+    # production is distinguishable from a healthy one (never a bare 201).
+    verification_email: Literal["sent", "skipped_dev_mode", "failed"]
 
 
 class CheckEmailResponse(BaseModel):
