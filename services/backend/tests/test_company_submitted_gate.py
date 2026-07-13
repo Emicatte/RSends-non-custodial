@@ -1,4 +1,4 @@
-"""require_org_company_submitted gate — behavior, wiring, and the inline
+"""require_org_approved gate — behavior, wiring, and the inline
 settlement-wallet / chain guards.
 
 Three layers:
@@ -87,10 +87,10 @@ async def _make_org(session, *, onboarding_status, role="admin", with_wallet=Fal
 @pytest.mark.asyncio
 @pytest.mark.parametrize("status", ["created", "email_verified"])
 async def test_gate_denies_before_submission(session, status):
-    from app.api.deps.require_company_submitted import require_org_company_submitted
+    from app.api.deps.require_org_approved import require_org_approved
 
     _user, org = await _make_org(session, onboarding_status=status)
-    dep = require_org_company_submitted("viewer")
+    dep = require_org_approved("viewer")
 
     with pytest.raises(HTTPException) as exc:
         await dep(ctx=("u", str(org.id), "viewer"), db=session)
@@ -100,10 +100,10 @@ async def test_gate_denies_before_submission(session, status):
 
 @pytest.mark.asyncio
 async def test_gate_passes_ctx_through_after_submission(session):
-    from app.api.deps.require_company_submitted import require_org_company_submitted
+    from app.api.deps.require_org_approved import require_org_approved
 
     _user, org = await _make_org(session, onboarding_status="company_submitted")
-    dep = require_org_company_submitted("operator")
+    dep = require_org_approved("operator")
 
     ctx = ("u", str(org.id), "operator")
     assert await dep(ctx=ctx, db=session) == ctx
@@ -164,8 +164,8 @@ def test_operational_routes_are_gated(method, path):
     from app.main import app
 
     names = _route_dep_names(app, method, path)
-    assert any("require_org_company_submitted" in n for n in names), (
-        f"{method} {path} is NOT gated by require_org_company_submitted: {names}"
+    assert any("require_org_approved" in n for n in names), (
+        f"{method} {path} is NOT gated by require_org_approved: {names}"
     )
 
 
@@ -174,7 +174,7 @@ def test_onboarding_and_org_management_routes_stay_open(method, path):
     from app.main import app
 
     names = _route_dep_names(app, method, path)
-    assert not any("require_org_company_submitted" in n for n in names), (
+    assert not any("require_org_approved" in n for n in names), (
         f"{method} {path} must stay reachable during onboarding"
     )
 

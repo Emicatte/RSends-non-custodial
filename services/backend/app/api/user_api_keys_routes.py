@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps.require_company_submitted import require_org_company_submitted
+from app.api.deps.require_org_approved import require_org_approved
 from app.db.session import get_db
 from app.models.auth_models import User
 from app.models.user_api_keys_models import UserApiKey
@@ -56,7 +56,7 @@ def _hydrate_item(row: UserApiKey, created_by_email: Optional[str]) -> ApiKeyLis
 
 @router.get("/available-scopes", response_model=AvailableScopesResponse)
 async def list_available_scopes(
-    _ctx: Tuple[str, str, str] = Depends(require_org_company_submitted("viewer")),
+    _ctx: Tuple[str, str, str] = Depends(require_org_approved("viewer")),
 ):
     """Frontend uses this to render the scope checkbox grid in the create modal."""
     return AvailableScopesResponse(scopes=list(ALL_AVAILABLE_SCOPES))
@@ -64,7 +64,7 @@ async def list_available_scopes(
 
 @router.get("", response_model=ApiKeyListResponse)
 async def list_keys(
-    ctx: Tuple[str, str, str] = Depends(require_org_company_submitted("viewer")),
+    ctx: Tuple[str, str, str] = Depends(require_org_approved("viewer")),
     db: AsyncSession = Depends(get_db),
 ):
     _user_id, org_id, _role = ctx
@@ -95,7 +95,7 @@ async def list_keys(
 async def create(
     payload: ApiKeyCreateRequest,
     request: Request,
-    ctx: Tuple[str, str, str] = Depends(require_org_company_submitted("operator")),
+    ctx: Tuple[str, str, str] = Depends(require_org_approved("operator")),
     db: AsyncSession = Depends(get_db),
 ):
     user_id, org_id, _role = ctx
@@ -145,7 +145,7 @@ async def create(
 async def update_label(
     key_id: str,
     payload: ApiKeyPatchRequest,
-    ctx: Tuple[str, str, str] = Depends(require_org_company_submitted("operator")),
+    ctx: Tuple[str, str, str] = Depends(require_org_approved("operator")),
     db: AsyncSession = Depends(get_db),
 ):
     _user_id, org_id, _role = ctx
@@ -176,7 +176,7 @@ async def update_label(
 async def revoke(
     key_id: str,
     request: Request,
-    ctx: Tuple[str, str, str] = Depends(require_org_company_submitted("admin")),
+    ctx: Tuple[str, str, str] = Depends(require_org_approved("admin")),
     db: AsyncSession = Depends(get_db),
 ):
     """Soft-revoke: `is_active=False` + `revoked_at=now()`. Idempotent."""

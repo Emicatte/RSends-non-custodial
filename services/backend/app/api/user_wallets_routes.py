@@ -40,7 +40,7 @@ from sqlalchemy import and_, asc, desc, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps.require_company_submitted import require_org_company_submitted
+from app.api.deps.require_org_approved import require_org_approved
 from app.db.session import get_db
 from app.models.auth_models import User
 from app.models.user_wallets_models import UserWallet
@@ -118,7 +118,7 @@ def _hydrate_wallet(wallet: UserWallet, created_by_email: Optional[str]) -> Wall
 
 @router.get("", response_model=WalletListResponse)
 async def list_wallets(
-    ctx: Tuple[str, str, str] = Depends(require_org_company_submitted("viewer")),
+    ctx: Tuple[str, str, str] = Depends(require_org_approved("viewer")),
     db: AsyncSession = Depends(get_db),
 ) -> WalletListResponse:
     _user_id, org_id, _role = ctx
@@ -145,7 +145,7 @@ async def list_wallets(
 @router.post("/challenge", response_model=WalletChallengeResponse)
 async def post_challenge(
     payload: WalletChallengeRequest,
-    ctx: Tuple[str, str, str] = Depends(require_org_company_submitted("operator")),
+    ctx: Tuple[str, str, str] = Depends(require_org_approved("operator")),
     db: AsyncSession = Depends(get_db),
 ) -> WalletChallengeResponse:
     user_id, org_id, _role = ctx
@@ -198,7 +198,7 @@ async def post_challenge(
 )
 async def post_verify(
     payload: WalletVerifyRequest,
-    ctx: Tuple[str, str, str] = Depends(require_org_company_submitted("operator")),
+    ctx: Tuple[str, str, str] = Depends(require_org_approved("operator")),
     db: AsyncSession = Depends(get_db),
 ) -> WalletResponse:
     user_id, org_id, _role = ctx
@@ -317,7 +317,7 @@ async def _promote_primary(
 async def patch_wallet(
     wallet_id: str,
     payload: WalletPatchRequest,
-    ctx: Tuple[str, str, str] = Depends(require_org_company_submitted("operator")),
+    ctx: Tuple[str, str, str] = Depends(require_org_approved("operator")),
     db: AsyncSession = Depends(get_db),
 ) -> WalletResponse:
     user_id, org_id, role = ctx
@@ -404,7 +404,7 @@ async def patch_wallet(
 @router.delete("/{wallet_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_wallet(
     wallet_id: str,
-    ctx: Tuple[str, str, str] = Depends(require_org_company_submitted("admin")),
+    ctx: Tuple[str, str, str] = Depends(require_org_approved("admin")),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
     user_id, org_id, _role = ctx

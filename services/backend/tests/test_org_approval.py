@@ -104,3 +104,40 @@ def test_explicit_approval_status_wins_over_grandfather():
         approval_status="pending_approval",
     )
     assert org.approval_status == "pending_approval"
+
+
+# ── Aggregate onboarding state carries the approval fields ────────
+
+
+@pytest.mark.asyncio
+async def test_onboarding_state_carries_approval_fields(session):
+    """The waiting screen polls GET /api/v1/user/onboarding: it must see the
+    org's approval_status (and the operator's reason once declined)."""
+    from app.services.onboarding_service import get_onboarding_state
+    from app.services.org_service import create_personal_org
+
+    user = await _make_user(session)
+    org = await create_personal_org(session, user)
+    await session.commit()
+
+    state = await get_onboarding_state(session, user)
+    assert state["approval_status"] == "pending_approval"
+    assert state["decline_reason"] is None
+
+    org.approval_status = "declined"
+    org.decline_reason = "prohibited category"
+    await session.commit()
+
+    state = await get_onboarding_state(session, user)
+    assert state["approval_status"] == "declined"
+    assert state["decline_reason"] == "prohibited category"
+
+
+def test_onboarding_endpoint_has_per_ip_rate_limit():
+    """The pending screen polls this endpoint — it needs its own per-IP cap."""
+    from app.middleware.rate_limit import ENDPOINT_LIMITS
+
+    assert any(
+        method == "GET" and path == "/api/v1/user/onboarding" and key == "ip"
+        for method, path, _max, _win, key in ENDPOINT_LIMITS
+    )

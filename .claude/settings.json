@@ -546,7 +546,11 @@
       "Bash(DATABASE_URL=\"sqlite+aiosqlite://\" DEBUG=true ENVIRONMENT=test REDIS_URL=\"redis://localhost:6379/0\" venv/bin/python -m pytest tests/test_signup_flow.py -q)",
       "Bash(DATABASE_URL=\"sqlite+aiosqlite://\" DEBUG=true ENVIRONMENT=test REDIS_URL=\"redis://localhost:6379/0\" venv/bin/python -m pytest tests/test_signup_flow.py::test_signup_creates_pending_personal_org -q)",
       "Bash(DATABASE_URL=\"sqlite+aiosqlite://\" DEBUG=true ENVIRONMENT=test REDIS_URL=\"redis://localhost:6379/0\" venv/bin/python -m pytest tests/test_signup_flow.py::test_signup_creates_pending_personal_org)",
-      "Bash(DATABASE_URL=\"sqlite+aiosqlite://\" DEBUG=true ENVIRONMENT=test REDIS_URL=\"redis://localhost:6379/0\" venv/bin/python -m pytest tests/test_consent_records.py::test_signup_records_consents_and_age_attestation)"
+      "Bash(DATABASE_URL=\"sqlite+aiosqlite://\" DEBUG=true ENVIRONMENT=test REDIS_URL=\"redis://localhost:6379/0\" venv/bin/python -m pytest tests/test_consent_records.py::test_signup_records_consents_and_age_attestation)",
+      "Bash(DATABASE_URL=\"sqlite+aiosqlite://\" DEBUG=true ENVIRONMENT=test REDIS_URL=\"redis://localhost:6379/0\" venv/bin/python -m pytest tests/test_approval_gate.py -q)",
+      "Bash(DATABASE_URL=\"sqlite+aiosqlite://\" DEBUG=true ENVIRONMENT=test REDIS_URL=\"redis://localhost:6379/0\" venv/bin/python -m pytest tests/test_approval_gate.py::test_company_gate_fires_before_approval_gate tests/test_approval_gate.py::test_every_merchant_route_carries_the_approval_dep)",
+      "Bash(DATABASE_URL=\"sqlite+aiosqlite://\" DEBUG=true ENVIRONMENT=test REDIS_URL=\"redis://localhost:6379/0\" venv/bin/python -m pytest tests/test_org_approval.py -q)",
+      "Bash(DATABASE_URL=\"sqlite+aiosqlite://\" DEBUG=true ENVIRONMENT=test REDIS_URL=\"redis://localhost:6379/0\" venv/bin/python -m pytest tests/test_org_approval.py tests/test_approval_gate.py tests/test_company_submitted_gate.py -q)"
     ],
     "additionalDirectories": [
       "/Users/emi/dev/rsends-noncustodial/apps/web/public/globe",
