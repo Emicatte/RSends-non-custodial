@@ -148,10 +148,10 @@ async def test_unknown_user_401(session):
     assert exc.value.status_code == 401
 
 
-# ── Email-path org creation: verify_email hook (prod posture) ─────
+# ── Email-path org creation: at signup; verify_email only advances ─
 
 @pytest.mark.asyncio
-async def test_verify_email_creates_personal_org(session, monkeypatch):
+async def test_signup_creates_org_and_verify_email_advances_it(session, monkeypatch):
     from app.services import email_auth_service
 
     monkeypatch.setattr(
@@ -167,7 +167,7 @@ async def test_verify_email_creates_personal_org(session, monkeypatch):
     monkeypatch.setattr(email_auth_service, "send_email", _capture_email)
 
     email = f"{secrets.token_hex(6)}@example.com"
-    user = await email_auth_service.signup(
+    user, _ = await email_auth_service.signup(
         session,
         email=email,
         password="longenough123",
@@ -179,7 +179,16 @@ async def test_verify_email_creates_personal_org(session, monkeypatch):
     )
     await session.commit()
     assert user.email_verified is False
-    assert user.active_org_id is None
+    # Org is born AT SIGNUP now (email wall removed), pending approval,
+    # onboarding at 'created' (owner unverified in prod posture).
+    assert user.active_org_id is not None
+    signup_org = (
+        await session.execute(
+            select(Organization).where(Organization.owner_user_id == user.id)
+        )
+    ).scalar_one()
+    assert signup_org.onboarding_status == "created"
+    assert signup_org.approval_status == "pending_approval"
 
     token = captured["verify_url"].split("token=")[1]
 
@@ -215,8 +224,9 @@ async def test_verify_email_creates_personal_org(session, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_login_recovery_creates_missing_org(monkeypatch):
-    """Dev-posture signup auto-verifies WITHOUT creating an org (verify_email
-    never runs); the login route's recovery hook must create it."""
+    """Orgs are created at signup now — the login hook is pure recovery for
+    legacy accounts that predate org-at-signup. Simulate one by deleting the
+    signup-created org; login must recreate it (verified or not)."""
     from app.main import app
 
     email = f"{secrets.token_hex(6)}@example.com"
@@ -236,6 +246,19 @@ async def test_login_recovery_creates_missing_org(monkeypatch):
         r = await client.post("/api/v1/auth/signup", json=payload)
         assert r.status_code == 201, r.text
         assert r.json()["email_verified"] is True  # dev auto-verify
+
+        # Simulate a legacy account: wipe the signup-created org + pointer.
+        from sqlalchemy import delete as sa_delete
+
+        async with async_session() as s:
+            u = (
+                await s.execute(select(User).where(User.email == email))
+            ).scalar_one()
+            u.active_org_id = None
+            await s.execute(
+                sa_delete(Organization).where(Organization.owner_user_id == u.id)
+            )
+            await s.commit()
 
         r = await client.post(
             "/api/v1/auth/login", json={"email": email, "password": "longenough123"}

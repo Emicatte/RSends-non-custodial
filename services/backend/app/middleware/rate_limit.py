@@ -59,6 +59,10 @@ ENDPOINT_LIMITS: list[tuple[str, str, int, int, str]] = [
     ("POST", "/api/v1/tx/callback",                  10,    60,  "ip"),
     ("POST", "/api/v1/webhooks/alchemy",           1000,    60,  "ip"),
     ("GET",  "/api/v1/audit/log",                    30,    60,  "ip"),
+    # Admin approval surface (X-Admin-Token, server-to-server). Most-specific
+    # first: the decision subpaths (trailing slash) precede the bare list.
+    ("POST", "/admin/approvals/",                    30,    60,  "ip"),  # approve/decline
+    ("GET",  "/admin/approvals",                     60,    60,  "ip"),  # queue list
     # Org admin mutations (settlement_wallet, member roles, …) — per-IP.
     ("PATCH", "/api/v1/organizations",               30,    60,  "ip"),
     # End-user auth (session mgmt)

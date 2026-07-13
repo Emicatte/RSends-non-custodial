@@ -24,6 +24,10 @@ export default function OnboardingGatePage() {
       router.replace('/onboarding/consent')
     } else if (state.onboarding_status !== 'company_submitted') {
       router.replace('/onboarding/company')
+    } else if (state.approval_status === 'declined') {
+      router.replace('/onboarding/declined')
+    } else if (state.approval_status !== 'approved') {
+      router.replace('/onboarding/pending')
     } else {
       router.replace('/app')
     }

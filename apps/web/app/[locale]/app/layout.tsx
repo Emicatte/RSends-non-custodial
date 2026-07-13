@@ -11,7 +11,6 @@ import AppTopbar from '@/components/app/AppTopbar'
 import { TransactionPersistence } from '@/components/TransactionPersistence'
 import { ContactsPersistence } from '@/components/ContactsPersistence'
 import { PostLoginMerge } from '@/components/auth/PostLoginMerge'
-import { EmailVerifyBanner } from '@/components/auth/EmailVerifyBanner'
 import { TestnetBanner } from '@/components/app/TestnetBanner'
 
 export const metadata: Metadata = {
@@ -50,7 +49,6 @@ export default async function AppLayout({
       >
         <AppTopbar />
         <TestnetBanner />
-        <EmailVerifyBanner />
         {children}
       </div>
       <TransactionPersistence />

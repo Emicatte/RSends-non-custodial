@@ -117,6 +117,8 @@ class OnboardingStateResponse(BaseModel):
     active_org_id: Optional[str] = None
     onboarding_status: Optional[str] = None
     activation_status: Optional[str] = None
+    approval_status: Optional[str] = None
+    decline_reason: Optional[str] = None
     company_profile: Optional[CompanyProfileState] = None
 
 

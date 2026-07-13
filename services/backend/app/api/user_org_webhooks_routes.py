@@ -4,7 +4,7 @@ Browser/session counterpart of the API-key `POST /merchant/webhook/*` +
 webhook reads. Authed by the logged-in user's ACTIVE ORG (never a client-supplied
 id), mirroring Phase C/D:
 
-    session JWT → require_org_company_submitted(...) → active org_id → _resolve_owner_address
+    session JWT → require_org_approved(...) → active org_id → _resolve_owner_address
     (org_id) → owner address == MerchantWebhook.merchant_id
 
 Routes live under `/api/v1/user/` (JWT-exempt from the API-key middleware —
@@ -29,7 +29,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps.require_company_submitted import require_org_company_submitted
+from app.api.deps.require_org_approved import require_org_approved
 from app.api.merchant_profile_routes import _resolve_owner_address
 from app.db.session import get_db
 from app.models.merchant_models import (
@@ -77,7 +77,7 @@ async def _owned_webhook(
 
 @router.get("/webhooks", response_model=WebhookListResponse)
 async def list_org_webhooks(
-    ctx: Tuple[str, str, str] = Depends(require_org_company_submitted("viewer")),
+    ctx: Tuple[str, str, str] = Depends(require_org_approved("viewer")),
     environment: Literal["test", "live"] = Query("test"),
     db: AsyncSession = Depends(get_db),
 ) -> WebhookListResponse:
@@ -116,7 +116,7 @@ async def list_org_webhooks(
 )
 async def list_org_webhook_deliveries(
     webhook_id: int,
-    ctx: Tuple[str, str, str] = Depends(require_org_company_submitted("viewer")),
+    ctx: Tuple[str, str, str] = Depends(require_org_approved("viewer")),
     environment: Literal["test", "live"] = Query("test"),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
@@ -174,7 +174,7 @@ async def list_org_webhook_deliveries(
 @router.post("/webhooks", response_model=RegisterWebhookResponse)
 async def register_org_webhook(
     payload: RegisterWebhookRequest,
-    ctx: Tuple[str, str, str] = Depends(require_org_company_submitted("operator")),
+    ctx: Tuple[str, str, str] = Depends(require_org_approved("operator")),
     environment: Literal["test", "live"] = Query("test"),
     db: AsyncSession = Depends(get_db),
 ) -> RegisterWebhookResponse:
@@ -224,7 +224,7 @@ async def register_org_webhook(
 @router.post("/webhooks/{webhook_id}/test", response_model=TestWebhookResponse)
 async def test_org_webhook(
     webhook_id: int,
-    ctx: Tuple[str, str, str] = Depends(require_org_company_submitted("operator")),
+    ctx: Tuple[str, str, str] = Depends(require_org_approved("operator")),
     environment: Literal["test", "live"] = Query("test"),
     db: AsyncSession = Depends(get_db),
 ) -> TestWebhookResponse:

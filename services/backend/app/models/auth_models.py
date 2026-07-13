@@ -86,9 +86,9 @@ class User(Base):
     )
 
     id = Column(_UUID(), primary_key=True)
-    google_sub = Column(Text, nullable=True, unique=True, index=True)
-    github_sub = Column(Text, nullable=True, unique=True, index=True)
-    github_username = Column(Text, nullable=True)
+    # google_sub / github_sub / github_username were dropped by migration 0010
+    # (social login removed 2026-07-13, PR #25; columns confirmed orphan with
+    # zero OAuth users in production).
     email = Column(Text, nullable=False, index=True)
     email_verified = Column(Boolean, nullable=False, default=False)
     email_verified_at = Column(TIMESTAMP(timezone=True), nullable=True)

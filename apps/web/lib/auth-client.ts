@@ -56,11 +56,8 @@ export async function apiCall<T>(
       detail?: { code?: string }
     }
     const code = err.code || err.detail?.code || `HTTP ${res.status}`
-    // A gated route was hit by an unverified user. Surface it globally so the
-    // "verify your email" banner can show even if the session looked verified.
-    if (res.status === 403 && code === 'email_not_verified' && typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('rsends:email-unverified'))
-    }
+    // (The email_not_verified → banner event went away with the email wall,
+    // 2026-07-13; approval_pending/approval_declined are handled by routing.)
     // Carry the HTTP status on the error so callers can classify by status
     // (reachable-but-denied vs unreachable) instead of matching the body code
     // string, which varies per route. Message stays the code (unchanged).

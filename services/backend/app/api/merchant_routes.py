@@ -59,7 +59,16 @@ from datetime import datetime, timezone, timedelta
 
 logger = logging.getLogger(__name__)
 
-merchant_router = APIRouter(prefix="/api/v1/merchant", tags=["merchant"])
+# Router-level gate: EVERY merchant API-key route requires the key owner's org
+# to be approved (fail closed; unauthenticated requests fall through to the
+# handlers' canonical 401). See app/api/deps/require_approved_merchant.py.
+from app.api.deps.require_approved_merchant import require_approved_merchant
+
+merchant_router = APIRouter(
+    prefix="/api/v1/merchant",
+    tags=["merchant"],
+    dependencies=[Depends(require_approved_merchant)],
+)
 
 
 # ═══════════════════════════════════════════════════════════════

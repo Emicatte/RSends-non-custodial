@@ -19,7 +19,7 @@ import logging
 import time
 
 from datetime import datetime, timezone
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
@@ -117,7 +117,7 @@ async def _check_kms() -> dict:
 
 
 @health_router.get("/health/deep")
-async def health_deep():
+async def health_deep(request: Request):
     """Deep health check: verifica tutti i componenti del sistema.
 
     Ritorna lo stato di Postgres, Redis, Celery, RPC e KMS.
@@ -133,6 +133,20 @@ async def health_deep():
     postgres, redis, celery_result, rpc_base, kms = await asyncio.gather(
         pg_task, redis_task, celery_task, rpc_task, kms_task,
     )
+
+    # With the lifespan's asyncio fallback covering webhook delivery + intent
+    # expiration, zero Celery workers is the configured deployment shape —
+    # report it as such and keep it out of the verdict (a permanently-yellow
+    # health check is a health check nobody reads). A real Celery deployment
+    # (fallback inactive) keeps the old warn→degraded semantics.
+    fallback_active = bool(
+        getattr(request.app.state, "celery_fallback_active", False)
+    )
+    if fallback_active and celery_result.get("status") == "warn":
+        celery_result = {
+            "status": "not_configured",
+            "detail": "asyncio fallback active (webhook delivery + expiration in-process)",
+        }
 
     components = {
         "postgres": postgres,

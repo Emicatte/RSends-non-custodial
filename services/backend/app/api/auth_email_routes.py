@@ -57,7 +57,6 @@ COOKIE_PATH = "/api/v1/auth"
 _ERROR_STATUS = {
     "email_already_exists": 409,
     "invalid_credentials": 401,
-    "email_not_verified": 403,
     "password_not_set": 403,
     "account_suspended": 403,
     "account_deleted": 410,
@@ -117,7 +116,7 @@ async def signup_route(
     db: AsyncSession = Depends(get_db),
 ) -> SignupResponse:
     try:
-        user = await signup(
+        user, verification_email = await signup(
             db,
             email=payload.email,
             password=payload.password,
@@ -144,6 +143,7 @@ async def signup_route(
         account_type=user.account_type,
         display_name=user.display_name,
         created_at=user.created_at,
+        verification_email=verification_email,
     )
 
 
@@ -181,11 +181,11 @@ async def login_route(
     db.add(session_row)
     await db.commit()
 
-    # Recovery hook for the email path: verified users whose personal org was
-    # never created (dev-posture auto-verify bypasses verify_email; legacy
-    # accounts). Idempotent and commit-isolated like the OAuth first-login
-    # hook (auth_routes.py) — a failure here never rolls back the login.
-    if user.email_verified and user.active_org_id is None:
+    # Recovery hook: users whose personal org was never created (accounts
+    # predating org-at-signup, legacy paths). Verification is NOT a condition —
+    # the email wall is gone and orgs are born at signup regardless.
+    # Idempotent and commit-isolated — a failure here never rolls back login.
+    if user.active_org_id is None:
         try:
             from app.services.org_service import create_personal_org
 

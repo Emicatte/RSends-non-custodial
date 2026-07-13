@@ -1,13 +1,14 @@
 'use client'
 
 /**
- * Wizard step indicator: Account -> Verify email -> Company info -> Dashboard.
- * Static markup, current-step highlight only — no animation.
+ * Wizard step indicator: Account -> Company info -> Approval -> Dashboard.
+ * (The verify-email step was removed with the email wall, 2026-07-13; manual
+ * approval took its slot.) Static markup, current-step highlight only.
  */
 
 import { useTranslations } from 'next-intl'
 
-const STEPS = ['account', 'verifyEmail', 'companyInfo', 'dashboard'] as const
+const STEPS = ['account', 'companyInfo', 'approval', 'dashboard'] as const
 
 export type OnboardingStep = (typeof STEPS)[number]
 

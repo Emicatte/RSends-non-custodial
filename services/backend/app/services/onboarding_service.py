@@ -204,6 +204,10 @@ async def get_onboarding_state(db: AsyncSession, user: User) -> dict:
         "active_org_id": str(org.id) if org is not None else None,
         "onboarding_status": org.onboarding_status if org is not None else None,
         "activation_status": org.activation_status if org is not None else None,
+        # Approval gate (migration 0010): what the post-KYB waiting screen
+        # polls; decline_reason is the operator's text for the decline page.
+        "approval_status": org.approval_status if org is not None else None,
+        "decline_reason": org.decline_reason if org is not None else None,
         "company_profile": (
             {
                 "exists": profile is not None,

@@ -151,7 +151,7 @@ describe('CompanyProfileForm autosave', () => {
     expect(submit).toBeEnabled()
 
     fireEvent.click(submit)
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith('/app'))
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith('/onboarding/pending'))
 
     const submitCall = fetchMock.mock.calls.find(([u]) =>
       String(u).includes('/company-profile/submit'),

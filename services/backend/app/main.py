@@ -164,6 +164,9 @@ async def lifespan(app: FastAPI):
         logger.info("Celery not available — webhook delivery + expiration running as asyncio tasks")
     else:
         logger.info("Celery active — webhook delivery + expiration delegated to Celery beat")
+    # /health/deep reads this: with the asyncio fallback covering the queues,
+    # zero Celery workers is the CONFIGURED state, not a degradation.
+    app.state.celery_fallback_active = not celery_active
 
     webhook_mode = "webhook" if settings.alchemy_webhook_secret else "polling"
     db_display = settings.database_url.split("@")[-1] if "@" in settings.database_url else settings.database_url
@@ -213,6 +216,9 @@ app = FastAPI(
     lifespan=lifespan,
     docs_url="/docs" if get_settings().debug else None,  # Nascondi Swagger in prod
     redoc_url=None,
+    # No public schema in prod: FastAPI's default openapi_url would expose the
+    # full API surface even with /docs off.
+    openapi_url="/openapi.json" if get_settings().debug else None,
 )
 
 # ── CORS ─────────────────────────────────────────────────
@@ -257,12 +263,10 @@ app.add_middleware(InputSanitizationMiddleware)
 from app.middleware.rate_limit import RateLimitMiddleware
 app.add_middleware(RateLimitMiddleware)
 
-# ── Email Verification Gate (deny-by-default for JWT-session routes) ──
-# Blocks email_verified=False users from Bearer-authed routes except an
-# explicit allowlist (/auth/me, account self-management, auth lifecycle).
-# Fail-open; never touches wallet-signature or merchant API-key routes.
-from app.middleware.email_verified_gate import EmailVerifiedGateMiddleware
-app.add_middleware(EmailVerifiedGateMiddleware)
+# (The email-verification gate middleware was removed 2026-07-13: verification
+# no longer gates anything — merchants are gated on org approval_status
+# instead, enforced per-route by require_org_approved and the merchant
+# API-key approval check.)
 
 # ── Idempotency Middleware ──────────────────────────────
 from app.middleware.idempotency import IdempotencyMiddleware
@@ -312,6 +316,8 @@ from app.api.ratelimit_routes import ratelimit_router
 app.include_router(ratelimit_router)
 from app.api.aml_routes import aml_router
 app.include_router(aml_router)
+from app.api.admin_approval_routes import admin_approval_router  # X-Admin-Token only
+app.include_router(admin_approval_router)
 from app.api.api_key_routes import api_key_router
 app.include_router(api_key_router)
 from app.api.auth_routes import router as auth_router

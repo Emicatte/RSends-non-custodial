@@ -189,3 +189,31 @@ def test_dev_debug_allows_legacy_and_local():
     )
     with patch.dict(os.environ, {"ENVIRONMENT": ""}, clear=False):
         validate_settings(s)  # no raise
+
+
+# ── Email delivery is mandatory under ENVIRONMENT=production ──────
+
+
+def test_email_dev_mode_true_blocks_under_environment_production():
+    """EMAIL_DEV_MODE=true silently skips every send (verification, welcome)
+    while signup still returns 201 — a production configured that way looks
+    alive but nobody can ever receive an email. Same fail-closed class as
+    ADMIN_API_TOKEN: refuse to boot."""
+    s = _prod_settings(email_dev_mode=True)
+    with patch.dict(os.environ, {"ENVIRONMENT": "production"}, clear=False):
+        with pytest.raises(StartupValidationError):
+            validate_settings(s)
+
+
+def test_email_dev_mode_false_passes_under_environment_production():
+    s = _prod_settings()  # email_dev_mode=False in the stand-in
+    with patch.dict(os.environ, {"ENVIRONMENT": "production"}, clear=False):
+        validate_settings(s)  # no raise
+
+
+def test_email_dev_mode_true_still_allowed_outside_production_env():
+    """DEBUG=false alone (staging posture without ENVIRONMENT=production) keeps
+    the old behavior: dev-mode email is allowed, only a warning path."""
+    s = _prod_settings(email_dev_mode=True)
+    with patch.dict(os.environ, {"ENVIRONMENT": "staging"}, clear=False):
+        validate_settings(s)  # no raise

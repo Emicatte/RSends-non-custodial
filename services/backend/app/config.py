@@ -101,6 +101,12 @@ class Settings(BaseSettings):
     # ── Alert Notifications (separate from sweep notifications) ──
     telegram_alert_chat_id: str = ""   # dedicated chat/group for critical alerts
 
+    # ── Merchant approval queue ───────────────────────────
+    # Chat that receives the "merchant pending approval" message at KYB submit
+    # (falls back to telegram_chat_id). Optional: unset → notification disabled
+    # (one startup WARNING), the admin approval page remains the source of truth.
+    telegram_approvals_chat_id: str = ""
+
     # ── Notification Rate Limit ───────────────────────────
     notification_rate_limit: int = 30          # max messages per minute per chat
     notification_rate_window: int = 60         # sliding window in seconds
@@ -297,7 +303,9 @@ def validate_settings(settings: Settings) -> None:
     # ── Telegram (informational) ──────────────────────────
     if not settings.telegram_bot_token:
         warnings.append(
-            "TELEGRAM_BOT_TOKEN is empty. Sweep notifications are disabled."
+            "TELEGRAM_BOT_TOKEN is empty. Telegram notifications (merchant "
+            "approval queue, ops alerts) are disabled; the /admin/approvals "
+            "page remains the source of truth for pending merchants."
         )
 
     # ── Production hardening (F-BE-09, F-BE-13, F-BE-01) ──
@@ -322,6 +330,18 @@ def validate_settings(settings: Settings) -> None:
 
         if settings.debug:
             errors.append("DEBUG=true is forbidden when ENVIRONMENT=production")
+
+        # ── Email delivery (fail-closed, same class as ADMIN_API_TOKEN) ──
+        # EMAIL_DEV_MODE=true skips every send while signup still returns 201:
+        # a production configured that way looks alive but no one can ever
+        # receive a verification/welcome email. Keyed strictly on
+        # ENVIRONMENT=production (staging postures may still run mail-less).
+        if os.getenv("ENVIRONMENT", "").lower().startswith("prod") and settings.email_dev_mode:
+            errors.append(
+                "EMAIL_DEV_MODE=true is forbidden when ENVIRONMENT=production. "
+                "Emails would be silently skipped (log-only) while signup keeps "
+                "returning 201. Set EMAIL_DEV_MODE=false and a real RESEND_API_KEY."
+            )
 
         # ── User-auth hardening ──
         if len(settings.auth_jwt_secret) < 64:

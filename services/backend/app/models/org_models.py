@@ -66,6 +66,19 @@ class Organization(Base):
     onboarding_status = Column(Text, nullable=False, default="created")
     activation_status = Column(Text, nullable=False, default="not_started")
 
+    # Manual merchant approval (migration 0010). Independent of the two fields
+    # above: 'pending_approval' -> 'approved' | 'declined', decided only by an
+    # operator via the admin approval surface (X-Admin-Token routes). Fail
+    # closed: anything other than 'approved' denies operational access
+    # (require_org_approved / the merchant API-key gate). Python-side default
+    # ONLY — no server_default, to keep create_all parity with a migrated DB
+    # (env.py compares server defaults); org_service always sets it explicitly.
+    approval_status = Column(Text, nullable=False, default="pending_approval")
+    approval_requested_at = Column(DateTime(timezone=True), nullable=True)
+    approval_decided_at = Column(DateTime(timezone=True), nullable=True)
+    approval_decided_by = Column(Text, nullable=True)
+    decline_reason = Column(Text, nullable=True)
+
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,

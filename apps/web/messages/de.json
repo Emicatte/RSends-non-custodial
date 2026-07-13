@@ -64,17 +64,9 @@
       "successBody": "Ihr Konto ist aktiv. Sie können sich jetzt anmelden.",
       "errorTitle": "Verifizierung fehlgeschlagen",
       "ctaLogin": "Zur Anmeldung",
-      "sentTitle": "Prüfen Sie Ihren Posteingang",
-      "sentBody": "Wir haben einen Bestätigungslink an {email} gesendet.",
-      "sentBodyNoEmail": "Wir haben Ihnen einen Bestätigungslink gesendet. Klicken Sie darauf, um Ihr Konto zu aktivieren.",
       "resendCta": "Link erneut senden",
       "resendSent": "E-Mail gesendet",
       "resendEmailLabel": "Ihre E-Mail"
-    },
-    "verifyBanner": {
-      "message": "Bestätigen Sie Ihre E-Mail, um alle Funktionen freizuschalten. Prüfen Sie Ihren Posteingang.",
-      "resend": "Erneut senden",
-      "sent": "E-Mail gesendet"
     },
     "forgotPassword": {
       "title": "Passwort zurücksetzen",
@@ -1554,8 +1546,8 @@
   "onboarding": {
     "steps": {
       "account": "Konto",
-      "verifyEmail": "E-Mail bestätigen",
       "companyInfo": "Unternehmensdaten",
+      "approval": "Freigabe",
       "dashboard": "Dashboard"
     },
     "gate": {
@@ -1636,6 +1628,17 @@
       "apiKey": "Erstellen Sie einen API-Schlüssel",
       "testPayment": "Senden Sie eine Testzahlung",
       "completed": "Abgeschlossen"
+    },
+    "pending": {
+      "title": "Dein Konto wird geprüft",
+      "body": "Wir haben deine Unternehmensdaten erhalten. Unser Team prüft jeden neuen Händler, bevor Zahlungen aktiviert werden — in der Regel innerhalb eines Werktags.",
+      "autoRefresh": "Diese Seite aktualisiert sich automatisch — kein Neuladen nötig."
+    },
+    "declined": {
+      "title": "Deine Anfrage wurde abgelehnt",
+      "body": "Nach Prüfung deiner Unternehmensdaten können wir dir derzeit kein Konto anbieten.",
+      "reasonLabel": "Grund",
+      "contact": "Wenn du das für einen Fehler hältst, wende dich an support@rsends.io."
     }
   },
   "pay": {

@@ -63,17 +63,9 @@
       "successBody": "Your account is active. You can log in now.",
       "errorTitle": "Verification failed",
       "ctaLogin": "Go to login",
-      "sentTitle": "Check your inbox",
-      "sentBody": "We sent a verification link to {email}.",
-      "sentBodyNoEmail": "We sent you a verification link. Click it to activate your account.",
       "resendCta": "Send the link again",
       "resendSent": "Email sent",
       "resendEmailLabel": "Your email"
-    },
-    "verifyBanner": {
-      "message": "Verify your email to unlock all features. Check your inbox for the link.",
-      "resend": "Resend email",
-      "sent": "Email sent"
     },
     "forgotPassword": {
       "title": "Reset your password",
@@ -1553,8 +1545,8 @@
   "onboarding": {
     "steps": {
       "account": "Account",
-      "verifyEmail": "Verify email",
       "companyInfo": "Company info",
+      "approval": "Approval",
       "dashboard": "Dashboard"
     },
     "gate": {
@@ -1635,6 +1627,17 @@
       "apiKey": "Create an API key",
       "testPayment": "Send a test payment",
       "completed": "Completed"
+    },
+    "pending": {
+      "title": "Your account is being reviewed",
+      "body": "We received your company details. Our team reviews every new merchant before activating payments — this usually takes less than one business day.",
+      "autoRefresh": "This page updates automatically — no need to refresh."
+    },
+    "declined": {
+      "title": "Your application was declined",
+      "body": "After reviewing your company details we can't offer you an account at this time.",
+      "reasonLabel": "Reason",
+      "contact": "If you believe this is a mistake, contact support@rsends.io."
     }
   },
   "pay": {
