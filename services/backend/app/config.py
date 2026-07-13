@@ -323,6 +323,18 @@ def validate_settings(settings: Settings) -> None:
         if settings.debug:
             errors.append("DEBUG=true is forbidden when ENVIRONMENT=production")
 
+        # ── Email delivery (fail-closed, same class as ADMIN_API_TOKEN) ──
+        # EMAIL_DEV_MODE=true skips every send while signup still returns 201:
+        # a production configured that way looks alive but no one can ever
+        # receive a verification/welcome email. Keyed strictly on
+        # ENVIRONMENT=production (staging postures may still run mail-less).
+        if os.getenv("ENVIRONMENT", "").lower().startswith("prod") and settings.email_dev_mode:
+            errors.append(
+                "EMAIL_DEV_MODE=true is forbidden when ENVIRONMENT=production. "
+                "Emails would be silently skipped (log-only) while signup keeps "
+                "returning 201. Set EMAIL_DEV_MODE=false and a real RESEND_API_KEY."
+            )
+
         # ── User-auth hardening ──
         if len(settings.auth_jwt_secret) < 64:
             errors.append(

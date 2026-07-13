@@ -164,6 +164,9 @@ async def lifespan(app: FastAPI):
         logger.info("Celery not available — webhook delivery + expiration running as asyncio tasks")
     else:
         logger.info("Celery active — webhook delivery + expiration delegated to Celery beat")
+    # /health/deep reads this: with the asyncio fallback covering the queues,
+    # zero Celery workers is the CONFIGURED state, not a degradation.
+    app.state.celery_fallback_active = not celery_active
 
     webhook_mode = "webhook" if settings.alchemy_webhook_secret else "polling"
     db_display = settings.database_url.split("@")[-1] if "@" in settings.database_url else settings.database_url
@@ -213,6 +216,9 @@ app = FastAPI(
     lifespan=lifespan,
     docs_url="/docs" if get_settings().debug else None,  # Nascondi Swagger in prod
     redoc_url=None,
+    # No public schema in prod: FastAPI's default openapi_url would expose the
+    # full API surface even with /docs off.
+    openapi_url="/openapi.json" if get_settings().debug else None,
 )
 
 # ── CORS ─────────────────────────────────────────────────

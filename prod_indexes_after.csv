@@ -1,0 +1,113 @@
+indexname,indexdef
+aml_alerts_pkey,CREATE UNIQUE INDEX aml_alerts_pkey ON public.aml_alerts USING btree (id)
+aml_config_pkey,CREATE UNIQUE INDEX aml_config_pkey ON public.aml_config USING btree (id)
+anomaly_alerts_pkey,CREATE UNIQUE INDEX anomaly_alerts_pkey ON public.anomaly_alerts USING btree (id)
+api_keys_pkey,CREATE UNIQUE INDEX api_keys_pkey ON public.api_keys USING btree (id)
+audit_log_pkey,CREATE UNIQUE INDEX audit_log_pkey ON public.audit_log USING btree (id)
+audit_log_sequence_number_key,CREATE UNIQUE INDEX audit_log_sequence_number_key ON public.audit_log USING btree (sequence_number)
+auth_audit_log_pkey,CREATE UNIQUE INDEX auth_audit_log_pkey ON public.auth_audit_log USING btree (id)
+blacklisted_wallets_pkey,CREATE UNIQUE INDEX blacklisted_wallets_pkey ON public.blacklisted_wallets USING btree (id)
+company_profiles_pkey,CREATE UNIQUE INDEX company_profiles_pkey ON public.company_profiles USING btree (id)
+compliance_snapshots_compliance_id_key,CREATE UNIQUE INDEX compliance_snapshots_compliance_id_key ON public.compliance_snapshots USING btree (compliance_id)
+compliance_snapshots_pkey,CREATE UNIQUE INDEX compliance_snapshots_pkey ON public.compliance_snapshots USING btree (id)
+compliance_snapshots_transaction_id_key,CREATE UNIQUE INDEX compliance_snapshots_transaction_id_key ON public.compliance_snapshots USING btree (transaction_id)
+consent_records_pkey,CREATE UNIQUE INDEX consent_records_pkey ON public.consent_records USING btree (id)
+email_verification_tokens_pkey,CREATE UNIQUE INDEX email_verification_tokens_pkey ON public.email_verification_tokens USING btree (id)
+idx_audit_event_type,CREATE INDEX idx_audit_event_type ON public.auth_audit_log USING btree (event_type)
+idx_audit_log_created,CREATE INDEX idx_audit_log_created ON public.audit_log USING btree (created_at)
+idx_audit_log_entity,"CREATE INDEX idx_audit_log_entity ON public.audit_log USING btree (entity_type, entity_id)"
+idx_audit_log_seq,CREATE INDEX idx_audit_log_seq ON public.audit_log USING btree (sequence_number)
+idx_audit_user_id,CREATE INDEX idx_audit_user_id ON public.auth_audit_log USING btree (user_id)
+idx_consents_user_doc_accepted,"CREATE INDEX idx_consents_user_doc_accepted ON public.consent_records USING btree (user_id, document_type, accepted_at)"
+idx_sessions_session_id,CREATE INDEX idx_sessions_session_id ON public.user_sessions USING btree (session_id)
+idx_sessions_user_id,CREATE INDEX idx_sessions_user_id ON public.user_sessions USING btree (user_id)
+invoice_counters_pkey,CREATE UNIQUE INDEX invoice_counters_pkey ON public.invoice_counters USING btree (year)
+invoices_pkey,CREATE UNIQUE INDEX invoices_pkey ON public.invoices USING btree (id)
+ix_aml_alerts_created_at,CREATE INDEX ix_aml_alerts_created_at ON public.aml_alerts USING btree (created_at)
+ix_aml_alerts_sender,CREATE INDEX ix_aml_alerts_sender ON public.aml_alerts USING btree (sender)
+ix_aml_alerts_sender_ts,"CREATE INDEX ix_aml_alerts_sender_ts ON public.aml_alerts USING btree (sender, created_at)"
+ix_aml_alerts_status,CREATE INDEX ix_aml_alerts_status ON public.aml_alerts USING btree (status)
+ix_api_keys_env,CREATE INDEX ix_api_keys_env ON public.api_keys USING btree (environment)
+ix_api_keys_key_hash,CREATE UNIQUE INDEX ix_api_keys_key_hash ON public.api_keys USING btree (key_hash)
+ix_api_keys_owner_active,"CREATE INDEX ix_api_keys_owner_active ON public.api_keys USING btree (owner_address, is_active)"
+ix_api_keys_owner_address,CREATE INDEX ix_api_keys_owner_address ON public.api_keys USING btree (owner_address)
+ix_blacklisted_wallets_address,CREATE UNIQUE INDEX ix_blacklisted_wallets_address ON public.blacklisted_wallets USING btree (address)
+ix_company_profiles_org_id,CREATE UNIQUE INDEX ix_company_profiles_org_id ON public.company_profiles USING btree (org_id)
+ix_consent_records_user_id,CREATE INDEX ix_consent_records_user_id ON public.consent_records USING btree (user_id)
+ix_delivery_status_retry,"CREATE INDEX ix_delivery_status_retry ON public.webhook_deliveries USING btree (status, next_retry_at)"
+ix_intent_merchant_status,"CREATE INDEX ix_intent_merchant_status ON public.payment_intents USING btree (merchant_id, status)"
+ix_intent_status_expires,"CREATE INDEX ix_intent_status_expires ON public.payment_intents USING btree (status, expires_at)"
+ix_invoices_invoice_number,CREATE UNIQUE INDEX ix_invoices_invoice_number ON public.invoices USING btree (invoice_number)
+ix_invoices_owner_address,CREATE INDEX ix_invoices_owner_address ON public.invoices USING btree (owner_address)
+ix_invoices_owner_created,"CREATE INDEX ix_invoices_owner_created ON public.invoices USING btree (owner_address, created_at)"
+ix_known_devices_user_id,CREATE INDEX ix_known_devices_user_id ON public.known_devices USING btree (user_id)
+ix_memberships_org_id,CREATE INDEX ix_memberships_org_id ON public.memberships USING btree (org_id)
+ix_memberships_user_id,CREATE INDEX ix_memberships_user_id ON public.memberships USING btree (user_id)
+ix_merchant_profiles_owner_address,CREATE UNIQUE INDEX ix_merchant_profiles_owner_address ON public.merchant_profiles USING btree (owner_address)
+ix_merchant_webhooks_merchant_id,CREATE INDEX ix_merchant_webhooks_merchant_id ON public.merchant_webhooks USING btree (merchant_id)
+ix_org_invites_email,CREATE INDEX ix_org_invites_email ON public.org_invites USING btree (email)
+ix_org_invites_org_id,CREATE INDEX ix_org_invites_org_id ON public.org_invites USING btree (org_id)
+ix_org_invites_token_hash,CREATE UNIQUE INDEX ix_org_invites_token_hash ON public.org_invites USING btree (token_hash)
+ix_organizations_owner_user_id,CREATE INDEX ix_organizations_owner_user_id ON public.organizations USING btree (owner_user_id)
+ix_organizations_slug,CREATE UNIQUE INDEX ix_organizations_slug ON public.organizations USING btree (slug)
+ix_payment_intents_intent_id,CREATE UNIQUE INDEX ix_payment_intents_intent_id ON public.payment_intents USING btree (intent_id)
+ix_payment_intents_matched_tx_hash,CREATE INDEX ix_payment_intents_matched_tx_hash ON public.payment_intents USING btree (matched_tx_hash)
+ix_payment_intents_merchant_id,CREATE INDEX ix_payment_intents_merchant_id ON public.payment_intents USING btree (merchant_id)
+ix_payment_intents_onchain_invoice_id,CREATE INDEX ix_payment_intents_onchain_invoice_id ON public.payment_intents USING btree (onchain_invoice_id)
+ix_payment_intents_reference_id,CREATE UNIQUE INDEX ix_payment_intents_reference_id ON public.payment_intents USING btree (reference_id)
+ix_payment_intents_tx_hash,CREATE INDEX ix_payment_intents_tx_hash ON public.payment_intents USING btree (tx_hash)
+ix_payment_settlements_chain_id,CREATE INDEX ix_payment_settlements_chain_id ON public.payment_settlements USING btree (chain_id)
+ix_payment_settlements_intent_id,CREATE INDEX ix_payment_settlements_intent_id ON public.payment_settlements USING btree (intent_id)
+ix_payment_settlements_invoice_id,CREATE INDEX ix_payment_settlements_invoice_id ON public.payment_settlements USING btree (invoice_id)
+ix_payment_settlements_merchant,CREATE INDEX ix_payment_settlements_merchant ON public.payment_settlements USING btree (merchant)
+ix_payment_settlements_status,CREATE INDEX ix_payment_settlements_status ON public.payment_settlements USING btree (status)
+ix_sanctions_address_active,"CREATE INDEX ix_sanctions_address_active ON public.sanctions_list USING btree (address, is_active)"
+ix_sanctions_list_address,CREATE INDEX ix_sanctions_list_address ON public.sanctions_list USING btree (address)
+ix_settlement_chain_status,"CREATE INDEX ix_settlement_chain_status ON public.payment_settlements USING btree (chain_id, status)"
+ix_settlement_invoice,"CREATE INDEX ix_settlement_invoice ON public.payment_settlements USING btree (invoice_id, chain_id)"
+ix_settlement_merchant_created,"CREATE INDEX ix_settlement_merchant_created ON public.payment_settlements USING btree (merchant, created_at)"
+ix_transaction_logs_fiscal_ref,CREATE UNIQUE INDEX ix_transaction_logs_fiscal_ref ON public.transaction_logs USING btree (fiscal_ref)
+ix_transaction_logs_tx_hash,CREATE UNIQUE INDEX ix_transaction_logs_tx_hash ON public.transaction_logs USING btree (tx_hash)
+ix_tx_currency_date,"CREATE INDEX ix_tx_currency_date ON public.transaction_logs USING btree (currency, tx_timestamp)"
+ix_tx_status_date,"CREATE INDEX ix_tx_status_date ON public.transaction_logs USING btree (status, tx_timestamp)"
+ix_user_api_keys_key_prefix,CREATE INDEX ix_user_api_keys_key_prefix ON public.user_api_keys USING btree (key_prefix)
+ix_user_api_keys_org_id,CREATE INDEX ix_user_api_keys_org_id ON public.user_api_keys USING btree (org_id)
+ix_user_api_keys_user_id,CREATE INDEX ix_user_api_keys_user_id ON public.user_api_keys USING btree (user_id)
+ix_user_contacts_user_id,CREATE INDEX ix_user_contacts_user_id ON public.user_contacts USING btree (user_id)
+ix_user_routes_user_id,CREATE INDEX ix_user_routes_user_id ON public.user_routes USING btree (user_id)
+ix_user_transactions_user_id,CREATE INDEX ix_user_transactions_user_id ON public.user_transactions USING btree (user_id)
+ix_user_wallets_org_id,CREATE INDEX ix_user_wallets_org_id ON public.user_wallets USING btree (org_id)
+ix_user_wallets_user_id,CREATE INDEX ix_user_wallets_user_id ON public.user_wallets USING btree (user_id)
+ix_users_email,CREATE INDEX ix_users_email ON public.users USING btree (email)
+ix_users_github_sub,CREATE UNIQUE INDEX ix_users_github_sub ON public.users USING btree (github_sub)
+ix_users_google_sub,CREATE UNIQUE INDEX ix_users_google_sub ON public.users USING btree (google_sub)
+known_devices_pkey,CREATE UNIQUE INDEX known_devices_pkey ON public.known_devices USING btree (id)
+memberships_pkey,CREATE UNIQUE INDEX memberships_pkey ON public.memberships USING btree (id)
+merchant_profiles_pkey,CREATE UNIQUE INDEX merchant_profiles_pkey ON public.merchant_profiles USING btree (id)
+merchant_webhooks_pkey,CREATE UNIQUE INDEX merchant_webhooks_pkey ON public.merchant_webhooks USING btree (id)
+notification_preferences_pkey,CREATE UNIQUE INDEX notification_preferences_pkey ON public.notification_preferences USING btree (user_id)
+org_invites_pkey,CREATE UNIQUE INDEX org_invites_pkey ON public.org_invites USING btree (id)
+organizations_pkey,CREATE UNIQUE INDEX organizations_pkey ON public.organizations USING btree (id)
+password_reset_tokens_pkey,CREATE UNIQUE INDEX password_reset_tokens_pkey ON public.password_reset_tokens USING btree (id)
+payment_intents_pkey,CREATE UNIQUE INDEX payment_intents_pkey ON public.payment_intents USING btree (id)
+payment_settlements_pkey,CREATE UNIQUE INDEX payment_settlements_pkey ON public.payment_settlements USING btree (id)
+sanctions_list_pkey,CREATE UNIQUE INDEX sanctions_list_pkey ON public.sanctions_list USING btree (id)
+transaction_logs_pkey,CREATE UNIQUE INDEX transaction_logs_pkey ON public.transaction_logs USING btree (id)
+uq_invoices_owner_period,"CREATE UNIQUE INDEX uq_invoices_owner_period ON public.invoices USING btree (owner_address, period_start, period_end)"
+uq_known_devices_user_fp,"CREATE UNIQUE INDEX uq_known_devices_user_fp ON public.known_devices USING btree (user_id, fingerprint)"
+uq_memberships_user_org,"CREATE UNIQUE INDEX uq_memberships_user_org ON public.memberships USING btree (user_id, org_id)"
+uq_settlement_onchain_log,"CREATE UNIQUE INDEX uq_settlement_onchain_log ON public.payment_settlements USING btree (chain_id, tx_hash, log_index)"
+uq_user_contact_address,"CREATE UNIQUE INDEX uq_user_contact_address ON public.user_contacts USING btree (user_id, address)"
+uq_user_tx_hash,"CREATE UNIQUE INDEX uq_user_tx_hash ON public.user_transactions USING btree (user_id, chain_id, tx_hash)"
+uq_users_email_lower,CREATE UNIQUE INDEX uq_users_email_lower ON public.users USING btree (lower(email))
+user_api_keys_key_hash_key,CREATE UNIQUE INDEX user_api_keys_key_hash_key ON public.user_api_keys USING btree (key_hash)
+user_api_keys_pkey,CREATE UNIQUE INDEX user_api_keys_pkey ON public.user_api_keys USING btree (id)
+user_contacts_pkey,CREATE UNIQUE INDEX user_contacts_pkey ON public.user_contacts USING btree (id)
+user_routes_pkey,CREATE UNIQUE INDEX user_routes_pkey ON public.user_routes USING btree (id)
+user_sessions_pkey,CREATE UNIQUE INDEX user_sessions_pkey ON public.user_sessions USING btree (id)
+user_sessions_session_id_key,CREATE UNIQUE INDEX user_sessions_session_id_key ON public.user_sessions USING btree (session_id)
+user_transactions_pkey,CREATE UNIQUE INDEX user_transactions_pkey ON public.user_transactions USING btree (id)
+user_wallets_pkey,CREATE UNIQUE INDEX user_wallets_pkey ON public.user_wallets USING btree (id)
+users_pkey,CREATE UNIQUE INDEX users_pkey ON public.users USING btree (id)
+webhook_deliveries_idempotency_key_key,CREATE UNIQUE INDEX webhook_deliveries_idempotency_key_key ON public.webhook_deliveries USING btree (idempotency_key)
+webhook_deliveries_pkey,CREATE UNIQUE INDEX webhook_deliveries_pkey ON public.webhook_deliveries USING btree (id)
