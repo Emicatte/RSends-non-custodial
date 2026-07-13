@@ -1600,7 +1600,12 @@
     "gate": {
       "loading": "Comprobando el estado de tu cuenta...",
       "error": "No se pudo cargar el estado de la cuenta. Reintenta.",
-      "retry": "Reintentar"
+      "retry": "Reintentar",
+      "unreachable": {
+        "heading": "No hemos podido conectar con el servicio",
+        "body": "Se agotó el tiempo de conexión. Suele resolverse en unos segundos.",
+        "retry": "Inténtalo de nuevo"
+      }
     },
     "consent": {
       "heading": "Antes de continuar",

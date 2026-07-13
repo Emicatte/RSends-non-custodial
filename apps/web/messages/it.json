@@ -1599,7 +1599,12 @@
     "gate": {
       "loading": "Verifica dello stato dell'account in corso...",
       "error": "Impossibile caricare lo stato dell'account. Riprova.",
-      "retry": "Riprova"
+      "retry": "Riprova",
+      "unreachable": {
+        "heading": "Non riusciamo a raggiungere il servizio",
+        "body": "La connessione è scaduta. Di solito si risolve in pochi secondi.",
+        "retry": "Riprova"
+      }
     },
     "consent": {
       "heading": "Prima di continuare",

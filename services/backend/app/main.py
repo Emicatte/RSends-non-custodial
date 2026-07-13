@@ -27,7 +27,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import get_settings, validate_settings, validate_dev_flags
+from app.config import get_settings, validate_settings, validate_dev_flags, is_prod_posture
 from app.db.session import init_db, close_db, async_session, _is_sqlite, engine
 from app.api.routes import router
 from app.services.cache_service import close_redis
@@ -47,7 +47,9 @@ async def lifespan(app: FastAPI):
     validate_dev_flags(settings)
 
     # ── Structured JSON logging ─────────────────────
-    setup_logging(debug=settings.debug)
+    # Livello e logger rumorosi guidati dalla posture unificata (H6), non dal
+    # solo flag DEBUG; la redazione segreti è attiva in ogni posture.
+    setup_logging(debug=settings.debug, prod_posture=is_prod_posture(settings))
 
     # ── Validate critical env vars ──────────────────
     validate_settings(settings)

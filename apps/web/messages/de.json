@@ -1600,7 +1600,12 @@
     "gate": {
       "loading": "Kontostatus wird geprüft...",
       "error": "Kontostatus konnte nicht geladen werden. Erneut versuchen.",
-      "retry": "Erneut versuchen"
+      "retry": "Erneut versuchen",
+      "unreachable": {
+        "heading": "Wir konnten den Dienst nicht erreichen",
+        "body": "Die Verbindung hat das Zeitlimit überschritten. Das behebt sich in der Regel innerhalb weniger Sekunden.",
+        "retry": "Erneut versuchen"
+      }
     },
     "consent": {
       "heading": "Bevor Sie fortfahren",
