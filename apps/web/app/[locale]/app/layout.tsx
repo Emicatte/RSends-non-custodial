@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
 import { authOptions } from '@/lib/auth-options'
 import { enforceOnboarding } from '@/lib/onboarding-guard'
+import { BackendUnreachableGate } from '@/components/app/BackendUnreachableGate'
 import AppNav from '@/components/app/AppNav'
 import AppSidebar from '@/components/app/AppSidebar'
 import AppBottomNav from '@/components/app/AppBottomNav'
@@ -32,8 +33,12 @@ export default async function AppLayout({
   }
   // Staged onboarding, enforced server-side: sessions without current
   // consents/age attestation or an un-submitted company profile never render
-  // the dashboard (fail-closed to the /onboarding gate page).
-  await enforceOnboarding(session, locale)
+  // the dashboard (fail-closed to the /onboarding gate page). An unreachable
+  // backend is NOT a denial: render the client retry gate instead of bouncing.
+  const guard = await enforceOnboarding(session, locale)
+  if (guard === 'unreachable') {
+    return <BackendUnreachableGate />
+  }
   return (
     <>
       <AppNav />

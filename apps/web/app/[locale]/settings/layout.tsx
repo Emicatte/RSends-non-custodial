@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
 import { authOptions } from '@/lib/auth-options'
 import { enforceOnboarding } from '@/lib/onboarding-guard'
+import { BackendUnreachableGate } from '@/components/app/BackendUnreachableGate'
 import { SettingsSidebar } from '@/components/settings/SettingsSidebar'
 import { OrgSwitcher } from '@/components/settings/OrgSwitcher'
 import AuthHeader from '@/components/auth/AuthHeader'
@@ -20,8 +21,12 @@ export default async function SettingsLayout({
     redirect(`/${locale}`)
   }
   // Staged onboarding, enforced server-side (same guard as /app): settings
-  // hosts the settlement-wallet write and org management surfaces.
-  await enforceOnboarding(session, locale)
+  // hosts the settlement-wallet write and org management surfaces. An
+  // unreachable backend is NOT a denial: render the client retry gate.
+  const guard = await enforceOnboarding(session, locale)
+  if (guard === 'unreachable') {
+    return <BackendUnreachableGate />
+  }
   const t = await getTranslations({ locale, namespace: 'settings' })
 
   return (

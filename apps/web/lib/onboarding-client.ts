@@ -6,14 +6,15 @@
  */
 
 import { apiCall } from '@/lib/auth-client'
-import type {
-  CompanyProfile,
-  CompanyProfilePatch,
-  OnboardingState,
+import {
+  ONBOARDING_ENDPOINT,
+  type CompanyProfile,
+  type CompanyProfilePatch,
+  type OnboardingState,
 } from '@/lib/onboarding'
 
 export function getOnboardingState(accessToken: string | undefined) {
-  return apiCall<OnboardingState>('/api/v1/user/onboarding', accessToken)
+  return apiCall<OnboardingState>(ONBOARDING_ENDPOINT, accessToken)
 }
 
 export function postConsents(accessToken: string | undefined) {

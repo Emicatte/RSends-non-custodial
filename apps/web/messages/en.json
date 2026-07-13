@@ -1599,7 +1599,12 @@
     "gate": {
       "loading": "Checking your account status...",
       "error": "Could not load your account status. Retry.",
-      "retry": "Retry"
+      "retry": "Retry",
+      "unreachable": {
+        "heading": "We could not reach the service",
+        "body": "The connection timed out. This usually resolves in a few seconds.",
+        "retry": "Try again"
+      }
     },
     "consent": {
       "heading": "Before you continue",

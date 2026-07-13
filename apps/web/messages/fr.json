@@ -1600,7 +1600,12 @@
     "gate": {
       "loading": "Vérification de l'état de votre compte...",
       "error": "Impossible de charger l'état du compte. Réessayez.",
-      "retry": "Réessayer"
+      "retry": "Réessayer",
+      "unreachable": {
+        "heading": "Nous n'avons pas pu joindre le service",
+        "body": "La connexion a expiré. Cela se résout généralement en quelques secondes.",
+        "retry": "Réessayer"
+      }
     },
     "consent": {
       "heading": "Avant de continuer",

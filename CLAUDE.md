@@ -227,7 +227,14 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
   dedicated docs/handler change.
 - **Render provisioning before go-live:** Redis must be provisioned and `DEBUG=false` set —
   fail-closed rate limiting depends on both. Also set **`ADMIN_API_TOKEN`** (≥32 chars,
-  distinct from `HMAC_SECRET`) — the admin surface is fully denied without it.
+  distinct from `HMAC_SECRET`) — the admin surface is fully denied without it. Log hygiene
+  (2026-07-13) also rides the posture: prod posture (`is_prod_posture`) drives root INFO +
+  `httpx`/`httpcore`/`sqlalchemy.engine` at WARNING (`setup_logging(debug, prod_posture)`),
+  so `DEBUG=false` (ideally plus `ENVIRONMENT=production`, which makes a future `DEBUG=true`
+  flip refuse startup) is required for quiet prod logs; secret **redaction**
+  (`SecretRedactionFilter`/`RedactingJsonFormatter` in `logging_config.py` — Alchemy-style
+  URL-path keys, connection-string passwords, bearer tokens, `rsend_`/`rsusr_` keys) is
+  active in every posture and pinned by `test_logging_redaction.py`/`test_logging_posture.py`.
 - **Phase C deferrals — mostly closed by Phase E (2026-07-08).** Phase C shipped the session-authed
   org **payments read** view (`GET /api/v1/user/org/payment-intents` + `/[locale]/app/payments`,
   hook `useOrgPayments`). **Phase E built `GET /api/v1/user/org/stats`** (settlements→intents join

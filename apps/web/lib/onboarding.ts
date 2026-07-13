@@ -9,6 +9,14 @@
  * lib/onboarding-client.ts (client-only, via apiCall).
  */
 
+/**
+ * The aggregate onboarding-state endpoint. Single-sourced so the server guard
+ * (lib/onboarding-guard.ts) and the client probe (lib/onboarding-client.ts,
+ * which the retry gate re-asks as "the guard's exact question") cannot drift
+ * onto different paths.
+ */
+export const ONBOARDING_ENDPOINT = '/api/v1/user/onboarding'
+
 export interface CompanyProfileState {
   exists: boolean
   submitted_at: string | null

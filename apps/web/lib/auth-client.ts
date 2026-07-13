@@ -61,7 +61,12 @@ export async function apiCall<T>(
     if (res.status === 403 && code === 'email_not_verified' && typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('rsends:email-unverified'))
     }
-    throw new Error(code)
+    // Carry the HTTP status on the error so callers can classify by status
+    // (reachable-but-denied vs unreachable) instead of matching the body code
+    // string, which varies per route. Message stays the code (unchanged).
+    const error = new Error(code) as Error & { status?: number }
+    error.status = res.status
+    throw error
   }
   return res.json() as Promise<T>
 }
