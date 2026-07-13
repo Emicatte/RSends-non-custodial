@@ -1,8 +1,9 @@
-"""Connected-accounts endpoints — /api/v1/user/account/*.
+"""Account settings endpoints — /api/v1/user/account/*.
 
 Co-exists with user_account_routes.py under the same prefix (FastAPI merges
-routers). Paths exposed here: /auth-methods, /add-password, /remove-password,
-/link-google, /unlink-google, /link-github, /unlink-github.
+routers). Paths exposed here: /auth-methods, /add-password, /remove-password.
+Social login (Google/GitHub) was removed from the product, and the link/unlink
+provider endpoints went with it.
 
 Each mutation loads the User row, delegates to account_linking_service, then
 commits. Errors from the service layer (AccountLinkingError) are translated
@@ -11,8 +12,6 @@ frontend's apiCall already handles.
 """
 
 from __future__ import annotations
-
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -25,16 +24,12 @@ from app.security.trusted_proxy import get_real_client_ip
 from app.services.account_linking_service import (
     AccountLinkingError,
     add_password,
-    link_github,
-    link_google,
     remove_password,
-    unlink_github,
-    unlink_google,
     view_methods,
 )
 from app.services.auth_service import AuthError, verify_access_token
 
-router = APIRouter(prefix="/api/v1/user/account", tags=["account-linking"])
+router = APIRouter(prefix="/api/v1/user/account", tags=["account-settings"])
 
 
 async def require_user_id(request: Request) -> str:
@@ -62,13 +57,6 @@ _STATUS_BY_CODE = {
     "last_auth_method": 409,
     "password_already_set": 409,
     "password_not_set": 409,
-    "google_already_linked": 409,
-    "google_not_linked": 409,
-    "github_already_linked": 409,
-    "github_not_linked": 409,
-    "google_sub_in_use": 409,
-    "github_sub_in_use": 409,
-    "email_mismatch": 403,
     "invalid_token": 401,
 }
 
@@ -83,22 +71,10 @@ def _err_to_http(e: AccountLinkingError) -> HTTPException:
 
 class AuthMethodsResponse(BaseModel):
     has_password: bool
-    has_google: bool
-    has_github: bool
-    google_email: Optional[str] = None
-    github_username: Optional[str] = None
 
 
 class AddPasswordRequest(BaseModel):
     password: str = Field(min_length=1)
-
-
-class LinkGoogleRequest(BaseModel):
-    id_token: str = Field(min_length=1)
-
-
-class LinkGithubRequest(BaseModel):
-    access_token: str = Field(min_length=1)
 
 
 class OkResponse(BaseModel):
@@ -112,13 +88,7 @@ async def get_auth_methods(
 ) -> AuthMethodsResponse:
     user = await _load_user(db, user_id)
     v = view_methods(user)
-    return AuthMethodsResponse(
-        has_password=v.has_password,
-        has_google=v.has_google,
-        has_github=v.has_github,
-        google_email=v.google_email,
-        github_username=v.github_username,
-    )
+    return AuthMethodsResponse(has_password=v.has_password)
 
 
 @router.post("/add-password", response_model=OkResponse)
@@ -154,94 +124,6 @@ async def remove_password_route(
     ua = request.headers.get("User-Agent", "")
     try:
         await remove_password(
-            db,
-            user,
-            ip=get_real_client_ip(request),
-            user_agent=ua,
-        )
-    except AccountLinkingError as e:
-        raise _err_to_http(e)
-    await db.commit()
-    return OkResponse()
-
-
-@router.post("/link-google", response_model=OkResponse)
-async def link_google_route(
-    payload: LinkGoogleRequest,
-    request: Request,
-    user_id: str = Depends(require_user_id),
-    db: AsyncSession = Depends(get_db),
-) -> OkResponse:
-    user = await _load_user(db, user_id)
-    ua = request.headers.get("User-Agent", "")
-    try:
-        await link_google(
-            db,
-            user,
-            payload.id_token,
-            ip=get_real_client_ip(request),
-            user_agent=ua,
-        )
-    except AccountLinkingError as e:
-        raise _err_to_http(e)
-    await db.commit()
-    return OkResponse()
-
-
-@router.post("/unlink-google", response_model=OkResponse)
-async def unlink_google_route(
-    request: Request,
-    user_id: str = Depends(require_user_id),
-    db: AsyncSession = Depends(get_db),
-) -> OkResponse:
-    user = await _load_user(db, user_id)
-    ua = request.headers.get("User-Agent", "")
-    try:
-        await unlink_google(
-            db,
-            user,
-            ip=get_real_client_ip(request),
-            user_agent=ua,
-        )
-    except AccountLinkingError as e:
-        raise _err_to_http(e)
-    await db.commit()
-    return OkResponse()
-
-
-@router.post("/link-github", response_model=OkResponse)
-async def link_github_route(
-    payload: LinkGithubRequest,
-    request: Request,
-    user_id: str = Depends(require_user_id),
-    db: AsyncSession = Depends(get_db),
-) -> OkResponse:
-    user = await _load_user(db, user_id)
-    ua = request.headers.get("User-Agent", "")
-    try:
-        await link_github(
-            db,
-            user,
-            payload.access_token,
-            ip=get_real_client_ip(request),
-            user_agent=ua,
-        )
-    except AccountLinkingError as e:
-        raise _err_to_http(e)
-    await db.commit()
-    return OkResponse()
-
-
-@router.post("/unlink-github", response_model=OkResponse)
-async def unlink_github_route(
-    request: Request,
-    user_id: str = Depends(require_user_id),
-    db: AsyncSession = Depends(get_db),
-) -> OkResponse:
-    user = await _load_user(db, user_id)
-    ua = request.headers.get("User-Agent", "")
-    try:
-        await unlink_github(
             db,
             user,
             ip=get_real_client_ip(request),

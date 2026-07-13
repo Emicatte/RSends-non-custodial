@@ -1,8 +1,11 @@
 """
-RPagos Backend — End-user auth models (Google OAuth).
+RPagos Backend — End-user auth models.
 
 Three tables:
-- User: one row per Google identity (keyed by `google_sub`).
+- User: one row per user (email/password identity). The `google_sub` /
+  `github_sub` / `github_username` columns are orphans from the removed
+  social-login feature — kept in place (no migration; DB reconciliation is
+  a separate task).
 - UserSession: DB backup of Redis-authoritative sessions (audit/forensics).
 - AuthAuditLog: immutable append-only event stream. On PostgreSQL a
   BEFORE UPDATE/DELETE trigger enforces immutability at the DB layer.

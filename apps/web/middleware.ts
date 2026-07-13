@@ -59,8 +59,9 @@ export async function middleware(req: NextRequest) {
         return NextResponse.redirect(url)
       }
 
-      // (b) Logged in but email EXPLICITLY unverified (credentials only) → verify page.
-      //     OAuth (Google/GitHub) leaves email_verified === undefined → must NOT block.
+      // (b) Logged in but email EXPLICITLY unverified → verify page. A legacy
+      //     token without the claim leaves email_verified === undefined →
+      //     must NOT block (only an explicit false does).
       if (token.email_verified === false) {
         const url = req.nextUrl.clone()
         url.pathname = `/${locale}/verify-email-sent`
@@ -68,7 +69,7 @@ export async function middleware(req: NextRequest) {
         return NextResponse.redirect(url)
       }
 
-      // (c) Authenticated (verified, or OAuth-undefined) → continue via intl middleware.
+      // (c) Authenticated (verified, or legacy-undefined) → continue via intl middleware.
       //     Never NextResponse.next(): with next-intl v4 (and no setRequestLocale in the
       //     project) the middleware is what communicates the locale to getMessages();
       //     bypassing it would render /it/app in English. intlMiddleware passes

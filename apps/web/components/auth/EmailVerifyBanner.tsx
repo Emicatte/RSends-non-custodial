@@ -8,8 +8,7 @@ import { useEmailAuth } from '@/hooks/useEmailAuth'
 /**
  * Persistent "verify your email" banner shown across the signed-in app while
  * the user's email is unverified. Sources of truth:
- *  - session.email_verified === false (set at credentials login). Google/GitHub
- *    users are verified by construction, so it's never false for them.
+ *  - session.email_verified === false (set at credentials login).
  *  - a `rsends:email-unverified` window event (emitted by apiCall when a gated
  *    route returns 403 email_not_verified) — covers a stale-but-verified
  *    session that nonetheless hit the deny-by-default gate.

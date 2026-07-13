@@ -12,7 +12,7 @@ Python/FastAPI backend for RSend: transaction processing, auto-forwarding, cross
 | Migrations | Alembic | 41 versioned migrations (0000–0040) |
 | Cache | Redis + hiredis | Rate limiting, idempotency, nonce dedup, sessions |
 | Task Queue | Celery | Async background tasks |
-| Identity | PyJWT (HS256) + bcrypt + google-auth | Access/refresh tokens, password hashing, OAuth ID-token verify |
+| Identity | PyJWT (HS256) + bcrypt | Access/refresh tokens, password hashing |
 | Signing | eth-account + boto3 (KMS) | Local key / AWS KMS / Vault |
 | Email | Resend API | Verification + password-reset emails |
 | Monitoring | Prometheus + Sentry + OpenTelemetry | Metrics, errors, tracing |
@@ -53,7 +53,7 @@ rpagos-backend/
 │   │   ├── payment_ws.py             # Per-intent payment status WS
 │   │   ├── api_key_routes.py         # Merchant API keys (/api/v1/keys)
 │   │   │
-│   │   ├── auth_routes.py             # Google/GitHub OAuth, refresh, logout, /me
+│   │   ├── auth_routes.py             # Session refresh, logout, /me
 │   │   ├── auth_email_routes.py       # Email+password signup/login/verify/reset
 │   │   ├── wallet_session_routes.py   # SIWE wallet-session login
 │   │   ├── account_settings_routes.py # Link/unlink Google/GitHub, add/remove password
@@ -109,7 +109,7 @@ rpagos-backend/
 │   │   ├── alert_service.py / notification_service.py # Telegram/webhook alerts
 │   │   ├── key_manager.py / signing_audit.py / signing_rate_limit.py # Signer hardening
 │   │   ├── auth_service.py / email_auth_service.py / password_service.py # Identity
-│   │   ├── github_oauth_service.py / siwe_service.py / wallet_session.py # OAuth + SIWE
+│   │   ├── siwe_service.py / wallet_session.py # SIWE wallet sessions
 │   │   ├── org_service.py / org_invite_service.py # Orgs + invites
 │   │   ├── account_deletion_service.py / account_linking_service.py # GDPR + linking
 │   │   ├── device_fingerprint.py / auth_audit.py # Known-device + auth audit
@@ -144,7 +144,7 @@ pip install -r requirements.txt
 # 2. Configure
 cp .env.example .env
 # Fill in: DATABASE_URL, REDIS_URL, ALCHEMY_API_KEY, SWEEP_PRIVATE_KEY,
-#          HMAC_SECRET, AUTH_JWT_SECRET, GOOGLE_OAUTH_CLIENT_ID, RESEND_API_KEY
+#          HMAC_SECRET, AUTH_JWT_SECRET, RESEND_API_KEY
 
 # 3. Database
 alembic upgrade head
@@ -198,7 +198,6 @@ DATABASE_URL="sqlite+aiosqlite:///./.test.db" pytest -q
 ### Identity & Auth
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/api/v1/auth/google` · `/github` | OAuth ID-token login |
 | POST | `/api/v1/auth/signup` · `/login` | Email + password (bcrypt) |
 | POST | `/api/v1/auth/verify-email` · `/resend-verification` | Email verification |
 | POST | `/api/v1/auth/request-password-reset` · `/reset-password` | Password reset |
@@ -256,9 +255,9 @@ DATABASE_URL="sqlite+aiosqlite:///./.test.db" pytest -q
 ## Security Architecture
 
 ### Identity & Sessions
-- **Multi-method auth**: email+password (bcrypt), Google & GitHub OAuth (ID-token `aud` verification), SIWE wallet sessions (EIP-4361).
+- **Auth**: email+password (bcrypt) end-user login, SIWE wallet sessions (EIP-4361). Social login (Google/GitHub) was removed from the product.
 - **JWT access/refresh** (HS256, `AUTH_JWT_SECRET` ≥64 chars in prod) with server-side session records and refresh rotation.
-- **Account linking**: one user can attach multiple sign-in methods; add/remove password and link/unlink OAuth providers.
+- **Account settings**: add/remove password (a user must always retain at least one sign-in method).
 - **Known-device + session management**: device fingerprinting, list/revoke sessions, GDPR soft-delete with cancellation window.
 - **Email verification + password reset** via single-use tokens (Resend API; `EMAIL_DEV_MODE=true` logs links locally).
 
@@ -314,7 +313,7 @@ Cooldown: EMERGENCY 1min, CRITICAL 5min, WARNING 15min, INFO 60min.
 0001 Double-entry ledger         0015 KMS audit log              0029 Organizations + memberships
 0002 Legacy forwarding tables    0016 API keys table             0030 Org-scope keys + wallets
 0003 Command center models       0017 Platform fee fields        0031 Email+password auth
-0004 Merchant B2B tables         0018 API key scopes + tracking  0032 GitHub OAuth
+0004 Merchant B2B tables         0018 API key scopes + tracking  0032 Auth-method columns (legacy)
 0005 Late payment policy         0019 Unique matched_tx_hash     0033 Forwarding rules version
 0006 Matching v2 amount track    0020 API key bcrypt v2          0034 Audit logs SET NULL
 0007 Deposit address matching    0021 Auth tables (users)        0035 Split contracts owner_address
@@ -341,7 +340,6 @@ See `.env.example` for full documentation. Key variables:
 | `DEPOSIT_MASTER_KEY` / `DEPOSIT_MASTER_SEED` | Yes | HD deposit-address derivation |
 | `HMAC_SECRET` | Prod | ≥32 chars, webhook/API verification |
 | `AUTH_JWT_SECRET` | Prod | HS256 access-token secret, ≥64 chars in prod |
-| `GOOGLE_OAUTH_CLIENT_ID` | If Google login | OAuth client ID (`aud` claim check) |
 | `RESEND_API_KEY` | If emails | Resend API key (`re_...`); skipped when `EMAIL_DEV_MODE=true` |
 | `EMAIL_FROM` / `EMAIL_DEV_MODE` | No | Sender address / log-links-locally toggle |
 | `FRONTEND_URL` | Prod | Base URL for verification/reset links + CORS |

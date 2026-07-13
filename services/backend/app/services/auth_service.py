@@ -2,30 +2,24 @@
 RPagos Backend — End-user auth service.
 
 Responsibilities:
-- Verify Google ID tokens via google-auth (canonical Google-blessed path,
-  handles public key caching + iss/aud/exp validation).
 - Issue + verify HS256 access tokens (via PyJWT).
 - Create / rotate / revoke sessions backed by Redis.
 - Fail closed when Redis is unavailable (auth is security-critical).
 
 Cookies + DB backup rows are created in the route handler — this module
-only owns token + Redis session state.
+only owns token + Redis session state. Social login (Google/GitHub) was
+removed from the product; login/signup is email/password only.
 """
 
-import asyncio
 import hashlib
 import json
 import logging
 import secrets
-import threading
 import time
-from typing import Optional, Tuple
+from typing import Tuple
 
 import jwt  # PyJWT
 from jwt import InvalidTokenError
-from google.oauth2 import id_token as google_id_token
-from google.auth.transport import requests as g_requests
-from pydantic import BaseModel
 
 from app.config import get_settings
 from app.services.cache_service import get_redis
@@ -40,15 +34,6 @@ SESSION_REDIS_PREFIX = "auth:session:"
 SESSION_REDIS_TTL = REFRESH_TOKEN_TTL
 
 
-class GoogleUserInfo(BaseModel):
-    sub: str
-    email: str
-    email_verified: bool
-    name: Optional[str] = None
-    picture: Optional[str] = None
-    locale: Optional[str] = None
-
-
 class AuthError(Exception):
     """Raised on any auth validation failure.
 
@@ -59,107 +44,6 @@ class AuthError(Exception):
     def __init__(self, code: str, message: str):
         self.code = code
         super().__init__(message)
-
-
-# ─── Google ID token verification ─────────────────────────────
-
-# Module-level JWKS cache. google-auth's verify_oauth2_token calls
-# request(url=GOOGLE_CERTS_URL) on every token verification. Its in-process
-# cert cache dies on every worker restart (frequent on Render free-tier), so
-# we layer a 1h TTL cache keyed by URL to amortize the outbound HTTPS fetch
-# (free-tier egress can stall 10-30 s, overrunning upstream proxy timeouts).
-_certs_cache: dict[str, tuple[float, object]] = {}
-_certs_lock = threading.Lock()
-_CERTS_TTL_S = 3600
-
-
-class _CachingRequest(g_requests.Request):
-    # threading.Lock (not asyncio.Lock) because this is driven from inside
-    # asyncio.to_thread. Also bounds the outbound timeout to 60 s so a
-    # stuck fetch surfaces as an error well inside Vercel's 25 s cap.
-    def __call__(
-        self,
-        url,
-        method="GET",
-        body=None,
-        headers=None,
-        timeout=60,
-        **kwargs,
-    ):
-        now = time.monotonic()
-        if method == "GET":
-            with _certs_lock:
-                hit = _certs_cache.get(url)
-                if hit and hit[0] > now:
-                    return hit[1]
-        resp = super().__call__(
-            url,
-            method=method,
-            body=body,
-            headers=headers,
-            timeout=timeout,
-            **kwargs,
-        )
-        if method == "GET" and 200 <= resp.status < 300:
-            with _certs_lock:
-                _certs_cache[url] = (now + _CERTS_TTL_S, resp)
-        return resp
-
-
-_g_request_cache: Optional[_CachingRequest] = None
-
-
-def _google_request() -> _CachingRequest:
-    """Cached Request instance with per-URL JWKS caching."""
-    global _g_request_cache
-    if _g_request_cache is None:
-        _g_request_cache = _CachingRequest()
-    return _g_request_cache
-
-
-async def verify_google_id_token(
-    token: str,
-    expected_nonce: Optional[str] = None,
-) -> GoogleUserInfo:
-    """Verify a Google ID token. Returns GoogleUserInfo or raises AuthError.
-
-    google-auth validates signature + iss + aud + exp against Google's
-    published JWKS. We additionally check nonce + email_verified.
-
-    The underlying call is sync + uses urllib → wrap in a thread so the
-    event loop stays free under concurrent logins.
-    """
-    settings = get_settings()
-    if not settings.google_oauth_client_id:
-        raise AuthError("server_misconfigured", "GOOGLE_OAUTH_CLIENT_ID is not set")
-
-    try:
-        claims = await asyncio.to_thread(
-            google_id_token.verify_oauth2_token,
-            token,
-            _google_request(),
-            settings.google_oauth_client_id,
-        )
-    except ValueError as e:
-        raise AuthError("invalid_token", f"Google ID token rejected: {e}")
-
-    if expected_nonce and claims.get("nonce") != expected_nonce:
-        raise AuthError("invalid_nonce", "Nonce mismatch")
-
-    if not claims.get("email_verified"):
-        raise AuthError("email_not_verified", "Google email not verified")
-
-    return GoogleUserInfo(
-        sub=claims["sub"],
-        # Normalized on ingest: one account per lowercase email — every other
-        # entry path (email/password schemas, GitHub service) already lowers,
-        # and the collision guards + uq_users_email_lower index rely on it.
-        email=claims["email"].strip().lower(),
-        email_verified=bool(claims["email_verified"]),
-        name=claims.get("name"),
-        picture=claims.get("picture"),
-        locale=claims.get("locale"),
-    )
 
 
 # ─── Access token (HS256 via PyJWT) ───────────────────────────
@@ -332,20 +216,3 @@ async def revoke_session(session_id: str) -> None:
     if r is None:
         return
     await r.delete(f"{SESSION_REDIS_PREFIX}{session_id}")
-
-
-def peek_unverified_email(id_token_str: str) -> Optional[str]:
-    """Extract `email` claim from an ID token WITHOUT verifying.
-
-    ONLY for use as a rate-limit bucket key. Never trust this value as identity.
-    Returns None if the token is malformed.
-    """
-    try:
-        email = jwt.decode(
-            id_token_str,
-            options={"verify_signature": False, "verify_aud": False, "verify_exp": False},
-            algorithms=["RS256", "HS256"],
-        ).get("email")
-        return email.strip().lower() if isinstance(email, str) else None
-    except Exception:
-        return None

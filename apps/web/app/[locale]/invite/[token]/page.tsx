@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useSession, signIn } from 'next-auth/react'
+import { useSession } from 'next-auth/react'
 import { useParams, useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { apiCall } from '@/lib/auth-client'
@@ -74,15 +74,17 @@ export default function InvitePage() {
     }
     if (status === 'unauthenticated') {
       setView('signing-in')
+      // Email/password is the only sign-in method: hand off to the login
+      // page and come back here after (?redirect= is what LoginForm reads).
       const callback =
         typeof window !== 'undefined'
           ? window.location.pathname
           : `/${locale}/invite/${token}`
-      void signIn('google', { callbackUrl: callback })
+      router.replace(`/${locale}/login?redirect=${encodeURIComponent(callback)}`)
       return
     }
     setView('loading-preview')
-  }, [status, locale, token])
+  }, [status, locale, token, router])
 
   useEffect(() => {
     if (view !== 'loading-preview' || !accessToken || !token) return

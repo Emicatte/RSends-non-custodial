@@ -6,9 +6,6 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useState } from 'react'
 import { useEmailAuth, type EmailAuthErrorShape } from '@/hooks/useEmailAuth'
-import { OAuthDivider } from './OAuthDivider'
-import { GoogleSignInButton } from './GoogleSignInButton'
-import { GitHubSignInButton } from './GitHubSignInButton'
 import { EmailAuthError } from './EmailAuthError'
 
 const INPUT_STYLE: React.CSSProperties = {
@@ -197,12 +194,6 @@ export function LoginForm() {
           {loading ? t('submitLoading') : t('submit')}
         </button>
       </form>
-
-      <OAuthDivider />
-      <GoogleSignInButton callbackUrl={`/${locale}/app`} disabled={loading} />
-      <div className="mt-2">
-        <GitHubSignInButton callbackUrl={`/${locale}/app`} disabled={loading} />
-      </div>
 
       <p className="mt-6 text-center text-sm" style={{ color: '#888780' }}>
         {tCommon('noAccount')}{' '}

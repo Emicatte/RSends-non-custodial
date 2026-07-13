@@ -42,9 +42,6 @@ esac
 command -v psql >/dev/null 2>&1 || \
   die "psql not on PATH — install postgres client (brew install libpq && brew link --force libpq)"
 
-[ -f alembic/versions/0032_github_auth.py ] || \
-  die "alembic/versions/0032_github_auth.py missing — stale checkout? run: git pull"
-
 psql "$DBURL" -v ON_ERROR_STOP=1 -c "SELECT 1;" >/dev/null || \
   die "cannot connect to DBURL"
 
@@ -109,7 +106,7 @@ USERS_COLS=$(psql "$DBURL" -v ON_ERROR_STOP=1 -tAc \
   "SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='users';")
 
 MISSING=""
-for col in github_sub github_username password_hash password_set_at email_verified_at \
+for col in password_hash password_set_at email_verified_at \
            deletion_requested_at deletion_scheduled_for deletion_reason active_org_id; do
   echo "$USERS_COLS" | grep -qx "$col" || MISSING="$MISSING $col"
 done
@@ -118,16 +115,16 @@ done
 TABLE_COUNT=$(psql "$DBURL" -v ON_ERROR_STOP=1 -tAc \
   "SELECT count(*) FROM pg_tables WHERE schemaname='public';")
 [ "$TABLE_COUNT" -ge 40 ] || die "only $TABLE_COUNT tables after upgrade (expected >= 40)"
-note "tables: $TABLE_COUNT  |  users has all 9 expected columns"
+note "tables: $TABLE_COUNT  |  users has all 7 expected columns"
 
 # ─── 8. Success summary ─────────────────────────────────────────
 cat <<EOF
 
 [rebuild_db] OK  schema dropped and recreated
 [rebuild_db] OK  alembic upgraded to $VERSION
-[rebuild_db] OK  users table has all 9 expected columns
+[rebuild_db] OK  users table has all 7 expected columns
 [rebuild_db] OK  $TABLE_COUNT tables in public schema
 
-Done. Verify in app: POST /api/v1/auth/google should no longer raise
-UndefinedColumnError.
+Done. Verify in app: POST /api/v1/auth/signup (email/password) should no
+longer raise UndefinedColumnError.
 EOF

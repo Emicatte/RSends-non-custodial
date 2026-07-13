@@ -151,11 +151,6 @@ envVarGroups:
       - key: AUTH_JWT_SECRET
         sync: false
 
-      # ── End-user auth [prod guard: GOOGLE_OAUTH_CLIENT_ID required] ──
-      # Create a Google OAuth client (free; works on a vercel.app domain).
-      - key: GOOGLE_OAUTH_CLIENT_ID
-        sync: false
-
       # ── RPC / indexer (ALCHEMY_API_KEY always required) ──
       - key: ALCHEMY_API_KEY
         sync: false

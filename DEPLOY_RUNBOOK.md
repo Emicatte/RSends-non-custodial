@@ -58,7 +58,6 @@ Legend: **[AUTO]** = done by Render/Vercel/CI · **[AZIONE UTENTE]** = you do it
 | `CELERY_BROKER_URL` must be `rediss://` (TLS) | ERROR | TLS Redis endpoint |
 | no `rpagos:password@` default DB creds | ERROR | real DB creds |
 | `DEBUG` must not be true | ERROR | `DEBUG=false` |
-| `GOOGLE_OAUTH_CLIENT_ID` non-empty | ERROR | Google OAuth client |
 | `AUTH_JWT_SECRET` ≥64 chars | ERROR | manual `token_hex(32)` |
 | `ADMIN_API_TOKEN` non-empty/placeholder, ≥32 chars, ≠ `HMAC_SECRET` | ERROR | manual `openssl rand -hex 32` |
 | `INTERNAL_PROXY_SECRET` non-empty | ERROR | Render `generateValue` |
@@ -72,9 +71,8 @@ prod → refuse start (we use `DEBUG=false`).
 
 **Relaxed:** none of the security guards. The only non-security toggle is
 `EMAIL_DEV_MODE=true` (outbound email off) — `APP_URL` is still required and set.
-The two friction points are infra/setup, not relaxations: Redis must be a TLS
-(`rediss://`) endpoint, and a Google OAuth client must exist (free, works on a
-`vercel.app` domain).
+The one friction point is infra/setup, not a relaxation: Redis must be a TLS
+(`rediss://`) endpoint.
 
 ---
 
@@ -197,7 +195,6 @@ In the `rsends-shared` env group (Render dashboard):
 | `CELERY_RESULT_BACKEND` | `rediss://…/2` |
 | `AUTH_JWT_SECRET` | **manual** — `python -c 'import secrets;print(secrets.token_hex(32))'` (≥64 chars; Render's generated value may be too short) |
 | `ADMIN_API_TOKEN` | **manual** — `openssl rand -hex 32` (≥32 chars, **must differ from `HMAC_SECRET`**; startup fails on empty/short/equal) |
-| `GOOGLE_OAUTH_CLIENT_ID` | **required** — create a Google OAuth client (free; works on `vercel.app`) |
 | `ALCHEMY_API_KEY` | your Alchemy key (always required) |
 | `INDEXER_RPC_URLS_JSON` | `{"84532":"https://base-sepolia.g.alchemy.com/v2/<KEY>"}` |
 | `RSENDS_ROUTER_ADDRESSES_JSON` | `{"84532":"<ROUTER_ADDRESS>"}` (from Part 1) |
@@ -329,7 +326,6 @@ re-deploy re-runs `upgrade head`, which is a no-op once at `0007`.
 | `INTERNAL_PROXY_SECRET` | gates `/api/internal/*` | SECRET | Render generateValue | (auto) |
 | `AUTH_JWT_SECRET` | session JWT (≥64) | SECRET | **manual** `token_hex(32)` | (64-char hex) |
 | `ADMIN_API_TOKEN` | admin surface bearer (≥32, ≠ `HMAC_SECRET`) | SECRET | **manual** `openssl rand -hex 32` | (64-char hex) |
-| `GOOGLE_OAUTH_CLIENT_ID` | Google login (**required**) | SECRET | Google Cloud Console | `<oauth_client_id>` |
 | `ALCHEMY_API_KEY` | RPC (always required) | SECRET | dashboard.alchemy.com | `<alchemy_key>` |
 | `RSENDS_ROUTER_ADDRESSES_JSON` | chain→router map | PUBLIC | Part 1 deploy output | `{"84532":"<FILL_AFTER_CONTRACT_DEPLOY>"}` |
 | `INDEXER_RPC_URLS_JSON` | chain→RPC map | SECRET (has key) | Alchemy | `{"84532":"https://base-sepolia.g.alchemy.com/v2/<KEY>"}` |
@@ -373,13 +369,6 @@ with) the first production-posture deploy:
      -H "X-Admin-Token: <ADMIN_API_TOKEN>" https://rsends-api.onrender.com/health/config
    # → 200 (env var audit; values never exposed)
    ```
-2. **Google OAuth consent screen.** Publish the consent screen for the OAuth
-   client behind `GOOGLE_OAUTH_CLIENT_ID` (Google Cloud Console). While it stays
-   in *Testing*, only allowlisted test users can sign in with Google.
-3. **GitHub OAuth production app.** Create the production GitHub OAuth app
-   (callback URL = the Vercel domain) and set `GITHUB_CLIENT_ID` /
-   `GITHUB_CLIENT_SECRET` on Vercel (NextAuth side — the backend only verifies
-   the resulting token).
-4. **Monitoring (optional).** Backend env: `SENTRY_DSN` (errors),
+2. **Monitoring (optional).** Backend env: `SENTRY_DSN` (errors),
    `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` / `TELEGRAM_ALERT_CHAT_ID`
    (alerts), `ALERT_WEBHOOK_URL` (Slack/Discord webhook).

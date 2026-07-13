@@ -1,10 +1,10 @@
 """Email+password auth endpoints (Prompt 12 / Fase 3 start).
 
-Parallel to `auth_routes.py` (Google OAuth), which stays untouched. The
-login flow reproduces the Google flow's UserSession-row-persist + cookie
-steps so both methods share the same downstream session semantics.
+Parallel to `auth_routes.py` (session refresh/logout/me). The login flow
+persists the UserSession backup row + cookies so both routers share the
+same downstream session semantics.
 
-All endpoints live under /api/v1/auth, matching the Google router's
+All endpoints live under /api/v1/auth, matching the session router's
 prefix so cookie path scoping (/api/v1/auth) remains consistent.
 """
 

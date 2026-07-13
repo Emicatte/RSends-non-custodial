@@ -7,12 +7,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useEmailAuth, type AccountType, type EmailAuthErrorShape } from '@/hooks/useEmailAuth'
 import { countryOptions } from '@/lib/countries'
 import { PasswordStrengthMeter, scorePassword } from './PasswordStrengthMeter'
-import { OAuthDivider } from './OAuthDivider'
-import { GoogleSignInButton } from './GoogleSignInButton'
-import { GitHubSignInButton } from './GitHubSignInButton'
 import { EmailAuthError } from './EmailAuthError'
 import { TurnstileWidget } from './TurnstileWidget'
-import { AccountLinkingModal, type LinkingScenario } from './AccountLinkingModal'
+import { AccountLinkingModal } from './AccountLinkingModal'
 
 // Design system: ink #2C2C2A · terracotta #C8512C · paper #FAF8F3/#fff · muted #888780.
 const FIELD =
@@ -40,7 +37,7 @@ export function SignupForm() {
   const [terms, setTerms] = useState(false)
   const [newsletter, setNewsletter] = useState(false)
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
-  const [linking, setLinking] = useState<{ scenario: LinkingScenario; email: string } | null>(null)
+  const [linking, setLinking] = useState<{ email: string } | null>(null)
   const checkTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => () => { if (checkTimer.current) clearTimeout(checkTimer.current) }, [])
@@ -62,10 +59,7 @@ export function SignupForm() {
       try {
         const r = await checkEmail(value)
         if (r.exists) {
-          setLinking({
-            scenario: r.has_password ? 'existing-password' : r.has_github ? 'existing-github' : 'existing-google',
-            email: value,
-          })
+          setLinking({ email: value })
         }
       } catch {
         /* surface only on submit */
@@ -115,15 +109,7 @@ export function SignupForm() {
     } catch (err) {
       const ex = err as EmailAuthErrorShape
       if (ex?.code === 'email_already_exists') {
-        try {
-          const r = await checkEmail(lowerEmail)
-          setLinking({
-            scenario: r.has_password ? 'existing-password' : r.has_github ? 'existing-github' : 'existing-google',
-            email: lowerEmail,
-          })
-        } catch {
-          /* leave error banner */
-        }
+        setLinking({ email: lowerEmail })
       }
     }
   }
@@ -311,12 +297,6 @@ export function SignupForm() {
         </button>
       </form>
 
-      <OAuthDivider />
-      <GoogleSignInButton callbackUrl={`/${locale}/app`} disabled={loading} />
-      <div className="mt-2">
-        <GitHubSignInButton callbackUrl={`/${locale}/app`} disabled={loading} />
-      </div>
-
       <p className="mt-6 text-center text-sm" style={{ color: '#888780' }}>
         {tCommon('haveAccount')}{' '}
         <Link href={`/${locale}/login`} style={{ color: '#C8512C', textDecoration: 'none' }}>
@@ -326,7 +306,6 @@ export function SignupForm() {
 
       {linking ? (
         <AccountLinkingModal
-          scenario={linking.scenario}
           email={linking.email}
           onClose={() => setLinking(null)}
         />
