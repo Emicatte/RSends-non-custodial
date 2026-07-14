@@ -68,6 +68,9 @@ export default function AdminApprovalsPage() {
         setRows((await res.json()) as PendingRow[])
         setError(null)
       } catch (e) {
+        // Fail loud: a failed read must never leave a plausible-but-unverified
+        // queue (or an empty-state that implies a successful read) on screen.
+        setRows([])
         setError(e instanceof Error ? e.message : String(e))
       } finally {
         setLoading(false)
@@ -134,13 +137,14 @@ export default function AdminApprovalsPage() {
           </div>
         </header>
 
+        {/* Error is EXCLUSIVE: when the read failed, show only the error —
+            never the empty-state or a stale list, which would imply a
+            successful read of an empty queue. */}
         {error ? (
           <p role="alert" className="mb-4 text-sm" style={{ color: '#B3261E' }}>
             {error}
           </p>
-        ) : null}
-
-        {loading ? (
+        ) : loading ? (
           <p className="text-sm" style={{ color: '#888780' }}>
             Loading…
           </p>

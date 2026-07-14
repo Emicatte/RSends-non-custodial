@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireEnv } from '@/lib/env'
+import { mapAdminBackendError } from '@/lib/admin/adminBackendError'
+
+export { mapAdminBackendError }
 
 /**
  * Server-side bridge to the backend's admin approval queue.
@@ -62,6 +65,10 @@ export async function forwardToBackend(
       },
       signal: AbortSignal.timeout(10000),
     })
+    const classified = mapAdminBackendError(backendRes.status)
+    if (classified) {
+      return NextResponse.json(classified, { status: backendRes.status })
+    }
     const data = await backendRes.json().catch(() => ({}))
     return NextResponse.json(data, { status: backendRes.status })
   } catch (err) {
