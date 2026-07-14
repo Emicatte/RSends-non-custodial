@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import { useSession } from 'next-auth/react'
+import { initAuthChannel } from '@/lib/auth-client'
 
 /**
  * Persists reactively-refreshed backend access tokens into the NextAuth JWT.
@@ -13,11 +14,15 @@ import { useSession } from 'next-auth/react'
  * was permanently expired after 15 minutes and bounced users to /onboarding.
  * The jwt callback already accepts `trigger === 'update'` (auth-options.ts);
  * this bridge is the missing caller.
+ *
+ * Also opens the cross-tab auth channel from page load, so a token refreshed
+ * in another tab lands here (as the same event) before this tab ever 401s.
  */
 export function TokenRefreshBridge() {
   const { update } = useSession()
 
   useEffect(() => {
+    initAuthChannel()
     const onRefresh = (e: Event) => {
       const access_token = (e as CustomEvent<{ access_token?: string }>).detail
         ?.access_token
