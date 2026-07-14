@@ -50,6 +50,7 @@ EXEMPT_PATHS = {
     "/api/v1/forwarding",      # sweeper forwarding/*, require_wallet_auth
     # ── Admin token / internal ──
     "/api/v1/audit",           # X-Admin-Token
+    "/admin/approvals",        # X-Admin-Token (require_admin on the router)
     "/api/internal/signing",   # called by Next.js oracle, internal-only
     "/api/internal/ratelimit", # called by Next.js oracle, internal-only (M5)
     "/api/internal/oracle",    # oracle digest signer, internal-only (M1)
