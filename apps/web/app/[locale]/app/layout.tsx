@@ -34,8 +34,10 @@ export default async function AppLayout({
   // consents/age attestation or an un-submitted company profile never render
   // the dashboard (fail-closed to the /onboarding gate page). An unreachable
   // backend is NOT a denial: render the client retry gate instead of bouncing.
+  // A stale (expired) access token gets the same gate — it refreshes the
+  // token in place and re-runs this guard, keeping the user on their URL.
   const guard = await enforceOnboarding(session, locale)
-  if (guard === 'unreachable') {
+  if (guard === 'unreachable' || guard === 'stale-token') {
     return <BackendUnreachableGate />
   }
   return (

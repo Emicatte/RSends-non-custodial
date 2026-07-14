@@ -23,8 +23,10 @@ export default async function SettingsLayout({
   // Staged onboarding, enforced server-side (same guard as /app): settings
   // hosts the settlement-wallet write and org management surfaces. An
   // unreachable backend is NOT a denial: render the client retry gate.
+  // A stale (expired) access token gets the same gate — it refreshes the
+  // token in place and re-runs this guard, keeping the user on their URL.
   const guard = await enforceOnboarding(session, locale)
-  if (guard === 'unreachable') {
+  if (guard === 'unreachable' || guard === 'stale-token') {
     return <BackendUnreachableGate />
   }
   const t = await getTranslations({ locale, namespace: 'settings' })

@@ -3,7 +3,10 @@
 /**
  * Full-page retry gate rendered by the /app and /settings layouts when the
  * server-side onboarding guard resolves 'unreachable' (network error,
- * timeout, 5xx — e.g. the Render free-tier cold start).
+ * timeout, 5xx — e.g. the Render free-tier cold start) or 'stale-token'
+ * (expired access token — the probe below refreshes it via apiCall and hands
+ * back to the guard, so the user stays on their URL instead of bouncing
+ * through /onboarding).
  *
  * The absence of an answer is not a denial. This component re-asks the guard's
  * exact question (getOnboardingState via apiCall, Bearer + one-shot cookie

@@ -4,10 +4,16 @@
  * enforceOnboarding — denial vs unreachable.
  *
  * A timeout is not a denial. The guard must keep the fail-closed redirect for
- * explicit auth/onboarding states (401/403/other 4xx, missing token) but must
- * NOT bounce the user when the backend simply could not answer (network
- * error, timeout, 5xx — e.g. the Render free-tier cold start): those resolve
+ * explicit onboarding denials (403/other 4xx, missing token) but must NOT
+ * bounce the user when the backend simply could not answer (network error,
+ * timeout, 5xx — e.g. the Render free-tier cold start): those resolve
  * 'unreachable' so the layout can render the retry gate instead.
+ *
+ * A 401 is its own class: the server guard cannot refresh (it can't persist
+ * rotated cookies), but the CLIENT can — so an expired access token resolves
+ * 'stale-token' and the layout renders the same client gate, which refreshes
+ * in place instead of bouncing the user through /onboarding on every hard
+ * refresh past the 15-minute token TTL.
  */
 import { redirect } from 'next/navigation'
 import type { Session } from 'next-auth'
@@ -77,9 +83,11 @@ it('redirects to the consent step on 200 with stale consents (unchanged)', async
   await expectRedirect(enforceOnboarding(SESSION, 'en'), '/en/onboarding/consent')
 })
 
-it('401 keeps the fail-closed redirect to the gate (unchanged)', async () => {
+it("401 resolves 'stale-token' — client-refreshable, no /onboarding bounce", async () => {
   mockFetch(async () => ({ ok: false, status: 401 }))
-  await expectRedirect(enforceOnboarding(SESSION, 'en'), '/en/onboarding')
+
+  await expect(enforceOnboarding(SESSION, 'en')).resolves.toBe('stale-token')
+  expect(redirectMock).not.toHaveBeenCalled()
 })
 
 it('403 keeps the fail-closed redirect to the gate (unchanged)', async () => {

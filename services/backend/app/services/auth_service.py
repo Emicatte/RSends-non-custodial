@@ -175,7 +175,13 @@ async def rotate_refresh_token(
 
     Security: if the provided refresh token hash does NOT match the stored
     hash, we treat it as possible theft → revoke the session immediately and
-    raise `refresh_reuse_detected`.
+    raise `refresh_reuse_detected`. This is DELIBERATELY strict — no reuse
+    grace window. The benign multi-tab rotation race is prevented on the
+    client (cross-tab Web Lock + BroadcastChannel in
+    apps/web/lib/auth-client.ts); a 60s server-side grace was considered and
+    rejected (2026-07-14) because it silently hands an access token to
+    whoever presents a stolen just-rotated token and defers theft detection
+    by one access-token lifetime.
     """
     r = await get_redis()
     if r is None:

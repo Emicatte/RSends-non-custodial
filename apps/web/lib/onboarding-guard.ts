@@ -19,8 +19,13 @@
  *
  * No server-side token refresh here: a server component cannot persist the
  * rotated refresh-token cookies, and rotating them server-side would desync
- * the browser's refresh chain. An expired access token costs one bounce
- * through the gate page.
+ * the browser's refresh chain. A 401 therefore resolves 'stale-token' instead
+ * of redirecting: the access token in the NextAuth cookie has expired (15-min
+ * TTL) but the CLIENT can refresh it, so the layout renders the client gate
+ * (same component as 'unreachable'), which refreshes in place and hands back
+ * to this guard — the user stays on their URL instead of bouncing through
+ * /onboarding on every hard refresh past the token TTL. A dead session still
+ * ends at /login: the gate's probe classifies a failed refresh as terminal.
  */
 
 import { redirect } from 'next/navigation'
@@ -36,7 +41,7 @@ import {
  * to the client-side retry gate (which owns the long cold-start budget). */
 const GUARD_TIMEOUT_MS = 8_000
 
-export type OnboardingGuardResult = 'ok' | 'unreachable'
+export type OnboardingGuardResult = 'ok' | 'unreachable' | 'stale-token'
 
 export async function enforceOnboarding(
   session: Session,
@@ -60,6 +65,10 @@ export async function enforceOnboarding(
     )
     if (res.status >= 500) {
       return 'unreachable'
+    }
+    if (res.status === 401) {
+      // Expired access token — refreshable, but only by the client.
+      return 'stale-token'
     }
     if (!res.ok) {
       redirect(gate)
