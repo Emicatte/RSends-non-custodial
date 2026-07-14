@@ -1631,7 +1631,10 @@
     "pending": {
       "title": "Il tuo account è in revisione",
       "body": "Abbiamo ricevuto i dati della tua azienda. Il nostro team esamina ogni nuovo merchant prima di attivare i pagamenti — di solito entro un giorno lavorativo.",
-      "autoRefresh": "Questa pagina si aggiorna automaticamente — non serve ricaricare."
+      "autoRefresh": "Questa pagina si aggiorna automaticamente — non serve ricaricare.",
+      "sessionExpired": "La sessione è scaduta durante l'attesa. Accedi di nuovo per continuare a seguire questa pagina — la tua richiesta non ne è toccata.",
+      "loginAgain": "Accedi di nuovo",
+      "connectionTrouble": "Difficoltà a raggiungere il server — continuo a riprovare automaticamente."
     },
     "declined": {
       "title": "La tua richiesta è stata rifiutata",

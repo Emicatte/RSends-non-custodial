@@ -1632,7 +1632,10 @@
     "pending": {
       "title": "Votre compte est en cours de vérification",
       "body": "Nous avons bien reçu les informations de votre société. Notre équipe examine chaque nouveau marchand avant d'activer les paiements — généralement sous un jour ouvré.",
-      "autoRefresh": "Cette page se met à jour automatiquement — inutile de recharger."
+      "autoRefresh": "Cette page se met à jour automatiquement — inutile de recharger.",
+      "sessionExpired": "Votre session a expiré pendant l'attente. Reconnectez-vous pour continuer à suivre cette page — votre demande n'est pas affectée.",
+      "loginAgain": "Se reconnecter",
+      "connectionTrouble": "Difficultés à joindre le serveur — nouvelles tentatives automatiques en cours."
     },
     "declined": {
       "title": "Votre demande a été refusée",

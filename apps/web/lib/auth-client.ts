@@ -10,9 +10,64 @@ import { performLogout } from '@/lib/logoutClient'
  *   • Data calls go through the existing /api/backend proxy (Bearer only).
  *   • 401s trigger ONE refresh through /api/rp-auth (cookie-aware proxy)
  *     and the original request is replayed with the new access_token.
- *   • If refresh fails, signs the user out (client-side) and throws
- *     "session_expired".
+ *   • Refresh outcomes are CLASSIFIED: a 401/403 from the refresh endpoint
+ *     means the server session is dead (revoked/rotated away) → sign out and
+ *     throw "session_expired". Network errors and 5xx are TRANSIENT (backend
+ *     deploy, blip) → throw "refresh_unavailable" WITHOUT logging out, so a
+ *     polling caller can simply retry later. Treating a transient failure as
+ *     terminal is what killed live sessions during backend redeploys.
+ *   • The refresh is SINGLE-FLIGHT: concurrent 401s share one refresh call.
+ *     Two racing refreshes present the same rotated-away cookie and trip the
+ *     backend's reuse detection, which revokes the whole session.
  */
+
+let refreshInFlight: Promise<string> | null = null
+
+async function doRefresh(): Promise<string> {
+  let res: Response
+  try {
+    res = await fetch('/api/rp-auth/api/v1/auth/refresh', {
+      method: 'POST',
+      credentials: 'include',
+    })
+  } catch {
+    throw new Error('refresh_unavailable')
+  }
+  if (res.ok) {
+    const { access_token } = (await res
+      .json()
+      .catch(() => ({}))) as { access_token?: string }
+    if (access_token) {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('rsends:token-refreshed', { detail: { access_token } }),
+        )
+      }
+      return access_token
+    }
+    // 200 without a token is a malformed response, not a dead session.
+    throw new Error('refresh_unavailable')
+  }
+  if (res.status === 401 || res.status === 403) {
+    // The server session is already dead — skipBackend: requiring a logout
+    // call here would deadlock.
+    await performLogout({ skipBackend: true })
+    throw new Error('session_expired')
+  }
+  // 5xx / 429 / anything else: the auth service is unavailable, the session
+  // may well still be valid — do NOT log out.
+  throw new Error('refresh_unavailable')
+}
+
+function refreshAccessToken(): Promise<string> {
+  if (!refreshInFlight) {
+    refreshInFlight = doRefresh().finally(() => {
+      refreshInFlight = null
+    })
+  }
+  return refreshInFlight
+}
+
 export async function apiCall<T>(
   path: string,
   accessToken: string | undefined,
@@ -27,27 +82,11 @@ export async function apiCall<T>(
   let res = await fetch(`/api/backend${path}`, { ...init, headers })
 
   if (res.status === 401 && accessToken) {
-    const refresh = await fetch('/api/rp-auth/api/v1/auth/refresh', {
-      method: 'POST',
-      credentials: 'include',
-    })
-    if (refresh.ok) {
-      const { access_token } = (await refresh.json()) as { access_token?: string }
-      if (access_token) {
-        headers.set('Authorization', `Bearer ${access_token}`)
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(
-            new CustomEvent('rsends:token-refreshed', { detail: { access_token } }),
-          )
-        }
-        res = await fetch(`/api/backend${path}`, { ...init, headers })
-      }
-    } else {
-      // Refresh failed ⇒ the server session is already dead (revoked/rotated
-      // away) — skipBackend: requiring a logout call here would deadlock.
-      await performLogout({ skipBackend: true })
-      throw new Error('session_expired')
-    }
+    // Throws session_expired (terminal, signed out) or refresh_unavailable
+    // (transient, session intact — caller retries).
+    const access_token = await refreshAccessToken()
+    headers.set('Authorization', `Bearer ${access_token}`)
+    res = await fetch(`/api/backend${path}`, { ...init, headers })
   }
 
   if (!res.ok) {
