@@ -44,3 +44,24 @@ export function revokeToken(token: string): void {
 }
 
 export const TOKEN_TTL_SECONDS = TOKEN_TTL
+
+// ── Bearer ADMIN_SECRET fallback (single implementation) ────
+// The Bearer fallback is password-only (no 2FA), so it is disabled in
+// production unless ADMIN_ALLOW_BEARER=1 is set explicitly (M11). Every
+// admin surface must gate its Authorization-header path through this —
+// a route with its own copy risks drifting (2fa/setup did).
+
+function bearerAllowed(): boolean {
+  return process.env.NODE_ENV !== 'production' || process.env.ADMIN_ALLOW_BEARER === '1'
+}
+
+export function bearerAdminAuthorized(authorizationHeader: string | null): boolean {
+  if (!bearerAllowed()) return false
+  const auth = authorizationHeader ?? ''
+  const bearer = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+  const secret = process.env.ADMIN_SECRET || ''
+  if (!secret || !bearer) return false
+  const bearerBuf = Buffer.from(bearer)
+  const secretBuf = Buffer.from(secret)
+  return bearerBuf.length === secretBuf.length && crypto.timingSafeEqual(bearerBuf, secretBuf)
+}

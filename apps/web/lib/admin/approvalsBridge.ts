@@ -23,23 +23,16 @@ function getBackendAdminToken() {
   return process.env.BACKEND_ADMIN_API_TOKEN || ''
 }
 
-// The Bearer ADMIN_SECRET fallback is password-only (no 2FA) — disabled in
-// production unless ADMIN_ALLOW_BEARER=1 (same rule as /api/admin/transactions).
-function bearerAllowed(): boolean {
-  return process.env.NODE_ENV !== 'production' || process.env.ADMIN_ALLOW_BEARER === '1'
-}
-
 export async function isAuthorized(req: NextRequest): Promise<boolean> {
   const cookie = req.cookies.get(COOKIE_NAME)?.value
   if (cookie) {
     const { getTokenScope } = await import('@/lib/auth/adminTokens')
     return getTokenScope(cookie) === 'full'
   }
-  if (!bearerAllowed()) return false
-  const auth = req.headers.get('Authorization') ?? ''
-  const bearer = auth.startsWith('Bearer ') ? auth.slice(7) : ''
-  const secret = process.env.ADMIN_SECRET || ''
-  return !!(secret && bearer && bearer === secret)
+  // Bearer ADMIN_SECRET fallback (password-only, no 2FA) — prod-disabled
+  // unless ADMIN_ALLOW_BEARER=1 (M11), shared implementation.
+  const { bearerAdminAuthorized } = await import('@/lib/auth/adminTokens')
+  return bearerAdminAuthorized(req.headers.get('Authorization'))
 }
 
 export function notConfigured(): NextResponse | null {

@@ -195,7 +195,7 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
 
 | Surface | Auth | Notes |
 |---|---|---|
-| `GET /api/v1/audit/log`, `/admin/aml/*` (4 routes), `GET /health/config` | `X-Admin-Token` == **`ADMIN_API_TOKEN`** (dedicated env var) | Single `require_admin` dependency (`audit_routes.py`): constant-time `secrets.compare_digest`, denies everything when unset. **Never reuse `HMAC_SECRET` as an auth token** — startup fails in prod if the two are equal, too short, or placeholder. |
+| `GET /api/v1/audit/log`, `/admin/aml/*` (4 routes), `/admin/approvals` (list) + `/{org_id}/approve\|decline`, `GET /health/config` | `X-Admin-Token` == **`ADMIN_API_TOKEN`** (dedicated env var) | Single `require_admin` dependency (`audit_routes.py`): constant-time `secrets.compare_digest`, denies everything when unset. **Never reuse `HMAC_SECRET` as an auth token** — startup fails in prod if the two are equal, too short, or placeholder. X-Admin-Token surfaces must also be exempt from the API-key middleware (`EXEMPT_PATHS`) or they 401 in prod before `require_admin` runs — pinned by `test_admin_approvals.py::test_admin_approvals_exempt_from_api_key_middleware`. |
 
 ### Known follow-ups (tracked here so they're not forgotten — do not fix as a drive-by)
 
@@ -234,7 +234,8 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
   so `DEBUG=false` (ideally plus `ENVIRONMENT=production`, which makes a future `DEBUG=true`
   flip refuse startup) is required for quiet prod logs; secret **redaction**
   (`SecretRedactionFilter`/`RedactingJsonFormatter` in `logging_config.py` — Alchemy-style
-  URL-path keys, connection-string passwords, bearer tokens, `rsend_`/`rsusr_` keys) is
+  URL-path keys, Telegram bot tokens in the URL path (`api.telegram.org/bot<token>/…`),
+  connection-string passwords, bearer tokens, `rsend_`/`rsusr_` keys) is
   active in every posture and pinned by `test_logging_redaction.py`/`test_logging_posture.py`.
 - **Phase C deferrals — mostly closed by Phase E (2026-07-08).** Phase C shipped the session-authed
   org **payments read** view (`GET /api/v1/user/org/payment-intents` + `/[locale]/app/payments`,

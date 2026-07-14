@@ -5,16 +5,16 @@ import QRCode from 'qrcode'
 const COOKIE_NAME = 'admin_session'
 
 async function isAuthorized(req: NextRequest): Promise<boolean> {
-  // Same pattern as app/api/admin/transactions/route.ts
+  // Same pattern as app/api/admin/transactions/route.ts. A setup-only
+  // (bootstrap) session is accepted here on purpose — enrolling TOTP is the
+  // one thing it exists for.
   const cookie = req.cookies.get(COOKIE_NAME)?.value
   if (cookie) {
     const { validateToken } = await import('@/lib/auth/adminTokens')
     return validateToken(cookie)
   }
-  const auth = req.headers.get('Authorization') ?? ''
-  const bearer = auth.startsWith('Bearer ') ? auth.slice(7) : ''
-  const secret = process.env.ADMIN_SECRET || ''
-  return !!(secret && bearer && bearer === secret)
+  const { bearerAdminAuthorized } = await import('@/lib/auth/adminTokens')
+  return bearerAdminAuthorized(req.headers.get('Authorization'))
 }
 
 // POST /api/admin/2fa/setup

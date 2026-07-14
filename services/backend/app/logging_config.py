@@ -67,6 +67,13 @@ _GENERIC_V2_KEY = re.compile(
 _URL_CREDENTIALS = re.compile(
     r"\b([a-z][a-z0-9+.\-]*://[^/\s:@\"']*):([^@/\s\"']+)@", re.IGNORECASE
 )
+# Token del bot Telegram nel PATH dell'URL (https://api.telegram.org/bot
+# <id>:<token>/metodo — notification_service/alert_service): host-anchored e
+# con la forma <digits>:<token> obbligatoria, così /botinfo o /bottega/…
+# restano intatti. Il suffisso (/sendMessage) resta visibile come contesto.
+_TELEGRAM_BOT_URL = re.compile(
+    r"(https?://api\.telegram\.org/bot)\d+:[A-Za-z0-9_\-]+"
+)
 # Bearer token (header Authorization, JWT inclusi).
 _BEARER = re.compile(r"\b([Bb]earer\s+)[A-Za-z0-9\-._~+/]+=*")
 # Chiavi API del repo (merchant rsend_*, utente rsusr_*) — oltre il minimo
@@ -77,9 +84,10 @@ _RSEND_KEY = re.compile(
     r"\b(rsend_(?:test|live)_|rsusr_(?:test|live)_)[A-Za-z0-9_\-]+"
 )
 
-# Marcatori a substring: se nessuno è presente, nessuna delle 5 regex può
+# Marcatori a substring: se nessuno è presente, nessuna delle 6 regex può
 # matchare, quindi si salta l'intera scansione (fast-path, output invariato).
-# "://" copre sia le connection string sia gli URL Alchemy/generici (/v2/…).
+# "://" copre le connection string e TUTTI i pattern URL (Alchemy, /v2/…,
+# Telegram bot).
 _MARKERS = ("://", "earer", "rsend_", "rsusr_")
 
 
@@ -90,6 +98,7 @@ def redact_secrets(text: str) -> str:
         return text
     text = _ALCHEMY_URL_KEY.sub(r"\1" + _MASK, text)
     text = _GENERIC_V2_KEY.sub(r"\1" + _MASK, text)
+    text = _TELEGRAM_BOT_URL.sub(r"\1" + _MASK, text)
     text = _URL_CREDENTIALS.sub(r"\1:" + _MASK + "@", text)
     text = _BEARER.sub(r"\1" + _MASK, text)
     text = _RSEND_KEY.sub(r"\1" + _MASK, text)

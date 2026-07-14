@@ -96,6 +96,54 @@ def test_redact_alchemy_key_in_traceback():
     assert f"alchemy.com/v2/{MASK}" in out
 
 
+# ── Telegram bot token in the URL path ────────────────────────────────
+# The Telegram Bot API puts the token IN the path (…/bot<token>/sendMessage):
+# notification_service.py:198 / alert_service.py:205. Not /v2/, not user:pass@,
+# not Bearer — none of the other regexes cover it.
+
+TELEGRAM_TOKEN = "8123456789:AAEexample-secret_bot_token1234567"
+TELEGRAM_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+
+
+def test_redact_telegram_token_in_message():
+    stream = _capture()
+    _log().info(f'HTTP Request: POST {TELEGRAM_URL} "HTTP/1.1 200 OK"')
+    (rec,) = _records(stream)
+    assert TELEGRAM_TOKEN not in rec["message"]
+    assert f"https://api.telegram.org/bot{MASK}/sendMessage" in rec["message"]
+    assert '"HTTP/1.1 200 OK"' in rec["message"]  # context preserved
+
+
+def test_redact_telegram_token_in_percent_args():
+    """The httpx sink passes the URL via %-args, not an f-string."""
+    stream = _capture()
+    _log().info("HTTP Request: %s %s", "POST", TELEGRAM_URL)
+    (rec,) = _records(stream)
+    assert rec["message"] == f"HTTP Request: POST https://api.telegram.org/bot{MASK}/sendMessage"
+
+
+def test_redact_telegram_token_in_traceback():
+    """Connect errors embed the URL in the exception message."""
+    stream = _capture()
+    try:
+        raise ValueError(f"connect failed: {TELEGRAM_URL}")
+    except ValueError:
+        _log().exception("boom")
+    out = stream.getvalue()
+    assert TELEGRAM_TOKEN not in out
+    assert f"api.telegram.org/bot{MASK}" in out
+
+
+def test_bot_like_paths_untouched():
+    """Human path segments starting with 'bot' must survive (host-anchored,
+    digits+colon required)."""
+    stream = _capture()
+    msg = "GET https://example.com/bottega/items and https://api.telegram.org/botinfo/docs"
+    _log().info(msg)
+    (rec,) = _records(stream)
+    assert rec["message"] == msg
+
+
 # ── Credentialed connection strings ───────────────────────────────────
 
 
