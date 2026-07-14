@@ -588,41 +588,53 @@ class PaymentWatcher:
         start_block = min(last + 1, final_head + 1)
         if start_block <= latest:
             end_block = min(latest, start_block + MAX_BLOCKS_PER_TICK - 1)
-            logs = await rpc.call(
-                "eth_getLogs",
-                [{
-                    "fromBlock": hex(start_block),
-                    "toBlock": hex(end_block),
-                    "address": self.router_address,
-                    "topics": [PAYMENT_MADE_TOPIC],
-                }],
-            ) or []
+            # Providers cap the getLogs range (Alchemy free tier: 10 blocks on
+            # Base Sepolia) — scan the window in chunks the provider accepts.
+            # The cursor advances PER CHUNK, so a mid-window failure keeps the
+            # completed chunks and the next tick resumes at the exact failure
+            # point instead of retrying the same oversized range forever.
+            max_range = max(
+                1, int(getattr(settings, "indexer_getlogs_max_range", 10))
+            )
+            chunk_start = start_block
+            while chunk_start <= end_block:
+                chunk_end = min(end_block, chunk_start + max_range - 1)
+                logs = await rpc.call(
+                    "eth_getLogs",
+                    [{
+                        "fromBlock": hex(chunk_start),
+                        "toBlock": hex(chunk_end),
+                        "address": self.router_address,
+                        "topics": [PAYMENT_MADE_TOPIC],
+                    }],
+                ) or []
 
-            for log in logs:
-                # Source authenticity (defence-in-depth on the address filter
-                # above): only trust logs emitted by THIS chain's RSendsRouter.
-                if (log.get("address") or "").lower() != self.router_address:
-                    logger.warning(
-                        "[indexer] dropping PaymentMade from non-router address %s (chain=%d)",
-                        log.get("address"), self.chain_id,
-                    )
-                    continue
-                ev = _decode_payment_made(log)
-                if ev is None:
-                    continue
-                try:
-                    action = await _record_settlement(self.chain_id, ev)
-                    if action == "new":
-                        processed += 1
-                        logger.info(
-                            "[indexer] PaymentMade invoiceId=%s amount=%s tx=%s (pending)",
-                            ev["invoice_id"][:18], ev["amount"], ev["tx_hash"][:16],
+                for log in logs:
+                    # Source authenticity (defence-in-depth on the address filter
+                    # above): only trust logs emitted by THIS chain's RSendsRouter.
+                    if (log.get("address") or "").lower() != self.router_address:
+                        logger.warning(
+                            "[indexer] dropping PaymentMade from non-router address %s (chain=%d)",
+                            log.get("address"), self.chain_id,
                         )
-                except Exception:
-                    logger.exception(
-                        "[indexer] failed to ingest settlement tx=%s", ev["tx_hash"][:16]
-                    )
-            await _set_last_block(self.chain_id, end_block)
+                        continue
+                    ev = _decode_payment_made(log)
+                    if ev is None:
+                        continue
+                    try:
+                        action = await _record_settlement(self.chain_id, ev)
+                        if action == "new":
+                            processed += 1
+                            logger.info(
+                                "[indexer] PaymentMade invoiceId=%s amount=%s tx=%s (pending)",
+                                ev["invoice_id"][:18], ev["amount"], ev["tx_hash"][:16],
+                            )
+                    except Exception:
+                        logger.exception(
+                            "[indexer] failed to ingest settlement tx=%s", ev["tx_hash"][:16]
+                        )
+                await _set_last_block(self.chain_id, chunk_end)
+                chunk_start = chunk_end + 1
 
         # ── FINALIZE / RECONCILE ── Promote canonical+final rows to paid, reverse
         # reorged ones. This is where invoices are marked paid and webhooks fire.
