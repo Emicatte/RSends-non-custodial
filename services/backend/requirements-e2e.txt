@@ -1,2 +1,5 @@
 web3>=6.20,<8
 fakeredis>=2.21
+# Per-test wall-clock cap so a single hung test dies with a traceback of where
+# it blocked, instead of running until the job timeout with no diagnosis.
+pytest-timeout>=2.3

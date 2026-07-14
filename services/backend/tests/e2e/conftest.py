@@ -116,15 +116,23 @@ def deployed(anvil):
         "FEE_COLLECTOR": ANVIL_ACCOUNTS["feeCollector"]["address"],
         "PAYER": ANVIL_ACCOUNTS["payer"]["address"],
     }
-    subprocess.run(
-        [
-            "forge", "script", "script/E2EDeploy.s.sol:E2EDeploy",
-            "--rpc-url", anvil, "--broadcast",
-            "--private-key", ANVIL_ACCOUNTS["deployer"]["key"],
-        ],
-        cwd=CONTRACTS_DIR, env=env, check=True,
-        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-    )
+    try:
+        subprocess.run(
+            [
+                "forge", "script", "script/E2EDeploy.s.sol:E2EDeploy",
+                "--rpc-url", anvil, "--broadcast",
+                "--private-key", ANVIL_ACCOUNTS["deployer"]["key"],
+            ],
+            cwd=CONTRACTS_DIR, env=env, check=True,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            # Bound the deploy: a wedged forge/anvil here is the one unbounded
+            # wait left in the harness and would otherwise hang the whole job.
+            timeout=180,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            "E2EDeploy forge script timed out after 180s — anvil/forge wedged"
+        ) from exc
     artifact = (
         CONTRACTS_DIR / "broadcast" / "E2EDeploy.s.sol" / str(CHAIN_ID) / "run-latest.json"
     )
