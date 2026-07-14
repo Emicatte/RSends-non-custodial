@@ -14,6 +14,7 @@ jobs:
   contracts:
     name: Contracts (forge)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: packages/contracts
@@ -30,6 +31,7 @@ jobs:
   backend:
     name: Backend (pytest)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: services/backend
@@ -88,6 +90,7 @@ jobs:
   frontend:
     name: Frontend (tsc)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -108,6 +111,9 @@ jobs:
   e2e:
     name: E2E (Anvil money-path)
     runs-on: ubuntu-latest
+    # The real suite runs in ~1min; a wedged anvil/forge with no timeout has
+    # burned the full 6h GitHub ceiling. Cap it so a hang self-terminates.
+    timeout-minutes: 15
     env:
       DATABASE_URL: "sqlite+aiosqlite://"
       ENVIRONMENT: "test"
