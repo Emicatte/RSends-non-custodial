@@ -234,7 +234,8 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
   so `DEBUG=false` (ideally plus `ENVIRONMENT=production`, which makes a future `DEBUG=true`
   flip refuse startup) is required for quiet prod logs; secret **redaction**
   (`SecretRedactionFilter`/`RedactingJsonFormatter` in `logging_config.py` — Alchemy-style
-  URL-path keys, connection-string passwords, bearer tokens, `rsend_`/`rsusr_` keys) is
+  URL-path keys, Telegram bot tokens in the URL path (`api.telegram.org/bot<token>/…`),
+  connection-string passwords, bearer tokens, `rsend_`/`rsusr_` keys) is
   active in every posture and pinned by `test_logging_redaction.py`/`test_logging_posture.py`.
 - **Phase C deferrals — mostly closed by Phase E (2026-07-08).** Phase C shipped the session-authed
   org **payments read** view (`GET /api/v1/user/org/payment-intents` + `/[locale]/app/payments`,
