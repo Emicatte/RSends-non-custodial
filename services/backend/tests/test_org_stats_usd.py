@@ -15,7 +15,6 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 
-import app.api.user_org_stats_routes as stats_mod
 from app.db.session import async_session, engine
 from app.models.db_models import Base
 from app.models.auth_models import User
@@ -44,13 +43,6 @@ async def setup_db():
 async def session():
     async with async_session() as s:
         yield s
-
-
-@pytest.fixture(autouse=True)
-def _patch_price(monkeypatch):
-    async def _fake_price(coingecko_id, currency="usd"):
-        return {"usd-coin": 1.0, "ethereum": 2000.0}.get(coingecko_id)
-    monkeypatch.setattr(stats_mod, "get_price", _fake_price)
 
 
 async def _make_org(session, *, owner_address):
@@ -170,3 +162,39 @@ async def test_unmatched_settlement_excluded(session):
     stats = await get_org_stats(ctx=_ctx(org), environment="test", db=session)
     assert stats.transactions_24h == 0
     assert stats.volume_24h == 0.0
+
+
+# ═════════════════════════════════════════════════════════════════
+#  Stablecoin peg (price_service removed 2026-07-14)
+# ═════════════════════════════════════════════════════════════════
+
+NATIVE_ETH = "0x" + "0" * 40
+
+
+@pytest.mark.asyncio
+async def test_eth_settlement_counts_but_contributes_zero_volume(session):
+    """RSends moves stablecoins only: a non-stablecoin settlement (native ETH,
+    no peg) is counted in transactions_24h but adds 0 to the USD volume KPI."""
+    org = await _make_org(session, owner_address=OWNER_A)
+    await _seed_settled_intent(session, owner=OWNER_A, recipient=SETTLE_WALLET_A)
+    await _seed_settled_intent(
+        session, owner=OWNER_A, recipient=SETTLE_WALLET_A,
+        token=NATIVE_ETH, amount_base=10**18,  # 1 ETH
+    )
+
+    stats = await get_org_stats(ctx=_ctx(org), environment="test", db=session)
+
+    assert stats.transactions_24h == 2          # both counted
+    assert stats.volume_24h == 5.0              # only the USDC contributes
+
+
+def test_registry_pegs_stablecoins_only():
+    """peg_usd = 1.0 exactly on the USD stablecoins, None on everything else —
+    the dashboard volume figure must never invent a price."""
+    from app.tokens.registry import TOKEN_REGISTRY
+
+    for token in TOKEN_REGISTRY.values():
+        if token.symbol in ("USDC", "USDT", "DAI"):
+            assert token.peg_usd == 1.0, token
+        else:
+            assert token.peg_usd is None, token

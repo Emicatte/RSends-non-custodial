@@ -20,9 +20,10 @@ the intent. Same response shape as `DashboardStats` so the widget re-point is a
 one-line URL change.
 
 USD volume: `PaymentSettlement.amount` is base units; per row we map
-(chain_id, token) → decimals + coingecko_id via `app.tokens.registry`, normalize,
-and multiply by the cached USD price (`price_service.get_price`). Tokens with no
-registry entry or no cached price are counted but contribute 0 to USD volume.
+(chain_id, token) → decimals + `peg_usd` via `app.tokens.registry`, normalize,
+and multiply by the assumed stablecoin peg (RSends moves stablecoins only —
+no price feed; the KPI is display-only). Tokens with no registry entry or no
+peg (ETH, …) are counted but contribute 0 to USD volume.
 """
 
 from __future__ import annotations
@@ -47,7 +48,6 @@ from app.models.settlement_models import PaymentSettlement, SettlementStatus
 # import is lazy — import it here so Base.metadata registers the table for
 # any consumer that create_all's after importing this module.
 from app.models.user_api_keys_models import UserApiKey  # noqa: F401
-from app.services.price_service import get_price
 from app.services.user_api_key_service import count_active_keys_for_org
 from app.tokens.registry import get_token
 
@@ -68,17 +68,14 @@ def _token_info(chain_id, token_addr):
     return get_token(int(chain_id), None if is_native else token_addr)
 
 
-async def _usd_value(chain_id, token_addr, amount_base) -> Optional[float]:
+def _usd_value(chain_id, token_addr, amount_base) -> Optional[float]:
     """USD controvalue of one settlement's base-unit amount, or None when the
-    token is unknown or unpriced."""
+    token is unknown or has no assumed peg (non-stablecoin)."""
     info = _token_info(chain_id, token_addr)
-    if info is None:
-        return None
-    price = await get_price(info.coingecko_id, "usd")
-    if price is None:
+    if info is None or info.peg_usd is None:
         return None
     human = Decimal(amount_base) / (Decimal(10) ** info.decimals)
-    return float(human) * price
+    return float(human) * info.peg_usd
 
 
 @router.get("/stats", response_model=OrgDashboardStats)
@@ -243,7 +240,7 @@ async def get_org_stats(
         rows = (await db.execute(stmt)).scalars().all()
         total = 0.0
         for s in rows:
-            usd = await _usd_value(s.chain_id, s.token, s.amount)
+            usd = _usd_value(s.chain_id, s.token, s.amount)
             if usd is not None:
                 total += usd
         return round(total, 2)
@@ -266,7 +263,7 @@ async def get_org_stats(
     ).scalars().all()
     recent = []
     for s in recent_rows:
-        usd = await _usd_value(s.chain_id, s.token, s.amount)
+        usd = _usd_value(s.chain_id, s.token, s.amount)
         info = _token_info(s.chain_id, s.token)
         recent.append(
             RecentTransaction(

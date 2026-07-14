@@ -31,9 +31,9 @@ def _client(monkeypatch, *, deny=True, api_client=None):
     async def _anomalies():
         return {"ok": "anomalies"}
 
-    @app.get("/api/v1/prices")             # public allowlist
-    async def _prices():
-        return {"ok": "prices"}
+    @app.get("/api/v1/health/sweep")       # public allowlist
+    async def _health_sweep():
+        return {"ok": "health_sweep"}
 
     @app.get("/api/v1/tx/recent")          # public allowlist (account header)
     async def _tx_recent():
@@ -62,7 +62,7 @@ def test_unauth_get_non_allowlisted_denied(monkeypatch):
 
 def test_unauth_get_public_allowed(monkeypatch):
     c = _client(monkeypatch, deny=True, api_client=None)
-    assert c.get("/api/v1/prices").status_code == 200
+    assert c.get("/api/v1/health/sweep").status_code == 200
     assert c.get("/api/v1/tx/recent").status_code == 200
 
 

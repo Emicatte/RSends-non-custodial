@@ -26,7 +26,6 @@ import pytest
 import pytest_asyncio
 from fastapi import HTTPException
 
-import app.api.user_org_stats_routes as stats_mod
 from app.db.session import async_session, engine
 from app.models.db_models import Base
 from app.models.auth_models import User
@@ -56,13 +55,6 @@ async def setup_db():
 async def session():
     async with async_session() as s:
         yield s
-
-
-@pytest.fixture(autouse=True)
-def _patch_price(monkeypatch):
-    async def _fake_price(coingecko_id, currency="usd"):
-        return {"usd-coin": 1.0, "ethereum": 2000.0}.get(coingecko_id)
-    monkeypatch.setattr(stats_mod, "get_price", _fake_price)
 
 
 async def _make_org(session, *, primary_wallet=None, settlement_wallet=None):

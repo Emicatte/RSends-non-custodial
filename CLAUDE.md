@@ -158,7 +158,7 @@ feeding the /app "Get started" card); `settlement_wallet_conflict` still propaga
 | `GET /api/v1/user/org/webhooks/{id}/deliveries` (Phase E) | `viewer` | webhook resolved with owner+env filter FIRST → **404** on empty (cross-tenant/cross-env/missing); paginated; **excludes `payload`/`response_body`** (OQ-E2, PII/secret avoidance) | 120/min **per IP** |
 | `POST /api/v1/user/org/webhooks` (Phase E) | `operator` | register mirror — SAME `create_merchant_webhook` as the API-key path (SSRF egress guard + env stamp); returns `secret` **once**; 422 `WEBHOOK_URL_FORBIDDEN` on unsafe URL | 5/hour **per IP** |
 | `POST /api/v1/user/org/webhooks/{id}/test` (Phase E) | `operator` | scoped `(id, owner, env)` → **404**/400; SAME `send_test_event` (egress-guarded) | 10/min **per IP** |
-| `GET /api/v1/user/org/stats` (Phase E) | `viewer` | settlements attributed via the **intent join** (`settlement.intent_id → intent`, `intent.merchant_id == owner` + env) — NOT the broken primary-wallet filter; USD conversion via `price_service` + `app.tokens.registry`; read-only; carries the get-started checklist booleans (`settlement_wallet_set`/`has_api_key`/`has_paid_payment`, response `OrgDashboardStats(DashboardStats)` — the shared `DashboardStats` untouched); fresh-merchant safe: `no_primary_wallet` caught → **200 with zeroed KPIs + booleans**; `settlement_wallet_conflict` still 409 | 120/min **per IP** |
+| `GET /api/v1/user/org/stats` (Phase E) | `viewer` | settlements attributed via the **intent join** (`settlement.intent_id → intent`, `intent.merchant_id == owner` + env) — NOT the broken primary-wallet filter; USD volume via the **stablecoin peg** (`TokenInfo.peg_usd` in `app.tokens.registry`, 1.0 for USDC/USDT/DAI, `None` = counts but contributes 0 — `price_service` and the public `/api/v1/prices` feed were removed 2026-07-14, no price feed in the backend); read-only; carries the get-started checklist booleans (`settlement_wallet_set`/`has_api_key`/`has_paid_payment`, response `OrgDashboardStats(DashboardStats)` — the shared `DashboardStats` untouched); fresh-merchant safe: `no_primary_wallet` caught → **200 with zeroed KPIs + booleans**; `settlement_wallet_conflict` still 409 | 120/min **per IP** |
 
 Browser/session counterpart of the API-key merchant API. The `/app` UI
 (`/[locale]/app/{payments,webhooks,api-keys}` + the home stats widget) reads/writes here and is
@@ -240,7 +240,8 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
 - **Phase C deferrals — mostly closed by Phase E (2026-07-08).** Phase C shipped the session-authed
   org **payments read** view (`GET /api/v1/user/org/payment-intents` + `/[locale]/app/payments`,
   hook `useOrgPayments`). **Phase E built `GET /api/v1/user/org/stats`** (settlements→intents join
-  by `settlement_wallet`, USD conversion via `price_service`/`app.tokens.registry`) **and
+  by `settlement_wallet`, USD volume now via the registry stablecoin peg — `price_service`
+  was removed 2026-07-14) **and
   re-pointed the `/app` home stats widget** off the wallet-sig `dashboard/stats` to it (hook
   `useOrgStats`). Legacy **`dashboard_routes.py` stays frozen and scope-broken** — it filters
   `PaymentSettlement.merchant == owner` (the org's *primary* wallet), reading **zero** once

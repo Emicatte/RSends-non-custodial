@@ -81,7 +81,6 @@ GET_PUBLIC_PREFIXES = {
     "/api/v1/splits",                   # @require_wallet_auth
     "/api/v1/dashboard",                # @require_wallet_auth
     # genuinely public
-    "/api/v1/prices",                   # public price feed
     "/api/v1/health/sweep",             # public health probe (sweeper router)
     "/api/v1/public/payment-intent",    # hosted checkout status — id-as-secret, limited view
     "/api/v1/tx/recent",                # account-header recent tx (public read)
