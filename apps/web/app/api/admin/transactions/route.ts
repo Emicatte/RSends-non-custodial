@@ -11,12 +11,6 @@ function getAdminSecret() {
   return process.env.ADMIN_SECRET || ''
 }
 
-// The Bearer ADMIN_SECRET fallback is password-only (no 2FA), so it is disabled
-// in production unless ADMIN_ALLOW_BEARER=1 is set explicitly (M11).
-function bearerAllowed(): boolean {
-  return process.env.NODE_ENV !== 'production' || process.env.ADMIN_ALLOW_BEARER === '1'
-}
-
 async function isAuthorized(req: NextRequest): Promise<boolean> {
   // 1. Cookie-based auth (httpOnly session). A SETUP-ONLY bootstrap session
   //    (password without 2FA) cannot perform admin actions — full scope only.
@@ -26,12 +20,10 @@ async function isAuthorized(req: NextRequest): Promise<boolean> {
     return getTokenScope(cookie) === 'full'
   }
 
-  // 2. Fallback: Authorization header (backward compatibility, no 2FA).
-  if (!bearerAllowed()) return false
-  const auth = req.headers.get('Authorization') ?? ''
-  const bearer = auth.startsWith('Bearer ') ? auth.slice(7) : ''
-  const secret = getAdminSecret()
-  return !!(secret && bearer && bearer === secret)
+  // 2. Fallback: Authorization header (backward compatibility, no 2FA) —
+  //    prod-disabled unless ADMIN_ALLOW_BEARER=1 (M11), shared implementation.
+  const { bearerAdminAuthorized } = await import('@/lib/auth/adminTokens')
+  return bearerAdminAuthorized(req.headers.get('Authorization'))
 }
 
 export async function GET(req: NextRequest) {

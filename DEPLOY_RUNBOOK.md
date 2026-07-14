@@ -227,7 +227,7 @@ Migrations use Alembic's **async** engine (`async_engine_from_config`) reading
 `DATABASE_URL` directly — so the **same `postgresql+asyncpg://` URL works for
 migrations**; there is **no** separate sync/psycopg2 URL to configure (psycopg2
 isn't even installed). On the empty Render DB this runs clean `0001 → 0007`.
-Confirm `https://rsends-api.onrender.com/health` returns `{"status":"healthy"}`.
+Confirm `https://rsends-non-custodial.onrender.com/health` returns `{"status":"healthy"}`.
 
 ---
 
@@ -273,7 +273,7 @@ After editing env on either side, **redeploy** that service.
 ---
 
 ## Part 5 — Smoke test **[AZIONE UTENTE]**
-1. `GET https://rsends-api.onrender.com/health` → `healthy`.
+1. `GET https://rsends-non-custodial.onrender.com/health` → `healthy`.
 2. Render `rsends-api` logs show the indexer started for chain `84532`.
 3. Open the Vercel app → create a payment intent → the `/pay/[intentId]` page
    loads and reads the router address from the intent.
@@ -338,7 +338,7 @@ re-deploy re-runs `upgrade head`, which is a no-op once at `0007`.
 | Name | What | Class | Where to get it | Placeholder |
 |---|---|---|---|---|
 | `NEXT_PUBLIC_WC_PROJECT_ID` | WalletConnect | PUBLIC | cloud.walletconnect.com | `<wc_project_id>` |
-| `RPAGOS_BACKEND_URL` | backend (server) | PUBLIC | Render web URL | `https://rsends-api.onrender.com` |
+| `RPAGOS_BACKEND_URL` | backend (server) | PUBLIC | Render web URL | `https://rsends-non-custodial.onrender.com` |
 | `NEXT_PUBLIC_RPAGOS_BACKEND_URL` / `NEXT_PUBLIC_API_URL` | backend (client) | PUBLIC | same | same |
 | `INTERNAL_PROXY_SECRET` | proxy auth | SECRET | **match backend** | (copy from Render) |
 | `HMAC_SECRET` | callback signing | SECRET | **match backend** | (copy from Render) |
@@ -363,10 +363,10 @@ with) the first production-posture deploy:
    empty/placeholder, <32 chars, or `== HMAC_SECRET` (`app/config.py`).
    Generate with `openssl rand -hex 32`. Verify after deploy:
    ```bash
-   curl -s -o /dev/null -w "%{http_code}\n" https://rsends-api.onrender.com/health/config
+   curl -s -o /dev/null -w "%{http_code}\n" https://rsends-non-custodial.onrender.com/health/config
    # → 403 (anonymous denied)
    curl -s -o /dev/null -w "%{http_code}\n" \
-     -H "X-Admin-Token: <ADMIN_API_TOKEN>" https://rsends-api.onrender.com/health/config
+     -H "X-Admin-Token: <ADMIN_API_TOKEN>" https://rsends-non-custodial.onrender.com/health/config
    # → 200 (env var audit; values never exposed)
    ```
 2. **Monitoring (optional).** Backend env: `SENTRY_DSN` (errors),

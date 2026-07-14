@@ -23,14 +23,10 @@ export async function GET(req: NextRequest) {
     return res
   }
 
-  // Fallback: Authorization header (backward compatibility, no 2FA). Disabled
-  // in production unless ADMIN_ALLOW_BEARER=1 (M11).
-  const bearerAllowed = process.env.NODE_ENV !== 'production' || process.env.ADMIN_ALLOW_BEARER === '1'
-  const auth = req.headers.get('Authorization') ?? ''
-  const bearerToken = auth.startsWith('Bearer ') ? auth.slice(7) : ''
-  const secret = process.env.ADMIN_SECRET || ''
-
-  if (bearerAllowed && secret && bearerToken && bearerToken === secret) {
+  // Fallback: Authorization header (backward compatibility, no 2FA) —
+  // prod-disabled unless ADMIN_ALLOW_BEARER=1 (M11), shared implementation.
+  const { bearerAdminAuthorized } = await import('@/lib/auth/adminTokens')
+  if (bearerAdminAuthorized(req.headers.get('Authorization'))) {
     return NextResponse.json({ status: 'ok', auth: 'bearer' })
   }
 
