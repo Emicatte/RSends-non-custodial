@@ -78,6 +78,11 @@ class Settings(BaseSettings):
     indexer_reorg_safety_depth: int = 64
     # JSON map of chain_id → start block for first-run backfill, e.g. {"8453": 0}
     indexer_start_blocks_json: str = ""
+    # Widest eth_getLogs block range a single request may span. The per-tick
+    # window is scanned in chunks of at most this many blocks. Default 10 =
+    # the Alchemy free-tier cap on Base Sepolia; raise only if EVERY
+    # configured provider accepts the wider range.
+    indexer_getlogs_max_range: int = 10
 
     # ── Server ────────────────────────────────────────────
     host: str = "0.0.0.0"

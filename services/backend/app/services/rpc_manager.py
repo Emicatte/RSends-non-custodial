@@ -76,6 +76,10 @@ class RPCProvider:
                 failure_threshold=3,
                 recovery_timeout=15.0,
                 half_open_max_calls=1,
+                # A deterministic request rejection is not a provider fault:
+                # counting it opened the circuit on a healthy provider every
+                # ~16s, forever (Alchemy getLogs range limit, 2026-07-14).
+                excluded_exceptions=(PermanentRPCError,),
             )
 
 
@@ -114,6 +118,33 @@ REQUEST_TIMEOUT = 10  # seconds
 #  Low-level RPC call
 # ═══════════════════════════════════════════════════════════════
 
+class PermanentRPCError(RuntimeError):
+    """Deterministic request rejection (invalid params, getLogs range too
+    large, …): retrying the SAME request will fail identically, so it must
+    not count as a provider-availability failure — the circuit breaker
+    excludes it (see RPCProvider). Another provider MAY still accept the
+    request, so RPCManager.call keeps rotating on it."""
+
+
+# Heuristic classification of JSON-RPC errors that are properties of the
+# REQUEST, not of the provider's availability. Small and documented on
+# purpose — extend only with error shapes observed in the wild.
+_PERMANENT_ERROR_CODES = {-32602}  # invalid params
+_PERMANENT_ERROR_PATTERNS = (
+    "block range",      # Alchemy free tier: "up to a 10 block range"
+    "too large",
+    "exceed",
+    "invalid param",
+)
+
+
+def _is_permanent_rpc_error(error: dict) -> bool:
+    if error.get("code") in _PERMANENT_ERROR_CODES:
+        return True
+    message = str(error.get("message", "")).lower()
+    return any(p in message for p in _PERMANENT_ERROR_PATTERNS)
+
+
 async def _raw_rpc_call(
     url: str,
     method: str,
@@ -130,6 +161,8 @@ async def _raw_rpc_call(
         data = resp.json()
 
     if "error" in data:
+        if _is_permanent_rpc_error(data["error"]):
+            raise PermanentRPCError(f"RPC {method} rejected: {data['error']}")
         raise RuntimeError(f"RPC {method} error: {data['error']}")
 
     return data.get("result")
@@ -348,9 +381,17 @@ class RPCManager:
                     method=method,
                     status="error",
                 ).inc()
-                logger.warning(
-                    "Provider %s failed for %s: %s", provider.name, method, exc
-                )
+                if isinstance(exc, PermanentRPCError):
+                    # Request rejected deterministically (not counted by the
+                    # breaker) — another provider may accept it, keep rotating.
+                    logger.warning(
+                        "Provider %s rejected %s (permanent request error): %s",
+                        provider.name, method, exc,
+                    )
+                else:
+                    logger.warning(
+                        "Provider %s failed for %s: %s", provider.name, method, exc
+                    )
                 last_exc = exc
                 continue
 

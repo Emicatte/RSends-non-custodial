@@ -420,3 +420,123 @@ async def _async_return(v):
 
 async def _async_set(d, c, b):
     d[c] = b
+
+
+# ═════════════════════════════════════════════════════════════════
+#  eth_getLogs chunking (Alchemy free tier caps the range at 10)
+# ═════════════════════════════════════════════════════════════════
+
+ALCHEMY_RANGE_ERROR = (
+    "RPC eth_getLogs error: {'code': -32600, 'message': 'Under the Free tier "
+    "plan, you can make eth_getLogs requests with up to a 10 block range.'}"
+)
+
+
+class RangeLimitedChain(FakeChain):
+    """FakeChain that rejects eth_getLogs spans wider than `max_range` (the
+    Alchemy free-tier behavior) and records every requested span."""
+
+    def __init__(self, max_range: int = 10):
+        super().__init__()
+        self.max_range = max_range
+        self.getlogs_spans: list[tuple[int, int]] = []
+        self.fail_at_call: int | None = None  # 1-based getLogs call to fail
+
+    async def call(self, method, params, **kw):
+        if method == "eth_getLogs":
+            f = int(params[0]["fromBlock"], 16)
+            t = int(params[0]["toBlock"], 16)
+            self.getlogs_spans.append((f, t))
+            if self.fail_at_call is not None and len(self.getlogs_spans) == self.fail_at_call:
+                raise RuntimeError("transient RPC blip")
+            if t - f + 1 > self.max_range:
+                raise RuntimeError(ALCHEMY_RANGE_ERROR)
+        return await super().call(method, params, **kw)
+
+
+def _wire(monkeypatch, rpc, cursor):
+    monkeypatch.setattr("app.services.rpc_manager.get_rpc_manager", lambda cid: rpc)
+    monkeypatch.setattr(idx, "_get_last_block", lambda c: _async_return(cursor.get(c)))
+    monkeypatch.setattr(idx, "_set_last_block", lambda c, b: _async_set(cursor, c, b))
+
+
+def test_getlogs_max_range_config_default_is_10():
+    from app.config import Settings
+
+    assert Settings.model_fields["indexer_getlogs_max_range"].default == 10
+
+
+@pytest.mark.asyncio
+async def test_getlogs_chunked_within_provider_limit(monkeypatch, webhook_calls):
+    """A 60-block window against a 10-block provider limit must be scanned in
+    chunks the provider accepts — no request wider than the limit, no log
+    missed, cursor at the end of the window."""
+    from app.models.merchant_models import IntentStatus
+
+    inv_a, inv_b = "0x" + "21" * 32, "0x" + "22" * 32
+    iid_a = await _make_intent(invoice_id=inv_a)
+    iid_b = await _make_intent(invoice_id=inv_b)
+
+    rpc = RangeLimitedChain(max_range=10)
+    rpc.latest = 160
+    rpc.finalized = 158
+    ha, hb = "0x" + "21" * 32, "0x" + "22" * 32
+    rpc.block_hashes[105] = ha
+    rpc.block_hashes[155] = hb
+    rpc.logs = [
+        _make_log(invoice_id=inv_a, tx_hash="0x" + "21" * 32, block_number=105,
+                  block_hash=ha, address=ROUTER),
+        _make_log(invoice_id=inv_b, tx_hash="0x" + "22" * 32, block_number=155,
+                  block_hash=hb, address=ROUTER),
+    ]
+
+    cursor = {CHAIN: 100}
+    _wire(monkeypatch, rpc, cursor)
+
+    w = PaymentWatcher(chain_id=CHAIN, router_address=ROUTER)
+    await w._tick()
+
+    assert all(t - f + 1 <= 10 for f, t in rpc.getlogs_spans), rpc.getlogs_spans
+    assert len(rpc.getlogs_spans) >= 6                     # 101..160 in ≤10-block chunks
+    assert (await _intent(iid_a)).status == IntentStatus.paid
+    assert (await _intent(iid_b)).status == IntentStatus.paid
+    assert await _settlement_count() == 2
+    assert cursor[CHAIN] == 160
+
+
+@pytest.mark.asyncio
+async def test_chunk_failure_preserves_partial_progress(monkeypatch, webhook_calls):
+    """A failure mid-window must not throw away completed chunks: the cursor
+    stops at the last successful chunk and the next tick resumes exactly
+    there — never the same oversized range forever."""
+    from app.models.merchant_models import IntentStatus
+
+    inv = "0x" + "23" * 32
+    iid = await _make_intent(invoice_id=inv)
+
+    rpc = RangeLimitedChain(max_range=10)
+    rpc.latest = 160
+    rpc.finalized = 158
+    h = "0x" + "23" * 32
+    rpc.block_hashes[105] = h
+    rpc.logs = [_make_log(invoice_id=inv, tx_hash="0x" + "23" * 32, block_number=105,
+                          block_hash=h, address=ROUTER)]
+
+    cursor = {CHAIN: 100}
+    _wire(monkeypatch, rpc, cursor)
+    rpc.fail_at_call = 3  # chunks 101-110 and 111-120 succeed, 121-130 blows up
+
+    w = PaymentWatcher(chain_id=CHAIN, router_address=ROUTER)
+    with pytest.raises(RuntimeError, match="transient RPC blip"):
+        await w._tick()
+
+    assert cursor[CHAIN] == 120                            # partial progress kept
+    assert await _settlement_count() == 1                  # log at 105 ingested
+
+    # Next tick resumes from the exact failure point and completes the window.
+    rpc.fail_at_call = None
+    await w._tick()
+    assert rpc.getlogs_spans[-((160 - 121) // 10 + 1)][0] == 121   # resumed at 121
+    assert cursor[CHAIN] == 160
+    assert (await _intent(iid)).status == IntentStatus.paid
+    assert await _settlement_count() == 1                  # no duplicates
