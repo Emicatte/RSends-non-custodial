@@ -129,6 +129,23 @@ def test_admin_approvals_rate_limited():
     assert any(p.startswith("/admin/approvals") for p in paths)
 
 
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/admin/approvals",
+        "/admin/approvals/some-org-id/approve",
+        "/admin/approvals/some-org-id/decline",
+    ],
+)
+def test_admin_approvals_exempt_from_api_key_middleware(path):
+    """The API-key middleware must not swallow these routes: in production
+    (no dev bypass) a non-exempt path 401s INVALID_API_KEY before the
+    router's require_admin ever sees the X-Admin-Token header."""
+    from app.security.api_keys import is_exempt
+
+    assert is_exempt(path), f"{path} must be covered by EXEMPT_PATHS"
+
+
 # ── List pending ──────────────────────────────────────────────────
 
 

@@ -195,7 +195,7 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
 
 | Surface | Auth | Notes |
 |---|---|---|
-| `GET /api/v1/audit/log`, `/admin/aml/*` (4 routes), `GET /health/config` | `X-Admin-Token` == **`ADMIN_API_TOKEN`** (dedicated env var) | Single `require_admin` dependency (`audit_routes.py`): constant-time `secrets.compare_digest`, denies everything when unset. **Never reuse `HMAC_SECRET` as an auth token** — startup fails in prod if the two are equal, too short, or placeholder. |
+| `GET /api/v1/audit/log`, `/admin/aml/*` (4 routes), `/admin/approvals` (list) + `/{org_id}/approve\|decline`, `GET /health/config` | `X-Admin-Token` == **`ADMIN_API_TOKEN`** (dedicated env var) | Single `require_admin` dependency (`audit_routes.py`): constant-time `secrets.compare_digest`, denies everything when unset. **Never reuse `HMAC_SECRET` as an auth token** — startup fails in prod if the two are equal, too short, or placeholder. X-Admin-Token surfaces must also be exempt from the API-key middleware (`EXEMPT_PATHS`) or they 401 in prod before `require_admin` runs — pinned by `test_admin_approvals.py::test_admin_approvals_exempt_from_api_key_middleware`. |
 
 ### Known follow-ups (tracked here so they're not forgotten — do not fix as a drive-by)
 
