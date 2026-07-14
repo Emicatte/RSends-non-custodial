@@ -1632,7 +1632,10 @@
     "pending": {
       "title": "Dein Konto wird geprüft",
       "body": "Wir haben deine Unternehmensdaten erhalten. Unser Team prüft jeden neuen Händler, bevor Zahlungen aktiviert werden — in der Regel innerhalb eines Werktags.",
-      "autoRefresh": "Diese Seite aktualisiert sich automatisch — kein Neuladen nötig."
+      "autoRefresh": "Diese Seite aktualisiert sich automatisch — kein Neuladen nötig.",
+      "sessionExpired": "Deine Sitzung ist während des Wartens abgelaufen. Melde dich erneut an, um diese Seite weiter zu verfolgen — dein Antrag ist davon nicht betroffen.",
+      "loginAgain": "Erneut anmelden",
+      "connectionTrouble": "Der Server ist gerade schwer erreichbar — wir versuchen es automatisch weiter."
     },
     "declined": {
       "title": "Deine Anfrage wurde abgelehnt",

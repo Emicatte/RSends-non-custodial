@@ -29,13 +29,19 @@ jest.mock('next-intl', () => ({
 
 jest.mock('@/i18n/navigation', () => ({
   useRouter: () => mockRouter,
+  Link: ({ href, children, ...rest }: any) => (
+    <a href={String(href)} {...rest}>
+      {children}
+    </a>
+  ),
 }))
 
+let mockSession: { data: { access_token?: string } | null; status: string } = {
+  data: { access_token: 'tok-1' },
+  status: 'authenticated',
+}
 jest.mock('next-auth/react', () => ({
-  useSession: () => ({
-    data: { access_token: 'tok-1' },
-    status: 'authenticated',
-  }),
+  useSession: () => mockSession,
 }))
 
 jest.mock('@/lib/onboarding-client', () => ({
@@ -69,6 +75,7 @@ beforeEach(() => {
   jest.useFakeTimers()
   mockReplace.mockClear()
   stateMock.mockReset()
+  mockSession = { data: { access_token: 'tok-1' }, status: 'authenticated' }
 })
 
 afterEach(() => {
@@ -138,5 +145,80 @@ describe('ApprovalPendingScreen', () => {
     await act(async () => {})
 
     expect(mockReplace).toHaveBeenCalledWith('/onboarding/declined')
+  })
+
+  // ── Failure handling (pinned per incident 2026-07-14) ────────
+
+  it('survives a transient poll failure and still transitions on approval', async () => {
+    stateMock
+      .mockRejectedValueOnce(new Error('refresh_unavailable'))
+      .mockResolvedValue({ ...pendingState, approval_status: 'approved' })
+
+    render(<ApprovalPendingScreen />)
+    await act(async () => {})
+    expect(mockReplace).not.toHaveBeenCalled()
+
+    await act(async () => {
+      jest.advanceTimersByTime(APPROVAL_POLL_BASE_MS)
+    })
+
+    expect(mockReplace).toHaveBeenCalledWith('/app')
+  })
+
+  it('session_expired STOPS the polling and shows a visible message with a login link', async () => {
+    stateMock.mockRejectedValue(new Error('session_expired'))
+
+    render(<ApprovalPendingScreen />)
+    await act(async () => {})
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Your session expired')
+    const link = screen.getByRole('link', { name: 'Log in again' })
+    expect(link).toHaveAttribute('href', '/login?redirect=/onboarding/pending')
+
+    // No infinite silent retry: no further polls after the terminal error.
+    const callsAfterError = stateMock.mock.calls.length
+    await act(async () => {
+      jest.advanceTimersByTime(10 * APPROVAL_POLL_MAX_MS)
+    })
+    expect(stateMock.mock.calls.length).toBe(callsAfterError)
+    expect(mockReplace).not.toHaveBeenCalled()
+  })
+
+  it('shows the expired message when the NextAuth session dies (no silent stall)', async () => {
+    mockSession = { data: null, status: 'unauthenticated' }
+    stateMock.mockResolvedValue(pendingState)
+
+    render(<ApprovalPendingScreen />)
+    await act(async () => {})
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Your session expired')
+    expect(stateMock).not.toHaveBeenCalled()
+  })
+
+  it('surfaces a retrying notice after repeated transient failures, cleared on success', async () => {
+    stateMock.mockRejectedValue(new Error('refresh_unavailable'))
+
+    render(<ApprovalPendingScreen />)
+    await act(async () => {}) // failure 1 (t=0)
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+
+    await act(async () => {
+      jest.advanceTimersByTime(APPROVAL_POLL_BASE_MS) // failure 2
+    })
+    await act(async () => {
+      jest.advanceTimersByTime(2 * APPROVAL_POLL_BASE_MS) // failure 3
+    })
+    await act(async () => {
+      jest.advanceTimersByTime(APPROVAL_POLL_MAX_MS) // failure 4 → notice
+    })
+    expect(screen.getByRole('status')).toHaveTextContent('still retrying')
+
+    // First success clears the notice and keeps waiting normally.
+    stateMock.mockResolvedValue(pendingState)
+    await act(async () => {
+      jest.advanceTimersByTime(APPROVAL_POLL_MAX_MS)
+    })
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(mockReplace).not.toHaveBeenCalled()
   })
 })

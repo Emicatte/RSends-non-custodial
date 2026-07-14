@@ -1632,7 +1632,10 @@
     "pending": {
       "title": "Tu cuenta está en revisión",
       "body": "Hemos recibido los datos de tu empresa. Nuestro equipo revisa cada nuevo comercio antes de activar los pagos — normalmente en menos de un día laborable.",
-      "autoRefresh": "Esta página se actualiza automáticamente — no hace falta recargar."
+      "autoRefresh": "Esta página se actualiza automáticamente — no hace falta recargar.",
+      "sessionExpired": "Tu sesión ha caducado durante la espera. Inicia sesión de nuevo para seguir viendo esta página — tu solicitud no se ve afectada.",
+      "loginAgain": "Iniciar sesión de nuevo",
+      "connectionTrouble": "Problemas para conectar con el servidor — seguimos reintentando automáticamente."
     },
     "declined": {
       "title": "Tu solicitud fue rechazada",

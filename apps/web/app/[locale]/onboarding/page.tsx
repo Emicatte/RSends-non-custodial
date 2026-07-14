@@ -9,6 +9,7 @@
  */
 
 import { useEffect } from 'react'
+import { useSession } from 'next-auth/react'
 import { useTranslations } from 'next-intl'
 import { useRouter } from '@/i18n/navigation'
 import { useOnboarding } from '@/hooks/useOnboarding'
@@ -16,7 +17,17 @@ import { useOnboarding } from '@/hooks/useOnboarding'
 export default function OnboardingGatePage() {
   const t = useTranslations('onboarding.gate')
   const router = useRouter()
+  const { status } = useSession()
   const { state, loading, error, reload } = useOnboarding()
+
+  // A dead session must not leave the gate on its loading copy forever
+  // (useOnboarding resolves loading=false, error=false, state=null in that
+  // case — previously an infinite "Checking your account status...").
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.replace('/login?redirect=/onboarding')
+    }
+  }, [status, router])
 
   useEffect(() => {
     if (loading || error || !state) return

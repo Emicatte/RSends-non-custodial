@@ -1631,7 +1631,10 @@
     "pending": {
       "title": "Your account is being reviewed",
       "body": "We received your company details. Our team reviews every new merchant before activating payments — this usually takes less than one business day.",
-      "autoRefresh": "This page updates automatically — no need to refresh."
+      "autoRefresh": "This page updates automatically — no need to refresh.",
+      "sessionExpired": "Your session expired while waiting. Log in again to keep following this page — your application is not affected.",
+      "loginAgain": "Log in again",
+      "connectionTrouble": "Having trouble reaching the server — still retrying automatically."
     },
     "declined": {
       "title": "Your application was declined",

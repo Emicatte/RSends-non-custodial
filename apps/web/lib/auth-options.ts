@@ -62,7 +62,13 @@ export const authOptions: NextAuthOptions = {
       },
     }),
   ],
-  session: { strategy: 'jwt', maxAge: 30 * 60 },
+  // maxAge aligned with the backend refresh-session TTL (7 days): the real
+  // security boundary is the backend Redis session (revocable, rotating
+  // refresh with reuse detection) — the NextAuth JWT only carries the access
+  // token. At 30 min, a laptop sleeping past the refetch window killed the
+  // client session while the backend session was still perfectly valid
+  // (merchants waiting on /onboarding/pending hit this).
+  session: { strategy: 'jwt', maxAge: 7 * 24 * 60 * 60 },
   callbacks: {
     async jwt({ token, account, user, trigger, session }) {
       if (
