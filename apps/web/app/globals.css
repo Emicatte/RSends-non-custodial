@@ -675,6 +675,13 @@ body {
   will-change: transform, opacity;
 }
 
+/* Skeleton pulse for the /app dashboard loading placeholders (referenced from
+   inline `animation:` styles — keep the name stable). */
+@keyframes rsendsPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 /* ============================================================
    UTILITY — Performance helpers
    ============================================================ */
