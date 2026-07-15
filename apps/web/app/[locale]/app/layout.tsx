@@ -46,7 +46,7 @@ export default async function AppLayout({
       <AppSidebar />
       <AppBottomNav />
       <div
-        className="min-h-screen pt-[55px] md:pt-[63px] md:pl-[210px]"
+        className="min-h-screen pt-14 md:pt-16 md:pl-52"
         style={{ background: '#f7f6f3' }}
       >
         <AppTopbar />

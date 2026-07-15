@@ -38,49 +38,42 @@ export default function AppTopbar() {
 
   return (
     <div
-      className="px-4 md:px-8 py-[18px]"
+      className="px-5 py-4 md:px-8"
       style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        flexWrap: 'wrap',
         background: COLORS.white,
         borderBottom: `1px solid ${COLORS.border}`,
       }}
     >
-      <h1
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: 22,
-          fontWeight: 700,
-          color: COLORS.ink,
-          letterSpacing: '-0.02em',
-          margin: 0,
-        }}
-      >
-        {title}
-      </h1>
+      {/* Inner max-w-6xl mirrors the page container (pageStyles.appPage) so
+          the title stays aligned with page content at wide viewports. */}
+      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-3">
+        <h1
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 22,
+            fontWeight: 700,
+            color: COLORS.ink,
+            letterSpacing: '-0.02em',
+            margin: 0,
+          }}
+        >
+          {title}
+        </h1>
 
-      <div
-        style={{
-          marginLeft: 'auto',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-        }}
-      >
-        {activeOrg?.name && (
-          <span
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: 13,
-              fontWeight: 600,
-              color: COLORS.muted,
-            }}
-          >
-            {activeOrg.name}
-          </span>
-        )}
+        <div className="ml-auto flex items-center gap-3">
+          {activeOrg?.name && (
+            <span
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 13,
+                fontWeight: 600,
+                color: COLORS.muted,
+              }}
+            >
+              {activeOrg.name}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   )
