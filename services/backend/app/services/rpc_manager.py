@@ -129,7 +129,10 @@ class PermanentRPCError(RuntimeError):
 # Heuristic classification of JSON-RPC errors that are properties of the
 # REQUEST, not of the provider's availability. Small and documented on
 # purpose — extend only with error shapes observed in the wild.
-_PERMANENT_ERROR_CODES = {-32602}  # invalid params
+# -32600 invalid request / -32602 invalid params: both deterministic —
+# Alchemy rejects an oversized getLogs range with -32600 in production
+# (observed 2026-07-14), which previously fed the breaker as if transient.
+_PERMANENT_ERROR_CODES = {-32600, -32602}
 _PERMANENT_ERROR_PATTERNS = (
     "block range",      # Alchemy free tier: "up to a 10 block range"
     "too large",
@@ -347,6 +350,7 @@ class RPCManager:
             healthy = self._providers  # try all as last resort
 
         last_exc: Optional[Exception] = None
+        all_permanent = True  # becomes False on any transient/availability error
 
         for provider in healthy:
             t0 = time.monotonic()
@@ -389,11 +393,22 @@ class RPCManager:
                         provider.name, method, exc,
                     )
                 else:
+                    all_permanent = False
                     logger.warning(
                         "Provider %s failed for %s: %s", provider.name, method, exc
                     )
                 last_exc = exc
                 continue
+
+        if all_permanent and isinstance(last_exc, PermanentRPCError):
+            # EVERY provider rejected the request deterministically: retrying
+            # the same call cannot succeed. Propagate the classification so
+            # callers (the indexer's stall detection) can surface it as a
+            # config/range error to FIX instead of a fault to retry forever.
+            raise PermanentRPCError(
+                f"All RPC providers rejected {method} on chain "
+                f"{self.chain_id} (permanent request error): {last_exc}"
+            ) from last_exc
 
         raise RuntimeError(
             f"All RPC providers failed for {method} on chain {self.chain_id}: "

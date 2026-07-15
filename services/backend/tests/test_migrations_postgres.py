@@ -36,7 +36,7 @@ import pytest
 _BACKEND_ROOT = Path(__file__).resolve().parents[1]
 _VERSIONS_DIR = _BACKEND_ROOT / "alembic" / "versions"
 
-HEAD = "0011_api_keys_org_id"
+HEAD = "0012_indexer_cursors"
 # Alembic's hardcoded alembic_version.version_num width.
 _VERSION_NUM_MAX = 32
 
@@ -271,3 +271,35 @@ def test_0010_backfills_existing_orgs_and_drops_oauth_columns(clean_schema):
         )
         == 3
     )
+
+
+@_needs_pg
+def test_0012_downgrade_reverses_cursor_table(clean_schema):
+    """Migration 0012 is genuinely reversible. Bounds are PINNED (downgrade to
+    0011 explicitly, not -1) so later migrations can't shift what this test
+    unwinds — the exact failure mode the 0010 test hit when 0011 landed."""
+
+    def _has_cursor_table() -> bool:
+        return (
+            asyncio.run(
+                _fetchval(
+                    "SELECT count(*) FROM information_schema.tables"
+                    " WHERE table_schema = 'public'"
+                    " AND table_name = 'indexer_cursors'"
+                )
+            )
+            == 1
+        )
+
+    assert _alembic("upgrade", "head").returncode == 0
+    assert _has_cursor_table()
+
+    down = _alembic("downgrade", "0011_api_keys_org_id")
+    assert down.returncode == 0, down.stderr
+    assert not _has_cursor_table()
+    version = asyncio.run(_fetchval("SELECT version_num FROM alembic_version"))
+    assert version == "0011_api_keys_org_id"
+
+    up = _alembic("upgrade", "head")
+    assert up.returncode == 0, up.stderr
+    assert _has_cursor_table()

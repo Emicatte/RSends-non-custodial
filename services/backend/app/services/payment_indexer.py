@@ -39,7 +39,9 @@ Config (see app/config.py):
                                         falls back to rpc_manager)
   - settings.indexer_confirmations   : block confirmations before processing
 
-Checkpointing uses Redis (survives restarts), mirroring the old poller.
+Checkpointing: Postgres (`indexer_cursors`, migration 0012) is the source of
+truth; Redis is a write-through hot cache. Cold starts resume from the
+persisted cursor — never from the chain head.
 """
 
 import asyncio
@@ -48,9 +50,14 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
+from prometheus_client import Counter as PromCounter, Gauge
 from sqlalchemy import and_, or_, select, update
 
 from app.config import get_settings
+# Top-level import ON PURPOSE: registers indexer_cursors on Base at module
+# import, so every create_all-based schema (tests, E2E) that imports this
+# module gets the table without having to know about the model.
+from app.models.indexer_models import IndexerCursor
 from app.services.cache_service import get_redis
 
 logger = logging.getLogger("payment_indexer")
@@ -59,8 +66,37 @@ logger = logging.getLogger("payment_indexer")
 POLL_INTERVAL = 5                # seconds between ticks
 MAX_BLOCKS_PER_TICK = 500        # getLogs range cap per tick
 DEFAULT_CONFIRMATIONS = 2
+# Consecutive failed ticks before the watcher declares itself STALLED
+# (CRITICAL log + gauge). Fail loud: a stuck indexer is silent payment loss.
+STALL_TICKS = 3
+# Cursor lag (blocks behind the final head) above which catch-up is logged.
+CATCHUP_LOG_LAG = 1_000
 
 REDIS_LAST_BLOCK_KEY = "indexer:last_block:{chain_id}"
+
+# ── Metrics (registry pattern of rpc_manager) ────────────────
+INDEXER_LAST_BLOCK = Gauge(
+    "rsend_indexer_last_block", "Indexer cursor (last processed block)", ["chain_id"]
+)
+INDEXER_LAG_BLOCKS = Gauge(
+    "rsend_indexer_lag_blocks", "Final head minus indexer cursor", ["chain_id"]
+)
+INDEXER_STALLED = Gauge(
+    "rsend_indexer_stalled", "1 when the watcher declared itself stalled", ["chain_id"]
+)
+INDEXER_CURSOR_WRITE_FAILURES = PromCounter(
+    "rsend_indexer_cursor_write_failures_total",
+    "Cursor writes that failed to reach Postgres",
+    ["chain_id"],
+)
+
+# Live status snapshot per chain, surfaced by /health (fail-loud visibility).
+_status: dict[int, dict] = {}
+
+
+def indexer_status() -> dict[int, dict]:
+    """Per-chain snapshot for /health: {chain_id: {last_block, lag, stalled}}."""
+    return {cid: dict(s) for cid, s in _status.items()}
 
 ZERO_ADDRESS = "0x" + "0" * 40
 
@@ -84,20 +120,109 @@ def _payment_made_topic() -> str:
 PAYMENT_MADE_TOPIC = _payment_made_topic()
 
 
-# ── Redis checkpoint helpers ─────────────────────────────────
+# ── Cursor persistence ───────────────────────────────────────
+# POSTGRES IS THE SOURCE OF TRUTH (migration 0012); Redis is a write-through
+# hot cache only. The cursor previously lived only in Redis: a flush/restart
+# re-initialized the indexer at the chain head, permanently skipping the gap
+# — silent payment loss. Now a cold start resumes from the persisted cursor,
+# never from head, and the existing chunked catch-up loop walks any backlog.
+
+
+async def _pg_get_cursor(chain_id: int) -> Optional[int]:
+    from app.db.session import async_session
+
+    async with async_session() as db:
+        row = (
+            await db.execute(
+                select(IndexerCursor).where(IndexerCursor.chain_id == chain_id)
+            )
+        ).scalar_one_or_none()
+        return int(row.last_block) if row is not None else None
+
+
+async def _pg_set_cursor(chain_id: int, block_number: int) -> None:
+    from app.db.session import async_session
+
+    async with async_session() as db:
+        row = (
+            await db.execute(
+                select(IndexerCursor).where(IndexerCursor.chain_id == chain_id)
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            db.add(
+                IndexerCursor(
+                    chain_id=chain_id,
+                    last_block=block_number,
+                    updated_at=datetime.now(timezone.utc),
+                )
+            )
+        else:
+            row.last_block = block_number
+            row.updated_at = datetime.now(timezone.utc)
+        await db.commit()
+
+
 async def _get_last_block(chain_id: int) -> Optional[int]:
+    """Read the cursor: Postgres first. A legacy Redis-only cursor (pre-0012
+    deploy) is ADOPTED into Postgres on first read, so the rollout itself
+    can't trigger one last init-at-head skip."""
+    pg_val = await _pg_get_cursor(chain_id)
+    if pg_val is not None:
+        return pg_val
+
     r = await get_redis()
-    if r is None:
-        return None
-    val = await r.get(REDIS_LAST_BLOCK_KEY.format(chain_id=chain_id))
-    return int(val) if val else None
+    if r is not None:
+        val = await r.get(REDIS_LAST_BLOCK_KEY.format(chain_id=chain_id))
+        if val:
+            block = int(val)
+            await _pg_set_cursor(chain_id, block)
+            logger.info(
+                "[indexer] adopted legacy Redis cursor into Postgres "
+                "(chain=%d block=%d)", chain_id, block,
+            )
+            return block
+    return None
 
 
 async def _set_last_block(chain_id: int, block_number: int) -> None:
-    r = await get_redis()
-    if r is None:
-        return
-    await r.set(REDIS_LAST_BLOCK_KEY.format(chain_id=chain_id), str(block_number))
+    """Write-through: Postgres authoritative, Redis best-effort cache.
+
+    A cursor that reaches NEITHER store raises — the tick must fail loudly
+    instead of spinning with a frozen cursor (the old Redis-only helper
+    silently no-op'd when Redis was down)."""
+    pg_ok = False
+    pg_exc: Optional[Exception] = None
+    try:
+        await _pg_set_cursor(chain_id, block_number)
+        pg_ok = True
+    except Exception as exc:  # noqa: BLE001 — classified below
+        pg_exc = exc
+        INDEXER_CURSOR_WRITE_FAILURES.labels(chain_id=chain_id).inc()
+        logger.error(
+            "[indexer] Postgres cursor write failed (chain=%d block=%d): %s",
+            chain_id, block_number, exc,
+        )
+
+    redis_ok = False
+    try:
+        r = await get_redis()
+        if r is not None:
+            await r.set(
+                REDIS_LAST_BLOCK_KEY.format(chain_id=chain_id), str(block_number)
+            )
+            redis_ok = True
+    except Exception as exc:  # noqa: BLE001 — cache only
+        logger.warning(
+            "[indexer] Redis cursor cache write failed (chain=%d): %s",
+            chain_id, exc,
+        )
+
+    if not pg_ok and not redis_ok:
+        raise RuntimeError(
+            f"indexer cursor write reached neither Postgres nor Redis "
+            f"(chain={chain_id} block={block_number}): {pg_exc}"
+        )
 
 
 # ── Decoding ─────────────────────────────────────────────────
@@ -553,14 +678,52 @@ class PaymentWatcher:
         logger.info("[indexer] stopped chain %d", self.chain_id)
 
     async def _loop(self) -> None:
+        from app.services.rpc_manager import PermanentRPCError
+
+        consecutive_failures = 0
         while self._running:
             try:
                 await self._tick()
+                if consecutive_failures >= STALL_TICKS:
+                    logger.warning(
+                        "[indexer] RECOVERED chain=%d after %d failed ticks",
+                        self.chain_id, consecutive_failures,
+                    )
+                consecutive_failures = 0
+                INDEXER_STALLED.labels(chain_id=self.chain_id).set(0)
+                _status.setdefault(self.chain_id, {})["stalled"] = False
             except asyncio.CancelledError:
                 break
+            except PermanentRPCError as exc:
+                # Deterministic request rejection on EVERY provider: retrying
+                # cannot succeed — this is a config/range error to FIX.
+                consecutive_failures += 1
+                self._note_failure(
+                    consecutive_failures,
+                    f"permanent RPC rejection — will not self-heal, fix the "
+                    f"request/config (getLogs range? provider limits?): {exc}",
+                )
             except Exception as exc:
-                logger.error("[indexer] tick failed (chain=%d): %s", self.chain_id, exc)
+                consecutive_failures += 1
+                self._note_failure(consecutive_failures, str(exc))
             await asyncio.sleep(POLL_INTERVAL)
+
+    def _note_failure(self, consecutive: int, reason: str) -> None:
+        """Fail loud: escalate to a single CRITICAL 'STALLED' signal (log +
+        gauge + /health) once STALL_TICKS consecutive ticks made no progress —
+        a quiet indexer is silent payment loss."""
+        if consecutive == STALL_TICKS:
+            logger.critical(
+                "[indexer] STALLED chain=%d after %d consecutive failed ticks: %s",
+                self.chain_id, consecutive, reason,
+            )
+            INDEXER_STALLED.labels(chain_id=self.chain_id).set(1)
+            _status.setdefault(self.chain_id, {})["stalled"] = True
+        else:
+            logger.error(
+                "[indexer] tick failed (chain=%d, consecutive=%d): %s",
+                self.chain_id, consecutive, reason,
+            )
 
     async def _tick(self) -> dict:
         from app.services.rpc_manager import get_rpc_manager
@@ -572,13 +735,33 @@ class PaymentWatcher:
 
         last = await _get_last_block(self.chain_id)
         if last is None:
-            # First run — start from the final head (don't replay all history).
-            # Override via settings.indexer_start_blocks[chain_id] if backfilling.
+            # TRUE first run only (no cursor in Postgres OR legacy Redis) —
+            # start from the final head (don't replay all history). Override
+            # via settings.indexer_start_blocks[chain_id] if backfilling.
+            # The init is persisted to Postgres, so it happens once, ever.
             start_blocks = getattr(settings, "indexer_start_blocks", {}) or {}
             start = int(start_blocks.get(str(self.chain_id), max(final_head, 0)))
             await _set_last_block(self.chain_id, start)
             logger.info("[indexer] chain %d initialized at block %d", self.chain_id, start)
             return {"processed": 0}
+
+        # Fail-loud visibility: cursor + lag, every tick.
+        lag = max(0, final_head - last)
+        INDEXER_LAST_BLOCK.labels(chain_id=self.chain_id).set(last)
+        INDEXER_LAG_BLOCKS.labels(chain_id=self.chain_id).set(lag)
+        _status[self.chain_id] = {
+            **_status.get(self.chain_id, {}),
+            "last_block": last,
+            "lag": lag,
+            "stalled": _status.get(self.chain_id, {}).get("stalled", False),
+        }
+        if lag > CATCHUP_LOG_LAG:
+            # A persisted cursor far behind head is a BACKFILL, not a skip:
+            # the loop below walks the whole gap in chunked windows.
+            logger.warning(
+                "[indexer] catching up chain=%d from block %d to %d (%d blocks behind)",
+                self.chain_id, last + 1, final_head, lag,
+            )
 
         # ── INGEST ── Scan up to `latest` (logs are recorded PENDING, never paid
         # here). Always re-scan the *unfinalized* tail (down to final_head+1) so a

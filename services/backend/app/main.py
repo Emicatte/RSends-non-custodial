@@ -368,13 +368,19 @@ app.include_router(user_onboarding_router)
 @app.get("/health")
 async def health():
     from app.services.cache_service import is_redis_healthy
+    from app.services.payment_indexer import indexer_status
     redis_ok = await is_redis_healthy()
+    # Fail loud: a stalled watcher is silent payment loss — surface it as
+    # `degraded` here, not only in logs/metrics.
+    indexer = indexer_status()
+    indexer_stalled = any(s.get("stalled") for s in indexer.values())
     return {
-        "status": "healthy" if redis_ok else "degraded",
+        "status": "healthy" if (redis_ok and not indexer_stalled) else "degraded",
         "service": "rpagos-backend-core",
         "version": "2.0.0",
         "redis": "connected" if redis_ok else "disconnected",
         "idempotency": "active" if redis_ok else "FAIL-CLOSED (webhooks rejected)",
+        "indexer": indexer or "disabled",
         "ws_connections": payment_manager.active_connections,
     }
 
