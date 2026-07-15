@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { appPage, card } from '@/components/app/pageStyles'
 import {
   useOrgWebhooks,
   type OrgWebhook,
@@ -34,17 +35,9 @@ const EVENT_OPTIONS = [
   'payment.overpaid',
 ] as const
 
-const card: React.CSSProperties = {
-  background: COLORS.white,
-  border: `1px solid ${COLORS.border}`,
-  borderRadius: 12,
-  padding: '18px 20px',
-}
-
+// Spacing lives in badgeClass; the helper keeps only the tone.
+const badgeClass = 'inline-block px-2 py-0.5 rounded-md'
 const badge = (bg: string, text: string): React.CSSProperties => ({
-  display: 'inline-block',
-  padding: '3px 8px',
-  borderRadius: 6,
   background: bg,
   color: text,
   fontSize: 11,
@@ -113,29 +106,28 @@ function WebhookCard({
   }
 
   return (
-    <div style={{ ...card, display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+    <div className={`${card} flex flex-col gap-3`}>
+      <div className="flex items-center justify-between gap-3">
         <div style={{ minWidth: 0 }}>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: COLORS.ink, wordBreak: 'break-all' }}>
             {webhook.url}
           </div>
-          <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
-            <span style={badge(COLORS.blueLight, COLORS.blue)}>TEST</span>
-            <span style={badge(webhook.is_active ? COLORS.greenLight : COLORS.redLight, webhook.is_active ? COLORS.green : COLORS.red)}>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            <span className={badgeClass} style={badge(COLORS.blueLight, COLORS.blue)}>TEST</span>
+            <span className={badgeClass} style={badge(webhook.is_active ? COLORS.greenLight : COLORS.redLight, webhook.is_active ? COLORS.green : COLORS.red)}>
               {webhook.is_active ? 'ACTIVE' : 'INACTIVE'}
             </span>
             {webhook.events.map((e) => (
-              <span key={e} style={badge(COLORS.paper, COLORS.muted)}>{e}</span>
+              <span key={e} className={badgeClass} style={badge(COLORS.paper, COLORS.muted)}>{e}</span>
             ))}
           </div>
         </div>
         <button
           onClick={onTest}
           disabled={testing || !webhook.is_active}
+          className="px-3.5 py-2 rounded-lg"
           style={{
             flexShrink: 0,
-            padding: '8px 14px',
-            borderRadius: 8,
             border: 'none',
             background: COLORS.accent,
             color: COLORS.white,
@@ -151,7 +143,7 @@ function WebhookCard({
       </div>
 
       {/* Health row */}
-      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', fontFamily: 'var(--font-display)', fontSize: 12 }}>
+      <div className="flex flex-wrap gap-5" style={{ fontFamily: 'var(--font-display)', fontSize: 12 }}>
         <Health label="Delivered (24h)" value={String(delivered24h)} color={COLORS.green} />
         <Health label="Failed (24h)" value={String(failed24h)} color={failed24h > 0 ? COLORS.red : COLORS.muted} />
         <Health label="Pending retries" value={String(pendingRetries)} color={pendingRetries > 0 ? COLORS.orange : COLORS.muted} />
@@ -219,18 +211,14 @@ export default function WebhooksPage() {
   }
 
   return (
-    <main className="rp-app-page" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: COLORS.ink, margin: 0 }}>
-          Webhooks
-        </h1>
-        <p style={{ fontFamily: 'var(--font-display)', fontSize: 13, color: COLORS.muted, margin: '4px 0 0' }}>
-          Register endpoints and monitor delivery health. Testnet only.
-        </p>
-      </div>
+    <main className={`${appPage} space-y-8`}>
+      {/* Title lives in the topbar; the page opens with its one-line intro. */}
+      <p className="m-0" style={{ fontFamily: 'var(--font-display)', fontSize: 13, color: COLORS.muted }}>
+        Register endpoints and monitor delivery health. Testnet only.
+      </p>
 
       {/* Register form */}
-      <form onSubmit={onRegister} style={{ ...card, display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <form onSubmit={onRegister} className={`${card} flex flex-col gap-4`}>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: COLORS.ink }}>
           Register a webhook
         </div>
@@ -239,17 +227,16 @@ export default function WebhooksPage() {
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://your-server.example/webhooks/rsends"
+          className="px-3 py-2.5 rounded-lg"
           style={{
-            padding: '10px 12px',
-            borderRadius: 8,
             border: `1px solid ${COLORS.border}`,
             fontFamily: 'var(--font-display)',
             fontSize: 13,
           }}
         />
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <div className="flex flex-wrap gap-2.5">
           {EVENT_OPTIONS.map((e) => (
-            <label key={e} style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--font-display)', fontSize: 12, color: COLORS.ink, cursor: 'pointer' }}>
+            <label key={e} className="flex items-center gap-1.5" style={{ fontFamily: 'var(--font-display)', fontSize: 12, color: COLORS.ink, cursor: 'pointer' }}>
               <input type="checkbox" checked={events.includes(e)} onChange={() => toggleEvent(e)} />
               {e}
             </label>
@@ -259,10 +246,8 @@ export default function WebhooksPage() {
         <button
           type="submit"
           disabled={submitting}
+          className="self-start px-4 py-2 rounded-lg"
           style={{
-            alignSelf: 'flex-start',
-            padding: '9px 16px',
-            borderRadius: 8,
             border: 'none',
             background: COLORS.accent,
             color: COLORS.white,
@@ -276,8 +261,8 @@ export default function WebhooksPage() {
           {submitting ? 'Registering…' : 'Register webhook'}
         </button>
         {newSecret && (
-          <div style={{ background: COLORS.orangeLight, border: `1px solid ${COLORS.orange}`, borderRadius: 8, padding: '12px 14px' }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 12, fontWeight: 700, color: COLORS.orange, marginBottom: 6 }}>
+          <div className="px-4 py-3 rounded-lg" style={{ background: COLORS.orangeLight, border: `1px solid ${COLORS.orange}` }}>
+            <div className="mb-1.5" style={{ fontFamily: 'var(--font-display)', fontSize: 12, fontWeight: 700, color: COLORS.orange }}>
               Save this signing secret — it is shown only once.
             </div>
             <code style={{ fontSize: 12, wordBreak: 'break-all', color: COLORS.ink }}>{newSecret}</code>
@@ -287,21 +272,21 @@ export default function WebhooksPage() {
 
       {/* Endpoint list */}
       {!isAuthed ? (
-        <div style={{ ...card, color: COLORS.muted, fontFamily: 'var(--font-display)', fontSize: 13 }}>
+        <div className={card} style={{ color: COLORS.muted, fontFamily: 'var(--font-display)', fontSize: 13 }}>
           Sign in to manage webhooks.
         </div>
       ) : loading ? (
-        <div style={{ ...card, color: COLORS.muted, fontFamily: 'var(--font-display)', fontSize: 13 }}>Loading…</div>
+        <div className={card} style={{ color: COLORS.muted, fontFamily: 'var(--font-display)', fontSize: 13 }}>Loading…</div>
       ) : error ? (
-        <div style={{ ...card, color: COLORS.red, fontFamily: 'var(--font-display)', fontSize: 13 }}>
+        <div className={card} style={{ color: COLORS.red, fontFamily: 'var(--font-display)', fontSize: 13 }}>
           Couldn’t load webhooks ({error}).
         </div>
       ) : webhooks.length === 0 ? (
-        <div style={{ ...card, color: COLORS.muted, fontFamily: 'var(--font-display)', fontSize: 13 }}>
+        <div className={card} style={{ color: COLORS.muted, fontFamily: 'var(--font-display)', fontSize: 13 }}>
           No webhooks registered yet.
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div className="flex flex-col gap-4">
           {webhooks.map((w) => (
             <WebhookCard key={w.webhook_id} webhook={w} fetchDeliveries={fetchDeliveries} sendTest={sendTest} />
           ))}

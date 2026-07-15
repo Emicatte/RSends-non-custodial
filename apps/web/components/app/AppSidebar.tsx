@@ -114,24 +114,18 @@ export default function AppSidebar() {
   return (
     <aside
       aria-label="App navigation"
-      className="hidden md:flex"
+      // top-16 must match the nav's md height (h-16) in AppNav.tsx — the two
+      // change together or content slides under the fixed chrome.
+      className="hidden md:flex fixed top-16 bottom-0 left-0 z-[999] w-52 flex-col overflow-y-auto px-3 py-5"
       style={{
-        position: 'fixed',
-        top: 63,
-        left: 0,
-        bottom: 0,
-        width: 210,
-        flexDirection: 'column',
-        padding: '20px 12px',
         background: COLORS.paper,
         borderRight: `1px solid ${COLORS.border}`,
-        zIndex: 999,
-        overflowY: 'auto',
       }}
     >
       {SECTIONS.map(({ section, items }) => (
-        <div key={section} style={{ marginBottom: 20 }}>
+        <div key={section} className="mb-5">
           <div
+            className="px-3 py-1.5 mb-1"
             style={{
               fontFamily: 'var(--font-display)',
               fontSize: 10,
@@ -139,8 +133,6 @@ export default function AppSidebar() {
               color: COLORS.muted,
               textTransform: 'uppercase',
               letterSpacing: '0.1em',
-              padding: '6px 12px',
-              marginBottom: 4,
             }}
           >
             {t(section)}
@@ -151,14 +143,9 @@ export default function AppSidebar() {
               <Link
                 key={key}
                 href={href}
-                className="rp-sidebar-link"
+                className="rp-sidebar-link flex items-center gap-3 px-3 py-2 rounded-lg"
                 data-active={active}
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  padding: '8px 12px',
-                  borderRadius: 8,
                   textDecoration: 'none',
                   color: active ? COLORS.accent : COLORS.ink,
                   fontFamily: 'var(--font-display)',

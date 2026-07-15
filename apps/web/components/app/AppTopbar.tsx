@@ -13,10 +13,14 @@ const COLORS = {
   greenLight: 'rgba(45, 134, 89, 0.08)',
 }
 
-// Map app pathname → app.sidebar.* translation key. Phase A left only /app
-// (dashboard) reachable in the app layout; the custodial/mock subroutes were
-// removed. Later phases re-add entries here (e.g. /app/payments) as they ship.
-const PATH_TO_KEY: ReadonlyArray<{ prefix: string; key: string }> = []
+// Map app pathname → app.sidebar.* translation key. The topbar h1 is the ONE
+// page title (the pages themselves render no h1 — a subtitle at most), so
+// every /app route needs an entry here or it falls back to "dashboard".
+const PATH_TO_KEY: ReadonlyArray<{ prefix: string; key: string }> = [
+  { prefix: '/app/payments', key: 'payments' },
+  { prefix: '/app/webhooks', key: 'webhooks' },
+  { prefix: '/app/api-keys', key: 'apiKeys' },
+]
 
 function resolveTitleKey(pathname: string): string {
   if (pathname === '/app') return 'dashboard'
@@ -38,49 +42,43 @@ export default function AppTopbar() {
 
   return (
     <div
-      className="px-4 md:px-8 py-[18px]"
+      className="py-4"
       style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        flexWrap: 'wrap',
         background: COLORS.white,
         borderBottom: `1px solid ${COLORS.border}`,
       }}
     >
-      <h1
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: 22,
-          fontWeight: 700,
-          color: COLORS.ink,
-          letterSpacing: '-0.02em',
-          margin: 0,
-        }}
-      >
-        {title}
-      </h1>
+      {/* Inner box mirrors the page container (pageStyles.appPage): same
+          max-w-6xl with the gutter padding INSIDE it, so the title stays
+          aligned with page content even when the max-width binds. */}
+      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-3 px-5 md:px-8">
+        <h1
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 22,
+            fontWeight: 700,
+            color: COLORS.ink,
+            letterSpacing: '-0.02em',
+            margin: 0,
+          }}
+        >
+          {title}
+        </h1>
 
-      <div
-        style={{
-          marginLeft: 'auto',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-        }}
-      >
-        {activeOrg?.name && (
-          <span
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: 13,
-              fontWeight: 600,
-              color: COLORS.muted,
-            }}
-          >
-            {activeOrg.name}
-          </span>
-        )}
+        <div className="ml-auto flex items-center gap-3">
+          {activeOrg?.name && (
+            <span
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 13,
+                fontWeight: 600,
+                color: COLORS.muted,
+              }}
+            >
+              {activeOrg.name}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   )

@@ -24,7 +24,13 @@ const KNOWN_ERROR_CODES = new Set<string>([
   'not_a_member',
 ])
 
-export function ApiKeysSettings() {
+/**
+ * `embedded` — rendered inside a page that already provides the section
+ * heading and description (the /app API-keys tab): skip the h1 + description
+ * (the topbar h1 would read "API Keys" twice) and keep only the usage count.
+ * Standalone /settings/api-keys keeps the full header.
+ */
+export function ApiKeysSettings({ embedded = false }: { embedded?: boolean } = {}) {
   const t = useTranslations('settings.apiKeys')
   const locale = useLocale()
   const { data: session } = useSession()
@@ -81,13 +87,17 @@ export function ApiKeysSettings() {
   return (
     <div className="flex flex-col gap-6 max-w-3xl">
       <header>
-        <h1 className="text-2xl font-semibold" style={{ color: INK, margin: 0 }}>
-          {t('title')}
-        </h1>
-        <p className="text-sm mt-2" style={{ color: MUTED }}>
-          {t('description')}
-        </p>
-        <p className="text-xs mt-2" style={{ color: MUTED }}>
+        {!embedded && (
+          <>
+            <h1 className="text-2xl font-semibold" style={{ color: INK, margin: 0 }}>
+              {t('title')}
+            </h1>
+            <p className="text-sm mt-2" style={{ color: MUTED }}>
+              {t('description')}
+            </p>
+          </>
+        )}
+        <p className={embedded ? 'text-xs m-0' : 'text-xs mt-2'} style={{ color: MUTED }}>
           {t('countUsed', { used: usedCount, max: maxAllowed })}
         </p>
       </header>

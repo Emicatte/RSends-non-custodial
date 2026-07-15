@@ -61,18 +61,15 @@ export function GetStartedChecklist({
   if (loading) {
     return (
       <div
-        className="rounded-2xl border p-5 mb-6"
+        className="rounded-xl border p-5"
         style={{ borderColor: '#DDDCD6', background: '#FFFFFF' }}
         data-testid="get-started-skeleton"
         aria-hidden="true"
       >
-        <style>{`@keyframes rsendsPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
+        {/* h-5 matches the card's text-sm h2 line height exactly */}
         <div
-          className="mb-3"
+          className="mb-4 h-5 w-1/4 rounded-lg"
           style={{
-            height: 20, // matches the card's text-sm h2 line height exactly
-            width: '25%',
-            borderRadius: 8,
             background: '#e5e4e0',
             animation: 'rsendsPulse 1.5s ease-in-out infinite',
           }}
@@ -81,9 +78,8 @@ export function GetStartedChecklist({
           {ITEMS.map((item) => (
             <div
               key={item.key}
+              className="h-10 rounded-lg"
               style={{
-                height: 42,
-                borderRadius: 8,
                 background: '#e5e4e0',
                 animation: 'rsendsPulse 1.5s ease-in-out infinite',
               }}
@@ -101,10 +97,10 @@ export function GetStartedChecklist({
 
   return (
     <div
-      className="rounded-2xl border p-5 mb-6"
+      className="rounded-xl border p-5"
       style={{ borderColor: '#DDDCD6', background: '#FFFFFF' }}
     >
-      <h2 className="text-sm font-semibold mb-3" style={{ color: '#0A0A0A' }}>
+      <h2 className="text-sm font-semibold mb-4" style={{ color: '#0A0A0A' }}>
         {t('title')}
       </h2>
       <ul className="space-y-2">

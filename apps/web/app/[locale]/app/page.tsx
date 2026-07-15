@@ -2,6 +2,7 @@
 
 import { useTranslations } from 'next-intl'
 import { GetStartedChecklist } from '@/components/app/GetStartedChecklist'
+import { appPage, card } from '@/components/app/pageStyles'
 import { useOrgStats } from '@/hooks/useOrgStats'
 
 const COLORS = {
@@ -109,11 +110,10 @@ export default function AppDashboardPage() {
   }))
 
   return (
-    <main className="rp-app-page">
-      <style>{`@keyframes rsendsPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
+    <main className={`${appPage} space-y-8`}>
       {/* Get started checklist — derived from the stats booleans; renders a
           layout-reserving skeleton while loading, nothing when all done (the
-          component owns its bottom margin so a null render leaves no gap) */}
+          parent's space-y owns the rhythm, so a null render leaves no gap) */}
       <GetStartedChecklist
         loading={loading && !stats}
         completed={
@@ -127,26 +127,11 @@ export default function AppDashboardPage() {
         }
       />
       {/* Metric cards */}
-      <div
-        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
-        style={{ marginBottom: 24 }}
-      >
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {metrics.map((m) => {
           const deltaText = m.delta
           return (
-            <div
-              key={m.key}
-              className="rp-stat-card"
-              style={{
-                background: COLORS.paper,
-                border: `1px solid ${COLORS.border}`,
-                borderRadius: 12,
-                padding: '16px 18px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 6,
-              }}
-            >
+            <div key={m.key} className={`${card} flex flex-col gap-1.5`}>
               <div
                 style={{
                   fontFamily: 'var(--font-display)',
@@ -160,7 +145,7 @@ export default function AppDashboardPage() {
                 {t(`metrics.${m.key}`)}
               </div>
               {loading && !stats ? (
-                <div style={{ height: 32, width: '60%', borderRadius: 8, background: '#e5e4e0', animation: 'rsendsPulse 1.5s ease-in-out infinite' }} />
+                <div className="h-8 w-3/5 rounded-lg" style={{ background: '#e5e4e0', animation: 'rsendsPulse 1.5s ease-in-out infinite' }} />
               ) : (
                 <div
                   style={{
@@ -191,35 +176,23 @@ export default function AppDashboardPage() {
       </div>
 
       {/* Volume trend chart */}
-      <section
-        style={{
-          background: COLORS.white,
-          border: `1px solid ${COLORS.border}`,
-          borderRadius: 12,
-          padding: '20px 22px',
-          marginBottom: 24,
-        }}
-      >
+      <section className={card}>
         <h2
+          className="m-0 mb-4"
           style={{
             fontFamily: 'var(--font-display)',
             fontSize: 14,
             fontWeight: 700,
             color: COLORS.ink,
-            margin: '0 0 16px',
             letterSpacing: '-0.01em',
           }}
         >
           {t('volumeTrend.title')}
         </h2>
         <div
+          className="flex h-60 items-center justify-center rounded-lg"
           style={{
             border: `1px dashed ${COLORS.border}`,
-            borderRadius: 8,
-            height: 240,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
             color: COLORS.subtle,
             fontFamily: 'var(--font-display)',
             fontSize: 13,
@@ -231,23 +204,8 @@ export default function AppDashboardPage() {
       </section>
 
       {/* Recent transactions */}
-      <section
-        style={{
-          background: COLORS.white,
-          border: `1px solid ${COLORS.border}`,
-          borderRadius: 12,
-          padding: '20px 22px',
-        }}
-      >
-        <header
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: 16,
-            gap: 12,
-          }}
-        >
+      <section className={card}>
+        <header className="mb-4 flex items-center justify-between gap-3">
           <h2
             style={{
               fontFamily: 'var(--font-display)',
@@ -277,9 +235,9 @@ export default function AppDashboardPage() {
                 {(['time', 'type', 'amount', 'chain', 'status'] as const).map((col) => (
                   <th
                     key={col}
+                    className="px-4 py-3"
                     style={{
                       textAlign: 'left',
-                      padding: '8px 12px',
                       borderBottom: `1px solid ${COLORS.border}`,
                       fontSize: 11,
                       fontWeight: 700,
@@ -299,21 +257,19 @@ export default function AppDashboardPage() {
                 const statusBadge = STATUS_BADGE[tx.status]
                 return (
                   <tr key={tx.id}>
-                    <td style={{ padding: '12px', color: COLORS.muted, borderBottom: `1px solid ${COLORS.border}` }}>
+                    <td className="px-4 py-3" style={{ color: COLORS.muted, borderBottom: `1px solid ${COLORS.border}` }}>
                       {tx.time}
                     </td>
-                    <td style={{ padding: '12px', color: COLORS.ink, fontWeight: 600, borderBottom: `1px solid ${COLORS.border}` }}>
+                    <td className="px-4 py-3" style={{ color: COLORS.ink, fontWeight: 600, borderBottom: `1px solid ${COLORS.border}` }}>
                       {tx.type}
                     </td>
-                    <td style={{ padding: '12px', color: COLORS.ink, fontWeight: 600, borderBottom: `1px solid ${COLORS.border}` }}>
+                    <td className="px-4 py-3" style={{ color: COLORS.ink, fontWeight: 600, borderBottom: `1px solid ${COLORS.border}` }}>
                       {tx.amount}
                     </td>
-                    <td style={{ padding: '12px', borderBottom: `1px solid ${COLORS.border}` }}>
+                    <td className="px-4 py-3" style={{ borderBottom: `1px solid ${COLORS.border}` }}>
                       <span
+                        className="inline-block px-2 py-0.5 rounded-md"
                         style={{
-                          display: 'inline-block',
-                          padding: '3px 8px',
-                          borderRadius: 6,
                           background: chainBadge.bg,
                           color: chainBadge.text,
                           fontSize: 11,
@@ -324,12 +280,10 @@ export default function AppDashboardPage() {
                         {tx.chain}
                       </span>
                     </td>
-                    <td style={{ padding: '12px', borderBottom: `1px solid ${COLORS.border}` }}>
+                    <td className="px-4 py-3" style={{ borderBottom: `1px solid ${COLORS.border}` }}>
                       <span
+                        className="inline-block px-2 py-0.5 rounded-md"
                         style={{
-                          display: 'inline-block',
-                          padding: '3px 8px',
-                          borderRadius: 6,
                           background: statusBadge.bg,
                           color: statusBadge.text,
                           fontSize: 11,

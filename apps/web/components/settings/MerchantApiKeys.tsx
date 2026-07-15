@@ -366,11 +366,10 @@ function CreateMerchantKeyModal({
       }}
     >
       <div
-        className="rounded-2xl w-full max-w-lg"
+        className="rounded-2xl w-full max-w-lg p-6"
         style={{
           background: '#FFFFFF',
           border: `1px solid ${step === 'display' ? DANGER : ORANGE}`,
-          padding: 24,
           maxHeight: '90vh',
           overflowY: 'auto',
         }}
