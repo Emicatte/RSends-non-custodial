@@ -25,6 +25,7 @@ from app.models.merchant_models import (
     PaymentIntent,
     generate_reference_id,
 )
+from app.models.api_key_models import ApiKey
 from app.models.org_models import Organization
 from app.models.user_wallets_models import UserWallet
 from app.services.audit_service import log_event
@@ -290,9 +291,23 @@ async def create_intent(
     onchain_invoice_id = derive_invoice_id(reference_id)
 
     # RECIPIENT GATE (Phase B): explicit override OR settlement_wallet default —
-    # org_id set (session) resolves the org's wallet directly. Fail-closed 422.
+    # org_id set (session) resolves the org's wallet directly. On the API-key
+    # path, a session-minted key carries its minting org (migration 0011):
+    # resolve via THAT org — a settlement-wallet-only merchant has no
+    # SIWE-linked wallet for the reverse lookup, but its keys are org-stamped.
+    # Wallet-minted keys (org_id NULL) keep the reverse lookup. Fail-closed 422.
+    recipient_org = org_id
+    if recipient_org is None and key_id is not None:
+        try:
+            recipient_org = (
+                await db.execute(
+                    select(ApiKey.org_id).where(ApiKey.id == int(key_id))
+                )
+            ).scalar_one_or_none()
+        except (TypeError, ValueError):
+            recipient_org = None  # non-numeric key_id (e.g. debug bypass)
     recipient = await resolve_recipient(
-        db, merchant_id, payload.recipient, org_id=org_id
+        db, merchant_id, payload.recipient, org_id=recipient_org
     )
 
     intent = PaymentIntent(

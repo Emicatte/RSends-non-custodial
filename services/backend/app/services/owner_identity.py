@@ -13,7 +13,11 @@ MerchantWebhook.merchant_id`). Precedence:
      (someone once proved control via SIWE; their data stays keyed to it);
    - is another org's `settlement_wallet` (the column is not unique);
    - is an `api_keys.owner_address`, active OR revoked (an rsend_ key mint
-     proved control via EIP-191 signature).
+     proved control via EIP-191 signature) — EXCLUDING keys this same org
+     minted via the session flow (`api_keys.org_id == org_id`, migration
+     0011): without the carve-out, a settlement-wallet-fallback org's first
+     session-minted key would 409 every later resolve, including its own
+     stats/payments reads and the mint of key #2.
    The checks re-run on every request, so a later legitimate claim (e.g. the
    real owner SIWE-links the address) immediately revokes a squatter's fallback.
 
@@ -81,7 +85,10 @@ async def resolve_owner_address(db: AsyncSession, org_id: str) -> str:
     keyed = (
         await db.execute(
             select(func.count(ApiKey.id)).where(
-                func.lower(ApiKey.owner_address) == addr
+                func.lower(ApiKey.owner_address) == addr,
+                # Session-minted keys of THIS org are our own identity, not a
+                # competing claim (see module docstring; migration 0011).
+                (ApiKey.org_id.is_(None)) | (ApiKey.org_id != org_id),
             )
         )
     ).scalar()

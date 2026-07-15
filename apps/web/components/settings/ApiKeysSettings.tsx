@@ -213,23 +213,6 @@ export function ApiKeysSettings() {
         </ul>
       )}
 
-      <DocsSnippet t={t} />
-
-      {/* Contextual hand-off: after creating/viewing a key, open the merchant
-          dashboard (separate API-key app) and paste the key there. */}
-      <a
-        href="/merchant/dashboard"
-        className="text-sm px-4 py-2 rounded-lg self-start"
-        style={{
-          background: ORANGE,
-          color: '#FFFFFF',
-          textDecoration: 'none',
-          fontWeight: 600,
-        }}
-      >
-        Open Merchant Dashboard →
-      </a>
-
       {modalOpen ? (
         <CreateApiKeyModal
           onClose={() => setModalOpen(false)}
@@ -470,38 +453,6 @@ function ApiKeyRow({
         ) : null}
       </div>
     </li>
-  )
-}
-
-function DocsSnippet({ t }: { t: ReturnType<typeof useTranslations> }) {
-  return (
-    <section
-      className="rounded-xl p-4"
-      style={{
-        background: '#FFFFFF',
-        border: '1px solid rgba(200,81,44,0.1)',
-      }}
-    >
-      <h2
-        className="text-sm font-semibold"
-        style={{ color: INK, margin: 0 }}
-      >
-        {t('docs.title')}
-      </h2>
-      <p className="text-xs mt-2" style={{ color: MUTED, margin: 0 }}>
-        {t('docs.body')}
-      </p>
-      <pre
-        className="text-xs font-mono rounded-lg px-3 py-3 mt-3 whitespace-pre-wrap break-all"
-        style={{
-          color: INK,
-          background: 'rgba(44,44,42,0.04)',
-          border: '1px solid rgba(136,135,128,0.25)',
-          margin: 0,
-        }}
-      >{`curl https://api.rsends.io/api/v1/user/transactions \\
-  -H "Authorization: Bearer rsusr_live_..."`}</pre>
-    </section>
   )
 }
 
