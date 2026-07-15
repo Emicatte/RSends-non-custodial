@@ -36,7 +36,7 @@ import pytest
 _BACKEND_ROOT = Path(__file__).resolve().parents[1]
 _VERSIONS_DIR = _BACKEND_ROOT / "alembic" / "versions"
 
-HEAD = "0010_org_approval"
+HEAD = "0011_api_keys_org_id"
 # Alembic's hardcoded alembic_version.version_num width.
 _VERSION_NUM_MAX = 32
 
@@ -178,6 +178,11 @@ def test_0010_backfills_existing_orgs_and_drops_oauth_columns(clean_schema):
       parity — env.py compares server defaults, see the 0009 reconciliation);
     * the orphan OAuth columns are dropped from users;
     * downgrade -1 reverses: approval columns gone, OAuth columns back nullable.
+
+    Pinned to 0010 on BOTH bounds (upgrade target and downgrade) so later
+    migrations don't shift what `downgrade -1` unwinds — when 0011 landed,
+    `upgrade head` + `downgrade -1` silently started testing 0011's reversal
+    instead of 0010's.
     """
     assert _alembic("upgrade", "0009_onboarding").returncode == 0
     # 0001 is a create_all of the CURRENT ORM, so "at 0009" the schema already
@@ -211,7 +216,7 @@ def test_0010_backfills_existing_orgs_and_drops_oauth_columns(clean_schema):
         )
     )
 
-    upgrade = _alembic("upgrade", "head")
+    upgrade = _alembic("upgrade", "0010_org_approval")
     assert upgrade.returncode == 0, upgrade.stderr
 
     assert (
