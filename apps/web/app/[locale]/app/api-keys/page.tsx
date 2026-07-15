@@ -2,6 +2,7 @@
 
 import { ApiKeysSettings } from '@/components/settings/ApiKeysSettings'
 import { MerchantApiKeys } from '@/components/settings/MerchantApiKeys'
+import { appPage } from '@/components/app/pageStyles'
 
 const COLORS = {
   ink: '#1a1a1a',
@@ -20,7 +21,7 @@ const COLORS = {
  */
 export default function AppApiKeysPage() {
   return (
-    <main className="rp-app-page" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <main className={`${appPage} space-y-8`}>
       <MerchantApiKeys />
 
       <div>
