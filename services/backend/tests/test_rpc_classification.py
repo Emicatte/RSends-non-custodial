@@ -92,3 +92,52 @@ def test_provider_breakers_exclude_permanent_errors():
     exclusion — this is the wiring that stops the prod log storm."""
     p = RPCProvider(name="probe", url="https://example.invalid", chain_id=84532)
     assert PermanentRPCError in p.cb.excluded_exceptions
+
+
+# ── Bare -32600 (code-level) + all-permanent propagation ─────────
+# Alchemy's oversized-getLogs rejection arrives as -32600; the message
+# pattern caught the known wording, but a bare -32600 with any other text
+# was still fed to the breaker as transient. -32600 is deterministic by
+# spec (Invalid Request) — classify by CODE, not wording.
+
+
+def test_bare_32600_is_permanent_regardless_of_message():
+    assert _is_permanent_rpc_error({"code": -32600, "message": "invalid request"})
+    assert _is_permanent_rpc_error({"code": -32600, "message": ""})
+
+
+@pytest.mark.asyncio
+async def test_call_propagates_permanent_when_all_providers_reject(monkeypatch):
+    """When EVERY provider rejects deterministically, RPCManager.call must
+    raise PermanentRPCError (not a generic RuntimeError) so the indexer's
+    stall detection can surface a config/range error instead of retrying."""
+    from app.services import rpc_manager as rm
+
+    async def _always_permanent(url, method, params, timeout=10):
+        raise PermanentRPCError("RPC eth_getLogs rejected: range too large")
+
+    monkeypatch.setattr(rm, "_raw_rpc_call", _always_permanent)
+    mgr = rm.RPCManager(chain_id=84532)
+    with pytest.raises(PermanentRPCError):
+        await mgr.call("eth_getLogs", [{}])
+
+
+@pytest.mark.asyncio
+async def test_call_stays_runtimeerror_when_any_failure_is_transient(monkeypatch):
+    """A mixed failure (any transient error in the rotation) keeps the
+    generic RuntimeError — the situation MAY self-heal, retrying is right."""
+    from app.services import rpc_manager as rm
+
+    calls = {"n": 0}
+
+    async def _mixed(url, method, params, timeout=10):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise PermanentRPCError("rejected: range too large")
+        raise RuntimeError("upstream timeout")
+
+    monkeypatch.setattr(rm, "_raw_rpc_call", _mixed)
+    mgr = rm.RPCManager(chain_id=8453)  # multiple default providers
+    with pytest.raises(RuntimeError) as exc:
+        await mgr.call("eth_getLogs", [{}])
+    assert not isinstance(exc.value, PermanentRPCError)
