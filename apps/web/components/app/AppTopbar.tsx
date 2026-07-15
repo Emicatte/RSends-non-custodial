@@ -13,10 +13,14 @@ const COLORS = {
   greenLight: 'rgba(45, 134, 89, 0.08)',
 }
 
-// Map app pathname → app.sidebar.* translation key. Phase A left only /app
-// (dashboard) reachable in the app layout; the custodial/mock subroutes were
-// removed. Later phases re-add entries here (e.g. /app/payments) as they ship.
-const PATH_TO_KEY: ReadonlyArray<{ prefix: string; key: string }> = []
+// Map app pathname → app.sidebar.* translation key. The topbar h1 is the ONE
+// page title (the pages themselves render no h1 — a subtitle at most), so
+// every /app route needs an entry here or it falls back to "dashboard".
+const PATH_TO_KEY: ReadonlyArray<{ prefix: string; key: string }> = [
+  { prefix: '/app/payments', key: 'payments' },
+  { prefix: '/app/webhooks', key: 'webhooks' },
+  { prefix: '/app/api-keys', key: 'apiKeys' },
+]
 
 function resolveTitleKey(pathname: string): string {
   if (pathname === '/app') return 'dashboard'

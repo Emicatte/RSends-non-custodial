@@ -33,7 +33,7 @@ export default function AppApiKeysPage() {
           <strong>not</strong> call the merchant payment API — use a merchant
           key above for that.
         </p>
-        <ApiKeysSettings />
+        <ApiKeysSettings embedded />
       </div>
     </main>
   )

@@ -170,24 +170,12 @@ export default function AppPaymentsPage() {
 
   return (
     <main className={appPage}>
-      {/* Non-uniform rhythm: title block binds tight to its subtitle (mt-1)
-          and sits mb-6 above the toolbar, which binds mb-4 to its table. */}
-      <div className="mb-6">
-        <h1
-          className="m-0"
-          style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: 22,
-            fontWeight: 700,
-            color: COLORS.ink,
-          }}
-        >
-          {t('title')}
-        </h1>
-        <p className="m-0 mt-1" style={{ fontSize: 13, color: COLORS.muted }}>
-          {t('subtitle')}
-        </p>
-      </div>
+      {/* The page title lives in the topbar (AppTopbar resolves it from the
+          pathname) — the page opens with its one-line intro, mb-6 above the
+          toolbar, which binds mb-4 to its table. */}
+      <p className="m-0 mb-6" style={{ fontSize: 13, color: COLORS.muted }}>
+        {t('subtitle')}
+      </p>
 
       {/* Toolbar: status filter + create */}
       <div className="mb-4 flex items-center justify-between gap-3">

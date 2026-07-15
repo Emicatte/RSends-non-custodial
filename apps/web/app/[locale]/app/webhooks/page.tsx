@@ -212,14 +212,10 @@ export default function WebhooksPage() {
 
   return (
     <main className={`${appPage} space-y-8`}>
-      <div>
-        <h1 className="m-0" style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: COLORS.ink }}>
-          Webhooks
-        </h1>
-        <p className="m-0 mt-1" style={{ fontFamily: 'var(--font-display)', fontSize: 13, color: COLORS.muted }}>
-          Register endpoints and monitor delivery health. Testnet only.
-        </p>
-      </div>
+      {/* Title lives in the topbar; the page opens with its one-line intro. */}
+      <p className="m-0" style={{ fontFamily: 'var(--font-display)', fontSize: 13, color: COLORS.muted }}>
+        Register endpoints and monitor delivery health. Testnet only.
+      </p>
 
       {/* Register form */}
       <form onSubmit={onRegister} className={`${card} flex flex-col gap-4`}>
