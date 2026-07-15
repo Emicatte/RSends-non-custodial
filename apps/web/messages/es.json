@@ -1646,9 +1646,6 @@
   },
   "pay": {
     "summary": {
-      "amount": "Importe",
-      "fee": "Comisión RSends",
-      "total": "Total",
       "gasNote": "Tu cartera añade una pequeña comisión de red (gas)."
     },
     "trust": {
@@ -1676,7 +1673,7 @@
     "syncing": "Confirmado on-chain. Actualizando los registros del comercio.",
     "success": {
       "title": "Pago completado",
-      "body": "{amount} {token} enviados a {merchant}."
+      "body": "Has pagado {amount} {token} a {merchant}."
     },
     "rejected": "Cancelaste la solicitud en tu cartera. No se envió nada.",
     "failed": "La transacción no se completó. Ningún pago salió de tu cartera. Revisa los detalles en el explorador.",

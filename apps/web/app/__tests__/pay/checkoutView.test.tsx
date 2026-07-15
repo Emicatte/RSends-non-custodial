@@ -9,7 +9,7 @@ import { render, screen } from '@testing-library/react'
 
 jest.mock('next-intl', () => require('@/test-utils/intlMock').intlModuleMock())
 
-import { SummarySection } from '@/app/pay/[intentId]/_components/SummarySection'
+import { GasNote, TotalHeadline } from '@/app/pay/[intentId]/_components/SummarySection'
 import { TrustFooter } from '@/app/pay/[intentId]/_components/TrustFooter'
 import { ActionArea } from '@/app/pay/[intentId]/_components/ActionArea'
 import {
@@ -56,28 +56,36 @@ function actionProps(step: string, overrides: Record<string, unknown> = {}) {
   }
 }
 
-describe('SummarySection', () => {
-  it('renders the three-line breakdown in DM Mono with token decimals plus the gas note', () => {
+describe('TotalHeadline', () => {
+  it('renders the single total in DM Mono with token decimals and no breakdown', () => {
     render(
-      <SummarySection onchain={ONCHAIN} currency="USDC" fee={600_000n} total={50_600_000n} />,
+      <TotalHeadline total={50_600_000n} currency="USDC" decimals={ONCHAIN.decimals} />,
     )
-    expect(screen.getByText('Amount')).toBeInTheDocument()
-    expect(screen.getByText('RSends fee')).toBeInTheDocument()
-    expect(screen.getByText('Total')).toBeInTheDocument()
+    const node = screen.getByText('50.6')
+    expect(node.closest('span')).toHaveStyle({ fontFamily: MONO })
+    expect(screen.getByText('USDC')).toBeInTheDocument()
+    // The breakdown is gone: no fee/total labels, no principal figure.
+    expect(screen.queryByText('RSends fee')).toBeNull()
+    expect(screen.queryByText('Total')).toBeNull()
+    expect(screen.queryByText('Amount')).toBeNull()
+  })
 
-    for (const value of ['50 USDC', '0.6 USDC', '50.6 USDC']) {
-      const node = screen.getByText(value)
-      expect(node).toHaveStyle({ fontFamily: MONO })
-    }
+  it('holds a placeholder while the total is quoting and never shows the bare principal', () => {
+    render(<TotalHeadline total={null} currency="USDC" decimals={ONCHAIN.decimals} />)
+    expect(screen.getByTestId('amount-pending')).toBeInTheDocument()
+    expect(screen.queryByText('50')).toBeNull()
+    expect(screen.queryByText('50 USDC')).toBeNull()
+    // The currency ticker stays visible next to the placeholder.
+    expect(screen.getByText('USDC')).toBeInTheDocument()
+  })
+})
+
+describe('GasNote', () => {
+  it('renders the wallet-gas note', () => {
+    render(<GasNote />)
     expect(
       screen.getByText('Your wallet adds a small network gas fee on top.'),
     ).toBeInTheDocument()
-  })
-
-  it('reserves the value slots while the fee is still quoting', () => {
-    render(<SummarySection onchain={ONCHAIN} currency="USDC" fee={null} total={null} />)
-    expect(screen.getByText('50 USDC')).toBeInTheDocument()
-    expect(screen.getAllByTestId('summary-pending')).toHaveLength(2)
   })
 })
 
@@ -212,7 +220,7 @@ describe('terminal views (no wallet UI)', () => {
   it('success shows heading, body and the explorer link', () => {
     render(
       <SuccessView
-        amount="50"
+        amount="50.6"
         currency="USDC"
         merchant="Caffe Roma"
         chainId={84532}
@@ -220,7 +228,7 @@ describe('terminal views (no wallet UI)', () => {
       />,
     )
     expect(screen.getByText('Payment complete')).toBeInTheDocument()
-    expect(screen.getByText('50 USDC sent to Caffe Roma.')).toBeInTheDocument()
+    expect(screen.getByText('You paid 50.6 USDC to Caffe Roma.')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /View transaction/ })).toHaveAttribute(
       'href',
       `https://sepolia.basescan.org/tx/${HASH}`,

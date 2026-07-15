@@ -40,7 +40,7 @@ export function CheckoutFrame({
           <div data-testid="frame-amount" style={{ minHeight: 44 }}>
             {amount}
           </div>
-          <div data-testid="frame-summary" style={{ minHeight: 118 }}>
+          <div data-testid="frame-summary" style={{ minHeight: 18 }}>
             {summary}
           </div>
           <div

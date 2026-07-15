@@ -28,7 +28,7 @@ import {
 import { ActionArea } from './ActionArea'
 import { CheckoutFrame } from './CheckoutFrame'
 import { CheckoutSkeleton } from './CheckoutSkeleton'
-import { SummarySection } from './SummarySection'
+import { GasNote, TotalHeadline } from './SummarySection'
 import { TrustFooter } from './TrustFooter'
 import {
   AlreadyPaidView,
@@ -117,7 +117,9 @@ function CheckoutActive({
   if (checkout.step === 'success') {
     return (
       <SuccessView
-        amount={formatTokenAmount(onchain.amount, onchain.decimals)}
+        // checkout.total is non-null by the time step === 'success' (pay()
+        // never fires with a null total); the ?? is unreachable narrowing.
+        amount={formatTokenAmount(checkout.total ?? onchain.amount, onchain.decimals)}
         currency={intent.currency}
         merchant={merchantName(intent)}
         chainId={onchain.chainId}
@@ -165,19 +167,13 @@ function CheckoutActive({
         </div>
       }
       amount={
-        <Mono style={{ fontSize: 34, fontWeight: 500, color: C.text }}>
-          {formatTokenAmount(onchain.amount, onchain.decimals)}{' '}
-          <span style={{ fontSize: 18, color: C.sub }}>{intent.currency}</span>
-        </Mono>
-      }
-      summary={
-        <SummarySection
-          onchain={onchain}
-          currency={intent.currency}
-          fee={checkout.fee}
+        <TotalHeadline
           total={checkout.total}
+          currency={intent.currency}
+          decimals={onchain.decimals}
         />
       }
+      summary={<GasNote />}
       action={
         <ActionArea
           step={checkout.step}
