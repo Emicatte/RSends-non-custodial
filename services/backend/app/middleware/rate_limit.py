@@ -79,6 +79,11 @@ ENDPOINT_LIMITS: list[tuple[str, str, int, int, str]] = [
     ("POST",   "/api/v1/user/org/webhooks/",         10,    60,  "ip"),  # {id}/test
     ("POST",   "/api/v1/user/org/webhooks",           5,  3600,  "ip"),  # register
     ("GET",    "/api/v1/user/org/webhooks",          120,    60,  "ip"),  # list + deliveries
+    # Session-minted rsend_ merchant keys (Option B, 2026-07-15) — per-IP.
+    # Trailing-slash prefix ({id}/revoke) MUST precede the bare mint entry.
+    ("POST",   "/api/v1/user/org/merchant-keys/",    10,    60,  "ip"),  # {id}/revoke
+    ("POST",   "/api/v1/user/org/merchant-keys",      5,  3600,  "ip"),  # mint
+    ("GET",    "/api/v1/user/org/merchant-keys",     120,    60,  "ip"),  # list
     # Session-authed org stats (Phase E) — per-IP.
     ("GET",    "/api/v1/user/org/stats",             120,    60,  "ip"),
     # Session-authed onboarding (state, consents, company profile) — per-IP

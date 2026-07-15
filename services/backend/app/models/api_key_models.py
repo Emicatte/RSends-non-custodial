@@ -24,6 +24,12 @@ class ApiKey(Base):
 
     owner_address = Column(String(42), nullable=False, index=True)
 
+    # Which org minted this key via the session flow (migration 0011).
+    # NULL for wallet-signed mints (pre-session keys have no org linkage).
+    # Lets owner_identity's conflict check exclude an org's OWN keys, so a
+    # settlement-wallet-fallback org that mints a key doesn't 409 itself.
+    org_id = Column(String(36), nullable=True, index=True)
+
     key_hash = Column(String(64), nullable=False, unique=True, index=True)
     key_prefix = Column(String(32), nullable=False)
     display_prefix = Column(String(32), nullable=True)

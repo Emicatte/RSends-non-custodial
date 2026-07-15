@@ -358,6 +358,8 @@ from app.api.user_org_webhooks_routes import router as user_org_webhooks_router
 app.include_router(user_org_webhooks_router)
 from app.api.user_org_stats_routes import router as user_org_stats_router
 app.include_router(user_org_stats_router)
+from app.api.user_org_merchant_keys_routes import router as user_org_merchant_keys_router
+app.include_router(user_org_merchant_keys_router)
 from app.api.user_onboarding_routes import router as user_onboarding_router
 app.include_router(user_onboarding_router)
 

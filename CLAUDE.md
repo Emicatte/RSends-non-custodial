@@ -158,6 +158,9 @@ feeding the /app "Get started" card); `settlement_wallet_conflict` still propaga
 | `GET /api/v1/user/org/webhooks/{id}/deliveries` (Phase E) | `viewer` | webhook resolved with owner+env filter FIRST → **404** on empty (cross-tenant/cross-env/missing); paginated; **excludes `payload`/`response_body`** (OQ-E2, PII/secret avoidance) | 120/min **per IP** |
 | `POST /api/v1/user/org/webhooks` (Phase E) | `operator` | register mirror — SAME `create_merchant_webhook` as the API-key path (SSRF egress guard + env stamp); returns `secret` **once**; 422 `WEBHOOK_URL_FORBIDDEN` on unsafe URL | 5/hour **per IP** |
 | `POST /api/v1/user/org/webhooks/{id}/test` (Phase E) | `operator` | scoped `(id, owner, env)` → **404**/400; SAME `send_test_event` (egress-guarded) | 10/min **per IP** |
+| `POST /api/v1/user/org/merchant-keys` (Option B, 2026-07-15) | `admin` | mints a REAL `rsend_test_` merchant key from the session — SAME `generate_api_key` + `api_keys` table as the wallet route; `owner_address = resolve_owner_address(org)`; scope pinned `write`, env pinned `test`; row stamped `org_id` (migration 0011) so the owner-identity conflict check excludes the org's OWN keys (self-conflict trap); 5-active cap per (owner, env) → 409 `max_keys_reached`; resolver 409s propagate; plaintext returned **once** | 5/hour **per IP** |
+| `GET /api/v1/user/org/merchant-keys` | `viewer` | prefix-only list, `(org_id == org) OR (owner_address == resolved owner)` (includes historical wallet-minted keys of the same identity); never key material | 120/min **per IP** |
+| `POST /api/v1/user/org/merchant-keys/{id}/revoke` | `admin` | soft-revoke, idempotent; tenant scope IN the query → **404** on miss/cross-tenant | 10/min **per IP** |
 | `GET /api/v1/user/org/stats` (Phase E) | `viewer` | settlements attributed via the **intent join** (`settlement.intent_id → intent`, `intent.merchant_id == owner` + env) — NOT the broken primary-wallet filter; USD conversion via `price_service` + `app.tokens.registry`; read-only; carries the get-started checklist booleans (`settlement_wallet_set`/`has_api_key`/`has_paid_payment`, response `OrgDashboardStats(DashboardStats)` — the shared `DashboardStats` untouched); fresh-merchant safe: `no_primary_wallet` caught → **200 with zeroed KPIs + booleans**; `settlement_wallet_conflict` still 409 | 120/min **per IP** |
 
 Browser/session counterpart of the API-key merchant API. The `/app` UI
@@ -183,13 +186,16 @@ validation and the httpx connect share a resolver, a host that *can* reach a pri
 `create_merchant_webhook` rejects unsafe URLs at registration (422). This is the sanctioned touch
 to the otherwise-frozen webhook pipeline; it also hardened the pre-existing API-key routes.
 
-**`rsend_` vs `rsusr_` interop gap (OQ-E3 = A, product decision).** The `/app` API-keys tab
-mounts the existing session `rsusr_` CRUD (`ApiKeysSettings`) + a documented link to
-`/merchant/dashboard` for `rsend_` management. `rsusr_` user keys authenticate the session/dashboard
-APIs but **cannot call the merchant payment API** (`verify_api_key` accepts only `rsend_`); minting
-`rsend_` keys stays wallet-authenticated. The gap is surfaced in-UI (a note on `/app/api-keys`), not
-hidden. Session-authed `rsend_` management (Option B) and accepting `rsusr_` on the merchant API
-(Option C) were both rejected — they'd widen/rewire the auth perimeter.
+**`rsend_` vs `rsusr_` — Option B implemented (2026-07-15, supersedes OQ-E3 = A).** The `/app`
+API-keys tab now has TWO honest sections: session-minted **merchant keys** (`MerchantApiKeys` →
+`/api/v1/user/org/merchant-keys`, table above — the real payment-API keys, env-pinned `test`)
+and the pre-existing `rsusr_` **dashboard keys** (`ApiKeysSettings`, unchanged; note that
+`rsusr_` verification — `require_api_key_scope` — is still wired to zero routes, so those keys
+currently authenticate nothing; binding or retiring them is an open decision). The old interop
+banner and the `/merchant/dashboard` hand-off link were removed (that dashboard never minted
+keys — it only consumed a pasted one). `verify_api_key` still accepts only `rsend_`; accepting
+`rsusr_` on the merchant API (OQ-E3 Option C) stays rejected. The wallet-signed `/api/v1/keys/*`
+routes remain until the Merchant Dashboard retirement (follow-up below).
 
 Admin surface (server-to-server only; the web proxy denylists these paths):
 
@@ -205,12 +211,16 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
   wallet-less org's settlement address 409s both). Durable fix: nullable `org_id` on
   `payment_intents`/`merchant_webhooks` + backfill + re-scope the session queries (~16 sites);
   API-key visibility needs a union or org-bound keys. Est. 3-5 days, dedicated pass.
-- **Retire the wallet-authenticated Merchant Dashboard (approved direction, 2026-07-12).**
-  Supersedes OQ-E3's Option-B rejection: mint `rsend_` keys from `/app` with the session
-  (org-scoped, admin role, `owner_address = resolve_owner_address(org)` — same identity chain),
-  port list/revoke, then remove `/merchant/dashboard`, `/api/v1/keys/*` wallet-sig routes and
-  `require_wallet_auth`. `/pay` and `verify_api_key` untouched. Sequenced after the fallback
-  (shipped) — needs its own `ENDPOINT_LIMITS` entry and secret-shown-once UX.
+- **Retire the wallet-authenticated Merchant Dashboard (approved direction, 2026-07-12; FIRST
+  HALF SHIPPED 2026-07-15).** Session minting + list/revoke are live
+  (`/api/v1/user/org/merchant-keys`, admin role, `resolve_owner_address` identity chain, own
+  `ENDPOINT_LIMITS` entries, secret-shown-once UX). REMAINING: remove `/merchant/dashboard`,
+  the `/api/v1/keys/*` wallet-sig routes, frozen `dashboard_routes.py`, the dead `/api/v1/keys`
+  `EXEMPT_PATHS` entry + `ADMIN_PATHS` middleware branch; `require_wallet_auth` itself stays
+  until the dormant custodial surfaces (splits/forwarding/distributions) also go. `/pay` and
+  `verify_api_key` untouched. Also decide `rsusr_`'s fate (verification wired to zero routes).
+  Note: migration 0011 (`api_keys.org_id` + resolver own-org carve-out) is the first contained
+  slice of the org_id re-key follow-up above.
 - **Dormant custodial residue (audit 2026-07-12, batch as one subtractive pass):**
   `TransactionPersistence`/`ContactsPersistence`/`PostLoginMerge`/`lib/tx-events`/
   `useUserTransactions` (listeners without emitters, mounted in the `/app` layout) + the now
