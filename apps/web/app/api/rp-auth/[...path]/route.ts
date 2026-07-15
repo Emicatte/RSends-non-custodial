@@ -12,7 +12,8 @@ export const maxDuration = 30
  *   • Forwards the browser `cookie` header to the backend (rsends_refresh +
  *     rsends_sid travel server-side so refresh/logout work).
  *   • Replays every `Set-Cookie` header from the backend response back on
- *     the browser, preserving HttpOnly / Secure / SameSite attributes.
+ *     the browser, preserving HttpOnly / Secure / SameSite attributes —
+ *     but REWRITING the Path attribute onto this proxy's mount (below).
  *
  * The existing /api/backend proxy is NOT modified — it stays Bearer-only
  * for non-auth calls.
@@ -29,6 +30,29 @@ const FORWARD_HEADERS = [
   'cookie',
   'x-idempotency-key',
 ] as const
+
+/** Where this proxy is mounted on the web origin. */
+const PROXY_PREFIX = '/api/rp-auth'
+
+/**
+ * The browser stores replayed cookies against THIS origin, where every auth
+ * call the client makes lives under /api/rp-auth/... — so a backend Path
+ * (Path=/api/v1/auth) replayed verbatim can NEVER path-match a request: the
+ * cookie exists in the jar but is never sent, refresh is eternally 401
+ * no_session, and any idle past the access-token TTL ends at /login. Prefix
+ * the backend Path with the proxy mount; every other attribute (HttpOnly,
+ * Secure, SameSite, Max-Age) replays byte-identical. Applies equally to
+ * Max-Age=0 deletion cookies so logout clears what login set.
+ */
+function rewriteCookiePath(setCookie: string): string {
+  return setCookie.replace(
+    /;(\s*)path=(\/[^;]*)/i,
+    (match, ws: string, p: string) =>
+      p.startsWith(PROXY_PREFIX)
+        ? match
+        : `;${ws}Path=${PROXY_PREFIX}${p}`,
+  )
+}
 
 async function proxyRequest(
   req: NextRequest,
@@ -80,7 +104,7 @@ async function proxyRequest(
           ? [backendRes.headers.get('set-cookie') as string]
           : []
     for (const c of setCookies) {
-      response.headers.append('set-cookie', c)
+      response.headers.append('set-cookie', rewriteCookiePath(c))
     }
 
     return response
