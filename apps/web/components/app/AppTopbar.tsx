@@ -38,15 +38,16 @@ export default function AppTopbar() {
 
   return (
     <div
-      className="px-5 py-4 md:px-8"
+      className="py-4"
       style={{
         background: COLORS.white,
         borderBottom: `1px solid ${COLORS.border}`,
       }}
     >
-      {/* Inner max-w-6xl mirrors the page container (pageStyles.appPage) so
-          the title stays aligned with page content at wide viewports. */}
-      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-3">
+      {/* Inner box mirrors the page container (pageStyles.appPage): same
+          max-w-6xl with the gutter padding INSIDE it, so the title stays
+          aligned with page content even when the max-width binds. */}
+      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-3 px-5 md:px-8">
         <h1
           style={{
             fontFamily: 'var(--font-display)',
