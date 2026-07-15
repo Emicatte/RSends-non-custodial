@@ -54,6 +54,10 @@ from prometheus_client import Counter as PromCounter, Gauge
 from sqlalchemy import and_, or_, select, update
 
 from app.config import get_settings
+# Top-level import ON PURPOSE: registers indexer_cursors on Base at module
+# import, so every create_all-based schema (tests, E2E) that imports this
+# module gets the table without having to know about the model.
+from app.models.indexer_models import IndexerCursor
 from app.services.cache_service import get_redis
 
 logger = logging.getLogger("payment_indexer")
@@ -126,7 +130,6 @@ PAYMENT_MADE_TOPIC = _payment_made_topic()
 
 async def _pg_get_cursor(chain_id: int) -> Optional[int]:
     from app.db.session import async_session
-    from app.models.indexer_models import IndexerCursor
 
     async with async_session() as db:
         row = (
@@ -139,7 +142,6 @@ async def _pg_get_cursor(chain_id: int) -> Optional[int]:
 
 async def _pg_set_cursor(chain_id: int, block_number: int) -> None:
     from app.db.session import async_session
-    from app.models.indexer_models import IndexerCursor
 
     async with async_session() as db:
         row = (
