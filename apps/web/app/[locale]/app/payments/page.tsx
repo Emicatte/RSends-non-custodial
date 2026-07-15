@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { useCurrentOrg } from '@/hooks/useCurrentOrg'
 import { CreatePaymentModal } from '@/components/app/CreatePaymentModal'
+import { appPage } from '@/components/app/pageStyles'
 import { useOrgPayments, type OrgPaymentRecord } from '@/hooks/useOrgPayments'
 
 // Visual language mirrors the /app home (app/[locale]/app/page.tsx) so the
@@ -82,9 +83,10 @@ function fmtDate(iso: string): string {
 
 const AMOUNT_FMT = new Intl.NumberFormat(undefined, { maximumFractionDigits: 6 })
 
+// Spacing lives in the className (default `px-3.5 py-2 rounded-lg`, small
+// inline variant `px-2 py-1 rounded-lg`); this const keeps only the shared
+// non-spacing button chrome.
 const btnStyle: React.CSSProperties = {
-  padding: '8px 14px',
-  borderRadius: 8,
   border: 'none',
   fontSize: 13,
   fontWeight: 600,
@@ -109,7 +111,8 @@ function CopyLinkButton({ intentId }: { intentId: string }) {
     <button
       type="button"
       onClick={copy}
-      style={{ ...btnStyle, background: 'transparent', color: COLORS.accent, padding: '4px 8px', fontSize: 12 }}
+      className="px-2 py-1 rounded-lg"
+      style={{ ...btnStyle, background: 'transparent', color: COLORS.accent, fontSize: 12 }}
     >
       {copied ? t('row.copied') : t('row.copyLink')}
     </button>
@@ -147,8 +150,8 @@ export default function AppPaymentsPage() {
     }
   }
 
+  // Cell padding lives in the shared `px-4 py-3` className on every th/td.
   const cellStyle: React.CSSProperties = {
-    padding: '12px 14px',
     fontSize: 13,
     color: COLORS.ink,
     borderBottom: `1px solid ${COLORS.border}`,
@@ -166,41 +169,34 @@ export default function AppPaymentsPage() {
   }
 
   return (
-    <main className="rp-app-page">
-      <div style={{ marginBottom: 20 }}>
+    <main className={appPage}>
+      {/* Non-uniform rhythm: title block binds tight to its subtitle (mt-1)
+          and sits mb-6 above the toolbar, which binds mb-4 to its table. */}
+      <div className="mb-6">
         <h1
+          className="m-0"
           style={{
             fontFamily: 'var(--font-display)',
             fontSize: 22,
             fontWeight: 700,
             color: COLORS.ink,
-            margin: 0,
           }}
         >
           {t('title')}
         </h1>
-        <p style={{ fontSize: 13, color: COLORS.muted, margin: '4px 0 0' }}>
+        <p className="m-0 mt-1" style={{ fontSize: 13, color: COLORS.muted }}>
           {t('subtitle')}
         </p>
       </div>
 
       {/* Toolbar: status filter + create */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 12,
-          marginBottom: 14,
-        }}
-      >
+      <div className="mb-4 flex items-center justify-between gap-3">
         <select
           aria-label={t('columns.status')}
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-3 py-2 rounded-lg"
           style={{
-            padding: '8px 11px',
-            borderRadius: 8,
             border: `1px solid ${COLORS.border}`,
             fontSize: 13,
             background: COLORS.white,
@@ -216,6 +212,7 @@ export default function AppPaymentsPage() {
           <button
             type="button"
             onClick={() => setModalOpen(true)}
+            className="px-3.5 py-2 rounded-lg"
             style={{ ...btnStyle, background: COLORS.accent, color: COLORS.white }}
           >
             {t('newButton')}
@@ -223,25 +220,26 @@ export default function AppPaymentsPage() {
         )}
       </div>
 
+      {/* Full-bleed card variant: border/radius/bg without the p-5 (the table
+          supplies its own px-4 py-3 cell padding). */}
       <div
+        className="rounded-xl border overflow-hidden"
         style={{
           background: COLORS.white,
-          border: `1px solid ${COLORS.border}`,
-          borderRadius: 12,
-          overflow: 'hidden',
+          borderColor: COLORS.border,
         }}
       >
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: COLORS.paper }}>
-                <th style={headStyle}>{t('columns.date')}</th>
-                <th style={headStyle}>{t('columns.amount')}</th>
-                <th style={headStyle}>{t('columns.network')}</th>
-                <th style={headStyle}>{t('columns.status')}</th>
-                <th style={headStyle}>{t('columns.recipient')}</th>
-                <th style={headStyle}>{t('columns.tx')}</th>
-                <th style={headStyle}>{t('columns.actions')}</th>
+                <th className="px-4 py-3" style={headStyle}>{t('columns.date')}</th>
+                <th className="px-4 py-3" style={headStyle}>{t('columns.amount')}</th>
+                <th className="px-4 py-3" style={headStyle}>{t('columns.network')}</th>
+                <th className="px-4 py-3" style={headStyle}>{t('columns.status')}</th>
+                <th className="px-4 py-3" style={headStyle}>{t('columns.recipient')}</th>
+                <th className="px-4 py-3" style={headStyle}>{t('columns.tx')}</th>
+                <th className="px-4 py-3" style={headStyle}>{t('columns.actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -257,21 +255,19 @@ export default function AppPaymentsPage() {
                 const txUrl = txHash ? explorerTxUrl(r.chain, txHash) : null
                 return (
                   <tr key={r.intent_id}>
-                    <td style={{ ...cellStyle, color: COLORS.muted }}>
+                    <td className="px-4 py-3" style={{ ...cellStyle, color: COLORS.muted }}>
                       {fmtDate(r.created_at)}
                     </td>
-                    <td style={{ ...cellStyle, fontWeight: 600 }}>
+                    <td className="px-4 py-3" style={{ ...cellStyle, fontWeight: 600 }}>
                       {AMOUNT_FMT.format(r.amount)} {r.currency}
                     </td>
-                    <td style={cellStyle}>
+                    <td className="px-4 py-3" style={cellStyle}>
                       {CHAIN_LABEL[r.chain?.toLowerCase()] ?? r.chain}
                     </td>
-                    <td style={cellStyle}>
+                    <td className="px-4 py-3" style={cellStyle}>
                       <span
+                        className="inline-block px-2 py-0.5 rounded-full"
                         style={{
-                          display: 'inline-block',
-                          padding: '3px 9px',
-                          borderRadius: 999,
                           fontSize: 11,
                           fontWeight: 600,
                           background: tone.bg,
@@ -282,6 +278,7 @@ export default function AppPaymentsPage() {
                       </span>
                     </td>
                     <td
+                      className="px-4 py-3"
                       style={{
                         ...cellStyle,
                         fontFamily: 'var(--font-mono, monospace)',
@@ -290,7 +287,7 @@ export default function AppPaymentsPage() {
                     >
                       {r.recipient ? truncAddr(r.recipient) : '—'}
                     </td>
-                    <td style={cellStyle}>
+                    <td className="px-4 py-3" style={cellStyle}>
                       {txUrl ? (
                         <a
                           href={txUrl}
@@ -313,14 +310,15 @@ export default function AppPaymentsPage() {
                         '—'
                       )}
                     </td>
-                    <td style={cellStyle}>
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <td className="px-4 py-3" style={cellStyle}>
+                      <div className="flex items-center gap-1.5">
                         <CopyLinkButton intentId={r.intent_id} />
                         {canManage && r.status === 'pending' && (
                           <button
                             type="button"
                             onClick={() => onCancel(r.intent_id)}
-                            style={{ ...btnStyle, background: 'transparent', color: COLORS.red, padding: '4px 8px', fontSize: 12 }}
+                            className="px-2 py-1 rounded-lg"
+                            style={{ ...btnStyle, background: 'transparent', color: COLORS.red, fontSize: 12 }}
                           >
                             {t('row.cancel')}
                           </button>
@@ -335,21 +333,21 @@ export default function AppPaymentsPage() {
         </div>
 
         {loading && records.length === 0 && (
-          <div style={{ padding: '28px 16px', textAlign: 'center', fontSize: 13, color: COLORS.muted }}>
+          <div className="px-4 py-7" style={{ textAlign: 'center', fontSize: 13, color: COLORS.muted }}>
             {t('loading')}
           </div>
         )}
         {error && !loading && (
-          <div style={{ padding: '28px 16px', textAlign: 'center', fontSize: 13, color: COLORS.red }}>
+          <div className="px-4 py-7" style={{ textAlign: 'center', fontSize: 13, color: COLORS.red }}>
             {t('errorLoading')}
           </div>
         )}
         {!loading && !error && records.length === 0 && (
-          <div style={{ padding: '40px 16px', textAlign: 'center' }}>
+          <div className="px-4 py-10" style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 14, fontWeight: 600, color: COLORS.ink }}>
               {t('empty.title')}
             </div>
-            <div style={{ fontSize: 13, color: COLORS.muted, marginTop: 4 }}>
+            <div className="mt-1" style={{ fontSize: 13, color: COLORS.muted }}>
               {t('empty.hint')}
             </div>
           </div>
@@ -358,26 +356,17 @@ export default function AppPaymentsPage() {
 
       {/* Pagination */}
       {(hasPrev || hasNext) && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginTop: 16,
-          }}
-        >
+        <div className="mt-4 flex items-center justify-between">
           <span style={{ fontSize: 12, color: COLORS.muted }}>
             {t('pagination.page')} {page} · {total} {t('pagination.results')}
           </span>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div className="flex gap-2">
             <button
               type="button"
               onClick={() => setPage(Math.max(1, page - 1))}
               disabled={!hasPrev}
-              className="rp-page-btn"
+              className="rp-page-btn px-3.5 py-1.5 rounded-lg"
               style={{
-                padding: '6px 14px',
-                borderRadius: 8,
                 border: `1px solid ${COLORS.border}`,
                 background: COLORS.white,
                 fontSize: 13,
@@ -391,10 +380,8 @@ export default function AppPaymentsPage() {
               type="button"
               onClick={() => setPage(page + 1)}
               disabled={!hasNext}
-              className="rp-page-btn"
+              className="rp-page-btn px-3.5 py-1.5 rounded-lg"
               style={{
-                padding: '6px 14px',
-                borderRadius: 8,
                 border: `1px solid ${COLORS.border}`,
                 background: COLORS.white,
                 fontSize: 13,
