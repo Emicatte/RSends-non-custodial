@@ -1645,9 +1645,6 @@
   },
   "pay": {
     "summary": {
-      "amount": "Amount",
-      "fee": "RSends fee",
-      "total": "Total",
       "gasNote": "Your wallet adds a small network gas fee on top."
     },
     "trust": {
@@ -1675,7 +1672,7 @@
     "syncing": "Confirmed on-chain. Updating the merchant's records.",
     "success": {
       "title": "Payment complete",
-      "body": "{amount} {token} sent to {merchant}."
+      "body": "You paid {amount} {token} to {merchant}."
     },
     "rejected": "You canceled the request in your wallet. Nothing was sent.",
     "failed": "The transaction did not complete. No payment left your wallet. Check the details on the explorer.",

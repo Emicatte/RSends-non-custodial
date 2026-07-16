@@ -1646,9 +1646,6 @@
   },
   "pay": {
     "summary": {
-      "amount": "Montant",
-      "fee": "Frais RSends",
-      "total": "Total",
       "gasNote": "Votre portefeuille ajoute de petits frais de réseau (gas)."
     },
     "trust": {
@@ -1676,7 +1673,7 @@
     "syncing": "Confirmé on-chain. Mise à jour des registres du marchand.",
     "success": {
       "title": "Paiement effectué",
-      "body": "{amount} {token} envoyés à {merchant}."
+      "body": "Vous avez payé {amount} {token} à {merchant}."
     },
     "rejected": "Vous avez annulé la demande dans votre portefeuille. Rien n'a été envoyé.",
     "failed": "La transaction n'a pas abouti. Aucun paiement n'a quitté votre portefeuille. Consultez les détails sur l'explorateur.",

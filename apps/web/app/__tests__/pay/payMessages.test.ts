@@ -31,9 +31,6 @@ function stringValues(node: unknown): string[] {
 }
 
 const EN_VERBATIM: Record<string, string> = {
-  'summary.amount': 'Amount',
-  'summary.fee': 'RSends fee',
-  'summary.total': 'Total',
   'summary.gasNote': 'Your wallet adds a small network gas fee on top.',
   'trust.nonCustodial':
     "Funds go directly to the merchant's wallet. RSends never holds your money.",
@@ -56,7 +53,7 @@ const EN_VERBATIM: Record<string, string> = {
   txPending: 'Transaction sent. Waiting for the network.',
   syncing: "Confirmed on-chain. Updating the merchant's records.",
   'success.title': 'Payment complete',
-  'success.body': '{amount} {token} sent to {merchant}.',
+  'success.body': 'You paid {amount} {token} to {merchant}.',
   rejected: 'You canceled the request in your wallet. Nothing was sent.',
   failed:
     'The transaction did not complete. No payment left your wallet. Check the details on the explorer.',

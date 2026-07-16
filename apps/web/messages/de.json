@@ -1646,9 +1646,6 @@
   },
   "pay": {
     "summary": {
-      "amount": "Betrag",
-      "fee": "RSends-Gebühr",
-      "total": "Gesamt",
       "gasNote": "Ihre Wallet fügt eine kleine Netzwerkgebühr (Gas) hinzu."
     },
     "trust": {
@@ -1676,7 +1673,7 @@
     "syncing": "On-chain bestätigt. Die Aufzeichnungen des Händlers werden aktualisiert.",
     "success": {
       "title": "Zahlung abgeschlossen",
-      "body": "{amount} {token} an {merchant} gesendet."
+      "body": "Sie haben {amount} {token} an {merchant} gezahlt."
     },
     "rejected": "Sie haben die Anfrage in Ihrer Wallet abgebrochen. Es wurde nichts gesendet.",
     "failed": "Die Transaktion wurde nicht abgeschlossen. Keine Zahlung hat Ihre Wallet verlassen. Prüfen Sie die Details im Explorer.",

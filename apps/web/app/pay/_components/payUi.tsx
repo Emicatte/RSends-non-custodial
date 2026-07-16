@@ -260,8 +260,8 @@ export function TestnetBadge() {
 export function NonCustodialNote() {
   return (
     <p style={{ margin: 0, fontFamily: C.D, fontSize: 12.5, lineHeight: 1.5, color: C.sub }}>
-      RSends never holds your funds — the router transfers the principal to the merchant and the
-      fee to the fee collector in one transaction.
+      RSends never holds your funds — payments go directly to the merchant&apos;s wallet in a
+      single on-chain transaction.
     </p>
   )
 }

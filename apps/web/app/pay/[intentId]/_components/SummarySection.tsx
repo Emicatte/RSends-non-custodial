@@ -1,124 +1,63 @@
 'use client'
 
 /**
- * SummarySection — the three-line breakdown (Amount / RSends fee / Total)
- * in DM Mono with per-token decimals, plus the gas note. Fee and total come
- * from the single fee source of truth (resolveFeeBreakdown upstream); while
- * quoting, fixed-width placeholders keep the rows from shifting.
+ * TotalHeadline + GasNote — the checkout presents ONE figure to the payer:
+ * the total the wallet will charge (amount + on-chain fee, from
+ * resolveFeeBreakdown upstream). No breakdown rows. While the total is
+ * still resolving (backend feeUnavailable → on-chain quote in flight) a
+ * fixed-size placeholder holds the line — the bare principal is never
+ * shown as if it were the charge.
  */
 
 import { useTranslations } from 'next-intl'
 import { C } from '@/app/designTokens'
 import { Mono } from '@/app/pay/_components/payUi'
 import { formatTokenAmount } from '@/lib/web3/feeMath'
-import type { OnChainIntent } from '@/lib/web3/paymentIntent'
 
-function Row({
-  label,
-  value,
+export function TotalHeadline({
+  total,
   currency,
   decimals,
-  emphasize = false,
 }: {
-  label: string
-  value: bigint | null
+  total: bigint | null
   currency: string
   decimals: number
-  emphasize?: boolean
 }) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        gap: 12,
-        minHeight: 26,
-        flexWrap: 'wrap',
-      }}
-    >
-      <span
-        style={{
-          fontFamily: C.D,
-          fontSize: 13,
-          color: emphasize ? C.text : C.sub,
-          fontWeight: emphasize ? 600 : 400,
-        }}
-      >
-        {label}
-      </span>
-      {value != null ? (
-        <Mono
-          style={{
-            fontSize: emphasize ? 15 : 13,
-            fontWeight: emphasize ? 500 : 400,
-            color: C.text,
-          }}
-        >
-          {`${formatTokenAmount(value, decimals)} ${currency}`}
-        </Mono>
+    <Mono style={{ fontSize: 34, fontWeight: 500, color: C.text }}>
+      {total != null ? (
+        formatTokenAmount(total, decimals)
       ) : (
         <span
-          data-testid="summary-pending"
+          data-testid="amount-pending"
           aria-hidden
           style={{
             display: 'inline-block',
-            width: 84,
-            height: 14,
-            borderRadius: 6,
+            width: 120,
+            height: 28,
+            borderRadius: 8,
             background: 'rgba(10,10,10,0.07)',
+            verticalAlign: 'middle',
           }}
         />
-      )}
-    </div>
+      )}{' '}
+      <span style={{ fontSize: 18, color: C.sub }}>{currency}</span>
+    </Mono>
   )
 }
 
-export function SummarySection({
-  onchain,
-  currency,
-  fee,
-  total,
-}: {
-  onchain: OnChainIntent
-  currency: string
-  fee: bigint | null
-  total: bigint | null
-}) {
+export function GasNote() {
   const t = useTranslations('pay')
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <Row
-        label={t('summary.amount')}
-        value={onchain.amount}
-        currency={currency}
-        decimals={onchain.decimals}
-      />
-      <Row
-        label={t('summary.fee')}
-        value={fee}
-        currency={currency}
-        decimals={onchain.decimals}
-      />
-      <div style={{ borderTop: `1px solid ${C.border}`, margin: '4px 0' }} />
-      <Row
-        label={t('summary.total')}
-        value={total}
-        currency={currency}
-        decimals={onchain.decimals}
-        emphasize
-      />
-      <p
-        style={{
-          margin: '6px 0 0',
-          fontFamily: C.D,
-          fontSize: 12,
-          color: C.sub,
-        }}
-      >
-        {t('summary.gasNote')}
-      </p>
-    </div>
+    <p
+      style={{
+        margin: 0,
+        fontFamily: C.D,
+        fontSize: 12,
+        color: C.sub,
+      }}
+    >
+      {t('summary.gasNote')}
+    </p>
   )
 }
