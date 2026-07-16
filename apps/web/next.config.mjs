@@ -61,6 +61,15 @@ const nextConfig = {
       destination: '/docs',
       permanent: false,
     },
+    // The wallet-era /merchant dashboard is retired (2026-07-16): merchants use
+    // the session dashboard at /app. next.config redirects run BEFORE middleware,
+    // so this fires without a /merchant entry in the middleware matcher. The /app
+    // auth guard forwards unauthenticated visitors to login.
+    {
+      source: '/merchant/:path*',
+      destination: '/en/app',
+      permanent: false,
+    },
     // pay.rsends.io is a docs-only domain: send its landing roots to /docs so
     // the docs are the face of the domain. Host-scoped so demo.rsends.io (and
     // every other domain on this project) is untouched. Only the bare root and

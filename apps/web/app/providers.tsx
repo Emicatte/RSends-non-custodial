@@ -75,8 +75,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => setMounted(true), [])
   const mountWallet = useCallback(() => setExplicitlyRequested(true), [])
 
-  // Admin / pay / merchant: bypass providers entirely (no wallet needed)
-  if (pathname?.startsWith('/admin') || pathname?.startsWith('/pay') || pathname?.startsWith('/merchant')) {
+  // Admin / pay: bypass providers entirely (no wallet needed)
+  if (pathname?.startsWith('/admin') || pathname?.startsWith('/pay')) {
     return <>{children}</>
   }
 
