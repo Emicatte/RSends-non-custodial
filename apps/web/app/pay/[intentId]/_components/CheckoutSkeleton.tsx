@@ -28,22 +28,6 @@ function Placeholder({ width, height = 14 }: { width: number; height?: number })
   )
 }
 
-function Row({ left, right }: { left: number; right: number }) {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        minHeight: 26,
-      }}
-    >
-      <Placeholder width={left} />
-      <Placeholder width={right} />
-    </div>
-  )
-}
-
 export function CheckoutSkeleton({ slow }: { slow: boolean }) {
   const t = useTranslations('pay')
 
@@ -53,14 +37,7 @@ export function CheckoutSkeleton({ slow }: { slow: boolean }) {
       <CheckoutFrame
         header={<Placeholder width={140} height={16} />}
         amount={<Placeholder width={190} height={34} />}
-        summary={
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <Row left={60} right={90} />
-            <Row left={80} right={70} />
-            <Row left={40} right={100} />
-            <Placeholder width={220} height={12} />
-          </div>
-        }
+        summary={<Placeholder width={260} height={12} />}
         action={<Placeholder width={396} height={47} />}
         notice={
           slow ? (

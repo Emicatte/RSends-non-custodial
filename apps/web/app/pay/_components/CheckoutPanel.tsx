@@ -38,7 +38,7 @@ function useEurUsd(): number | null {
 }
 
 export default function CheckoutPanel({ request }: { request: PaymentRequest }) {
-  const { token, amountHuman, amountBaseUnits, merchant, ref } = request
+  const { token, merchant, ref } = request
   const flow = usePayFlow(request)
   const eurUsd = useEurUsd()
 
@@ -56,11 +56,16 @@ export default function CheckoutPanel({ request }: { request: PaymentRequest }) 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <Eyebrow>Pay with RSends</Eyebrow>
+          {/* Single figure shown to the payer: the total the wallet will
+              charge (on-chain quote). Ellipsis while quoting — the bare
+              principal is never presented as the charge. */}
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-            <Mono style={{ fontSize: 34, fontWeight: 500, color: C.text }}>{amountHuman}</Mono>
+            <Mono style={{ fontSize: 34, fontWeight: 500, color: C.text }}>
+              {flow.total != null ? fmt(flow.total) : '…'}
+            </Mono>
             <span style={{ fontFamily: C.D, fontSize: 18, color: C.sub }}>{token.symbol}</span>
-            {toEur(amountBaseUnits) && (
-              <span style={{ fontFamily: C.M, fontSize: 13, color: C.sub }}>{toEur(amountBaseUnits)}</span>
+            {flow.total != null && toEur(flow.total) && (
+              <span style={{ fontFamily: C.M, fontSize: 13, color: C.sub }}>{toEur(flow.total)}</span>
             )}
           </div>
         </div>
@@ -74,17 +79,7 @@ export default function CheckoutPanel({ request }: { request: PaymentRequest }) 
         {flow.phase === 'confirmed' ? (
           <ConfirmedView flow={flow} symbol={token.symbol} fmt={fmt} />
         ) : (
-          <>
-            <FeeBreakdown
-              symbol={token.symbol}
-              amount={fmt(amountBaseUnits)}
-              fee={flow.fee != null ? fmt(flow.fee) : null}
-              total={flow.total != null ? fmt(flow.total) : null}
-              amountEur={toEur(amountBaseUnits)}
-              totalEur={flow.total != null ? toEur(flow.total) : null}
-            />
-            <ActionArea flow={flow} symbol={token.symbol} fmt={fmt} />
-          </>
+          <ActionArea flow={flow} symbol={token.symbol} fmt={fmt} />
         )}
 
         <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
@@ -100,66 +95,6 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
       <span style={{ fontFamily: C.D, fontSize: 13, color: C.sub }}>{label}</span>
       <span style={{ display: 'inline-flex', alignItems: 'center' }}>{value}</span>
-    </div>
-  )
-}
-
-function FeeBreakdown({
-  symbol, amount, fee, total, amountEur, totalEur,
-}: {
-  symbol: string
-  amount: string
-  fee: string | null
-  total: string | null
-  amountEur: string | null
-  totalEur: string | null
-}) {
-  return (
-    <div
-      style={{
-        border: `1px solid ${C.border}`,
-        borderRadius: 12,
-        padding: '12px 14px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 9,
-        background: C.bg,
-      }}
-    >
-      <BreakdownRow label="Amount" sub={amountEur}>
-        <Mono style={{ fontSize: 13, color: C.text }}>{amount} {symbol}</Mono>
-      </BreakdownRow>
-      <BreakdownRow label="Network fee" sub="on-chain quoteFee">
-        <Mono style={{ fontSize: 13, color: C.text }}>{fee != null ? `${fee} ${symbol}` : '…'}</Mono>
-      </BreakdownRow>
-      <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 9 }}>
-        <BreakdownRow label="Total" sub={totalEur} strong>
-          <Mono style={{ fontSize: 15, fontWeight: 500, color: C.text }}>
-            {total != null ? `${total} ${symbol}` : '…'}
-          </Mono>
-        </BreakdownRow>
-      </div>
-    </div>
-  )
-}
-
-function BreakdownRow({
-  label, sub, strong, children,
-}: {
-  label: string
-  sub?: string | null
-  strong?: boolean
-  children: ReactNode
-}) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-      <span style={{ fontFamily: C.D, fontSize: strong ? 14 : 13, fontWeight: strong ? 600 : 400, color: strong ? C.text : C.sub }}>
-        {label}
-      </span>
-      <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8 }}>
-        {sub && <span style={{ fontFamily: C.M, fontSize: 11.5, color: C.sub }}>{sub}</span>}
-        {children}
-      </span>
     </div>
   )
 }
@@ -198,7 +133,7 @@ function ActionArea({
       )
       break
     case 'quoting':
-      action = <BusyButton label="Fetching fee…" />
+      action = <BusyButton label="Preparing payment…" />
       break
     case 'needsApprove':
       action = (
@@ -207,7 +142,7 @@ function ActionArea({
             Approve {symbol}
           </PrimaryButton>
           <p style={{ margin: 0, fontFamily: C.D, fontSize: 11.5, color: C.sub, textAlign: 'center' }}>
-            Step 1 of 2 — approve exactly {flow.total != null ? fmt(flow.total) : ''} {symbol} (amount + fee), then pay.
+            Step 1 of 2 — approve exactly {flow.total != null ? fmt(flow.total) : ''} {symbol}, then pay.
           </p>
         </div>
       )
@@ -316,14 +251,9 @@ function ConfirmedView({
           }}
         >
           <SettledRow
-            label="Principal → merchant"
-            value={p.principalTransfer ? `${fmt(p.principalTransfer.value)} ${symbol}` : `${fmt(p.paymentMade.amount)} ${symbol}`}
+            label="Total paid"
+            value={`${fmt(p.paymentMade.amount + p.paymentMade.fee)} ${symbol}`}
             to={p.principalTransfer?.to ?? p.paymentMade.merchant}
-          />
-          <SettledRow
-            label="Fee → fee collector"
-            value={`${fmt(p.paymentMade.fee)} ${symbol}`}
-            to={p.feeTransfer?.to}
           />
         </div>
       )}

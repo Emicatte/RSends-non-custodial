@@ -1606,9 +1606,6 @@
   },
   "pay": {
     "summary": {
-      "amount": "Importo",
-      "fee": "Commissione RSends",
-      "total": "Totale",
       "gasNote": "Il tuo wallet aggiunge una piccola commissione di rete (gas)."
     },
     "trust": {
@@ -1636,7 +1633,7 @@
     "syncing": "Confermato on-chain. Aggiornamento dei registri del merchant.",
     "success": {
       "title": "Pagamento completato",
-      "body": "{amount} {token} inviati a {merchant}."
+      "body": "Hai pagato {amount} {token} a {merchant}."
     },
     "rejected": "Hai annullato la richiesta nel tuo wallet. Non è stato inviato nulla.",
     "failed": "La transazione non è andata a buon fine. Nessun pagamento è uscito dal tuo wallet. Controlla i dettagli sull'explorer.",
