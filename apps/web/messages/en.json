@@ -507,14 +507,14 @@
     },
     "billing": {
       "title": "Billing",
-      "description": "The details RPagos uses to invoice your commission fees.",
+      "description": "The details RPagos uses to invoice your subscription.",
       "loading": "Loading…",
       "saving": "Saving…",
       "save": "Save",
       "saved": "Billing details saved.",
       "optional": "optional",
       "readOnly": "Only admins and operators can edit these details.",
-      "infoBanner": "These are the details RPagos will use to issue invoices for the commission fees on your payments. Make sure they are correct and up to date.",
+      "infoBanner": "These are the details RPagos will use to issue invoices for your RSends subscription. Make sure they are correct and up to date.",
       "noWallet": {
         "title": "Link a wallet first",
         "body": "Your billing profile is anchored to your organization's primary wallet. Link and verify a wallet to fill in these details.",
@@ -542,10 +542,10 @@
     },
     "invoices": {
       "title": "Invoices",
-      "description": "Commission invoices RPagos issues for your activity.",
+      "description": "Invoices RPagos issues for your subscription.",
       "loading": "Loading…",
       "empty": "No invoices yet. Generate the first one by selecting a period.",
-      "infoBanner": "Generate and download commission invoices (€0.01 per transaction). The PDF uses the brand style; the VAT regime is parametric until defined.",
+      "infoBanner": "Generate and download your subscription invoices. The PDF uses the brand style; the VAT regime is parametric until defined.",
       "periodLabel": "Period (month)",
       "generate": "Generate invoice",
       "generating": "Generating…",
@@ -628,7 +628,7 @@
             "<strong>Rpagos S.R.L</strong>",
             "Registered in Costa Rica, registry no. 4062001345466",
             "San José, Costa Rica",
-            "Contact: <privacyMail>privacy@rsends.io</privacyMail>"
+            "Contact: <privacyMail>emiliocatteddu@gmail.com</privacyMail>"
           ]
         },
         "dataCollect": {
@@ -688,7 +688,7 @@
             "<strong>EEA / UK users (GDPR Articles 15–22)</strong> — access, rectification, erasure, restriction of processing, data portability, objection to processing, and the right not to be subject to solely automated decisions.",
             "<strong>Costa Rica users (Law 8968)</strong> — the rights of access, rectification, deletion (where permitted), and revocation of consent."
           ],
-          "howTo": "To exercise these rights, contact <privacyMail>privacy@rsends.io</privacyMail>. We will respond within the timeframes required by applicable law. Some rights may be limited where we are required to retain data for legal or regulatory reasons (for example, AML record-keeping).",
+          "howTo": "To exercise these rights, contact <privacyMail>emiliocatteddu@gmail.com</privacyMail>. We will respond within the timeframes required by applicable law. Some rights may be limited where we are required to retain data for legal or regulatory reasons (for example, AML record-keeping).",
           "authority": "You also have the right to lodge a complaint with your local supervisory authority — in Costa Rica, the <em>Agencia de Protección de Datos de los Habitantes (PRODHAB)</em>; in the EEA, your national data protection authority."
         },
         "security": {
@@ -710,7 +710,7 @@
         "contact": {
           "heading": "13. Contact",
           "lines": [
-            "Privacy enquiries: <privacyMail>privacy@rsends.io</privacyMail>",
+            "Privacy enquiries: <privacyMail>emiliocatteddu@gmail.com</privacyMail>",
             "Postal: Rpagos S.R.L, San José, Costa Rica."
           ]
         }
@@ -764,7 +764,7 @@
         },
         "fees": {
           "heading": "6. Fees",
-          "body": "Fees applicable to the Service are set out on our pricing page and may be amended from time to time. Fees are deducted from settlements unless otherwise agreed in writing. We will provide reasonable advance notice of any material fee changes."
+          "body": "Fees for the Service take the form of a monthly subscription, agreed with you at onboarding and set out on our pricing page. Nothing is deducted from on-chain settlements: payments travel in full from the payer to the merchant's wallet. We will provide reasonable advance notice of any material change to your subscription."
         },
         "prohibited": {
           "heading": "7. Prohibited activities",
@@ -814,7 +814,7 @@
         "contact": {
           "heading": "15. Contact",
           "lines": [
-            "Legal enquiries: <legalMail>legal@rsends.io</legalMail>",
+            "Legal enquiries: <legalMail>emiliocatteddu@gmail.com</legalMail>",
             "Postal: Rpagos S.R.L, San José, Costa Rica."
           ]
         }
@@ -879,7 +879,7 @@
         },
         "contact": {
           "heading": "5. Contact",
-          "body": "Questions about this Cookie Policy: <privacyMail>privacy@rsends.io</privacyMail>."
+          "body": "Questions about this Cookie Policy: <privacyMail>emiliocatteddu@gmail.com</privacyMail>."
         }
       }
     },
@@ -962,7 +962,7 @@
         "contact": {
           "heading": "11. Contact",
           "lines": [
-            "Compliance enquiries: <complianceMail>compliance@rsends.io</complianceMail>",
+            "Compliance enquiries: <complianceMail>emiliocatteddu@gmail.com</complianceMail>",
             "Postal: Rpagos S.R.L, Compliance Office, San José, Costa Rica."
           ]
         }
@@ -1183,7 +1183,7 @@
       },
       "flat": {
         "label": "With RSends",
-        "body": "You pay one monthly price for the software. It stays the same when your sales grow, so you know your cost in January and in December."
+        "body": "You pay a monthly subscription sized to your transaction volume, not a percentage of your revenue. A bigger sale doesn't cost you more to process: your price is tied to the transactions you handle, not to what they're worth."
       }
     },
     "includes": {
@@ -1309,13 +1309,13 @@
     "eyebrow": "VISION",
     "title": "A payment should move money, not hold it.",
     "body1": "Most payment providers sit between you and your money. Your customer pays them, they hold the balance, and at some point they pay you. That gap is where settlement delays and frozen accounts live.",
-    "body2": "RSends removes the gap. When a customer pays, a smart contract sends the money to your wallet and takes our fee inside the same transaction. The contract is deployed once, it can't be upgraded, and nothing in it can hold a balance. We couldn't touch your money if we wanted to.",
+    "body2": "RSends removes the gap. When a customer pays, a smart contract sends the money straight to your wallet. The contract is deployed once, it can't be upgraded, and nothing in it can hold a balance. We couldn't touch your money if we wanted to. You pay for the software with a monthly subscription, not with anything taken out of the payment.",
     "body3": "We want accepting a stablecoin to feel as ordinary as accepting a card.",
     "pullLine": "The money is yours the second the block confirms.",
     "cards": [
       {
         "title": "Direct settlement",
-        "body": "Your customer's wallet pays your wallet in one transaction. The fee comes out in the same step."
+        "body": "Your customer's wallet pays your wallet in one transaction. Nothing is taken out along the way."
       },
       {
         "title": "Non-custodial by design",
@@ -1371,7 +1371,7 @@
       },
       {
         "title": "Predictability",
-        "body": "The API does the same thing every time, and the fee you see quoted is the fee the contract charges."
+        "body": "The API does the same thing every time, and the price you agreed at onboarding is the price you pay."
       },
       {
         "title": "Long term",
@@ -1601,7 +1601,7 @@
       "title": "Your application was declined",
       "body": "After reviewing your company details we can't offer you an account at this time.",
       "reasonLabel": "Reason",
-      "contact": "If you believe this is a mistake, contact support@rsends.io."
+      "contact": "If you believe this is a mistake, contact emiliocatteddu@gmail.com."
     }
   },
   "pay": {

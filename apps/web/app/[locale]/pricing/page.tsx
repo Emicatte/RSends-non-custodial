@@ -239,7 +239,7 @@ export default async function PricingPage({ params }: PageProps) {
               {t('talk.body')}
             </p>
             <a
-              href="mailto:support@rsends.com"
+              href="mailto:emiliocatteddu@gmail.com"
               style={{
                 display: 'inline-block',
                 textAlign: 'center',

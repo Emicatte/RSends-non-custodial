@@ -507,14 +507,14 @@
     },
     "billing": {
       "title": "Fatturazione",
-      "description": "I dati con cui RPagos emette le fatture delle commissioni.",
+      "description": "I dati con cui RPagos emette le fatture del tuo abbonamento.",
       "loading": "Caricamento…",
       "saving": "Salvataggio…",
       "save": "Salva",
       "saved": "Dati di fatturazione salvati.",
       "optional": "facoltativo",
       "readOnly": "Solo gli amministratori e gli operatori possono modificare questi dati.",
-      "infoBanner": "Questi sono i dati con cui RPagos emetterà le fatture delle commissioni applicate ai tuoi pagamenti. Verifica che siano corretti e aggiornati.",
+      "infoBanner": "Questi sono i dati con cui RPagos emetterà le fatture del tuo abbonamento RSends. Verifica che siano corretti e aggiornati.",
       "noWallet": {
         "title": "Collega prima un wallet",
         "body": "L'anagrafica di fatturazione è ancorata al wallet primario della tua organizzazione. Collega e verifica un wallet per poter compilare questi dati.",
@@ -542,10 +542,10 @@
     },
     "invoices": {
       "title": "Fatture",
-      "description": "Fatture delle commissioni che RPagos emette per la tua attività.",
+      "description": "Le fatture che RPagos emette per il tuo abbonamento.",
       "loading": "Caricamento…",
       "empty": "Nessuna fattura ancora. Genera la prima selezionando un periodo.",
-      "infoBanner": "Qui generi e scarichi le fatture delle commissioni (€0,01 per transazione). Il PDF usa lo stile brand; il regime IVA è parametrico finché non definito.",
+      "infoBanner": "Qui generi e scarichi le fatture del tuo abbonamento. Il PDF usa lo stile brand; il regime IVA è parametrico finché non definito.",
       "periodLabel": "Periodo (mese)",
       "generate": "Genera fattura",
       "generating": "Generazione…",
@@ -628,7 +628,7 @@
             "<strong>Rpagos S.R.L</strong>",
             "Iscritta in Costa Rica, n. registro 4062001345466",
             "San José, Costa Rica",
-            "Contatto: <privacyMail>privacy@rsends.io</privacyMail>"
+            "Contatto: <privacyMail>emiliocatteddu@gmail.com</privacyMail>"
           ]
         },
         "dataCollect": {
@@ -688,7 +688,7 @@
             "<strong>Utenti SEE / Regno Unito (artt. 15–22 GDPR)</strong> — accesso, rettifica, cancellazione, limitazione del trattamento, portabilità dei dati, opposizione al trattamento e diritto di non essere sottoposto a decisioni esclusivamente automatizzate.",
             "<strong>Utenti Costa Rica (Legge 8968)</strong> — diritti di accesso, rettifica, cancellazione (ove consentita) e revoca del consenso."
           ],
-          "howTo": "Per esercitare questi diritti, scrivi a <privacyMail>privacy@rsends.io</privacyMail>. Risponderemo entro i termini previsti dalla normativa applicabile. Alcuni diritti possono essere limitati ove siamo tenuti a conservare i dati per ragioni legali o regolamentari (ad esempio, tenuta dei registri AML).",
+          "howTo": "Per esercitare questi diritti, scrivi a <privacyMail>emiliocatteddu@gmail.com</privacyMail>. Risponderemo entro i termini previsti dalla normativa applicabile. Alcuni diritti possono essere limitati ove siamo tenuti a conservare i dati per ragioni legali o regolamentari (ad esempio, tenuta dei registri AML).",
           "authority": "Hai inoltre il diritto di proporre reclamo all'autorità di controllo competente — in Costa Rica, l’<em>Agencia de Protección de Datos de los Habitantes (PRODHAB)</em>; nel SEE, l'autorità nazionale di protezione dei dati."
         },
         "security": {
@@ -710,7 +710,7 @@
         "contact": {
           "heading": "13. Contatti",
           "lines": [
-            "Richieste in materia di privacy: <privacyMail>privacy@rsends.io</privacyMail>",
+            "Richieste in materia di privacy: <privacyMail>emiliocatteddu@gmail.com</privacyMail>",
             "Indirizzo postale: Rpagos S.R.L, San José, Costa Rica."
           ]
         }
@@ -763,8 +763,8 @@
           "body": "Il regolamento è on-chain e diretto: ogni pagamento è consegnato al tuo wallet nel momento in cui viene confermato su Base o Ethereum, senza periodi di blocco. Dove è richiesta una verifica di compliance, una transazione può essere ritardata o rifiutata."
         },
         "fees": {
-          "heading": "6. Commissioni",
-          "body": "Le commissioni applicabili al Servizio sono indicate nella nostra pagina dei prezzi e possono essere modificate nel tempo. Le commissioni sono trattenute dai settlement salvo diverso accordo scritto. Forniremo un preavviso ragionevole per qualsiasi modifica sostanziale delle commissioni."
+          "heading": "6. Corrispettivi",
+          "body": "I corrispettivi del Servizio consistono in un canone mensile, concordato in fase di onboarding e indicato nella nostra pagina dei prezzi. Nulla viene trattenuto dai settlement on-chain: i pagamenti arrivano per intero dal pagatore al wallet del merchant. Forniremo un preavviso ragionevole per qualsiasi modifica sostanziale del canone."
         },
         "prohibited": {
           "heading": "7. Attività vietate",
@@ -814,7 +814,7 @@
         "contact": {
           "heading": "15. Contatti",
           "lines": [
-            "Richieste legali: <legalMail>legal@rsends.io</legalMail>",
+            "Richieste legali: <legalMail>emiliocatteddu@gmail.com</legalMail>",
             "Indirizzo postale: Rpagos S.R.L, San José, Costa Rica."
           ]
         }
@@ -879,7 +879,7 @@
         },
         "contact": {
           "heading": "5. Contatti",
-          "body": "Domande sulla presente Cookie Policy: <privacyMail>privacy@rsends.io</privacyMail>."
+          "body": "Domande sulla presente Cookie Policy: <privacyMail>emiliocatteddu@gmail.com</privacyMail>."
         }
       }
     },
@@ -962,7 +962,7 @@
         "contact": {
           "heading": "11. Contatti",
           "lines": [
-            "Richieste in materia di compliance: <complianceMail>compliance@rsends.io</complianceMail>",
+            "Richieste in materia di compliance: <complianceMail>emiliocatteddu@gmail.com</complianceMail>",
             "Indirizzo postale: Rpagos S.R.L, Compliance Office, San José, Costa Rica."
           ]
         }
@@ -1183,7 +1183,7 @@
       },
       "flat": {
         "label": "Con RSends",
-        "body": "Paghi un canone mensile per il software. Resta uguale quando le vendite crescono: sai quanto spendi a gennaio e a dicembre."
+        "body": "Paghi un canone mensile calibrato sul tuo volume di transazioni, non una percentuale sui ricavi. Una vendita più grande non ti costa di più: il prezzo è legato alle transazioni che gestisci, non al loro valore."
       }
     },
     "includes": {
@@ -1309,13 +1309,13 @@
     "eyebrow": "VISIONE",
     "title": "Un pagamento dovrebbe muovere i soldi, non trattenerli.",
     "body1": "La maggior parte dei fornitori di pagamento si mette tra te e i tuoi soldi. Il tuo cliente paga loro, loro trattengono il saldo e a un certo punto pagano te. In quello spazio vivono i ritardi di liquidazione e i conti congelati.",
-    "body2": "RSends elimina quello spazio. Quando un cliente paga, uno smart contract invia i soldi al tuo wallet e preleva la nostra fee nella stessa transazione. Il contratto viene deployato una sola volta, non può essere aggiornato e niente al suo interno può trattenere un saldo. Non potremmo toccare i tuoi soldi nemmeno volendo.",
+    "body2": "RSends elimina quello spazio. Quando un cliente paga, uno smart contract invia i soldi direttamente al tuo wallet. Il contratto viene deployato una sola volta, non può essere aggiornato e niente al suo interno può trattenere un saldo. Non potremmo toccare i tuoi soldi nemmeno volendo. Il software si paga con un canone mensile, non con qualcosa trattenuto dal pagamento.",
     "body3": "Vogliamo che accettare una stablecoin sia normale quanto accettare una carta.",
     "pullLine": "I soldi sono tuoi nel secondo in cui il blocco viene confermato.",
     "cards": [
       {
         "title": "Liquidazione diretta",
-        "body": "Il wallet del tuo cliente paga il tuo wallet in un'unica transazione. La fee viene prelevata nello stesso passaggio."
+        "body": "Il wallet del tuo cliente paga il tuo wallet in un'unica transazione. Non viene trattenuto nulla lungo il percorso."
       },
       {
         "title": "Non-custodial by design",
@@ -1371,7 +1371,7 @@
       },
       {
         "title": "Prevedibilità",
-        "body": "L'API fa la stessa cosa ogni volta, e la fee che vedi indicata è la fee che il contratto applica."
+        "body": "L'API fa la stessa cosa ogni volta, e il prezzo concordato in onboarding è il prezzo che paghi."
       },
       {
         "title": "Lungo periodo",
@@ -1601,7 +1601,7 @@
       "title": "La tua richiesta è stata rifiutata",
       "body": "Dopo aver esaminato i dati della tua azienda non possiamo offrirti un account al momento.",
       "reasonLabel": "Motivo",
-      "contact": "Se pensi si tratti di un errore, scrivi a support@rsends.io."
+      "contact": "Se pensi si tratti di un errore, scrivi a emiliocatteddu@gmail.com."
     }
   },
   "pay": {
