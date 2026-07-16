@@ -72,9 +72,10 @@ class Settings(BaseSettings):
     indexer_use_finalized_tag: bool = True
     # Block tag treated as final ("finalized" or "safe").
     indexer_finalized_tag: str = "finalized"
-    # How far below the final head we keep re-verifying `final` rows' block hash,
-    # so a deeper-than-expected reorg of an already-finalized log can still be
-    # detected and reversed.
+    # INERT since B-2 (finalized is terminal): `final` rows are no longer
+    # re-verified, so this depth is unused. Kept for env compatibility only —
+    # a conflicting re-observation of a finalized log now raises a CRITICAL
+    # "conflict" alert in the ingest path instead of auto-reversing.
     indexer_reorg_safety_depth: int = 64
     # JSON map of chain_id → start block for first-run backfill, e.g. {"8453": 0}
     indexer_start_blocks_json: str = ""
