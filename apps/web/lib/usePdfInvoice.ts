@@ -152,7 +152,7 @@ export function buildInvoiceDoc(p: InvoicePdfData): jsPDF {
   doc.setTextColor(...C.terracotta)
   doc.setFontSize(15)
   doc.setFont('helvetica', 'bold')
-  doc.text('Fattura — Commissioni Gateway', ml, 44)
+  doc.text('Fattura — Servizi RSends', ml, 44)
 
   doc.setTextColor(...C.ink55)
   doc.setFontSize(8)
@@ -280,7 +280,7 @@ export function buildInvoiceDoc(p: InvoicePdfData): jsPDF {
 
   // Riga
   const descLines = doc.splitTextToSize(
-    'Servizi di processing e settlement pagamenti blockchain — commissione gateway (€0,01/transazione)',
+    'Servizi di processing e settlement pagamenti blockchain',
     contentW * 0.58,
   )
   const rowH = Math.max(11, 4 + descLines.length * 3.6)

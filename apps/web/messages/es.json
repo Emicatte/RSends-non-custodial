@@ -508,14 +508,14 @@
     },
     "billing": {
       "title": "Billing",
-      "description": "The details RPagos uses to invoice your commission fees.",
+      "description": "Los datos que RPagos usa para facturar tu suscripción.",
       "loading": "Loading…",
       "saving": "Saving…",
       "save": "Save",
       "saved": "Billing details saved.",
       "optional": "optional",
       "readOnly": "Only admins and operators can edit these details.",
-      "infoBanner": "These are the details RPagos will use to issue invoices for the commission fees on your payments. Make sure they are correct and up to date.",
+      "infoBanner": "Estos son los datos que RPagos usará para emitir las facturas de tu suscripción a RSends. Comprueba que sean correctos y estén al día.",
       "noWallet": {
         "title": "Link a wallet first",
         "body": "Your billing profile is anchored to your organization's primary wallet. Link and verify a wallet to fill in these details.",
@@ -543,10 +543,10 @@
     },
     "invoices": {
       "title": "Invoices",
-      "description": "Commission invoices RPagos issues for your activity.",
+      "description": "Las facturas que RPagos emite por tu suscripción.",
       "loading": "Loading…",
       "empty": "No invoices yet. Generate the first one by selecting a period.",
-      "infoBanner": "Generate and download commission invoices (€0.01 per transaction). The PDF uses the brand style; the VAT regime is parametric until defined.",
+      "infoBanner": "Aquí generas y descargas las facturas de tu suscripción. El PDF usa el estilo de la marca; el régimen de IVA es paramétrico hasta que se defina.",
       "periodLabel": "Period (month)",
       "generate": "Generate invoice",
       "generating": "Generating…",
@@ -764,8 +764,8 @@
           "body": "La liquidación es on-chain y directa: cada pago se entrega en tu propia wallet en el momento en que se confirma en Base o Ethereum, sin periodo de retención. Cuando se requiera una revisión de cumplimiento, una transacción podrá retrasarse o rechazarse."
         },
         "fees": {
-          "heading": "6. Comisiones",
-          "body": "Las comisiones aplicables al Servicio se establecen en nuestra página de precios y pueden modificarse ocasionalmente. Las comisiones se deducen de las liquidaciones salvo acuerdo escrito en contrario. Daremos un preaviso razonable de cualquier modificación sustancial de las comisiones."
+          "heading": "6. Tarifas",
+          "body": "Las tarifas del Servicio consisten en una suscripción mensual, acordada contigo en el onboarding y descrita en nuestra página de precios. Nada se deduce de las liquidaciones on-chain: los pagos llegan íntegros del pagador a la wallet del comercio. Daremos un preaviso razonable de cualquier cambio sustancial de la suscripción."
         },
         "prohibited": {
           "heading": "7. Actividades prohibidas",
@@ -1310,13 +1310,13 @@
     "eyebrow": "VISIÓN",
     "title": "Un pago debería mover el dinero, no retenerlo.",
     "body1": "La mayoría de los proveedores de pago se colocan entre tú y tu dinero. Tu cliente les paga a ellos, ellos retienen el saldo y en algún momento te pagan a ti. En ese hueco viven los retrasos de liquidación y las cuentas congeladas.",
-    "body2": "RSends elimina ese hueco. Cuando un cliente paga, un smart contract envía el dinero a tu wallet y cobra nuestra comisión dentro de la misma transacción. El contrato se despliega una sola vez, no puede actualizarse y nada en él puede retener un saldo. No podríamos tocar tu dinero aunque quisiéramos.",
+    "body2": "RSends elimina ese hueco. Cuando un cliente paga, un smart contract envía el dinero directamente a tu wallet. El contrato se despliega una sola vez, no puede actualizarse y nada en él puede retener un saldo. No podríamos tocar tu dinero aunque quisiéramos. El software se paga con una suscripción mensual, no con nada descontado del pago.",
     "body3": "Queremos que aceptar una stablecoin sea tan normal como aceptar una tarjeta.",
     "pullLine": "El dinero es tuyo en el segundo en que se confirma el bloque.",
     "cards": [
       {
         "title": "Liquidación directa",
-        "body": "La wallet de tu cliente paga a tu wallet en una sola transacción. La comisión se descuenta en el mismo paso."
+        "body": "La wallet de tu cliente paga a tu wallet en una sola transacción. No se descuenta nada por el camino."
       },
       {
         "title": "No custodial por diseño",
@@ -1372,7 +1372,7 @@
       },
       {
         "title": "Previsibilidad",
-        "body": "La API hace lo mismo cada vez, y la comisión que ves cotizada es la que cobra el contrato."
+        "body": "La API hace lo mismo cada vez, y el precio que acordaste en el onboarding es el precio que pagas."
       },
       {
         "title": "Largo plazo",

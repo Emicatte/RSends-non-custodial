@@ -508,14 +508,14 @@
     },
     "billing": {
       "title": "Billing",
-      "description": "The details RPagos uses to invoice your commission fees.",
+      "description": "Les informations que RPagos utilise pour facturer votre abonnement.",
       "loading": "Loading…",
       "saving": "Saving…",
       "save": "Save",
       "saved": "Billing details saved.",
       "optional": "optional",
       "readOnly": "Only admins and operators can edit these details.",
-      "infoBanner": "These are the details RPagos will use to issue invoices for the commission fees on your payments. Make sure they are correct and up to date.",
+      "infoBanner": "Ce sont les informations que RPagos utilisera pour émettre les factures de votre abonnement RSends. Vérifiez qu'elles sont correctes et à jour.",
       "noWallet": {
         "title": "Link a wallet first",
         "body": "Your billing profile is anchored to your organization's primary wallet. Link and verify a wallet to fill in these details.",
@@ -543,10 +543,10 @@
     },
     "invoices": {
       "title": "Invoices",
-      "description": "Commission invoices RPagos issues for your activity.",
+      "description": "Les factures que RPagos émet pour votre abonnement.",
       "loading": "Loading…",
       "empty": "No invoices yet. Generate the first one by selecting a period.",
-      "infoBanner": "Generate and download commission invoices (€0.01 per transaction). The PDF uses the brand style; the VAT regime is parametric until defined.",
+      "infoBanner": "Générez et téléchargez ici les factures de votre abonnement. Le PDF utilise le style de la marque ; le régime de TVA est paramétrique tant qu'il n'est pas défini.",
       "periodLabel": "Period (month)",
       "generate": "Generate invoice",
       "generating": "Generating…",
@@ -765,7 +765,7 @@
         },
         "fees": {
           "heading": "6. Frais",
-          "body": "Les frais applicables au Service sont indiqués sur notre page de tarifs et peuvent être modifiés de temps à autre. Les frais sont déduits des règlements sauf accord écrit contraire. Nous donnerons un préavis raisonnable de toute modification substantielle des frais."
+          "body": "Les frais du Service prennent la forme d'un abonnement mensuel, convenu avec vous à l'onboarding et indiqué sur notre page de tarifs. Rien n'est déduit des règlements on-chain : les paiements vont en intégralité du payeur vers le wallet du marchand. Nous donnerons un préavis raisonnable de toute modification substantielle de l'abonnement."
         },
         "prohibited": {
           "heading": "7. Activités interdites",
@@ -1310,13 +1310,13 @@
     "eyebrow": "VISION",
     "title": "Un paiement devrait déplacer l'argent, pas le retenir.",
     "body1": "La plupart des prestataires de paiement se placent entre vous et votre argent. Votre client les paie, ils conservent le solde, et à un moment donné ils vous paient. C'est dans cet écart que vivent les délais de règlement et les comptes gelés.",
-    "body2": "RSends supprime cet écart. Quand un client paie, un smart contract envoie l'argent vers votre wallet et prélève notre commission dans la même transaction. Le contrat est déployé une seule fois, il ne peut pas être mis à niveau, et rien en lui ne peut détenir de solde. Nous ne pourrions pas toucher à votre argent même si nous le voulions.",
+    "body2": "RSends supprime cet écart. Quand un client paie, un smart contract envoie l'argent directement vers votre wallet. Le contrat est déployé une seule fois, il ne peut pas être mis à niveau, et rien en lui ne peut détenir de solde. Nous ne pourrions pas toucher à votre argent même si nous le voulions. Le logiciel se paie par un abonnement mensuel, pas par un prélèvement sur le paiement.",
     "body3": "Nous voulons qu'accepter un stablecoin soit aussi ordinaire qu'accepter une carte.",
     "pullLine": "L'argent est à vous à la seconde où le bloc est confirmé.",
     "cards": [
       {
         "title": "Règlement direct",
-        "body": "Le wallet de votre client paie votre wallet en une seule transaction. La commission est prélevée à la même étape."
+        "body": "Le wallet de votre client paie votre wallet en une seule transaction. Rien n'est prélevé en chemin."
       },
       {
         "title": "Non-custodial par conception",
@@ -1372,7 +1372,7 @@
       },
       {
         "title": "Prévisibilité",
-        "body": "L'API fait la même chose à chaque fois, et la commission qui vous est annoncée est celle que le contrat prélève."
+        "body": "L'API fait la même chose à chaque fois, et le prix convenu à l'onboarding est le prix que vous payez."
       },
       {
         "title": "Long terme",
