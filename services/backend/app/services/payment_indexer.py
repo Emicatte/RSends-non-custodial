@@ -65,7 +65,7 @@ logger = logging.getLogger("payment_indexer")
 # ── Constants ────────────────────────────────────────────────
 POLL_INTERVAL = 5                # seconds between ticks
 MAX_BLOCKS_PER_TICK = 500        # getLogs range cap per tick
-DEFAULT_CONFIRMATIONS = 2
+DEFAULT_CONFIRMATIONS = 15  # keep in sync with Settings.indexer_confirmations
 # Consecutive failed ticks before the watcher declares itself STALLED
 # (CRITICAL log + gauge). Fail loud: a stuck indexer is silent payment loss.
 STALL_TICKS = 3
@@ -753,6 +753,23 @@ class PaymentWatcher:
             "[indexer] watching RSendsRouter %s on chain %d",
             self.router_address, self.chain_id,
         )
+        # Announce the finality mode unambiguously: depth mode marks invoices
+        # paid BEFORE L1 finality (fix A) — that must be loud in the logs.
+        settings = get_settings()
+        if getattr(settings, "indexer_use_finalized_tag", True):
+            logger.info(
+                "[indexer] finality mode chain=%d: '%s' tag (L1 finality)",
+                self.chain_id,
+                getattr(settings, "indexer_finalized_tag", "finalized") or "finalized",
+            )
+        else:
+            logger.warning(
+                "[indexer] finality mode chain=%d: confirmation depth=%d — "
+                "pre-L1-finality completion enabled "
+                "(rollback: INDEXER_USE_FINALIZED_TAG=true)",
+                self.chain_id,
+                getattr(settings, "indexer_confirmations", DEFAULT_CONFIRMATIONS),
+            )
 
     async def stop(self) -> None:
         self._running = False

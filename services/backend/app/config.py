@@ -62,11 +62,16 @@ class Settings(BaseSettings):
     rsends_router_addresses_json: str = ""
     # JSON map of chain_id → RPC URL (optional; falls back to rpc_manager defaults)
     indexer_rpc_urls_json: str = ""
-    # Fallback confirmation depth (latest - N) used when the chain's finalized
-    # tag is unavailable/disabled. A settlement is FINAL (and only then is the
-    # invoice marked paid + webhook fired) once its block is this deep AND its
-    # stored block hash is still canonical.
-    indexer_confirmations: int = 2
+    # Confirmation depth (latest - N) used when the finalized tag is disabled
+    # (INDEXER_USE_FINALIZED_TAG=false — fix A) or unavailable. A settlement is
+    # FINAL (and only then is the invoice marked paid + webhook fired) once its
+    # block is this deep AND its stored block hash is still canonical. 15 on
+    # Base (2s blocks) ≈ Paid in ~35s, with margin over any observed OP-stack
+    # sequencer reorg and over the B-2 reorg-evidence window (3×5s ticks).
+    # MUST-REVISIT-BEFORE-MAINNET: at depth finality, "final is terminal"
+    # (B-2) means a deeper-than-N reorg is alert-only — raise N or build a
+    # reversible paid tier before real funds ride on this.
+    indexer_confirmations: int = 15
     # Prefer the chain's finalized/safe block tag (Base/Ethereum support it) to
     # decide finality; set False to always use the indexer_confirmations depth.
     indexer_use_finalized_tag: bool = True
