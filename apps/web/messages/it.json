@@ -153,7 +153,7 @@
     "eyebrow": "",
     "titleLine1": "I tuoi soldi.",
     "titleLine2": "Il tuo wallet.",
-    "subtitle": "Un gateway di pagamento non-custodial per le aziende. Una fee fissa, mai una percentuale. I fondi si regolano on-chain direttamente nel tuo wallet — RSends non li detiene mai.",
+    "subtitle": "Un gateway di pagamento non-custodial per le aziende. Un abbonamento mensile, nessuna fee per transazione. I fondi si regolano on-chain direttamente nel tuo wallet; RSends non li detiene mai.",
     "ctaPrimary": "Crea una fattura →",
     "ctaSecondary": "Leggi le specifiche",
     "metrics": {
@@ -166,7 +166,7 @@
   },
   "twoPaths": {
     "title": "Due motivi per cui le aziende scelgono RSends.",
-    "subtitle": "Non-custodial per design e con una fee fissa — mai una quota di ciò che incassi.",
+    "subtitle": "Non-custodial per design. Un abbonamento mensile, mai una quota di ciò che incassi.",
     "developers": {
       "eyebrow": "NON-CUSTODIAL",
       "title": "Le chiavi restano sempre tue",
@@ -178,12 +178,12 @@
       "cta": "Come funziona →"
     },
     "businesses": {
-      "eyebrow": "FEE FISSA",
-      "title": "Una fee fissa, mai una percentuale",
-      "body": "Paghi €0.60 fissi per transazione, con un cap di €3.00 — qualunque sia l’importo. Mai una percentuale sul volume, così il tuo margine resta tuo mentre cresci.",
-      "b1": "€0.60 per transazione",
-      "b2": "Cap di €3.00 per pagamento",
-      "b3": "Mai una % sul volume",
+      "eyebrow": "ABBONAMENTO",
+      "title": "Un abbonamento, non una quota delle tue vendite",
+      "body": "Paghi un canone mensile fisso per il software, concordato con te all'onboarding. RSends non applica fee per transazione né percentuali sul tuo volume, così il tuo margine resta tuo mentre cresci.",
+      "b1": "Abbonamento mensile fisso",
+      "b2": "Prezzo concordato all'onboarding",
+      "b3": "Nessuna % sul volume",
       "b4": "USDC · USDT · EURC",
       "cta": "Vedi i prezzi →"
     }
@@ -1168,81 +1168,88 @@
     "secondary": "Parla con noi"
   },
   "pricing": {
-    "eyebrow": "PREZZI",
-    "title": "Una fee fissa, mai una percentuale.",
-    "subtitle": "Costo prevedibile su ogni pagamento. Scegli il piano per le funzioni che ti servono — la fee per transazione è sempre la stessa.",
-    "feeLine": "€0.60 per transazione · cap €3.00 · mai una %",
     "compliance": "Non-custodial · solo B2B · Disponibile fuori da Stati Uniti e Türkiye.",
-    "footnote": "Demo su testnet Base Sepolia. La fee per transazione è fissa e con cap — mai una percentuale del volume.",
-    "feeModel": {
-      "eyebrow": "COME FUNZIONA LA FEE",
-      "title": "Una fee fissa, con un cap rigido.",
-      "subtitle": "€0.60 per transazione fino a €1.000, poi €3.00 fissi — mai una percentuale di ciò che incassi."
+    "footnote": "Demo su testnet Base Sepolia. Il prezzo dell'abbonamento si concorda con ogni merchant all'onboarding.",
+    "hero": {
+      "eyebrow": "PREZZI",
+      "title": "Un abbonamento mensile fisso.",
+      "subtitle": "Paghi il software, non una quota di ogni vendita. Il prezzo è dimensionato sul tuo volume di transazioni e concordato con te all'onboarding."
     },
-    "comparison": {
-      "title": "Quanto paghi rispetto a un gateway a percentuale",
-      "colPayment": "Pagamento",
-      "colRsends": "Fee RSends",
-      "col1": "All'1%",
-      "col29": "Al 2,9%",
-      "illustrative": "illustrativo",
-      "caption": "€0.60 fissi per transazione, cap massimo €3.00 oltre €1.000. Le colonne percentuali sono riferimenti illustrativi — non legate ad alcun provider specifico."
+    "model": {
+      "title": "Quanto ti costa una percentuale mentre cresci",
+      "percent": {
+        "label": "Con un gateway a percentuale",
+        "body": "Il gateway prende una quota di ogni vendita. Il costo cresce con il tuo fatturato: più vendi, più consegni."
+      },
+      "flat": {
+        "label": "Con RSends",
+        "body": "Paghi un canone mensile per il software. Resta uguale quando le vendite crescono: sai quanto spendi a gennaio e a dicembre."
+      }
     },
-    "details": {
-      "title": "Dettagli della fee",
+    "includes": {
+      "title": "Cosa include l'abbonamento",
       "items": [
         {
-          "label": "Gas",
-          "value": "pagato dal pagatore; il merchant riceve il pagamento meno la sola fee fissa"
+          "label": "Checkout hosted",
+          "value": "una pagina di pagamento da inviare come link o aprire dal tuo store; i clienti pagano in stablecoin dal proprio wallet"
         },
         {
-          "label": "Transazioni fallite",
-          "value": "mai addebitate (atomica — un revert non instrada nulla e non costa nulla)"
+          "label": "API e webhook firmati",
+          "value": "crei payment intent dal tuo backend e ricevi webhook firmati HMAC quando si regolano"
         },
         {
-          "label": "Costo di setup",
-          "value": "nessuno"
+          "label": "Dashboard merchant",
+          "value": "pagamenti, webhook e chiavi API in un unico posto"
         },
         {
-          "label": "Minimo mensile",
-          "value": "nessuno (il piano Free è €0/mese)"
+          "label": "Settlement non-custodial",
+          "value": "i fondi passano on-chain dal tuo cliente al wallet che indichi; RSends non li detiene mai"
         },
         {
-          "label": "Custodia",
-          "value": "nessuna (pagatore → merchant diretto)"
+          "label": "Split",
+          "value": "dividi un pagamento su più wallet nella stessa transazione"
         },
         {
-          "label": "Settlement",
-          "value": "on-chain, atomico, una sola transazione"
+          "label": "Gas e pagamenti falliti",
+          "value": "il gas lo paga il pagatore; una transazione in revert non instrada nulla e non costa nulla"
         }
       ]
+    },
+    "talk": {
+      "title": "Il prezzo si concorda con te",
+      "body": "Dicci il volume che ti aspetti e dimensioniamo l'abbonamento all'onboarding. Il prodotto oggi gira su Base Sepolia: puoi provare l'intero flusso prima di impegnarti.",
+      "cta": "Parla con noi"
     },
     "faq": {
       "title": "Domande",
       "items": [
         {
+          "q": "Quanto costa?",
+          "a": "RSends è un abbonamento software mensile. Il prezzo dipende dal tuo volume di transazioni e si concorda durante l'onboarding. Scrivici e lo dimensioniamo insieme."
+        },
+        {
+          "q": "C'è una fee per transazione?",
+          "a": "No. L'abbonamento copre il servizio. RSends non prezza i singoli pagamenti e non prende percentuali sul tuo volume."
+        },
+        {
           "q": "Quali chain e token sono supportati?",
           "a": "USDC, USDT ed EURC su Base ed Ethereum. Il prodotto è attualmente una demo su testnet Base Sepolia."
         },
         {
-          "q": "Chi paga il gas?",
-          "a": "Il gas è pagato dal pagatore, in quanto soggetto che avvia la transazione on-chain. Il merchant riceve il pagamento meno la sola fee fissa RSends — nessun costo di gas per il merchant."
+          "q": "Posso provarlo prima di pagare?",
+          "a": "Sì. L'intero flusso gira su Base Sepolia con token di test: checkout, API, webhook e dashboard. Chiedici l'accesso."
         },
         {
-          "q": "La fee è mai una percentuale dell'importo?",
-          "a": "No. È una fee fissa di €0.60 per transazione fino a €1.000, e di €3.00 fissi oltre tale soglia — un cap rigido. Non è mai una percentuale del volume."
+          "q": "Chi paga il gas?",
+          "a": "Il gas è pagato dal pagatore, in quanto soggetto che invia la transazione on-chain. Il merchant non paga gas."
         },
         {
           "q": "Le transazioni fallite hanno un costo?",
-          "a": "No. La fee è prelevata atomicamente all'interno della transazione di settlement, quindi se va in revert non viene instradato nulla e non viene addebitato nulla."
+          "a": "No. Il settlement è atomico: se la transazione va in revert non viene instradato nulla e non viene addebitato nulla."
         },
         {
           "q": "Come vengono gestiti i rimborsi?",
-          "a": "RSends è non-custodial e non detiene mai i fondi, quindi non può annullare un pagamento. La restituzione dei fondi è un nuovo pagamento avviato dal merchant e prevede la stessa fee fissa di qualsiasi pagamento."
-        },
-        {
-          "q": "Ci sono costi di setup o un minimo mensile?",
-          "a": "Nessun costo di setup e nessun minimo mensile per iniziare — il piano Free è €0/mese. I piani a pagamento aggiungono funzioni, non una fee per transazione diversa."
+          "a": "RSends è non-custodial e non detiene mai i fondi, quindi non può annullare un pagamento. La restituzione dei fondi è un nuovo pagamento avviato dal merchant."
         },
         {
           "q": "RSends detiene mai i miei fondi?",
@@ -1250,95 +1257,49 @@
         },
         {
           "q": "Quando viene regolato un pagamento?",
-          "a": "On-chain e in modo atomico — una sola transazione, confermata nel blocco. Il blocco è la ricevuta; non c'è alcun ledger nascosto da riconciliare."
+          "a": "On-chain e in modo atomico. Una sola transazione, confermata nel blocco; il blocco è la ricevuta."
         }
       ]
     },
     "split": {
       "heading": "Split, integrati",
-      "body": "Trattieni la tua fee di piattaforma dentro il pagamento. Gli split vengono instradati in modo atomico — o vengono pagati tutti, o nessuno.",
+      "body": "Trattieni la tua fee di piattaforma dentro il pagamento. Gli split vengono instradati in modo atomico: o vengono pagati tutti, o nessuno.",
       "label": "SPLIT",
-      "feeLabel": "Fee RSends",
       "note": "instradato in 1 tx",
-      "disclaimer": "Esempio illustrativo — non sono dati reali di clienti."
-    },
-    "tiers": {
-      "eyebrow": "COSA OTTIENI",
-      "title": "Stessa fee. Più spazio per crescere.",
-      "note": "Ogni piano paga la stessa fee di €0.60 per transazione (cap €3.00). I piani aggiungono limiti di frequenza, supporto, membri del team e SLA — mai una fee diversa."
-    },
-    "plans": {
-      "free": {
-        "name": "Free",
-        "price": "€0",
-        "period": "/mese",
-        "tagline": "Inizia ad accettare pagamenti in stablecoin con l’essenziale.",
-        "features": [
-          "USDC, USDT ed EURC",
-          "Base ed Ethereum",
-          "Webhook e accesso API"
-        ],
-        "cta": "Inizia"
-      },
-      "pro": {
-        "name": "Pro",
-        "price": "€39",
-        "period": "/mese",
-        "tagline": "Per aziende in crescita che vogliono più volume e supporto.",
-        "features": [
-          "Tutto di Free",
-          "Rate limit più alti",
-          "Supporto prioritario",
-          "Membri del team"
-        ],
-        "cta": "Scegli Pro"
-      },
-      "custom": {
-        "name": "Custom",
-        "price": "Parliamone",
-        "period": "",
-        "tagline": "Condizioni su misura per volumi elevati ed esigenze specifiche.",
-        "features": [
-          "Tutto di Pro",
-          "Prezzi a volume",
-          "Onboarding dedicato",
-          "SLA e contratti su misura"
-        ],
-        "cta": "Contattaci"
-      }
+      "disclaimer": "Esempio illustrativo, non sono dati reali di clienti."
     }
   },
   "howItWorks": {
     "hero": {
-      "eyebrow": "How it works",
-      "title": "How a payment moves through RSends",
-      "subtitle": "Every payment settles on-chain, straight to the wallet the merchant names — routed by an immutable contract that never takes custody."
+      "eyebrow": "Come funziona",
+      "title": "Come si muove un pagamento in RSends",
+      "subtitle": "Ogni pagamento si regola on-chain, dritto al wallet indicato dal merchant, instradato da un contratto immutabile che non prende mai custodia."
     },
-    "flowEyebrow": "The flow",
+    "flowEyebrow": "Il flusso",
     "step1": {
       "heading": "Checkout",
-      "body": "The customer opens a hosted checkout or a shareable payment link and picks a stablecoin and chain. The payment settles straight to the wallet the merchant names."
+      "body": "Il cliente apre un checkout hosted o un link di pagamento condivisibile e sceglie stablecoin e chain. Il pagamento si regola dritto al wallet indicato dal merchant."
     },
     "step2": {
-      "heading": "Split & route",
-      "body": "A single payment can divide across many wallets, and the platform fee is taken in the same transaction. Everyone is paid atomically — or no one is."
+      "heading": "Split e instradamento",
+      "body": "Un singolo pagamento può dividersi su più wallet in una sola transazione: la tua piattaforma trattiene la sua quota e i venditori ricevono la loro. O vengono pagati tutti, atomicamente, o nessuno."
     },
     "step3": {
-      "heading": "On-chain settlement",
-      "body": "Every payment is a verifiable transaction on the chain you chose. There is no reconciliation against a hidden ledger — the block is the receipt."
+      "heading": "Settlement on-chain",
+      "body": "Ogni pagamento è una transazione verificabile sulla chain che scegli. Non c'è riconciliazione con un ledger nascosto: il blocco è la ricevuta."
     },
     "proof": {
-      "eyebrow": "Proof",
-      "title": "See a real settlement on-chain",
-      "body": "This is an actual payment processed by the contract on Base Sepolia — a public testnet, not mainnet or production volume. Open it on BaseScan and read the transaction yourself.",
-      "cta": "See a real settlement on-chain →",
+      "eyebrow": "Prova",
+      "title": "Guarda un settlement reale on-chain",
+      "body": "Questo è un pagamento realmente processato dal contratto su Base Sepolia, una testnet pubblica: non è mainnet né volume di produzione. Aprilo su BaseScan e leggi tu stesso la transazione.",
+      "cta": "Guarda un settlement reale on-chain →",
       "network": "Base Sepolia · testnet"
     },
     "cta": {
-      "title": "A flat fee, never a percentage.",
-      "body": "The same contract that settles your payments charges one flat fee — see exactly what it costs.",
-      "pricing": "See pricing →",
-      "secondary": "Open the app"
+      "title": "Paghi il software, non ogni pagamento.",
+      "body": "RSends è un abbonamento mensile dimensionato sul tuo volume e concordato all'onboarding. Guarda cosa include.",
+      "pricing": "Vedi i prezzi →",
+      "secondary": "Apri l'app"
     }
   },
   "vision": {
