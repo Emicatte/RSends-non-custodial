@@ -629,7 +629,7 @@
             "<strong>Rpagos S.R.L</strong>",
             "Immatriculée au Costa Rica, n° de registre 4062001345466",
             "San José, Costa Rica",
-            "Contact : <privacyMail>privacy@rsends.io</privacyMail>"
+            "Contact : <privacyMail>emiliocatteddu@gmail.com</privacyMail>"
           ]
         },
         "dataCollect": {
@@ -689,7 +689,7 @@
             "<strong>Utilisateurs EEE / Royaume-Uni (articles 15–22 du RGPD)</strong> — accès, rectification, effacement, limitation du traitement, portabilité des données, opposition au traitement et droit de ne pas faire l'objet d'une décision exclusivement automatisée.",
             "<strong>Utilisateurs du Costa Rica (loi 8968)</strong> — droits d'accès, de rectification, de suppression (lorsque permise) et de retrait du consentement."
           ],
-          "howTo": "Pour exercer ces droits, contactez <privacyMail>privacy@rsends.io</privacyMail>. Nous répondrons dans les délais imposés par le droit applicable. Certains droits peuvent être limités lorsque nous sommes tenus de conserver les données pour des motifs légaux ou réglementaires (par exemple, conservation des registres LCB-FT).",
+          "howTo": "Pour exercer ces droits, contactez <privacyMail>emiliocatteddu@gmail.com</privacyMail>. Nous répondrons dans les délais imposés par le droit applicable. Certains droits peuvent être limités lorsque nous sommes tenus de conserver les données pour des motifs légaux ou réglementaires (par exemple, conservation des registres LCB-FT).",
           "authority": "Vous avez également le droit d'introduire une réclamation auprès de votre autorité de contrôle locale — au Costa Rica, l’<em>Agencia de Protección de Datos de los Habitantes (PRODHAB)</em> ; dans l'EEE, votre autorité nationale de protection des données (en France, la CNIL)."
         },
         "security": {
@@ -711,7 +711,7 @@
         "contact": {
           "heading": "13. Contact",
           "lines": [
-            "Demandes relatives à la confidentialité : <privacyMail>privacy@rsends.io</privacyMail>",
+            "Demandes relatives à la confidentialité : <privacyMail>emiliocatteddu@gmail.com</privacyMail>",
             "Adresse postale : Rpagos S.R.L, San José, Costa Rica."
           ]
         }
@@ -815,7 +815,7 @@
         "contact": {
           "heading": "15. Contact",
           "lines": [
-            "Demandes juridiques : <legalMail>legal@rsends.io</legalMail>",
+            "Demandes juridiques : <legalMail>emiliocatteddu@gmail.com</legalMail>",
             "Adresse postale : Rpagos S.R.L, San José, Costa Rica."
           ]
         }
@@ -880,7 +880,7 @@
         },
         "contact": {
           "heading": "5. Contact",
-          "body": "Questions relatives à la présente Politique : <privacyMail>privacy@rsends.io</privacyMail>."
+          "body": "Questions relatives à la présente Politique : <privacyMail>emiliocatteddu@gmail.com</privacyMail>."
         }
       }
     },
@@ -963,7 +963,7 @@
         "contact": {
           "heading": "11. Contact",
           "lines": [
-            "Demandes de conformité : <complianceMail>compliance@rsends.io</complianceMail>",
+            "Demandes de conformité : <complianceMail>emiliocatteddu@gmail.com</complianceMail>",
             "Adresse postale : Rpagos S.R.L, Compliance Office, San José, Costa Rica."
           ]
         }
@@ -1184,7 +1184,7 @@
       },
       "flat": {
         "label": "Avec RSends",
-        "body": "Vous payez un prix mensuel pour le logiciel. Il ne change pas quand vos ventes augmentent : vous connaissez votre coût en janvier comme en décembre."
+        "body": "Vous payez un abonnement mensuel calibré sur votre volume de transactions, pas un pourcentage de votre chiffre d'affaires. Une vente plus importante ne vous coûte pas plus cher : le prix est lié aux transactions que vous traitez, pas à leur valeur."
       }
     },
     "includes": {
@@ -1602,7 +1602,7 @@
       "title": "Votre demande a été refusée",
       "body": "Après examen des informations de votre société, nous ne pouvons pas vous proposer de compte pour le moment.",
       "reasonLabel": "Motif",
-      "contact": "Si vous pensez qu'il s'agit d'une erreur, contactez support@rsends.io."
+      "contact": "Si vous pensez qu'il s'agit d'une erreur, contactez emiliocatteddu@gmail.com."
     }
   },
   "pay": {

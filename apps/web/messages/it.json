@@ -628,7 +628,7 @@
             "<strong>Rpagos S.R.L</strong>",
             "Iscritta in Costa Rica, n. registro 4062001345466",
             "San José, Costa Rica",
-            "Contatto: <privacyMail>privacy@rsends.io</privacyMail>"
+            "Contatto: <privacyMail>emiliocatteddu@gmail.com</privacyMail>"
           ]
         },
         "dataCollect": {
@@ -688,7 +688,7 @@
             "<strong>Utenti SEE / Regno Unito (artt. 15–22 GDPR)</strong> — accesso, rettifica, cancellazione, limitazione del trattamento, portabilità dei dati, opposizione al trattamento e diritto di non essere sottoposto a decisioni esclusivamente automatizzate.",
             "<strong>Utenti Costa Rica (Legge 8968)</strong> — diritti di accesso, rettifica, cancellazione (ove consentita) e revoca del consenso."
           ],
-          "howTo": "Per esercitare questi diritti, scrivi a <privacyMail>privacy@rsends.io</privacyMail>. Risponderemo entro i termini previsti dalla normativa applicabile. Alcuni diritti possono essere limitati ove siamo tenuti a conservare i dati per ragioni legali o regolamentari (ad esempio, tenuta dei registri AML).",
+          "howTo": "Per esercitare questi diritti, scrivi a <privacyMail>emiliocatteddu@gmail.com</privacyMail>. Risponderemo entro i termini previsti dalla normativa applicabile. Alcuni diritti possono essere limitati ove siamo tenuti a conservare i dati per ragioni legali o regolamentari (ad esempio, tenuta dei registri AML).",
           "authority": "Hai inoltre il diritto di proporre reclamo all'autorità di controllo competente — in Costa Rica, l’<em>Agencia de Protección de Datos de los Habitantes (PRODHAB)</em>; nel SEE, l'autorità nazionale di protezione dei dati."
         },
         "security": {
@@ -710,7 +710,7 @@
         "contact": {
           "heading": "13. Contatti",
           "lines": [
-            "Richieste in materia di privacy: <privacyMail>privacy@rsends.io</privacyMail>",
+            "Richieste in materia di privacy: <privacyMail>emiliocatteddu@gmail.com</privacyMail>",
             "Indirizzo postale: Rpagos S.R.L, San José, Costa Rica."
           ]
         }
@@ -814,7 +814,7 @@
         "contact": {
           "heading": "15. Contatti",
           "lines": [
-            "Richieste legali: <legalMail>legal@rsends.io</legalMail>",
+            "Richieste legali: <legalMail>emiliocatteddu@gmail.com</legalMail>",
             "Indirizzo postale: Rpagos S.R.L, San José, Costa Rica."
           ]
         }
@@ -879,7 +879,7 @@
         },
         "contact": {
           "heading": "5. Contatti",
-          "body": "Domande sulla presente Cookie Policy: <privacyMail>privacy@rsends.io</privacyMail>."
+          "body": "Domande sulla presente Cookie Policy: <privacyMail>emiliocatteddu@gmail.com</privacyMail>."
         }
       }
     },
@@ -962,7 +962,7 @@
         "contact": {
           "heading": "11. Contatti",
           "lines": [
-            "Richieste in materia di compliance: <complianceMail>compliance@rsends.io</complianceMail>",
+            "Richieste in materia di compliance: <complianceMail>emiliocatteddu@gmail.com</complianceMail>",
             "Indirizzo postale: Rpagos S.R.L, Compliance Office, San José, Costa Rica."
           ]
         }
@@ -1183,7 +1183,7 @@
       },
       "flat": {
         "label": "Con RSends",
-        "body": "Paghi un canone mensile per il software. Resta uguale quando le vendite crescono: sai quanto spendi a gennaio e a dicembre."
+        "body": "Paghi un canone mensile calibrato sul tuo volume di transazioni, non una percentuale sui ricavi. Una vendita più grande non ti costa di più: il prezzo è legato alle transazioni che gestisci, non al loro valore."
       }
     },
     "includes": {
@@ -1601,7 +1601,7 @@
       "title": "La tua richiesta è stata rifiutata",
       "body": "Dopo aver esaminato i dati della tua azienda non possiamo offrirti un account al momento.",
       "reasonLabel": "Motivo",
-      "contact": "Se pensi si tratti di un errore, scrivi a support@rsends.io."
+      "contact": "Se pensi si tratti di un errore, scrivi a emiliocatteddu@gmail.com."
     }
   },
   "pay": {

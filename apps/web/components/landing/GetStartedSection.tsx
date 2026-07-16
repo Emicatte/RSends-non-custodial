@@ -185,7 +185,7 @@ export default function GetStartedSection() {
           </Link>
 
           <a
-            href="mailto:support@rsends.com"
+            href="mailto:emiliocatteddu@gmail.com"
             style={{
               display: 'block',
               textAlign: 'center',

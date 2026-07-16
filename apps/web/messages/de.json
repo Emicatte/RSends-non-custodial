@@ -629,7 +629,7 @@
             "<strong>Rpagos S.R.L</strong>",
             "Eingetragen in Costa Rica, Registernr. 4062001345466",
             "San José, Costa Rica",
-            "Kontakt: <privacyMail>privacy@rsends.io</privacyMail>"
+            "Kontakt: <privacyMail>emiliocatteddu@gmail.com</privacyMail>"
           ]
         },
         "dataCollect": {
@@ -689,7 +689,7 @@
             "<strong>EWR-/UK-Nutzer (Art. 15–22 DSGVO)</strong> — Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit, Widerspruch gegen die Verarbeitung sowie das Recht, nicht ausschließlich automatisierten Entscheidungen unterworfen zu werden.",
             "<strong>Nutzer in Costa Rica (Gesetz 8968)</strong> — Rechte auf Auskunft, Berichtigung, Löschung (soweit zulässig) und Widerruf der Einwilligung."
           ],
-          "howTo": "Zur Ausübung dieser Rechte wenden Sie sich an <privacyMail>privacy@rsends.io</privacyMail>. Wir antworten innerhalb der gesetzlich vorgeschriebenen Fristen. Einige Rechte können eingeschränkt sein, soweit wir Daten aus rechtlichen oder regulatorischen Gründen aufbewahren müssen (zum Beispiel zur AML-Aufzeichnungspflicht).",
+          "howTo": "Zur Ausübung dieser Rechte wenden Sie sich an <privacyMail>emiliocatteddu@gmail.com</privacyMail>. Wir antworten innerhalb der gesetzlich vorgeschriebenen Fristen. Einige Rechte können eingeschränkt sein, soweit wir Daten aus rechtlichen oder regulatorischen Gründen aufbewahren müssen (zum Beispiel zur AML-Aufzeichnungspflicht).",
           "authority": "Sie haben außerdem das Recht, eine Beschwerde bei Ihrer örtlichen Aufsichtsbehörde einzureichen — in Costa Rica bei der <em>Agencia de Protección de Datos de los Habitantes (PRODHAB)</em>; im EWR bei Ihrer nationalen Datenschutzbehörde (in Deutschland Ihrer zuständigen Landesdatenschutzbehörde)."
         },
         "security": {
@@ -711,7 +711,7 @@
         "contact": {
           "heading": "13. Kontakt",
           "lines": [
-            "Datenschutzanfragen: <privacyMail>privacy@rsends.io</privacyMail>",
+            "Datenschutzanfragen: <privacyMail>emiliocatteddu@gmail.com</privacyMail>",
             "Postanschrift: Rpagos S.R.L, San José, Costa Rica."
           ]
         }
@@ -815,7 +815,7 @@
         "contact": {
           "heading": "15. Kontakt",
           "lines": [
-            "Rechtliche Anfragen: <legalMail>legal@rsends.io</legalMail>",
+            "Rechtliche Anfragen: <legalMail>emiliocatteddu@gmail.com</legalMail>",
             "Postanschrift: Rpagos S.R.L, San José, Costa Rica."
           ]
         }
@@ -880,7 +880,7 @@
         },
         "contact": {
           "heading": "5. Kontakt",
-          "body": "Fragen zu dieser Cookie-Richtlinie: <privacyMail>privacy@rsends.io</privacyMail>."
+          "body": "Fragen zu dieser Cookie-Richtlinie: <privacyMail>emiliocatteddu@gmail.com</privacyMail>."
         }
       }
     },
@@ -963,7 +963,7 @@
         "contact": {
           "heading": "11. Kontakt",
           "lines": [
-            "Compliance-Anfragen: <complianceMail>compliance@rsends.io</complianceMail>",
+            "Compliance-Anfragen: <complianceMail>emiliocatteddu@gmail.com</complianceMail>",
             "Postanschrift: Rpagos S.R.L, Compliance Office, San José, Costa Rica."
           ]
         }
@@ -1184,7 +1184,7 @@
       },
       "flat": {
         "label": "Mit RSends",
-        "body": "Sie zahlen einen monatlichen Preis für die Software. Er bleibt gleich, wenn Ihre Verkäufe wachsen: Sie kennen Ihre Kosten im Januar wie im Dezember."
+        "body": "Sie zahlen ein monatliches Abo, das sich nach Ihrem Transaktionsvolumen richtet, keinen Prozentsatz Ihres Umsatzes. Ein größerer Verkauf kostet Sie nicht mehr: Der Preis hängt an den Transaktionen, die Sie abwickeln, nicht an deren Wert."
       }
     },
     "includes": {
@@ -1602,7 +1602,7 @@
       "title": "Deine Anfrage wurde abgelehnt",
       "body": "Nach Prüfung deiner Unternehmensdaten können wir dir derzeit kein Konto anbieten.",
       "reasonLabel": "Grund",
-      "contact": "Wenn du das für einen Fehler hältst, wende dich an support@rsends.io."
+      "contact": "Wenn du das für einen Fehler hältst, wende dich an emiliocatteddu@gmail.com."
     }
   },
   "pay": {
