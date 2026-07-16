@@ -211,16 +211,25 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
   wallet-less org's settlement address 409s both). Durable fix: nullable `org_id` on
   `payment_intents`/`merchant_webhooks` + backfill + re-scope the session queries (~16 sites);
   API-key visibility needs a union or org-bound keys. Est. 3-5 days, dedicated pass.
-- **Retire the wallet-authenticated Merchant Dashboard (approved direction, 2026-07-12; FIRST
-  HALF SHIPPED 2026-07-15).** Session minting + list/revoke are live
+- **Retire the wallet-authenticated Merchant Dashboard (approved 2026-07-12; WEB SURFACE
+  REMOVED 2026-07-16).** Session minting + list/revoke are live
   (`/api/v1/user/org/merchant-keys`, admin role, `resolve_owner_address` identity chain, own
-  `ENDPOINT_LIMITS` entries, secret-shown-once UX). REMAINING: remove `/merchant/dashboard`,
-  the `/api/v1/keys/*` wallet-sig routes, frozen `dashboard_routes.py`, the dead `/api/v1/keys`
-  `EXEMPT_PATHS` entry + `ADMIN_PATHS` middleware branch; `require_wallet_auth` itself stays
-  until the dormant custodial surfaces (splits/forwarding/distributions) also go. `/pay` and
-  `verify_api_key` untouched. Also decide `rsusr_`'s fate (verification wired to zero routes).
-  Note: migration 0011 (`api_keys.org_id` + resolver own-org carve-out) is the first contained
-  slice of the org_id re-key follow-up above.
+  `ENDPOINT_LIMITS` entries, secret-shown-once UX) — shipped 2026-07-15. The `/merchant/dashboard`
+  page (pasted-key UI, never SIWE) is gone: page archived to `apps/web/_archive/merchant-dashboard.tsx`
+  (kept for its chain-picker / multi-token / metadata create-modal code, wanted for /app at
+  mainnet), its `/api/merchant/[...path]` proxy deleted, `/merchant/:path*` now 307s to `/en/app`
+  via `next.config.mjs` redirects (which run before middleware; the `merchant` matcher exclusion
+  was dropped). Lock-out verified on prod before removal: zero passwordless users, one api_key
+  (operator's own test key). REMAINING (post-Manimama, with the org_id re-key): the
+  `/api/v1/keys/*` wallet-sig routes, frozen `dashboard_routes.py` (zero web callers),
+  `wallet_session_routes.py`, the `/api/v1/keys` `EXEMPT_PATHS` entry + `ADMIN_PATHS` middleware
+  branch; `require_wallet_auth` itself stays until the dormant custodial surfaces
+  (splits/forwarding/distributions) also go. `/pay` and `verify_api_key` untouched. Also decide
+  `rsusr_`'s fate (verification wired to zero routes). Note: migration 0011 (`api_keys.org_id` +
+  resolver own-org carve-out) is the first contained slice of the org_id re-key follow-up above.
+  Capability gap accepted at removal: /app is test-env-locked, so until it grows an environment
+  toggle there is no UI over live/mainnet data (live routers undeployed, so nothing is usable
+  there yet anyway).
 - **Dormant custodial residue (audit 2026-07-12, batch as one subtractive pass):**
   `TransactionPersistence`/`ContactsPersistence`/`PostLoginMerge`/`lib/tx-events`/
   `useUserTransactions` (listeners without emitters, mounted in the `/app` layout) + the now

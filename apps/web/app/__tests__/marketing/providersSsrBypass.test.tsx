@@ -1,7 +1,7 @@
 /**
  * Marketing pages must actually server-render: the wallet-provider mounted
  * gate (which blanks SSR output) has to be bypassed for them, exactly like
- * /admin, /pay and /merchant already are. The typewriter headline requirement
+ * /admin and /pay already are. The typewriter headline requirement
  * (full headline in server HTML, works with JS disabled) depends on this.
  */
 import { renderToString } from 'react-dom/server'

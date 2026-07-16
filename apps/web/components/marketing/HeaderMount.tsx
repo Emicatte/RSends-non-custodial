@@ -4,7 +4,7 @@ import { usePathname } from '@/i18n/navigation'
 import MarketingNav from './MarketingNav'
 
 // Allowlist, not denylist: the marketing header must never leak onto the
-// app/dashboard shell (settings, markets, merchant, login…), which lives flat
+// app/dashboard shell (settings, markets, login…), which lives flat
 // under the same [locale] segment. Mirrors the FooterMount pattern.
 const MARKETING_PATHS = ['/pricing', '/how-it-works', '/vision', '/team']
 

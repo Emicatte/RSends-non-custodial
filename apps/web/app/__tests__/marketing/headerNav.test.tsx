@@ -104,7 +104,7 @@ describe('HeaderMount', () => {
     },
   )
 
-  it.each(['/settings', '/app', '/app/payments', '/markets', '/merchant/dashboard', '/login'])(
+  it.each(['/settings', '/app', '/app/payments', '/markets', '/login'])(
     'does not mount the nav on app route %s',
     pathname => {
       currentPathname = pathname
