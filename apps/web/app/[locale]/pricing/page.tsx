@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import { getTranslations } from 'next-intl/server'
-import { Link } from '@/i18n/navigation'
 import { C } from '@/app/designTokens'
 import MeshHeroVideo from '@/components/pricing/MeshHeroVideo'
 import ScrubReveal from '@/components/motion/ScrubReveal'
@@ -9,7 +8,7 @@ import ScrubCascade from '@/components/motion/ScrubCascade'
 export const metadata: Metadata = {
   title: 'Pricing — RSends',
   description:
-    'A flat fee, never a percentage. €0.60 per transaction, capped at €3.00. Pick a plan for the features you need.',
+    'RSends is a flat monthly software subscription. No per-transaction fee. The price is sized to your volume and agreed at onboarding.',
 }
 
 type PageProps = { params: Promise<{ locale: string }> }
@@ -18,27 +17,17 @@ const HPAD = 'clamp(20px, 6vw, 96px)'
 const MAXW = 1440 // hero only — full-bleed dark band
 const CONTAINER = 1160 // shared width for every section below the hero
 
-// ── Fee model — single source of truth. Figures hard-coded so every locale
-//    renders identical numbers (DM Mono). The % columns are illustrative
-//    reference points, not any named provider's tariff. NEVER a % of volume.
-const COMPARISON_ROWS = [
-  { payment: '€50', rsends: '€0.60', p1: '€0.50', p29: '€1.45' },
-  { payment: '€1,200', rsends: '€3.00', p1: '€12.00', p29: '€34.80' },
-  { payment: '€50,000', rsends: '€3.00', p1: '€500.00', p29: '€1,450.00' },
-] as const
-
-// Illustrative split — percentages sum to 100; the fee is a flat line item,
-// NOT part of the split. Address labels are obviously fake placeholders.
+// Illustrative split — percentages sum to 100. The amounts are a sample
+// payment, not RSends pricing (subscription pricing is agreed per merchant
+// at onboarding and never shown as a public figure). Address labels are
+// obviously fake placeholders.
 const SPLIT = {
   total: '€49.00',
   rows: [
     { addr: '0x…shop', pct: 88 },
     { addr: '0x…seller', pct: 12 },
   ],
-  fee: '€0.60',
 } as const
-
-const PLAN_KEYS = ['free', 'pro', 'custom'] as const
 
 const section: React.CSSProperties = {
   maxWidth: MAXW,
@@ -55,7 +44,7 @@ const container: React.CSSProperties = {
 export default async function PricingPage({ params }: PageProps) {
   const { locale } = await params
   const t = await getTranslations({ locale, namespace: 'pricing' })
-  const details = t.raw('details.items') as { label: string; value: string }[]
+  const includes = t.raw('includes.items') as { label: string; value: string }[]
   const faqs = t.raw('faq.items') as { q: string; a: string }[]
 
   return (
@@ -89,7 +78,7 @@ export default async function PricingPage({ params }: PageProps) {
               marginBottom: 18,
             }}
           >
-            {t('feeModel.eyebrow')}
+            {t('hero.eyebrow')}
           </div>
           <h1
             style={{
@@ -103,7 +92,7 @@ export default async function PricingPage({ params }: PageProps) {
               maxWidth: 880,
             }}
           >
-            {t('feeModel.title')}
+            {t('hero.title')}
           </h1>
           <p
             style={{
@@ -115,12 +104,12 @@ export default async function PricingPage({ params }: PageProps) {
               maxWidth: 620,
             }}
           >
-            {t('feeModel.subtitle')}
+            {t('hero.subtitle')}
           </p>
         </div>
       </section>
 
-      {/* ── Comparison table — the centerpiece ─────────────────── */}
+      {/* ── Flat vs percentage — qualitative, no figures ───────── */}
       <section style={{ ...container, padding: `clamp(64px, 11vh, 120px) ${HPAD} clamp(40px, 7vh, 72px)` }}>
         <ScrubReveal scrub={0.5}>
           <h2
@@ -136,65 +125,54 @@ export default async function PricingPage({ params }: PageProps) {
               maxWidth: 760,
             }}
           >
-            {t('comparison.title')}
+            {t('model.title')}
           </h2>
-
-          {/* boundary div carries the reveal; inner scroll wrapper is its child */}
-          <div className="rs-reveal">
-            <div style={{ overflowX: 'auto', border: `1px solid ${C.border}`, borderRadius: 16, background: C.surface }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 640 }}>
-                <thead>
-                  <tr>
-                    <th style={thStyle('left', false)}>{t('comparison.colPayment')}</th>
-                    <th style={thStyle('right', true)}>{t('comparison.colRsends')}</th>
-                    <th style={thStyle('right', false)}>
-                      {t('comparison.col1')}{' '}
-                      <span style={illoStyle}>({t('comparison.illustrative')})</span>
-                    </th>
-                    <th style={thStyle('right', false)}>
-                      {t('comparison.col29')}{' '}
-                      <span style={illoStyle}>({t('comparison.illustrative')})</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {COMPARISON_ROWS.map((r, i) => {
-                    const last = i === COMPARISON_ROWS.length - 1
-                    return (
-                      <tr key={r.payment}>
-                        <td style={tdNum(last, 'left', false, C.text)}>{r.payment}</td>
-                        <td style={tdNum(last, 'right', true, C.purple)}>{r.rsends}</td>
-                        <td style={tdNum(last, 'right', false, C.sub)}>{r.p1}</td>
-                        <td style={tdNum(last, 'right', false, C.sub)}>{r.p29}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <p
-            className="rs-reveal"
-            style={{
-              fontFamily: C.D,
-              fontSize: 14,
-              lineHeight: 1.6,
-              color: C.sub,
-              margin: '18px 0 0',
-              maxWidth: 760,
-            }}
-          >
-            {t('comparison.caption')}
-          </p>
         </ScrubReveal>
+        <ScrubCascade
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+            gap: 20,
+          }}
+        >
+          {(['percent', 'flat'] as const).map((key) => {
+            const emphasized = key === 'flat'
+            return (
+              <div
+                key={key}
+                className="rs-card"
+                style={{
+                  background: C.surface,
+                  border: emphasized ? `1.5px solid ${C.purple}` : `1px solid ${C.border}`,
+                  borderRadius: 16,
+                  padding: '28px 30px',
+                }}
+              >
+                <h3
+                  style={{
+                    fontFamily: C.D,
+                    fontSize: 16,
+                    fontWeight: 600,
+                    color: emphasized ? C.purple : C.text,
+                    margin: '0 0 10px',
+                  }}
+                >
+                  {t(`model.${key}.label`)}
+                </h3>
+                <p style={{ fontFamily: C.D, fontSize: 15, lineHeight: 1.6, color: C.sub, margin: 0 }}>
+                  {t(`model.${key}.body`)}
+                </p>
+              </div>
+            )
+          })}
+        </ScrubCascade>
       </section>
 
-      {/* ── Fee details strip ──────────────────────────────────── */}
+      {/* ── What the subscription includes ─────────────────────── */}
       <section style={{ ...container, padding: `clamp(24px, 4vh, 48px) ${HPAD}` }}>
         <ScrubReveal scrub={0.5}>
           <h2 className="rs-reveal" style={sectionLabel}>
-            {t('details.title')}
+            {t('includes.title')}
           </h2>
         </ScrubReveal>
         <ScrubCascade
@@ -204,7 +182,7 @@ export default async function PricingPage({ params }: PageProps) {
             gap: 16,
           }}
         >
-          {details.map((d, i) => (
+          {includes.map((d, i) => (
             <div
               key={i}
               className="rs-card"
@@ -227,6 +205,59 @@ export default async function PricingPage({ params }: PageProps) {
             </div>
           ))}
         </ScrubCascade>
+      </section>
+
+      {/* ── Talk to us — the one offer, priced at onboarding ───── */}
+      <section style={{ ...container, padding: `clamp(40px, 7vh, 72px) ${HPAD}` }}>
+        <ScrubReveal scrub={0.5}>
+          <div
+            className="rs-reveal"
+            style={{
+              background: C.surface,
+              border: `1.5px solid ${C.purple}`,
+              borderRadius: 16,
+              padding: 'clamp(28px, 4vw, 44px)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-start',
+              gap: 14,
+            }}
+          >
+            <h2
+              style={{
+                fontFamily: C.D,
+                fontSize: 'clamp(22px, 2.8vw, 32px)',
+                fontWeight: 500,
+                color: C.text,
+                letterSpacing: '-0.01em',
+                margin: 0,
+              }}
+            >
+              {t('talk.title')}
+            </h2>
+            <p style={{ fontFamily: C.D, fontSize: 16, lineHeight: 1.6, color: C.sub, margin: 0, maxWidth: 640 }}>
+              {t('talk.body')}
+            </p>
+            <a
+              href="mailto:support@rsends.com"
+              style={{
+                display: 'inline-block',
+                textAlign: 'center',
+                fontFamily: C.D,
+                fontSize: 15,
+                fontWeight: 600,
+                padding: '13px 28px',
+                borderRadius: 8,
+                textDecoration: 'none',
+                background: C.text,
+                color: C.bg,
+                marginTop: 6,
+              }}
+            >
+              {t('talk.cta')}
+            </a>
+          </div>
+        </ScrubReveal>
       </section>
 
       {/* ── Split illustration ─────────────────────────────────── */}
@@ -338,35 +369,7 @@ export default async function PricingPage({ params }: PageProps) {
               ))}
             </div>
 
-            {/* Fee — a SEPARATE flat line item, not part of the split % */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 12,
-                padding: '16px 24px',
-                borderTop: `1px solid ${C.border}`,
-                background: 'rgba(200,81,44,0.04)',
-              }}
-            >
-              <span style={{ fontFamily: C.D, fontSize: 14, fontWeight: 500, color: C.text }}>
-                {t('split.feeLabel')}
-              </span>
-              <span
-                style={{
-                  fontFamily: C.M,
-                  fontSize: 16,
-                  fontWeight: 500,
-                  color: C.purple,
-                  fontVariantNumeric: 'tabular-nums',
-                }}
-              >
-                {SPLIT.fee}
-              </span>
-            </div>
-
-            <div style={{ padding: '12px 24px 18px' }}>
+            <div style={{ padding: '12px 24px 18px', borderTop: `1px solid ${C.border}` }}>
               <span style={{ fontFamily: C.D, fontSize: 13, color: C.sub }}>• {t('split.note')}</span>
             </div>
             </div>
@@ -374,176 +377,6 @@ export default async function PricingPage({ params }: PageProps) {
             </div>
           </div>
         </ScrubReveal>
-      </section>
-
-      {/* ── Tiers — what you get on top (same fee everywhere) ──── */}
-      <section style={{ ...container, padding: `clamp(40px, 7vh, 80px) ${HPAD}` }}>
-        <ScrubReveal scrub={0.5}>
-          <div className="rs-reveal" style={{ maxWidth: 760, marginBottom: 'clamp(28px, 4vh, 44px)' }}>
-            <div
-              style={{
-                fontFamily: C.M,
-                fontSize: 11,
-                letterSpacing: '0.18em',
-                color: C.purple,
-                fontWeight: 500,
-                marginBottom: 14,
-              }}
-            >
-              {t('tiers.eyebrow')}
-            </div>
-            <h2
-              style={{
-                fontFamily: C.D,
-                fontSize: 'clamp(26px, 3.6vw, 44px)',
-                fontWeight: 500,
-                color: C.text,
-                lineHeight: 1.12,
-                letterSpacing: '-0.02em',
-                margin: '0 0 16px',
-              }}
-            >
-              {t('tiers.title')}
-            </h2>
-            <p style={{ fontFamily: C.D, fontSize: 16, lineHeight: 1.6, color: C.sub, margin: 0, maxWidth: 720 }}>
-              {t('tiers.note')}
-            </p>
-          </div>
-        </ScrubReveal>
-
-        <ScrubCascade
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-            gap: 20,
-            alignItems: 'stretch',
-          }}
-        >
-          {PLAN_KEYS.map((key) => {
-            const isPro = key === 'pro'
-            const features = t.raw(`plans.${key}.features`) as string[]
-            const cta = t(`plans.${key}.cta`)
-            const period = t(`plans.${key}.period`)
-            return (
-              <div
-                key={key}
-                className="rs-card"
-                style={{
-                  background: C.surface,
-                  border: isPro ? `1.5px solid ${C.purple}` : `1px solid ${C.border}`,
-                  borderRadius: 16,
-                  padding: '36px 32px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                }}
-              >
-                {isPro && (
-                  <span
-                    style={{
-                      alignSelf: 'flex-start',
-                      fontFamily: C.D,
-                      fontSize: 11,
-                      fontWeight: 600,
-                      letterSpacing: '0.16em',
-                      textTransform: 'uppercase',
-                      color: C.purple,
-                      background: 'rgba(200,81,44,0.08)',
-                      borderRadius: 999,
-                      padding: '4px 10px',
-                      marginBottom: 14,
-                    }}
-                  >
-                    {t('plans.pro.name')}
-                  </span>
-                )}
-
-                <h3 style={{ fontFamily: C.D, fontSize: 18, fontWeight: 600, color: C.text, margin: '0 0 6px' }}>
-                  {t(`plans.${key}.name`)}
-                </h3>
-
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 10 }}>
-                  <span
-                    style={{
-                      fontFamily: C.D,
-                      fontSize: 'clamp(34px, 4vw, 44px)',
-                      fontWeight: 600,
-                      letterSpacing: '-1px',
-                      color: C.text,
-                    }}
-                  >
-                    {t(`plans.${key}.price`)}
-                  </span>
-                  {period && <span style={{ fontFamily: C.D, fontSize: 15, color: C.sub }}>{period}</span>}
-                </div>
-
-                <p style={{ fontFamily: C.D, fontSize: 15, lineHeight: 1.55, color: C.sub, margin: '0 0 22px' }}>
-                  {t(`plans.${key}.tagline`)}
-                </p>
-
-                <ul style={{ listStyle: 'none', margin: '0 0 28px', padding: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {features.map((f, i) => (
-                    <li
-                      key={i}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: 10,
-                        fontFamily: C.D,
-                        fontSize: 14,
-                        lineHeight: 1.5,
-                        color: C.text,
-                      }}
-                    >
-                      <span style={{ color: C.purple, fontWeight: 700, lineHeight: 1.5 }}>✓</span>
-                      <span>{f}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                <div style={{ marginTop: 'auto' }}>
-                  {key === 'custom' ? (
-                    <a
-                      href="mailto:support@rsends.com"
-                      style={{
-                        display: 'block',
-                        textAlign: 'center',
-                        fontFamily: C.D,
-                        fontSize: 15,
-                        fontWeight: 600,
-                        padding: '13px 24px',
-                        borderRadius: 8,
-                        textDecoration: 'none',
-                        background: 'transparent',
-                        color: C.text,
-                        border: `1.5px solid ${C.text}`,
-                      }}
-                    >
-                      {cta}
-                    </a>
-                  ) : (
-                    <Link
-                      href="/login"
-                      style={{
-                        display: 'block',
-                        textAlign: 'center',
-                        fontFamily: C.D,
-                        fontSize: 15,
-                        fontWeight: 600,
-                        padding: '13px 24px',
-                        borderRadius: 8,
-                        textDecoration: 'none',
-                        background: C.text,
-                        color: C.bg,
-                      }}
-                    >
-                      {cta}
-                    </Link>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </ScrubCascade>
       </section>
 
       {/* ── FAQ — always-open, left-aligned 2-col grid ─────────── */}
@@ -605,44 +438,4 @@ const splitCaption: React.CSSProperties = {
   color: C.sub,
   letterSpacing: 0,
   margin: '10px 0 0',
-}
-
-const illoStyle: React.CSSProperties = {
-  fontFamily: C.D,
-  fontSize: 11,
-  fontWeight: 400,
-  letterSpacing: 0,
-  color: C.sub,
-  textTransform: 'none',
-}
-
-function thStyle(align: 'left' | 'right', emphasized: boolean): React.CSSProperties {
-  return {
-    textAlign: align,
-    padding: '16px 20px',
-    fontFamily: C.D,
-    fontSize: 12,
-    fontWeight: 600,
-    letterSpacing: '0.04em',
-    textTransform: 'uppercase',
-    color: emphasized ? C.purple : C.sub,
-    background: emphasized ? 'rgba(200,81,44,0.04)' : 'transparent',
-    borderBottom: `1px solid ${C.border}`,
-    whiteSpace: 'nowrap',
-  }
-}
-
-function tdNum(last: boolean, align: 'left' | 'right', emphasized: boolean, color: string): React.CSSProperties {
-  return {
-    textAlign: align,
-    padding: '18px 20px',
-    fontFamily: C.M,
-    fontSize: 'clamp(16px, 1.6vw, 19px)',
-    fontWeight: emphasized ? 600 : 400,
-    color,
-    background: emphasized ? 'rgba(200,81,44,0.04)' : 'transparent',
-    borderBottom: last ? 'none' : `1px solid ${C.border}`,
-    fontVariantNumeric: 'tabular-nums',
-    whiteSpace: 'nowrap',
-  }
 }

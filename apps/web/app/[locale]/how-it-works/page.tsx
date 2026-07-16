@@ -19,8 +19,9 @@ const CONTAINER = 1160 // shared width for every section below the hero
 
 // ── Illustrative card data — hard-coded so every locale renders identical
 //    DM Mono figures. Addresses/order ids are obviously fake placeholders;
-//    the split percentages sum to 100 and the fee is a flat line item, never
-//    a percentage. The only REAL figure is the Base Sepolia tx in PROOF.
+//    the split percentages sum to 100. Amounts are a sample payment, not
+//    RSends pricing (the subscription is agreed per merchant at onboarding).
+//    The only REAL figure is the Base Sepolia tx in PROOF.
 const CHECKOUT = {
   order: 'Order #8421',
   total: '€49.00',
@@ -34,7 +35,6 @@ const SPLIT = {
     { addr: '0x…shop', pct: 88 },
     { addr: '0x…seller', pct: 12 },
   ],
-  fee: '€0.60',
 } as const
 
 const SETTLE = {
@@ -470,29 +470,11 @@ function SplitCard() {
         ))}
       </div>
 
-      {/* Fee — a SEPARATE flat line item, not part of the split % */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 12,
-          padding: rowPad,
-          borderTop: `1px solid ${C.border}`,
-          background: 'rgba(200,81,44,0.04)',
-        }}
-      >
-        <span style={{ fontFamily: C.D, fontSize: 14, fontWeight: 500, color: C.text }}>RSends fee</span>
-        <span style={{ fontFamily: C.M, fontSize: 16, fontWeight: 500, color: C.purple, fontVariantNumeric: 'tabular-nums' }}>
-          {SPLIT.fee}
-        </span>
-      </div>
-
-      <div style={{ padding: '12px 24px 18px' }}>
+      <div style={{ padding: '12px 24px 18px', borderTop: `1px solid ${C.border}` }}>
         <span style={{ fontFamily: C.D, fontSize: 13, color: C.sub }}>• routed in 1 tx</span>
       </div>
     </div>
-    <p style={splitCaption}>Illustrative example — not real customer data.</p>
+    <p style={splitCaption}>Illustrative example, not real customer data.</p>
     </div>
   )
 }
