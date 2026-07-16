@@ -51,7 +51,7 @@ from decimal import Decimal
 from typing import Optional
 
 from prometheus_client import Counter as PromCounter, Gauge
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import select, update
 
 from app.config import get_settings
 # Top-level import ON PURPOSE: registers indexer_cursors on Base at module
@@ -71,6 +71,10 @@ DEFAULT_CONFIRMATIONS = 2
 STALL_TICKS = 3
 # Cursor lag (blocks behind the final head) above which catch-up is logged.
 CATCHUP_LOG_LAG = 1_000
+# B-2: consecutive reconcile ticks on which a pending settlement's reorg
+# evidence (canonical hash mismatch AND tx receipt gone) must hold before we
+# reverse it. A single unverified RPC answer must never reverse a payment.
+REORG_EVIDENCE_TICKS = 3
 
 REDIS_LAST_BLOCK_KEY = "indexer:last_block:{chain_id}"
 
@@ -317,6 +321,30 @@ async def _finalized_head(rpc, settings, latest: int) -> int:
     return latest - conf
 
 
+# B-2 reorg-evidence counters: (chain_id, settlement.id) → consecutive ticks
+# the reorg evidence held. In-memory on purpose (no schema change): a restart
+# resets the counter, which only DELAYS a genuine reversal — never hastens one.
+_REORG_SUSPECTS: dict[tuple[int, int], int] = {}
+
+# Sentinel for "the receipt lookup itself failed" — must never count as
+# evidence in either direction.
+_RECEIPT_UNKNOWN = object()
+
+
+async def _tx_receipt_block_hash(rpc, tx_hash: str):
+    """blockHash of the tx's receipt (lowercase), None if the node reports no
+    receipt (tx gone), or _RECEIPT_UNKNOWN when the lookup failed / the answer
+    is malformed — the caller must treat that as 'no evidence'."""
+    try:
+        receipt = await rpc.call("eth_getTransactionReceipt", [tx_hash])
+    except Exception:  # pragma: no cover - RPC failure
+        return _RECEIPT_UNKNOWN
+    if receipt is None:
+        return None
+    h = (receipt.get("blockHash") or "").lower()
+    return h if h else _RECEIPT_UNKNOWN
+
+
 async def _canonical_block_hash(rpc, block_number: int, cache: dict) -> Optional[str]:
     """Canonical block hash at `block_number` (cached per tick). None if the
     block can't be resolved (RPC gap / not yet known) — caller must NOT treat
@@ -380,14 +408,20 @@ async def _record_settlement(chain_id: int, ev: dict) -> str:
             # Different block hash for the same (chain, tx, logIndex): the log was
             # re-included in a new block after a reorg. Reconcile instead of
             # deduping so we never double-count and never strand a stale row.
-            if existing.status == SettlementStatus.final and existing.webhook_fired_at:
-                # A previously FINAL log moved — finalized assumption broken.
-                logger.error(
-                    "[indexer] ALERT finalized settlement re-included in a new block "
-                    "(tx=%s old_hash=%s new_hash=%s) — reversing",
-                    ev["tx_hash"][:16], existing.block_hash, new_hash,
+            if existing.status == SettlementStatus.final:
+                # B-2: FINALIZED IS TERMINAL. A finalized payment is never
+                # auto-reversed — under finalized-tag operation its block
+                # cannot reorg, so a conflicting re-observation is provider
+                # noise or something that needs a human, not an auto-flip.
+                logger.critical(
+                    "[indexer] ALERT finalized settlement re-observed in a different "
+                    "block (tx=%s log=%s stored=%s/%s new=%s/%s) — NOT auto-reversing "
+                    "(finalized is terminal); manual investigation required",
+                    ev["tx_hash"][:16], ev["log_index"],
+                    existing.block_number, existing.block_hash,
+                    ev["block_number"], new_hash,
                 )
-                await _reverse_settlement(db, existing)
+                return "conflict"
             existing.block_number = ev["block_number"]
             existing.block_hash = new_hash
             existing.block_timestamp = block_dt
@@ -604,51 +638,96 @@ async def _reverse_settlement(db, settlement) -> None:
 
 
 async def _finalize_and_reconcile(chain_id: int, rpc, final_head: int) -> dict:
-    """Reconcile recorded settlements against the canonical chain:
+    """Reconcile PENDING settlements against the canonical chain:
 
       - PENDING + canonical hash + block <= final_head  → FINAL (pay + webhook once)
-      - PENDING/FINAL + hash no longer canonical         → REORGED (reverse effect)
-      - PENDING above final_head with canonical hash     → leave pending
+      - PENDING + persistent reorg evidence             → REORGED (reverse effect)
+      - PENDING above final_head with canonical hash    → leave pending
 
-    We re-verify recently-FINAL rows (within indexer_reorg_safety_depth of the
-    final head) so a deeper-than-expected reorg of an already-paid log is still
-    caught and reversed.
+    B-2 invariants:
+      * FINALIZED IS TERMINAL — final rows are not re-verified and can never be
+        reverted here. Under finalized-tag operation their blocks cannot reorg;
+        a conflicting later observation surfaces as the CRITICAL "conflict"
+        alert in the ingest path instead.
+      * A single unverified RPC answer never reverses a payment. A pending row
+        is reversed only when, on REORG_EVIDENCE_TICKS consecutive ticks, the
+        canonical block hash differs from the recorded one AND
+        eth_getTransactionReceipt reports the tx gone. Anything less resets
+        the evidence and does nothing — when uncertain, re-check later.
     """
     from app.db.session import async_session
     from app.models.settlement_models import PaymentSettlement, SettlementStatus
 
-    settings = get_settings()
-    safety = getattr(settings, "indexer_reorg_safety_depth", 64)
     finalized = reorged = 0
 
     async with async_session() as db:
         rows = (await db.execute(
             select(PaymentSettlement).where(
                 PaymentSettlement.chain_id == chain_id,
-                or_(
-                    PaymentSettlement.status == SettlementStatus.pending,
-                    and_(
-                        PaymentSettlement.status == SettlementStatus.final,
-                        PaymentSettlement.block_number >= final_head - safety,
-                    ),
-                ),
+                PaymentSettlement.status == SettlementStatus.pending,
             )
         )).scalars().all()
 
         cache: dict = {}
         for s in rows:
+            key = (chain_id, s.id)
+            if not s.block_hash:
+                continue  # unverifiable — never reverse on missing evidence
             canon = await _canonical_block_hash(rpc, s.block_number, cache)
             if canon is None:
-                continue  # can't verify right now — never reorg on an unknown block
-            if s.block_hash and canon == s.block_hash.lower():
+                # Can't verify right now — not contrary evidence either way.
+                _REORG_SUSPECTS.pop(key, None)
+                continue
+            if canon == s.block_hash.lower():
                 # Still canonical.
-                if s.status == SettlementStatus.pending and s.block_number <= final_head:
+                _REORG_SUSPECTS.pop(key, None)
+                if s.block_number <= final_head:
                     await _finalize_settlement(db, s, chain_id)
                     finalized += 1
-            else:
-                # Stored hash no longer matches the canonical block → reorged out.
-                await _reverse_settlement(db, s)
-                reorged += 1
+                continue
+
+            # Canonical hash differs — corroborate with the tx receipt before
+            # trusting a single block read.
+            receipt_hash = await _tx_receipt_block_hash(rpc, s.tx_hash)
+            if receipt_hash is _RECEIPT_UNKNOWN:
+                _REORG_SUSPECTS.pop(key, None)
+                continue
+            if receipt_hash is not None:
+                # The tx is alive somewhere. If it moved blocks, the ingest
+                # re-scan owns updating the row (direct log evidence); if the
+                # receipt still points at our stored block, the block read was
+                # provider noise. Either way: no reversal.
+                _REORG_SUSPECTS.pop(key, None)
+                if receipt_hash != s.block_hash.lower():
+                    logger.info(
+                        "[indexer] settlement tx=%s moved (receipt block %s ≠ stored %s)"
+                        " — awaiting ingest re-inclusion, not reversing",
+                        s.tx_hash[:16], receipt_hash[:18], s.block_hash[:18],
+                    )
+                continue
+
+            # Hash mismatch AND no receipt: reorg evidence for this tick.
+            ticks = _REORG_SUSPECTS.get(key, 0) + 1
+            if ticks < REORG_EVIDENCE_TICKS:
+                _REORG_SUSPECTS[key] = ticks
+                logger.warning(
+                    "[indexer] reorg suspected for settlement tx=%s block=%s "
+                    "(evidence tick %d/%d: canonical=%s, receipt=absent) — not "
+                    "reversing yet",
+                    s.tx_hash[:16], s.block_number, ticks, REORG_EVIDENCE_TICKS,
+                    canon[:18],
+                )
+                continue
+
+            # Evidence held for the full window → genuine reorg, reverse once.
+            _REORG_SUSPECTS.pop(key, None)
+            logger.error(
+                "[indexer] ALERT reorg confirmed over %d ticks for tx=%s block=%s "
+                "(canonical=%s, receipt=absent) — reversing",
+                REORG_EVIDENCE_TICKS, s.tx_hash[:16], s.block_number, canon[:18],
+            )
+            await _reverse_settlement(db, s)
+            reorged += 1
 
         await db.commit()
 

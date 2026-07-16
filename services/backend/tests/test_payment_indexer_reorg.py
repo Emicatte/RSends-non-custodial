@@ -131,17 +131,21 @@ def _make_log(*, invoice_id, tx_hash, block_number, block_hash, address=ROUTER,
 
 
 class FakeChain:
-    """Mock JSON-RPC: eth_blockNumber / eth_getBlockByNumber / eth_getLogs.
+    """Mock JSON-RPC: eth_blockNumber / eth_getBlockByNumber / eth_getLogs /
+    eth_getTransactionReceipt.
 
     Note: eth_getLogs intentionally returns ALL logs in range regardless of the
     `address` filter, so the indexer's per-log source-authenticity guard is the
     thing under test (simulates a buggy/hostile RPC returning extra logs).
+    `receipts` maps tx_hash → receipt blockHash; a missing/None entry means the
+    tx has no receipt (gone) — the reorg-evidence corroboration reads this.
     """
     def __init__(self):
         self.latest = 0
         self.finalized = 0
         self.block_hashes: dict[int, str] = {}
         self.logs: list[dict] = []
+        self.receipts: dict[str, str | None] = {}
 
     async def call(self, method, params, **kw):
         if method == "eth_blockNumber":
@@ -158,6 +162,9 @@ class FakeChain:
             f = int(params[0]["fromBlock"], 16)
             t = int(params[0]["toBlock"], 16)
             return [lg for lg in self.logs if f <= int(lg["blockNumber"], 16) <= t]
+        if method == "eth_getTransactionReceipt":
+            h = self.receipts.get(params[0].lower())
+            return None if h is None else {"blockHash": h}
         raise AssertionError(f"unexpected RPC {method}")
 
 
@@ -302,6 +309,9 @@ async def test_validation_mismatch_rejected_not_paid(webhook_calls, field, value
 # ═══════════════════════════════════════════════════════════════
 @pytest.mark.asyncio
 async def test_reorg_of_pending_settlement_marked_reorged(webhook_calls):
+    """B-2: a reorg of a PENDING settlement is honored only after
+    REORG_EVIDENCE_TICKS consecutive ticks of (hash mismatch + tx receipt gone)
+    — never on a single RPC answer."""
     from app.models.settlement_models import SettlementStatus
     from app.models.merchant_models import IntentStatus
 
@@ -313,8 +323,18 @@ async def test_reorg_of_pending_settlement_marked_reorged(webhook_calls):
              block_hash="0x" + "e5" * 32)
     await _record_settlement(CHAIN, ev)
 
-    # Reorg: block 100 now has a DIFFERENT canonical hash → settlement is stale.
+    # Reorg: block 100 now has a DIFFERENT canonical hash AND the tx is gone.
     rpc.block_hashes[100] = "0x" + "ff" * 32
+    rpc.receipts[ev["tx_hash"]] = None
+
+    # Evidence must persist: nothing reverses before the threshold tick.
+    # (getattr default keeps this a behavior-FAIL, not an AttributeError,
+    # against pre-B-2 code.)
+    for _ in range(getattr(idx, "REORG_EVIDENCE_TICKS", 3) - 1):
+        res = await _finalize_and_reconcile(CHAIN, rpc, final_head=200)
+        assert res["reorged"] == 0
+        assert (await _settlement(ev["tx_hash"])).status == SettlementStatus.pending
+
     res = await _finalize_and_reconcile(CHAIN, rpc, final_head=200)
     assert res["reorged"] == 1
     assert (await _settlement(ev["tx_hash"])).status == SettlementStatus.reorged
@@ -323,7 +343,10 @@ async def test_reorg_of_pending_settlement_marked_reorged(webhook_calls):
 
 
 @pytest.mark.asyncio
-async def test_reorg_after_finalize_reverses_and_signals(webhook_calls):
+async def test_finalized_settlement_survives_reported_reorg(webhook_calls):
+    """B-2: FINALIZED IS TERMINAL. A settlement past finality is never reverted
+    by the reconciler, no matter what the RPC reports — no payment.reversed.
+    (Replaces the pre-B-2 pin that reversed a finalized payment on one answer.)"""
     from app.models.settlement_models import SettlementStatus
     from app.models.merchant_models import IntentStatus
 
@@ -331,7 +354,7 @@ async def test_reorg_after_finalize_reverses_and_signals(webhook_calls):
     iid = await _make_intent(invoice_id=inv)
     H = "0x" + "16" * 32
     rpc = FakeChain()
-    rpc.block_hashes[180] = H  # within reorg_safety_depth (default 64) of final_head 200
+    rpc.block_hashes[180] = H
     ev = _ev(invoice_id=inv, tx_hash="0x" + "16" * 32, block_number=180, block_hash=H)
 
     await _record_settlement(CHAIN, ev)
@@ -339,13 +362,17 @@ async def test_reorg_after_finalize_reverses_and_signals(webhook_calls):
     assert (await _intent(iid)).status == IntentStatus.paid
     assert webhook_calls == ["payment.completed"]
 
-    # Deep reorg of an already-finalized block (still within safety window).
+    # RPC now claims block 180 has a different hash and the tx is gone —
+    # persistently. The finalized payment must not move.
     rpc.block_hashes[180] = "0x" + "fe" * 32
-    res = await _finalize_and_reconcile(CHAIN, rpc, final_head=200)
-    assert res["reorged"] == 1
-    assert (await _settlement(ev["tx_hash"])).status == SettlementStatus.reorged
-    assert (await _intent(iid)).status == IntentStatus.pending  # un-paid
-    assert webhook_calls == ["payment.completed", "payment.reversed"]
+    rpc.receipts[ev["tx_hash"]] = None
+    for _ in range(getattr(idx, "REORG_EVIDENCE_TICKS", 3) + 2):
+        res = await _finalize_and_reconcile(CHAIN, rpc, final_head=200)
+        assert res["reorged"] == 0
+
+    assert (await _settlement(ev["tx_hash"])).status == SettlementStatus.final
+    assert (await _intent(iid)).status == IntentStatus.paid
+    assert webhook_calls == ["payment.completed"]
 
 
 # ═══════════════════════════════════════════════════════════════
