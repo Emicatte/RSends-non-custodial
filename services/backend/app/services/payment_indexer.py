@@ -455,8 +455,17 @@ async def _finalize_settlement(db, settlement, chain_id: int) -> None:
     intent = (await db.execute(
         select(PaymentIntent).where(PaymentIntent.intent_id == settlement.intent_id)
     )).scalar_one_or_none()
-    if intent is None or intent.status != IntentStatus.pending:
+    # `expired` is payable too: expiry may have won the race against finality
+    # (30-min timer vs ~13-min L1 finality). Money on-chain wins over the
+    # timer — rescue the intent instead of stranding a settled payment.
+    if intent is None or intent.status not in (IntentStatus.pending, IntentStatus.expired):
         return  # already handled / not payable
+    if intent.status == IntentStatus.expired:
+        logger.warning(
+            "[indexer] late settlement rescued expired intent %s (tx=%s) — "
+            "expiry raced ahead of finality",
+            intent.intent_id, settlement.tx_hash[:16],
+        )
 
     ev = {
         "merchant": settlement.merchant,

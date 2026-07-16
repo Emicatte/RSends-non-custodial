@@ -27,6 +27,7 @@ from app.models.merchant_models import (
 )
 from app.models.api_key_models import ApiKey
 from app.models.org_models import Organization
+from app.models.settlement_models import PaymentSettlement, SettlementStatus
 from app.models.user_wallets_models import UserWallet
 from app.services.audit_service import log_event
 from app.services.key_usage_service import (
@@ -120,6 +121,42 @@ async def resolve_recipient(
     if wallet:
         return wallet.lower()
     raise HTTPException(status_code=422, detail=_MISSING)
+
+
+# ── Settlement hold (B-1) ────────────────────────────────────────
+#
+# Money on-chain wins over the expiry timer, always. An intent with an observed
+# (pending) or final settlement must never be flipped to expired — the indexer
+# will finalize it (or rescue it if expiry already won a race). `rejected`
+# (validation mismatch) and `reorged` (rolled back) settlements do NOT hold.
+
+SETTLEMENT_HOLD_STATUSES = (SettlementStatus.pending, SettlementStatus.final)
+
+
+def settlement_hold_exists():
+    """Correlated EXISTS for queries over PaymentIntent: true when the intent
+    has a settlement that must win over the expiry timer."""
+    return (
+        select(PaymentSettlement.id)
+        .where(
+            PaymentSettlement.intent_id == PaymentIntent.intent_id,
+            PaymentSettlement.status.in_(SETTLEMENT_HOLD_STATUSES),
+        )
+        .exists()
+    )
+
+
+async def has_settlement_hold(db: AsyncSession, intent_id: str) -> bool:
+    """Single-intent form of the same predicate (read-time expiry guards)."""
+    row = (await db.execute(
+        select(PaymentSettlement.id)
+        .where(
+            PaymentSettlement.intent_id == intent_id,
+            PaymentSettlement.status.in_(SETTLEMENT_HOLD_STATUSES),
+        )
+        .limit(1)
+    )).scalar_one_or_none()
+    return row is not None
 
 
 # ── Shared intent-list query (Phase C) ───────────────────────────

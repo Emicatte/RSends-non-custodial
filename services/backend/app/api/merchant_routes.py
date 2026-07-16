@@ -46,6 +46,7 @@ from app.services.intent_service import (
     resolve_recipient,
     list_org_intents,
     create_intent,
+    has_settlement_hold,
 )
 from app.services.router_registry import (
     derive_invoice_id,
@@ -218,12 +219,17 @@ async def get_payment_intent(
             },
         )
 
-    # Auto-expire se scaduto ma ancora pending
+    # Auto-expire se scaduto ma ancora pending — MAI se esiste un settlement
+    # on-chain osservato/finale (B-1: i soldi vincono sul timer).
     # SQLite non preserva timezone info — normalize per confronto sicuro
     expires_at = intent.expires_at
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
-    if intent.status == IntentStatus.pending and expires_at < datetime.now(timezone.utc):
+    if (
+        intent.status == IntentStatus.pending
+        and expires_at < datetime.now(timezone.utc)
+        and not await has_settlement_hold(db, intent.intent_id)
+    ):
         intent.status = IntentStatus.expired
         await db.commit()
 
