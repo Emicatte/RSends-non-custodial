@@ -79,7 +79,8 @@ def expire_pending_intents() -> dict:
 
 async def _expire_pending_intents_async() -> dict:
     from app.db.session import async_session
-    from app.services.webhook_service import expire_stale_intents, send_webhook
+    from app.services.webhook_service import send_webhook
+    from app.services.intent_service import settlement_hold_exists
     from app.models.merchant_models import PaymentIntent, IntentStatus
     from sqlalchemy import select, and_
     from datetime import datetime, timezone
@@ -88,12 +89,15 @@ async def _expire_pending_intents_async() -> dict:
 
     async with async_session() as session:
         async with session.begin():
-            # Trova intent pendenti scaduti
+            # Trova intent pendenti scaduti — MAI quelli con un settlement
+            # on-chain osservato/finale (B-1): i soldi vincono sul timer,
+            # l'indexer li finalizzerà (o farà rescue se perdiamo la corsa).
             result = await session.execute(
                 select(PaymentIntent).where(
                     and_(
                         PaymentIntent.status == IntentStatus.pending,
                         PaymentIntent.expires_at <= now,
+                        ~settlement_hold_exists(),
                     )
                 )
             )

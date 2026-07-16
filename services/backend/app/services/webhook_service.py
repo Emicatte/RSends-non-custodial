@@ -961,7 +961,13 @@ async def finalize_match(
 # ═══════════════════════════════════════════════════════════════
 
 async def expire_stale_intents(db: AsyncSession) -> int:
-    """Segna come expired tutti gli intent pending scaduti. Ritorna il count."""
+    """Segna come expired tutti gli intent pending scaduti. Ritorna il count.
+
+    B-1: esclude gli intent con un settlement on-chain osservato/finale —
+    un pagamento arrivato on-chain non va mai negato dal timer di scadenza.
+    """
+    from app.services.intent_service import settlement_hold_exists
+
     now = datetime.now(timezone.utc)
 
     result = await db.execute(
@@ -969,6 +975,7 @@ async def expire_stale_intents(db: AsyncSession) -> int:
             and_(
                 PaymentIntent.status == IntentStatus.pending,
                 PaymentIntent.expires_at <= now,
+                ~settlement_hold_exists(),
             )
         )
     )
