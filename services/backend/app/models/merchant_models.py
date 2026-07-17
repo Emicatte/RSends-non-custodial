@@ -11,9 +11,10 @@ from datetime import datetime, timezone, timedelta
 from sqlalchemy import (
     Column, String, Float, Boolean, DateTime, Integer,
     Text, ForeignKey, Index, Enum as SAEnum, JSON,
+    CheckConstraint, UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional
 import enum
 import hashlib
@@ -158,9 +159,51 @@ class PaymentIntent(Base):
     # taken atomically on-chain by RSendsRouter (if enabled); RSends never
     # sweeps funds. Billing is derived from settled on-chain payments instead.
 
+    # NON-CUSTODIAL SPLIT: quando l'intent è una split, `recipient` resta NULL
+    # (nessun payee singolo) e i destinatari vivono in payment_intent_recipients
+    # (ordine = position, share in bps ESATTI a somma 10000). Eager load
+    # (selectin) così serializer e indexer li hanno sempre senza lazy-IO async.
+    split_recipients = relationship(
+        "PaymentIntentRecipient",
+        order_by="PaymentIntentRecipient.position",
+        lazy="selectin",
+        viewonly=True,
+    )
+
     __table_args__ = (
         Index("ix_intent_merchant_status", "merchant_id", "status"),
         Index("ix_intent_status_expires", "status", "expires_at"),
+    )
+
+
+# ═══════════════════════════════════════════════════════════════
+#  PaymentIntentRecipient — destinatari di una split (bps, somma == 10000)
+# ═══════════════════════════════════════════════════════════════
+
+class PaymentIntentRecipient(Base):
+    """One leg of a split intent. position 0 = primary (receives the integer
+    remainder on-chain). The BPS-exact invariant (sum == 10000) is enforced at
+    the schema gate AND by the contract; the DB check bounds each single leg."""
+    __tablename__ = "payment_intent_recipients"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    intent_id = Column(
+        String(64),
+        ForeignKey("payment_intents.intent_id"),
+        nullable=False,
+        index=True,
+    )
+    position = Column(Integer, nullable=False)
+    address = Column(String(42), nullable=False)     # lowercase, regex-gated
+    share_bps = Column(Integer, nullable=False)
+    label = Column(String(64), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("intent_id", "position", name="uq_intent_recipient_position"),
+        UniqueConstraint("intent_id", "address", name="uq_intent_recipient_address"),
+        CheckConstraint(
+            "share_bps >= 1 AND share_bps <= 10000", name="ck_intent_recipient_bps"
+        ),
     )
 
 
@@ -242,6 +285,29 @@ class WebhookDelivery(Base):
 
 # ── Payment Intent ────────────────────────────────────────────
 
+class SplitRecipientInput(BaseModel):
+    """One split leg in a create request: EVM address + integer basis points."""
+    address: str = Field(..., max_length=42, description="Indirizzo destinatario del leg")
+    share_bps: int = Field(..., ge=1, le=10000, description="Quota in basis points (1..10000)")
+    label: Optional[str] = Field(None, max_length=64, description="Etichetta display opzionale")
+
+    @field_validator("address")
+    @classmethod
+    def validate_address(cls, v: str) -> str:
+        import re
+        if not re.match(r"^0x[a-fA-F0-9]{40}$", v):
+            raise ValueError("split address deve essere un indirizzo Ethereum valido")
+        return v.lower()
+
+
+class SplitRecipientOut(BaseModel):
+    """One split leg as serialized in responses (merchant list + public view)."""
+    address: str
+    share_bps: int
+    position: int
+    label: Optional[str] = None
+
+
 class CreatePaymentIntentRequest(BaseModel):
     """POST /api/v1/merchant/payment-intent"""
     amount: float = Field(..., gt=0, description="Importo richiesto")
@@ -256,6 +322,40 @@ class CreatePaymentIntentRequest(BaseModel):
     amount_tolerance_percent: float = Field(1.0, ge=0.0, le=10.0, description="Tolleranza percentuale sull'importo (default 1%)")
     allow_partial: bool = Field(False, description="Accetta pagamenti parziali (>=50% dell'importo)?")
     allow_overpayment: bool = Field(True, description="Accetta pagamenti in eccesso?")
+    split: Optional[list[SplitRecipientInput]] = Field(
+        None,
+        description=(
+            "Split non-custodial: 2..20 destinatari con quote in basis points "
+            "a somma ESATTA 10000. Mutuamente esclusivo con `recipient`."
+        ),
+    )
+
+    @field_validator("split")
+    @classmethod
+    def validate_split(cls, v: Optional[list[SplitRecipientInput]]) -> Optional[list[SplitRecipientInput]]:
+        if v is None:
+            return v
+        # Validate & REJECT, never coerce — the BPS-exact invariant lives here
+        # (schema gate) AND in the contract (revert). No "close enough".
+        if not (2 <= len(v) <= 20):
+            raise ValueError("split richiede da 2 a 20 destinatari")
+        addresses = [r.address for r in v]
+        if len(set(addresses)) != len(addresses):
+            raise ValueError("split: indirizzi duplicati non ammessi")
+        total_bps = sum(r.share_bps for r in v)
+        if total_bps != 10000:
+            raise ValueError(
+                f"split: le quote devono sommare esattamente a 10000 bps (ricevuto {total_bps})"
+            )
+        return v
+
+    @model_validator(mode="after")
+    def validate_split_recipient_exclusive(self):
+        if self.split is not None and self.recipient is not None:
+            raise ValueError(
+                "recipient e split sono mutuamente esclusivi: o un payee singolo o una split"
+            )
+        return self
 
     @field_validator("late_payment_policy")
     @classmethod
@@ -294,13 +394,27 @@ class CreatePaymentIntentRequest(BaseModel):
         return v
 
 
+class OnchainSplit(BaseModel):
+    """Split fan-out payload for RSendsSplitRouter.paySplit* (camelCase keys).
+
+    `amounts` are the server-computed per-leg base units (floor division,
+    remainder to index 0 — bit-identical to the contract math): the checkout
+    renders them and passes ONLY total+sharesBps on-chain, so the contract
+    recomputes and guarantees the same numbers.
+    """
+    router: str              # RSendsSplitRouter contract address (fee-less, ownerless)
+    recipients: list[str]
+    sharesBps: list[int]
+    amounts: list[str]       # per-leg base units, index-aligned with recipients
+
+
 class OnchainPayment(BaseModel):
     """Non-custodial on-chain payment instructions for the payer's wallet.
 
     camelCase keys match the frontend Pay flow (apps/web/app/pay/[intentId]).
     """
     invoiceId: str
-    merchant: str
+    merchant: str            # single payee; "" when `split` is set (no single payee)
     token: str               # 0x0000...0000 == native ETH
     amount: str              # base units (wei / token decimals)
     fee: Optional[str] = None       # fee in base units, live from quoteFee (None if unavailable)
@@ -319,6 +433,10 @@ class OnchainPayment(BaseModel):
     permitType: Optional[str] = None
     permitVersion: Optional[str] = None
     feeUnavailable: bool = False    # True if live quoteFee failed → frontend quotes on-chain itself
+    # Split fan-out (RSendsSplitRouter). When set: function is paySplit*/
+    # paySplitNative, `router` is the split router, fee is "0" (fee-less by
+    # design — subscription monetization), and `merchant` is "".
+    split: Optional[OnchainSplit] = None
 
 
 class PaymentIntentResponse(BaseModel):
@@ -331,6 +449,7 @@ class PaymentIntentResponse(BaseModel):
     currency: str
     chain: str = "BASE"
     recipient: Optional[str]
+    split: Optional[list[SplitRecipientOut]] = None  # N-way split legs (recipient is NULL)
     network: Optional[str]
     expected_sender: Optional[str]
     status: str
@@ -473,6 +592,7 @@ class MerchantTransactionItem(BaseModel):
     chain: str = "BASE"
     status: str
     recipient: Optional[str] = None  # Phase C: on-chain payee (settlement wallet or override)
+    split: Optional[list[SplitRecipientOut]] = None  # N-way split legs (recipient is None)
     tx_hash: Optional[str]
     matched_tx_hash: Optional[str] = None
     metadata: Optional[dict]

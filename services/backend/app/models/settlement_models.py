@@ -39,6 +39,7 @@ from sqlalchemy import (
     Enum as SAEnum,
     Index,
     Integer,
+    JSON,
     Numeric,
     String,
     UniqueConstraint,
@@ -104,6 +105,13 @@ class PaymentSettlement(Base):
 
     # ── Linkage to the off-chain intent (best-effort match) ─────
     intent_id = Column(String(64), nullable=True, index=True)
+
+    # ── Split fan-out detail (RSendsSplitRouter.SplitPaymentMade) ─
+    # One settlement row per split payment (the event is aggregate — atomicity
+    # is structural); the validated per-leg breakdown is recorded here:
+    # [{"address", "share_bps", "amount"}], index 0 = primary. NULL for
+    # single-recipient (PaymentMade) settlements.
+    split_legs = Column(JSON, nullable=True)
 
     created_at = Column(
         DateTime(timezone=True),

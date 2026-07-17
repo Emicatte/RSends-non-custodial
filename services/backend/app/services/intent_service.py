@@ -23,6 +23,8 @@ from app.models.merchant_models import (
     MerchantTransactionItem,
     MerchantTransactionListResponse,
     PaymentIntent,
+    PaymentIntentRecipient,
+    SplitRecipientOut,
     generate_reference_id,
 )
 from app.models.api_key_models import ApiKey
@@ -37,6 +39,7 @@ from app.services.key_usage_service import (
 from app.services.router_registry import (
     chain_is_supported,
     derive_invoice_id,
+    split_router_address_for,
     token_is_enabled,
 )
 
@@ -167,6 +170,27 @@ async def has_settlement_hold(db: AsyncSession, intent_id: str) -> bool:
 # environment isolation live IN the query (both predicates required — an owner's
 # test and live keys share the same merchant_id).
 
+def split_out(i: PaymentIntent) -> list[SplitRecipientOut] | None:
+    """The intent's split legs as response models, or None for a single-payee
+    intent. Shared by every serializer (merchant GET/list, session list) so the
+    split view can never drift between surfaces. Uses the load-safe accessor —
+    never triggers an async lazy-load."""
+    from app.services.router_registry import loaded_split_recipients
+
+    legs = loaded_split_recipients(i)
+    if not legs:
+        return None
+    return [
+        SplitRecipientOut(
+            address=leg.address,
+            share_bps=leg.share_bps,
+            position=leg.position,
+            label=leg.label,
+        )
+        for leg in legs
+    ]
+
+
 def _intent_to_item(i: PaymentIntent) -> MerchantTransactionItem:
     """Serialize an intent to the allowlisted transaction record (both paths)."""
     return MerchantTransactionItem(
@@ -177,6 +201,7 @@ def _intent_to_item(i: PaymentIntent) -> MerchantTransactionItem:
         chain=i.chain or "BASE",
         status=i.status.value,
         recipient=i.recipient,
+        split=split_out(i),
         tx_hash=i.tx_hash,
         matched_tx_hash=i.matched_tx_hash,
         metadata=i.metadata_,
@@ -333,19 +358,36 @@ async def create_intent(
     # resolve via THAT org — a settlement-wallet-only merchant has no
     # SIWE-linked wallet for the reverse lookup, but its keys are org-stamped.
     # Wallet-minted keys (org_id NULL) keep the reverse lookup. Fail-closed 422.
-    recipient_org = org_id
-    if recipient_org is None and key_id is not None:
-        try:
-            recipient_org = (
-                await db.execute(
-                    select(ApiKey.org_id).where(ApiKey.id == int(key_id))
-                )
-            ).scalar_one_or_none()
-        except (TypeError, ValueError):
-            recipient_org = None  # non-numeric key_id (e.g. debug bypass)
-    recipient = await resolve_recipient(
-        db, merchant_id, payload.recipient, org_id=recipient_org
-    )
+    #
+    # SPLIT: a valid split set (schema-gated: 2..20 legs, no dupes, bps sum
+    # EXACTLY 10000, mutually exclusive with `recipient`) IS the recipient set —
+    # `recipient` stays NULL and the legs go to payment_intent_recipients.
+    # Fail-closed on config: without a deployed+configured RSendsSplitRouter
+    # for the chain, no split intent may exist (it would be unpayable and the
+    # indexer couldn't validate it).
+    if payload.split is not None:
+        if split_router_address_for(requested_chain) is None:
+            raise HTTPException(422, {
+                "error": "SPLIT_UNAVAILABLE",
+                "message": (
+                    f"Split payments are not enabled on chain {requested_chain}."
+                ),
+            })
+        recipient = None
+    else:
+        recipient_org = org_id
+        if recipient_org is None and key_id is not None:
+            try:
+                recipient_org = (
+                    await db.execute(
+                        select(ApiKey.org_id).where(ApiKey.id == int(key_id))
+                    )
+                ).scalar_one_or_none()
+            except (TypeError, ValueError):
+                recipient_org = None  # non-numeric key_id (e.g. debug bypass)
+        recipient = await resolve_recipient(
+            db, merchant_id, payload.recipient, org_id=recipient_org
+        )
 
     intent = PaymentIntent(
         intent_id=intent_id,
@@ -368,7 +410,28 @@ async def create_intent(
         expires_at=now + timedelta(minutes=payload.expires_in_minutes),
     )
     db.add(intent)
+    if payload.split is not None:
+        # Same transaction as the intent — a split intent can never exist
+        # without its legs (position 0 = primary, receives the remainder).
+        for position, leg in enumerate(payload.split):
+            db.add(PaymentIntentRecipient(
+                intent_id=intent_id,
+                position=position,
+                address=leg.address,
+                share_bps=leg.share_bps,
+                label=leg.label,
+            ))
     await db.flush()
+    # Populate the (selectin) relationship on the freshly built instance — an
+    # async lazy-load on attribute access would raise MissingGreenlet when the
+    # caller serializes the response. Split: read the flushed legs back; single:
+    # empty by construction, no query needed.
+    if payload.split is not None:
+        await db.refresh(intent, ["split_recipients"])
+    else:
+        from sqlalchemy.orm.attributes import set_committed_value
+
+        set_committed_value(intent, "split_recipients", [])
 
     await log_event(
         db,
@@ -389,6 +452,14 @@ async def create_intent(
             "allow_partial": payload.allow_partial,
             "allow_overpayment": payload.allow_overpayment,
             "expires_in_minutes": payload.expires_in_minutes,
+            "split": (
+                [
+                    {"address": leg.address, "share_bps": leg.share_bps}
+                    for leg in payload.split
+                ]
+                if payload.split is not None
+                else None
+            ),
         },
     )
 

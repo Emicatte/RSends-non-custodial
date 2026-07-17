@@ -130,6 +130,19 @@ def router_address_for(chain: str) -> Optional[str]:
     return routers.get(str(cid)) or routers.get(cid)
 
 
+def split_router_address_for(chain: str) -> Optional[str]:
+    """RSendsSplitRouter address for the chain (settings.split_router_addresses).
+
+    None ⇒ splits are NOT enabled on this chain — intent creation fail-closes
+    (422 SPLIT_UNAVAILABLE) and build_onchain_payment returns no instructions.
+    """
+    cid = chain_id_for(chain)
+    if cid is None:
+        return None
+    routers = getattr(get_settings(), "split_router_addresses", {}) or {}
+    return routers.get(str(cid)) or routers.get(cid)
+
+
 def _canonical_chain(chain: str) -> Optional[str]:
     """Normalize a chain name to the registry key (resolves aliases like 'eth'→'ethereum')."""
     name = (chain or "").lower()
@@ -260,6 +273,78 @@ def build_pay_with_permit_calldata(
     )
 
 
+def loaded_split_recipients(intent) -> list:
+    """The intent's split legs WITHOUT ever triggering an async lazy-load
+    (which would raise MissingGreenlet outside a greenlet context).
+
+    Query-loaded intents always have the relationship populated (lazy=selectin
+    fires at query time); an UNLOADED relationship only occurs on manually
+    constructed instances (tests/harnesses), which by construction have no
+    legs — treat as empty rather than guessing with IO."""
+    try:
+        from sqlalchemy import inspect as _sa_inspect
+
+        if "split_recipients" in _sa_inspect(intent).unloaded:
+            return []
+    except Exception:  # not an ORM instance (plain stub) — fall through
+        pass
+    return getattr(intent, "split_recipients", None) or []
+
+
+def build_pay_split_calldata(
+    invoice_id: str,
+    token: str,
+    total_base_units: int,
+    recipients: list[str],
+    shares_bps: list[int],
+) -> str:
+    """calldata for paySplit(bytes32 invoiceId, address token, uint256 totalAmount,
+    address[] recipients, uint16[] sharesBps) — two dynamic tails after a 5-word head."""
+    sel = _selector("paySplit(bytes32,address,uint256,address[],uint16[])").hex()
+    n = len(recipients)
+    offset_recipients = 5 * 32
+    offset_shares = offset_recipients + 32 * (1 + n)
+    return (
+        "0x"
+        + sel
+        + _enc_bytes32(invoice_id)
+        + _enc_addr(token)
+        + _enc_uint(total_base_units)
+        + _enc_uint(offset_recipients)
+        + _enc_uint(offset_shares)
+        + _enc_uint(n)
+        + "".join(_enc_addr(a) for a in recipients)
+        + _enc_uint(n)
+        + "".join(_enc_uint(b) for b in shares_bps)
+    )
+
+
+def build_pay_split_native_calldata(
+    invoice_id: str,
+    total_base_units: int,
+    recipients: list[str],
+    shares_bps: list[int],
+) -> str:
+    """calldata for paySplitNative(bytes32 invoiceId, uint256 totalAmount,
+    address[] recipients, uint16[] sharesBps) — value must equal totalAmount."""
+    sel = _selector("paySplitNative(bytes32,uint256,address[],uint16[])").hex()
+    n = len(recipients)
+    offset_recipients = 4 * 32
+    offset_shares = offset_recipients + 32 * (1 + n)
+    return (
+        "0x"
+        + sel
+        + _enc_bytes32(invoice_id)
+        + _enc_uint(total_base_units)
+        + _enc_uint(offset_recipients)
+        + _enc_uint(offset_shares)
+        + _enc_uint(n)
+        + "".join(_enc_addr(a) for a in recipients)
+        + _enc_uint(n)
+        + "".join(_enc_uint(b) for b in shares_bps)
+    )
+
+
 async def quote_fee_onchain(
     chain_id: int, router: str, token: str, amount_base_units: int
 ) -> Optional[int]:
@@ -315,6 +400,54 @@ async def build_onchain_payment(intent) -> Optional[dict]:
     # STATIC permit policy from the registry — eip2612 → permit flow, else approve+pay.
     # The frontend reads these; no runtime "does this token support permit" introspection.
     pol = fee_policy_for(chain, intent.currency) or {}
+
+    # ── SPLIT intent → RSendsSplitRouter instructions (fee-less) ──
+    split_legs = loaded_split_recipients(intent)
+    if split_legs:
+        split_router = split_router_address_for(chain)
+        if split_router is None:
+            return None  # split router not configured → graceful fallback
+
+        legs = sorted(split_legs, key=lambda leg: leg.position)
+        recipients = [leg.address.lower() for leg in legs]
+        shares = [leg.share_bps for leg in legs]
+        from app.services.split_math import compute_split_amounts
+        amounts = compute_split_amounts(amount_base, shares)
+
+        calldata = (
+            build_pay_split_native_calldata(invoice_id, amount_base, recipients, shares)
+            if is_native
+            else build_pay_split_calldata(
+                invoice_id, token_addr, amount_base, recipients, shares
+            )
+        )
+        return {
+            "invoiceId": invoice_id,
+            "merchant": "",  # no single payee — the split IS the recipient set
+            "token": token_addr,
+            "amount": str(amount_base),
+            "chainId": cid,
+            "router": split_router,
+            "function": "paySplitNative" if is_native else "paySplit",
+            "decimals": decimals,
+            "isNative": is_native,
+            "permitType": pol.get("permitType", "none"),
+            "permitVersion": pol.get("permitVersion"),
+            # RSendsSplitRouter takes NO fee (subscription monetization) —
+            # the payer parts with exactly the amount.
+            "fee": "0",
+            "total": str(amount_base),
+            "maxFee": None,
+            "calldata": calldata,
+            "payWithPermitCalldata": None,  # permit variant built client-side via ABI
+            "feeUnavailable": False,
+            "split": {
+                "router": split_router,
+                "recipients": recipients,
+                "sharesBps": shares,
+                "amounts": [str(a) for a in amounts],
+            },
+        }
 
     out = {
         "invoiceId": invoice_id,
