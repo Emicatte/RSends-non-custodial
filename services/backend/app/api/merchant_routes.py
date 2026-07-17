@@ -47,6 +47,7 @@ from app.services.intent_service import (
     list_org_intents,
     create_intent,
     has_settlement_hold,
+    split_out,
 )
 from app.services.router_registry import (
     derive_invoice_id,
@@ -129,6 +130,7 @@ async def _intent_to_response(intent: PaymentIntent) -> PaymentIntentResponse:
         currency=intent.currency,
         chain=intent.chain or "BASE",
         recipient=intent.recipient,
+        split=split_out(intent),
         network=intent.network,
         expected_sender=intent.expected_sender,
         status=intent.status.value,

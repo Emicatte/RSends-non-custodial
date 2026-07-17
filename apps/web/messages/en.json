@@ -1466,7 +1466,8 @@
         "copyLink": "Copy link",
         "copied": "Copied",
         "cancel": "Cancel",
-        "cancelConfirm": "Cancel this payment request?"
+        "cancelConfirm": "Cancel this payment request?",
+        "split": "Split"
       },
       "create": {
         "title": "New payment request",
@@ -1493,8 +1494,15 @@
         "submitting": "Creating…",
         "errors": {
           "gate": "Set your settlement wallet or enter a recipient first.",
-          "generic": "Couldn't create the payment request. Please try again."
-        }
+          "generic": "Couldn't create the payment request. Please try again.",
+          "splitUnavailable": "Split payments aren't enabled yet on this network."
+        },
+        "splitToggle": "Split payment",
+        "splitAdd": "Add recipient",
+        "splitRemove": "Remove",
+        "splitShare": "Share %",
+        "splitTotal": "Total",
+        "splitHelp": "Shares must total exactly 100%."
       }
     }
   },
@@ -1607,6 +1615,9 @@
   "pay": {
     "summary": {
       "gasNote": "Your wallet adds a small network gas fee on top."
+    },
+    "split": {
+      "title": "Split between {count} recipients"
     },
     "trust": {
       "nonCustodial": "Funds go directly to the merchant's wallet. RSends never holds your money.",

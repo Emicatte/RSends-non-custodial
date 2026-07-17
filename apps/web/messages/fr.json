@@ -1467,7 +1467,8 @@
         "copyLink": "Copier le lien",
         "copied": "Copié",
         "cancel": "Annuler",
-        "cancelConfirm": "Annuler cette demande de paiement ?"
+        "cancelConfirm": "Annuler cette demande de paiement ?",
+        "split": "Réparti"
       },
       "create": {
         "title": "Nouvelle demande de paiement",
@@ -1494,8 +1495,15 @@
         "submitting": "Création…",
         "errors": {
           "gate": "Configurez votre portefeuille de règlement ou saisissez un destinataire.",
-          "generic": "Impossible de créer la demande de paiement. Réessayez."
-        }
+          "generic": "Impossible de créer la demande de paiement. Réessayez.",
+          "splitUnavailable": "Les paiements répartis ne sont pas encore activés sur ce réseau."
+        },
+        "splitToggle": "Paiement réparti",
+        "splitAdd": "Ajouter un destinataire",
+        "splitRemove": "Retirer",
+        "splitShare": "Part %",
+        "splitTotal": "Total",
+        "splitHelp": "Les parts doivent totaliser exactement 100 %."
       }
     }
   },
@@ -1608,6 +1616,9 @@
   "pay": {
     "summary": {
       "gasNote": "Votre portefeuille ajoute de petits frais de réseau (gas)."
+    },
+    "split": {
+      "title": "Réparti entre {count} destinataires"
     },
     "trust": {
       "nonCustodial": "Les fonds vont directement au portefeuille du marchand. RSends ne détient jamais votre argent.",

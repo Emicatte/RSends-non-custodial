@@ -36,7 +36,6 @@ import pytest
 _BACKEND_ROOT = Path(__file__).resolve().parents[1]
 _VERSIONS_DIR = _BACKEND_ROOT / "alembic" / "versions"
 
-HEAD = "0012_indexer_cursors"
 # Alembic's hardcoded alembic_version.version_num width.
 _VERSION_NUM_MAX = 32
 
@@ -47,6 +46,34 @@ _needs_pg = pytest.mark.skipif(
 )
 
 _REVISION_RE = re.compile(r'^revision\s*=\s*"([^"]+)"', re.MULTILINE)
+_DOWN_REVISION_RE = re.compile(r'^down_revision\s*=\s*"([^"]+)"', re.MULTILINE)
+
+
+def _compute_head() -> str:
+    """The repo's single migration head, derived from the version files' chain
+    topology (the revision no other file lists as its down_revision) — a
+    hardcoded HEAD went stale every time a migration landed. Never imports the
+    alembic library (the local alembic/ script dir shadows it, see module
+    docstring). The single-head assert also catches an accidentally BRANCHED
+    chain (two parallel migrations off the same parent), which filename
+    sorting would silently miss. The root's ``down_revision = None`` is
+    unquoted, so it correctly doesn't match the regex."""
+    revisions: dict[str, str | None] = {}
+    for path in _VERSIONS_DIR.glob("[0-9]*.py"):
+        text = path.read_text()
+        m = _REVISION_RE.search(text)
+        if not m:
+            continue
+        down = _DOWN_REVISION_RE.search(text)
+        revisions[m.group(1)] = down.group(1) if down else None
+    assert revisions, "no migration files found"
+    downs = {d for d in revisions.values() if d}
+    heads = [r for r in revisions if r not in downs]
+    assert len(heads) == 1, f"expected exactly one migration head, got: {heads}"
+    return heads[0]
+
+
+HEAD = _compute_head()
 
 
 def _all_revision_ids() -> dict[str, str]:

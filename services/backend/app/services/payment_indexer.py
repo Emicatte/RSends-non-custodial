@@ -123,6 +123,37 @@ def _payment_made_topic() -> str:
 
 PAYMENT_MADE_TOPIC = _payment_made_topic()
 
+# RSendsSplitRouter (ownerless, fee-less N-way split) — ONE aggregate event per
+# split payment:
+#   SplitPaymentMade(
+#     bytes32 indexed invoiceId,   # topic[1]
+#     address indexed payer,       # topic[2]
+#     address token,               # data word 0 (address(0) == native ETH)
+#     uint256 totalAmount,         # data word 1
+#     address[] recipients,        # dynamic (offset in data word 2)
+#     uint256[] amounts,           # dynamic (offset in data word 3)
+#     uint256 blockTimestamp       # data word 4
+#   )
+# One event → ONE settlement row: the contract reverts unless every leg
+# transferred, so atomic all-or-nothing settlement is structural and the
+# finalize/reverse machinery is reused untouched.
+_SPLIT_PAYMENT_MADE_SIG = (
+    "SplitPaymentMade(bytes32,address,address,uint256,address[],uint256[],uint256)"
+)
+
+
+def _split_payment_made_topic() -> str:
+    try:
+        from eth_utils import keccak  # type: ignore
+
+        return "0x" + keccak(text=_SPLIT_PAYMENT_MADE_SIG).hex()
+    except Exception:  # pragma: no cover - fallback for minimal envs
+        # NOTE: if you change the event signature, recompute this constant.
+        return "0xUNRESOLVED_RECOMPUTE_SPLIT_TOPIC"
+
+
+SPLIT_PAYMENT_MADE_TOPIC = _split_payment_made_topic()
+
 
 # ── Cursor persistence ───────────────────────────────────────
 # POSTGRES IS THE SOURCE OF TRUTH (migration 0012); Redis is a write-through
@@ -271,6 +302,74 @@ def _decode_payment_made(log: dict) -> Optional[dict]:
     }
 
 
+def _decode_split_payment_made(log: dict) -> Optional[dict]:
+    """Decode a SplitPaymentMade log (dynamic-array tails) into a dict, or None.
+
+    Returns the same shape as _decode_payment_made — `merchant` is the PRIMARY
+    recipient (index 0), `amount` the totalAmount, `fee` 0 (the SplitRouter is
+    fee-less) — plus a `split` block with the full recipients/amounts vectors.
+    """
+    topics = log.get("topics", [])
+    if len(topics) < 3:
+        return None
+    if topics[0].lower() != SPLIT_PAYMENT_MADE_TOPIC.lower():
+        return None
+
+    invoice_id = topics[1]                       # bytes32 hex (0x...)
+    payer = _addr_from_topic(topics[2])
+
+    data = (log.get("data") or "0x")[2:]
+    # 5 head words: token, totalAmount, offset(recipients), offset(amounts), blockTimestamp
+    if len(data) < 64 * 5:
+        return None
+
+    def _head(i: int) -> str:
+        return data[64 * i:64 * (i + 1)]
+
+    token = "0x" + _head(0)[-40:]
+    total = int(_head(1), 16)
+    offset_recipients = int(_head(2), 16) * 2    # bytes → hex chars
+    offset_amounts = int(_head(3), 16) * 2
+    block_ts = int(_head(4), 16)
+
+    def _read_array(offset: int) -> Optional[list[str]]:
+        if offset + 64 > len(data):
+            return None
+        n = int(data[offset:offset + 64], 16)
+        # Sanity bound (the contract enforces 2..20; 64 guards hostile data).
+        if n == 0 or n > 64:
+            return None
+        end = offset + 64 + 64 * n
+        if end > len(data):
+            return None
+        return [data[offset + 64 + 64 * i: offset + 64 + 64 * (i + 1)] for i in range(n)]
+
+    raw_recipients = _read_array(offset_recipients)
+    raw_amounts = _read_array(offset_amounts)
+    if raw_recipients is None or raw_amounts is None:
+        return None
+    if len(raw_recipients) != len(raw_amounts):
+        return None
+
+    recipients = [("0x" + w[-40:]).lower() for w in raw_recipients]
+    amounts = [int(w, 16) for w in raw_amounts]
+
+    return {
+        "invoice_id": invoice_id,
+        "merchant": recipients[0],               # primary → settlement.merchant
+        "payer": payer,
+        "token": token.lower(),
+        "amount": total,
+        "fee": 0,
+        "block_timestamp": block_ts,
+        "tx_hash": (log.get("transactionHash") or "").lower(),
+        "log_index": int(log.get("logIndex", "0x0"), 16),
+        "block_number": int(log.get("blockNumber", "0x0"), 16),
+        "block_hash": (log.get("blockHash") or "").lower(),
+        "split": {"recipients": recipients, "amounts": amounts},
+    }
+
+
 # ── Validation: the on-chain event must match the stored invoice ──
 def _validate_event_against_intent(ev: dict, intent) -> list:
     """Return human-readable mismatch reasons between a PaymentMade event and the
@@ -300,6 +399,63 @@ def _validate_event_against_intent(ev: dict, intent) -> list:
         expected_amount = to_base_units(intent.amount, decimals)
         if ev["amount"] < expected_amount:
             reasons.append(f"amount {ev['amount']} < expected {expected_amount}")
+
+    return reasons
+
+
+def _validate_split_event_against_intent(ev: dict, intent) -> list:
+    """Mismatch reasons between a SplitPaymentMade event and the stored split
+    intent (empty == valid). FAIL-CLOSED both ways: a split event against an
+    intent WITHOUT split recipients cannot be validated (and the single-event
+    validator already rejects the mirror case via the NULL `recipient`).
+
+    Checks: recipients vector equals the stored legs in position order; correct
+    token; on-chain total >= invoice amount; and BPS integrity — the event's
+    per-leg amounts must equal compute_split_amounts(totalAmount, stored bps),
+    the bit-identical mirror of the contract math."""
+    from app.services.router_registry import (
+        loaded_split_recipients, token_for, to_base_units,
+    )
+    from app.services.split_math import compute_split_amounts
+
+    reasons = []
+
+    legs = loaded_split_recipients(intent)
+    if not legs:
+        reasons.append(
+            "split event for an intent with no split recipients — cannot validate"
+        )
+        return reasons
+
+    stored = sorted(legs, key=lambda leg: leg.position)
+    expected_recipients = [leg.address.lower() for leg in stored]
+    event_recipients = [r.lower() for r in ev["split"]["recipients"]]
+    if event_recipients != expected_recipients:
+        reasons.append(
+            f"split recipients {event_recipients} != expected {expected_recipients}"
+        )
+
+    tok = token_for(intent.chain or "base", intent.currency)
+    if tok is not None:
+        expected_token, decimals = tok
+        if ev["token"].lower() != expected_token.lower():
+            reasons.append(f"token {ev['token']} != expected {expected_token}")
+        expected_total = to_base_units(intent.amount, decimals)
+        if ev["amount"] < expected_total:
+            reasons.append(f"total {ev['amount']} < expected {expected_total}")
+
+    if not reasons:
+        try:
+            expected_amounts = compute_split_amounts(
+                ev["amount"], [leg.share_bps for leg in stored]
+            )
+        except ValueError as exc:
+            reasons.append(f"stored split invalid: {exc}")
+        else:
+            if list(ev["split"]["amounts"]) != expected_amounts:
+                reasons.append(
+                    f"split amounts {ev['split']['amounts']} != expected {expected_amounts}"
+                )
 
     return reasons
 
@@ -393,7 +549,18 @@ async def _record_settlement(chain_id: int, ev: dict) -> str:
                 PaymentIntent.onchain_invoice_id == ev["invoice_id"].lower()
             )
         )).scalar_one_or_none()
-        mismatches = _validate_event_against_intent(ev, intent) if intent is not None else []
+        # Dispatch by event type — cross-type is fail-closed on BOTH sides: a
+        # split event against a single intent fails the split validator (no
+        # legs), a single event against a split intent fails the single one
+        # (recipient NULL). A split's primary matching a single intent's
+        # recipient must NOT settle it — the merchant only received one leg.
+        is_split_event = ev.get("split") is not None
+        if intent is None:
+            mismatches = []
+        elif is_split_event:
+            mismatches = _validate_split_event_against_intent(ev, intent)
+        else:
+            mismatches = _validate_event_against_intent(ev, intent)
 
         block_dt = (
             datetime.fromtimestamp(ev["block_timestamp"], tz=timezone.utc)
@@ -434,6 +601,32 @@ async def _record_settlement(chain_id: int, ev: dict) -> str:
 
         # ── First sight: persist as pending (or rejected on mismatch) ──
         status = SettlementStatus.rejected if mismatches else SettlementStatus.pending
+
+        # Split fan-out detail: record the ON-CHAIN facts (recipients+amounts
+        # from the event); stored bps ride along when the vectors validated.
+        split_legs = None
+        if is_split_event:
+            stored_bps = None
+            if intent is not None and not mismatches:
+                from app.services.router_registry import loaded_split_recipients
+
+                stored_bps = [
+                    leg.share_bps
+                    for leg in sorted(
+                        loaded_split_recipients(intent), key=lambda leg: leg.position
+                    )
+                ]
+            split_legs = [
+                {
+                    "address": recipient,
+                    **({"share_bps": stored_bps[i]} if stored_bps else {}),
+                    "amount": str(amount),
+                }
+                for i, (recipient, amount) in enumerate(
+                    zip(ev["split"]["recipients"], ev["split"]["amounts"])
+                )
+            ]
+
         db.add(PaymentSettlement(
             invoice_id=ev["invoice_id"].lower(),
             merchant=ev["merchant"],
@@ -449,6 +642,7 @@ async def _record_settlement(chain_id: int, ev: dict) -> str:
             block_hash=new_hash,
             status=status,
             intent_id=intent.intent_id if intent else None,
+            split_legs=split_legs,
         ))
 
         if intent is None:
@@ -501,12 +695,27 @@ async def _finalize_settlement(db, settlement, chain_id: int) -> None:
             intent.intent_id, settlement.tx_hash[:16],
         )
 
-    ev = {
-        "merchant": settlement.merchant,
-        "token": settlement.token,
-        "amount": int(settlement.amount),
-    }
-    if _validate_event_against_intent(ev, intent):
+    if settlement.split_legs:
+        # Rebuild the split view from the recorded on-chain facts and re-run
+        # the split validator (the single validator would false-reject on the
+        # NULL recipient).
+        ev = {
+            "token": settlement.token,
+            "amount": int(settlement.amount),
+            "split": {
+                "recipients": [leg["address"] for leg in settlement.split_legs],
+                "amounts": [int(leg["amount"]) for leg in settlement.split_legs],
+            },
+        }
+        invalid = _validate_split_event_against_intent(ev, intent)
+    else:
+        ev = {
+            "merchant": settlement.merchant,
+            "token": settlement.token,
+            "amount": int(settlement.amount),
+        }
+        invalid = _validate_event_against_intent(ev, intent)
+    if invalid:
         intent.status = IntentStatus.review  # defensive: should already be rejected
         return
 
@@ -535,17 +744,21 @@ async def _finalize_settlement(db, settlement, chain_id: int) -> None:
     try:
         from app.services.webhook_service import send_webhook
 
+        extra_payload = {
+            "chain_id": chain_id,
+            "tx_hash": settlement.tx_hash,
+            "fee": str(settlement.fee or 0),
+            "settlement": "onchain",
+        }
+        if settlement.split_legs:
+            # Additive: the validated per-leg breakdown for split payments.
+            extra_payload["split"] = settlement.split_legs
         await send_webhook(
             db,
             merchant_id=intent.merchant_id,
             event="payment.completed",
             intent=intent,
-            extra_payload={
-                "chain_id": chain_id,
-                "tx_hash": settlement.tx_hash,
-                "fee": str(settlement.fee or 0),
-                "settlement": "onchain",
-            },
+            extra_payload=extra_payload,
         )
     except Exception:
         # Release the claim so the next reconcile retries the dispatch.
@@ -736,11 +949,20 @@ async def _finalize_and_reconcile(chain_id: int, rpc, final_head: int) -> dict:
 
 # ── Per-chain watcher ────────────────────────────────────────
 class PaymentWatcher:
-    """Watches RSendsRouter.PaymentMade on a single chain via eth_getLogs."""
+    """Watches RSendsRouter.PaymentMade — and, when configured,
+    RSendsSplitRouter.SplitPaymentMade — on a single chain via eth_getLogs."""
 
-    def __init__(self, chain_id: int, router_address: str) -> None:
+    def __init__(
+        self,
+        chain_id: int,
+        router_address: str,
+        split_router_address: Optional[str] = None,
+    ) -> None:
         self.chain_id = chain_id
         self.router_address = router_address.lower()
+        self.split_router_address = (
+            split_router_address.lower() if split_router_address else None
+        )
         self._running = False
         self._task: Optional[asyncio.Task] = None
 
@@ -753,6 +975,11 @@ class PaymentWatcher:
             "[indexer] watching RSendsRouter %s on chain %d",
             self.router_address, self.chain_id,
         )
+        if self.split_router_address:
+            logger.info(
+                "[indexer] watching RSendsSplitRouter %s on chain %d",
+                self.split_router_address, self.chain_id,
+            )
         # Announce the finality mode unambiguously: depth mode marks invoices
         # paid BEFORE L1 finality (fix A) — that must be loud in the logs.
         settings = get_settings()
@@ -884,6 +1111,16 @@ class PaymentWatcher:
             max_range = max(
                 1, int(getattr(settings, "indexer_getlogs_max_range", 10))
             )
+            # One filter over BOTH contracts (address array + topic0 OR-list)
+            # when the split router is configured; byte-identical single-router
+            # filter otherwise.
+            if self.split_router_address:
+                filter_address: object = [self.router_address, self.split_router_address]
+                filter_topics = [[PAYMENT_MADE_TOPIC, SPLIT_PAYMENT_MADE_TOPIC]]
+            else:
+                filter_address = self.router_address
+                filter_topics = [PAYMENT_MADE_TOPIC]
+
             chunk_start = start_block
             while chunk_start <= end_block:
                 chunk_end = min(end_block, chunk_start + max_range - 1)
@@ -892,21 +1129,33 @@ class PaymentWatcher:
                     [{
                         "fromBlock": hex(chunk_start),
                         "toBlock": hex(chunk_end),
-                        "address": self.router_address,
-                        "topics": [PAYMENT_MADE_TOPIC],
+                        "address": filter_address,
+                        "topics": filter_topics,
                     }],
                 ) or []
 
                 for log in logs:
                     # Source authenticity (defence-in-depth on the address filter
-                    # above): only trust logs emitted by THIS chain's RSendsRouter.
-                    if (log.get("address") or "").lower() != self.router_address:
+                    # above): trust each event ONLY from its own contract — a
+                    # PaymentMade must come from the router, a SplitPaymentMade
+                    # from the split router; any other pairing is dropped.
+                    addr = (log.get("address") or "").lower()
+                    topic0 = ((log.get("topics") or [""])[0] or "").lower()
+                    if topic0 == PAYMENT_MADE_TOPIC.lower() and addr == self.router_address:
+                        ev = _decode_payment_made(log)
+                    elif (
+                        self.split_router_address
+                        and topic0 == SPLIT_PAYMENT_MADE_TOPIC.lower()
+                        and addr == self.split_router_address
+                    ):
+                        ev = _decode_split_payment_made(log)
+                    else:
                         logger.warning(
-                            "[indexer] dropping PaymentMade from non-router address %s (chain=%d)",
+                            "[indexer] dropping log with unexpected (address, topic) "
+                            "pairing: address=%s (chain=%d)",
                             log.get("address"), self.chain_id,
                         )
                         continue
-                    ev = _decode_payment_made(log)
                     if ev is None:
                         continue
                     try:
@@ -914,7 +1163,8 @@ class PaymentWatcher:
                         if action == "new":
                             processed += 1
                             logger.info(
-                                "[indexer] PaymentMade invoiceId=%s amount=%s tx=%s (pending)",
+                                "[indexer] %s invoiceId=%s amount=%s tx=%s (pending)",
+                                "SplitPaymentMade" if ev.get("split") else "PaymentMade",
                                 ev["invoice_id"][:18], ev["amount"], ev["tx_hash"][:16],
                             )
                     except Exception:
@@ -951,6 +1201,11 @@ async def start_indexer_if_needed() -> list[PaymentWatcher]:
         logger.info("[indexer] no RSENDS_ROUTER addresses configured — indexer disabled")
         return []
 
+    # RSendsSplitRouter addresses ride the SAME per-chain watcher — a chain
+    # gets split indexing only if its base router is configured too (true for
+    # every deployment: the split router is deployed alongside the router).
+    split_routers = getattr(settings, "split_router_addresses", {}) or {}
+
     for chain_id_str, addr in routers.items():
         if not addr:
             continue
@@ -959,7 +1214,14 @@ async def start_indexer_if_needed() -> list[PaymentWatcher]:
         except (TypeError, ValueError):
             logger.warning("[indexer] bad chain id in config: %r", chain_id_str)
             continue
-        watcher = PaymentWatcher(chain_id=chain_id, router_address=addr)
+        split_addr = (
+            split_routers.get(chain_id_str)
+            or split_routers.get(str(chain_id))
+            or None
+        )
+        watcher = PaymentWatcher(
+            chain_id=chain_id, router_address=addr, split_router_address=split_addr
+        )
         await watcher.start()
         _watchers.append(watcher)
 

@@ -273,7 +273,22 @@ export default function AppPaymentsPage() {
                         color: COLORS.subtle,
                       }}
                     >
-                      {r.recipient ? truncAddr(r.recipient) : '—'}
+                      {r.split && r.split.length > 0 ? (
+                        <span
+                          title={r.split
+                            .map(
+                              (leg) =>
+                                `${truncAddr(leg.address)} — ${leg.share_bps / 100}%`,
+                            )
+                            .join('\n')}
+                        >
+                          {t('row.split')} · {r.split.length}
+                        </span>
+                      ) : r.recipient ? (
+                        truncAddr(r.recipient)
+                      ) : (
+                        '—'
+                      )}
                     </td>
                     <td className="px-4 py-3" style={cellStyle}>
                       {txUrl ? (

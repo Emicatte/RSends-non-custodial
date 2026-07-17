@@ -1467,7 +1467,8 @@
         "copyLink": "Link kopieren",
         "copied": "Kopiert",
         "cancel": "Stornieren",
-        "cancelConfirm": "Diese Zahlungsanforderung stornieren?"
+        "cancelConfirm": "Diese Zahlungsanforderung stornieren?",
+        "split": "Aufgeteilt"
       },
       "create": {
         "title": "Neue Zahlungsanforderung",
@@ -1494,8 +1495,15 @@
         "submitting": "Wird erstellt…",
         "errors": {
           "gate": "Hinterlegen Sie Ihre Settlement-Wallet oder geben Sie einen Empfänger an.",
-          "generic": "Zahlungsanforderung konnte nicht erstellt werden. Bitte erneut versuchen."
-        }
+          "generic": "Zahlungsanforderung konnte nicht erstellt werden. Bitte erneut versuchen.",
+          "splitUnavailable": "Aufgeteilte Zahlungen sind in diesem Netzwerk noch nicht aktiviert."
+        },
+        "splitToggle": "Aufgeteilte Zahlung",
+        "splitAdd": "Empfänger hinzufügen",
+        "splitRemove": "Entfernen",
+        "splitShare": "Anteil %",
+        "splitTotal": "Gesamt",
+        "splitHelp": "Die Anteile müssen exakt 100 % ergeben."
       }
     }
   },
@@ -1608,6 +1616,9 @@
   "pay": {
     "summary": {
       "gasNote": "Ihre Wallet fügt eine kleine Netzwerkgebühr (Gas) hinzu."
+    },
+    "split": {
+      "title": "Aufgeteilt auf {count} Empfänger"
     },
     "trust": {
       "nonCustodial": "Die Mittel gehen direkt an die Wallet des Händlers. RSends hält Ihr Geld zu keinem Zeitpunkt.",

@@ -60,6 +60,11 @@ class Settings(BaseSettings):
     # ══════════════════════════════════════════════════════
     # JSON map of chain_id → RSendsRouter address, e.g. {"8453":"0xRouter..."}
     rsends_router_addresses_json: str = ""
+    # JSON map of chain_id → RSendsSplitRouter address (ownerless, fee-less
+    # N-way split). FAIL-CLOSED: split intent creation 422s SPLIT_UNAVAILABLE
+    # for any chain not in this map — set it only after the contract is
+    # deployed and the indexer knows the event (see DEPLOY_RUNBOOK 1e).
+    split_router_addresses_json: str = ""
     # JSON map of chain_id → RPC URL (optional; falls back to rpc_manager defaults)
     indexer_rpc_urls_json: str = ""
     # Confirmation depth (latest - N) used when the finalized tag is disabled
@@ -163,6 +168,11 @@ class Settings(BaseSettings):
     def rsends_router_addresses(self) -> dict:
         """{chain_id(str) -> RSendsRouter address} parsed from the JSON env."""
         return _parse_json_map(self.rsends_router_addresses_json)
+
+    @property
+    def split_router_addresses(self) -> dict:
+        """{chain_id(str) -> RSendsSplitRouter address} parsed from the JSON env."""
+        return _parse_json_map(self.split_router_addresses_json)
 
     @property
     def indexer_rpc_urls(self) -> dict:

@@ -1466,7 +1466,8 @@
         "copyLink": "Copia link",
         "copied": "Copiato",
         "cancel": "Annulla",
-        "cancelConfirm": "Annullare questa richiesta di pagamento?"
+        "cancelConfirm": "Annullare questa richiesta di pagamento?",
+        "split": "Suddiviso"
       },
       "create": {
         "title": "Nuova richiesta di pagamento",
@@ -1493,8 +1494,15 @@
         "submitting": "Creazione…",
         "errors": {
           "gate": "Imposta il wallet di liquidazione o inserisci un destinatario.",
-          "generic": "Impossibile creare la richiesta di pagamento. Riprova."
-        }
+          "generic": "Impossibile creare la richiesta di pagamento. Riprova.",
+          "splitUnavailable": "I pagamenti suddivisi non sono ancora attivi su questa rete."
+        },
+        "splitToggle": "Pagamento suddiviso",
+        "splitAdd": "Aggiungi destinatario",
+        "splitRemove": "Rimuovi",
+        "splitShare": "Quota %",
+        "splitTotal": "Totale",
+        "splitHelp": "Le quote devono sommare esattamente al 100%."
       }
     }
   },
@@ -1607,6 +1615,9 @@
   "pay": {
     "summary": {
       "gasNote": "Il tuo wallet aggiunge una piccola commissione di rete (gas)."
+    },
+    "split": {
+      "title": "Suddiviso tra {count} destinatari"
     },
     "trust": {
       "nonCustodial": "I fondi vanno direttamente al wallet del merchant. RSends non detiene mai il tuo denaro.",

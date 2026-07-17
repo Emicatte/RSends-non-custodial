@@ -1467,7 +1467,8 @@
         "copyLink": "Copiar enlace",
         "copied": "Copiado",
         "cancel": "Cancelar",
-        "cancelConfirm": "¿Cancelar esta solicitud de pago?"
+        "cancelConfirm": "¿Cancelar esta solicitud de pago?",
+        "split": "Dividido"
       },
       "create": {
         "title": "Nueva solicitud de pago",
@@ -1494,8 +1495,15 @@
         "submitting": "Creando…",
         "errors": {
           "gate": "Configura tu billetera de liquidación o introduce un destinatario.",
-          "generic": "No se pudo crear la solicitud de pago. Inténtalo de nuevo."
-        }
+          "generic": "No se pudo crear la solicitud de pago. Inténtalo de nuevo.",
+          "splitUnavailable": "Los pagos divididos aún no están habilitados en esta red."
+        },
+        "splitToggle": "Pago dividido",
+        "splitAdd": "Añadir destinatario",
+        "splitRemove": "Quitar",
+        "splitShare": "Cuota %",
+        "splitTotal": "Total",
+        "splitHelp": "Las cuotas deben sumar exactamente el 100%."
       }
     }
   },
@@ -1608,6 +1616,9 @@
   "pay": {
     "summary": {
       "gasNote": "Tu cartera añade una pequeña comisión de red (gas)."
+    },
+    "split": {
+      "title": "Dividido entre {count} destinatarios"
     },
     "trust": {
       "nonCustodial": "Los fondos van directamente a la cartera del comercio. RSends nunca retiene tu dinero.",
