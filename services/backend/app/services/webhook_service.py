@@ -1246,6 +1246,33 @@ async def _attempt_delivery(delivery: WebhookDelivery, webhook: MerchantWebhook)
 #  5. Send Test Event — per /api/v1/merchant/webhook/test
 # ═══════════════════════════════════════════════════════════════
 
+def _build_test_event_payload(webhook: MerchantWebhook) -> dict:
+    """Standalone 'test' event payload. Chain identity mirrors the production
+    settlement webhook (`_build_merchant_payload` + the indexer's `chain_id`
+    extra): a `chain` name plus numeric `chain_id`, derived from the active
+    network — never a hardcoded mainnet literal, and no legacy `network` key.
+    """
+    from app.services.router_registry import primary_chain_id, chain_name_for_id
+
+    chain_id = primary_chain_id()
+    now = datetime.now(timezone.utc).isoformat()
+    return {
+        "event": "test",
+        "intent_id": "pi_test_000000000000",
+        "merchant_id": webhook.merchant_id,
+        "amount": 10.0,
+        "currency": "USDC",
+        "recipient": "0x" + "0" * 40,
+        "chain": chain_name_for_id(chain_id),
+        "chain_id": chain_id,
+        "tx_hash": None,
+        "status": "completed",
+        "metadata": {"test": True},
+        "created_at": now,
+        "completed_at": now,
+    }
+
+
 async def send_test_event(webhook: MerchantWebhook) -> tuple:
     """
     Invia un evento test al webhook URL.
@@ -1253,20 +1280,7 @@ async def send_test_event(webhook: MerchantWebhook) -> tuple:
     Returns:
         (success, status_code, message)
     """
-    test_payload = {
-        "event": "test",
-        "intent_id": "pi_test_000000000000",
-        "merchant_id": webhook.merchant_id,
-        "amount": 10.0,
-        "currency": "USDC",
-        "recipient": "0x" + "0" * 40,
-        "network": "BASE_MAINNET",
-        "tx_hash": None,
-        "status": "completed",
-        "metadata": {"test": True},
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "completed_at": datetime.now(timezone.utc).isoformat(),
-    }
+    test_payload = _build_test_event_payload(webhook)
 
     # Re-validate egress immediately before the POST (DNS-rebinding window).
     reason = await check_webhook_egress(webhook.url)

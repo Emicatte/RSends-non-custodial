@@ -51,6 +51,14 @@ CHAIN_IDS = {
 # chain id → canonical chain name (first match in CHAIN_IDS wins; "eth" aliases 1)
 _CHAIN_NAME_BY_ID = {8453: "base", 84532: "base_sepolia", 1: "ethereum"}
 
+# chain id → legacy "network" name (the vocabulary carried by the merchant
+# webhook payloads and PaymentIntent.network). Single source of truth — the copy
+# in webhook_service.CHAIN_NETWORK_MAP is for tx matching only.
+_NETWORK_NAME_BY_ID = {
+    8453: "BASE_MAINNET", 84532: "BASE_SEPOLIA",
+    1: "ETH_MAINNET", 42161: "ARBITRUM_MAINNET",
+}
+
 
 class UnsupportedTokenError(ValueError):
     """Raised when a (chain, currency) pair is not in the registry or not enabled."""
@@ -119,6 +127,32 @@ def _keccak(data: bytes) -> bytes:
 
 def chain_id_for(chain: str) -> Optional[int]:
     return CHAIN_IDS.get((chain or "").lower())
+
+
+def primary_chain_id() -> int:
+    """Chain id representing the system's current network, derived from the
+    configured RSendsRouter map (the same source the indexer builds watchers
+    from). First configured chain, else Base Sepolia (84532) — the testnet we
+    run on — when unconfigured (local/dev/test)."""
+    routers = getattr(get_settings(), "rsends_router_addresses", {}) or {}
+    for k in routers:
+        try:
+            return int(k)
+        except (TypeError, ValueError):
+            continue
+    return 84532
+
+
+def chain_name_for_id(chain_id: int) -> str:
+    """Canonical chain name for a chain id (84532 -> 'base_sepolia'); falls back
+    to the stringified id for unknown chains."""
+    return _CHAIN_NAME_BY_ID.get(chain_id, str(chain_id))
+
+
+def network_name_for_chain_id(chain_id: int) -> Optional[str]:
+    """Legacy 'network' name for a chain id (84532 -> 'BASE_SEPOLIA'), or None
+    when the chain has no mapping (don't invent one)."""
+    return _NETWORK_NAME_BY_ID.get(chain_id)
 
 
 def router_address_for(chain: str) -> Optional[str]:

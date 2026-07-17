@@ -5,7 +5,7 @@ Endpoint /health/deep che verifica tutti i componenti del sistema:
   - Postgres: SELECT 1 con timeout 3s
   - Redis: PING con timeout 2s
   - Celery: control.ping per verificare almeno 1 worker alive
-  - RPC: eth_blockNumber su Base (chain 8453) con timeout 5s
+  - RPC: eth_blockNumber sulla chain attiva (derivata dalla config router) con timeout 5s
   - KMS: firma di test (opzionale, solo se SIGNER_MODE=kms)
 
 Status complessivo:
@@ -92,19 +92,25 @@ async def _check_celery() -> dict:
 
 
 async def _check_rpc() -> dict:
-    """Verifica RPC Base (chain 8453) con eth_blockNumber (timeout 5s)."""
+    """Verifica l'RPC della chain attiva con eth_blockNumber (timeout 5s).
+
+    The chain is derived from the same router config the indexer uses
+    (Base Sepolia, 84532, today) — not a hardcoded mainnet id.
+    """
     t0 = time.monotonic()
     try:
         from app.services.rpc_manager import get_rpc_manager
+        from app.services.router_registry import primary_chain_id
 
-        rpc = get_rpc_manager(8453)
+        chain_id = primary_chain_id()
+        rpc = get_rpc_manager(chain_id)
         result = await asyncio.wait_for(
             rpc.call("eth_blockNumber", []),
             timeout=5.0,
         )
         latency = round((time.monotonic() - t0) * 1000, 1)
         block = int(result, 16) if isinstance(result, str) else result
-        return {"status": "ok", "block": block, "latency_ms": latency}
+        return {"status": "ok", "chain_id": chain_id, "block": block, "latency_ms": latency}
     except asyncio.TimeoutError:
         return {"status": "error", "detail": "timeout (>5s)"}
     except Exception as e:
