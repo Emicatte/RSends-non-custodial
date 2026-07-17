@@ -282,7 +282,7 @@ function UsageSnippet() {
       >{`curl -X POST https://rsends-non-custodial.onrender.com/api/v1/merchant/payment-intent \\
   -H "Authorization: Bearer rsend_test_..." \\
   -H "Content-Type: application/json" \\
-  -d '{"amount": "10.00", "currency": "USDC", "chain": "base-sepolia"}'`}</pre>
+  -d '{"amount": "10.00", "currency": "USDC", "chain": "base_sepolia"}'`}</pre>
     </section>
   )
 }
