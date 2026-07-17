@@ -15,6 +15,13 @@ import { apiCall, waitForToken } from '@/lib/auth-client'
  * test/live toggle anywhere in `/app`.
  */
 
+export interface OrgSplitLeg {
+  address: string
+  share_bps: number
+  position: number
+  label?: string | null
+}
+
 export interface OrgPaymentRecord {
   intent_id: string
   amount: number
@@ -22,6 +29,8 @@ export interface OrgPaymentRecord {
   chain: string
   status: string
   recipient: string | null
+  /** N-way split legs (recipient is null for split intents). */
+  split?: OrgSplitLeg[] | null
   tx_hash: string | null
   matched_tx_hash: string | null
   created_at: string
@@ -41,6 +50,9 @@ export interface CreateInvoiceInput {
   chain: string
   expires_in_minutes: number
   recipient?: string
+  /** Non-custodial split: 2..20 legs, integer bps summing to exactly 10000.
+   * Mutually exclusive with `recipient` (server-enforced 422). */
+  split?: { address: string; share_bps: number }[]
 }
 
 /** Slice of PaymentIntentResponse the /app create flow needs (the pay link). */
@@ -151,6 +163,7 @@ export function useOrgPayments() {
             chain: input.chain,
             expires_in_minutes: input.expires_in_minutes,
             ...(input.recipient ? { recipient: input.recipient } : {}),
+            ...(input.split ? { split: input.split } : {}),
           }),
         },
       )

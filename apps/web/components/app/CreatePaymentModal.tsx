@@ -45,6 +45,31 @@ const btnStyle: React.CSSProperties = {
   cursor: 'pointer',
 }
 
+// ── Split (non-custodial, BPS-exact) ─────────────────────────────
+// Client mirror of the server gate: 2..20 legs, valid unique addresses,
+// integer bps summing to EXACTLY 10000. The server 422 stays authoritative.
+const SPLIT_MIN = 2
+const SPLIT_MAX = 20
+const SPLIT_LEG_COLORS = ['#C45A3C', '#3B82F6', '#00B27A', '#D99A2B'] as const
+
+interface SplitLegDraft {
+  address: string
+  percent: string
+}
+
+/** Percent string → integer bps, or null when invalid (sub-bps precision —
+ * e.g. 30.001% — is REJECTED, never rounded: no silent value drift). */
+function percentToBps(percent: string): number | null {
+  const trimmed = percent.trim()
+  if (trimmed === '') return null
+  const value = Number(trimmed)
+  if (!Number.isFinite(value) || value <= 0) return null
+  const bps = Math.round(value * 100)
+  if (Math.abs(value * 100 - bps) > 0.001) return null
+  if (bps < 1 || bps > 10000) return null
+  return bps
+}
+
 export function CreatePaymentModal({
   settlementWallet,
   onCreate,
@@ -59,6 +84,11 @@ export function CreatePaymentModal({
   const [token, setToken] = useState<string>('USDC')
   const [expiry, setExpiry] = useState<number>(30)
   const [recipient, setRecipient] = useState('')
+  const [splitOn, setSplitOn] = useState(false)
+  const [legs, setLegs] = useState<SplitLegDraft[]>([
+    { address: '', percent: '' },
+    { address: '', percent: '' },
+  ])
   const [submitting, setSubmitting] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [payLink, setPayLink] = useState<string | null>(null)
@@ -72,7 +102,28 @@ export function CreatePaymentModal({
   // The recipient gate (server-enforced) needs EITHER an org settlement wallet
   // OR a valid per-intent override; block the submit otherwise (no blind 422).
   const hasRecipient = Boolean(settlementWallet) || overrideResolves
-  const canSubmit = amountValid && overrideValid && hasRecipient && !submitting
+
+  // Split validity — the client mirror of the server BPS gate. A valid split
+  // set IS the recipient set: no settlement wallet needed.
+  const legBps = legs.map((leg) => percentToBps(leg.percent))
+  const legAddrs = legs.map((leg) => leg.address.trim())
+  const bpsSum = legBps.reduce<number>((acc, b) => acc + (b ?? 0), 0)
+  const splitValid =
+    legs.length >= SPLIT_MIN &&
+    legs.length <= SPLIT_MAX &&
+    legAddrs.every((a) => isAddress(a)) &&
+    new Set(legAddrs.map((a) => a.toLowerCase())).size === legAddrs.length &&
+    legBps.every((b) => b != null) &&
+    bpsSum === 10000
+
+  const canSubmit =
+    amountValid &&
+    !submitting &&
+    (splitOn ? splitValid : overrideValid && hasRecipient)
+
+  function setLeg(index: number, patch: Partial<SplitLegDraft>) {
+    setLegs((prev) => prev.map((leg, i) => (i === index ? { ...leg, ...patch } : leg)))
+  }
 
   async function submit() {
     if (!canSubmit) return
@@ -84,15 +135,31 @@ export function CreatePaymentModal({
         currency: token,
         chain: CREATE_CHAIN,
         expires_in_minutes: expiry,
-        ...(override ? { recipient: override } : {}),
+        ...(splitOn
+          ? {
+              split: legs.map((leg, i) => ({
+                address: leg.address.trim(),
+                share_bps: legBps[i] as number,
+              })),
+            }
+          : override
+            ? { recipient: override }
+            : {}),
       })
       const origin = typeof window !== 'undefined' ? window.location.origin : ''
       setPayLink(`${origin}/pay/${created.intent_id}`)
     } catch (e) {
       const code = e instanceof Error ? e.message : 'unknown'
-      // The session create's only 422 is the recipient gate; apiCall surfaces it
-      // as "HTTP 422" (the detail uses `error`, not `code`).
-      setErr(code === 'HTTP 422' ? t('create.errors.gate') : t('create.errors.generic'))
+      // apiCall surfaces 422s as "HTTP 422" (no detail). Split mode's only
+      // 422 (the client pre-validates the vectors) is SPLIT_UNAVAILABLE;
+      // single mode's only 422 is the recipient gate.
+      setErr(
+        code === 'HTTP 422'
+          ? splitOn
+            ? t('create.errors.splitUnavailable')
+            : t('create.errors.gate')
+          : t('create.errors.generic'),
+      )
     } finally {
       setSubmitting(false)
     }
@@ -204,8 +271,9 @@ export function CreatePaymentModal({
           </div>
         ) : (
           <div>
-            {/* Org-default (recipient gate) banner */}
-            {settlementWallet ? (
+            {/* Org-default (recipient gate) banner — a split defines its own
+                recipient set, so the banner only applies to single mode. */}
+            {splitOn ? null : settlementWallet ? (
               <div
                 style={{
                   fontSize: 12,
@@ -280,25 +348,162 @@ export function CreatePaymentModal({
               </select>
             </div>
 
-            <div style={{ marginBottom: 8 }}>
-              <label style={label} htmlFor="rp-recipient">{t('create.recipient')}</label>
+            {/* Split toggle — mutually exclusive with the single override */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
               <input
-                id="rp-recipient"
-                type="text"
-                placeholder="0x…"
-                value={recipient}
-                onChange={(e) => setRecipient(e.target.value)}
-                style={field}
+                id="rp-split-toggle"
+                type="checkbox"
+                checked={splitOn}
+                onChange={(e) => setSplitOn(e.target.checked)}
+                style={{ accentColor: COLORS.accent, width: 15, height: 15 }}
               />
-              <p style={{ fontSize: 11, color: COLORS.subtle, margin: '6px 0 0' }}>
-                {t('create.recipientHelp')}
-              </p>
-              {!overrideValid && (
-                <p style={{ fontSize: 11, color: COLORS.red, margin: '4px 0 0' }}>
-                  {t('create.invalidRecipient')}
-                </p>
-              )}
+              <label
+                htmlFor="rp-split-toggle"
+                style={{ fontSize: 13, fontWeight: 600, color: COLORS.ink, cursor: 'pointer' }}
+              >
+                {t('create.splitToggle')}
+              </label>
             </div>
+
+            {splitOn ? (
+              <div style={{ marginBottom: 8 }}>
+                {/* Proportional preview bar — flex weight IS the bps share */}
+                <div
+                  aria-hidden
+                  style={{
+                    display: 'flex',
+                    height: 6,
+                    borderRadius: 3,
+                    overflow: 'hidden',
+                    gap: 2,
+                    marginBottom: 10,
+                  }}
+                >
+                  {legs.map((_, i) => (
+                    <span
+                      key={i}
+                      style={{
+                        flex: legBps[i] ?? 1,
+                        background: SPLIT_LEG_COLORS[i % SPLIT_LEG_COLORS.length],
+                        borderRadius: 2,
+                        opacity: legBps[i] != null ? 1 : 0.25,
+                      }}
+                    />
+                  ))}
+                </div>
+
+                {legs.map((leg, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                    <input
+                      type="text"
+                      placeholder="0x…"
+                      aria-label={t('create.recipient')}
+                      value={leg.address}
+                      onChange={(e) => setLeg(i, { address: e.target.value })}
+                      style={{ ...field, flex: 3 }}
+                    />
+                    <input
+                      type="number"
+                      min="0.01"
+                      max="100"
+                      step="0.01"
+                      aria-label={t('create.splitShare')}
+                      value={leg.percent}
+                      onChange={(e) => setLeg(i, { percent: e.target.value })}
+                      style={{ ...field, flex: 1, minWidth: 74 }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setLegs((prev) =>
+                          prev.length > SPLIT_MIN ? prev.filter((_, j) => j !== i) : prev,
+                        )
+                      }
+                      disabled={legs.length <= SPLIT_MIN}
+                      style={{
+                        ...btnStyle,
+                        background: 'transparent',
+                        color: legs.length > SPLIT_MIN ? COLORS.red : COLORS.subtle,
+                        padding: '4px 6px',
+                        fontSize: 12,
+                        cursor: legs.length > SPLIT_MIN ? 'pointer' : 'not-allowed',
+                      }}
+                    >
+                      {t('create.splitRemove')}
+                    </button>
+                  </div>
+                ))}
+
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginTop: 4,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLegs((prev) =>
+                        prev.length < SPLIT_MAX
+                          ? [...prev, { address: '', percent: '' }]
+                          : prev,
+                      )
+                    }
+                    disabled={legs.length >= SPLIT_MAX}
+                    style={{
+                      ...btnStyle,
+                      background: COLORS.paper,
+                      color: COLORS.accent,
+                      padding: '5px 10px',
+                      fontSize: 12,
+                    }}
+                  >
+                    {t('create.splitAdd')}
+                  </button>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      fontFamily: 'var(--font-mono, monospace)',
+                      color: bpsSum === 10000 ? COLORS.ink : COLORS.red,
+                    }}
+                  >
+                    {t('create.splitTotal')}: {(bpsSum / 100).toFixed(2)}%
+                  </span>
+                </div>
+                <p
+                  style={{
+                    fontSize: 11,
+                    color: splitValid ? COLORS.subtle : COLORS.red,
+                    margin: '6px 0 0',
+                  }}
+                >
+                  {t('create.splitHelp')}
+                </p>
+              </div>
+            ) : (
+              <div style={{ marginBottom: 8 }}>
+                <label style={label} htmlFor="rp-recipient">{t('create.recipient')}</label>
+                <input
+                  id="rp-recipient"
+                  type="text"
+                  placeholder="0x…"
+                  value={recipient}
+                  onChange={(e) => setRecipient(e.target.value)}
+                  style={field}
+                />
+                <p style={{ fontSize: 11, color: COLORS.subtle, margin: '6px 0 0' }}>
+                  {t('create.recipientHelp')}
+                </p>
+                {!overrideValid && (
+                  <p style={{ fontSize: 11, color: COLORS.red, margin: '4px 0 0' }}>
+                    {t('create.invalidRecipient')}
+                  </p>
+                )}
+              </div>
+            )}
 
             {err && (
               <p role="alert" style={{ fontSize: 12, color: COLORS.red, margin: '8px 0 0' }}>{err}</p>
