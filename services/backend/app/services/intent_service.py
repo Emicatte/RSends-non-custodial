@@ -37,8 +37,10 @@ from app.services.key_usage_service import (
     increment_intent_count,
 )
 from app.services.router_registry import (
+    chain_id_for,
     chain_is_supported,
     derive_invoice_id,
+    network_name_for_chain_id,
     split_router_address_for,
     token_is_enabled,
 )
@@ -389,6 +391,13 @@ async def create_intent(
             db, merchant_id, payload.recipient, org_id=recipient_org
         )
 
+    # NETWORK is DERIVED from the (already validated + env-gated) chain, never
+    # trusted from merchant free-text: `payload.network` is unvalidated and can
+    # contradict the chain (e.g. "BASE_MAINNET" on a base_sepolia intent), which
+    # would then leak into lifecycle webhooks. Normalizing here keeps it always
+    # consistent with `chain` (None for a chain with no network-name mapping).
+    derived_network = network_name_for_chain_id(chain_id_for(requested_chain))
+
     intent = PaymentIntent(
         intent_id=intent_id,
         reference_id=reference_id,
@@ -398,7 +407,7 @@ async def create_intent(
         currency=payload.currency,
         chain=payload.chain,
         recipient=recipient,
-        network=payload.network,
+        network=derived_network,
         expected_sender=payload.expected_sender,
         onchain_invoice_id=onchain_invoice_id,
         late_payment_policy=payload.late_payment_policy,
