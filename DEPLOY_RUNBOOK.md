@@ -160,6 +160,23 @@ deploy block instead of jumping to the current head — so the demo payment is
 never missed. (Normal restarts still resume from the Redis cursor; this only
 kicks in on a first run with no cursor.)
 
+### 1e. Deploy the RSendsSplitRouter (split payments) **[AZIONE UTENTE]**
+Ownerless + fee-less: no constructor args, no post-deploy config script (there
+is no owner, pause, whitelist or fee to set — nothing to administer).
+```bash
+cd packages/contracts
+forge script script/DeploySplitRouter.s.sol:DeploySplitRouter \
+  --rpc-url "$BASE_SEPOLIA_RPC" \
+  --account rsends-deployer \
+  --broadcast
+```
+Capture the logged address → backend
+`SPLIT_ROUTER_ADDRESSES_JSON={"84532":"<SPLIT_ROUTER_ADDRESS>"}`. No frontend
+env: the /pay checkout receives the address via the backend `onchain` payload.
+Until this var is set, split intent creation fail-closes with 422
+`SPLIT_UNAVAILABLE` — deploying late is safe, deploying and not recording the
+address just keeps splits disabled.
+
 ---
 
 ## Part 2 — Backend on Render (Blueprint)
