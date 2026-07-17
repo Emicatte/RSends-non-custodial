@@ -1608,6 +1608,9 @@
     "summary": {
       "gasNote": "Il tuo wallet aggiunge una piccola commissione di rete (gas)."
     },
+    "split": {
+      "title": "Suddiviso tra {count} destinatari"
+    },
     "trust": {
       "nonCustodial": "I fondi vanno direttamente al wallet del merchant. RSends non detiene mai il tuo denaro.",
       "contract": "Eseguito da uno smart contract immutabile.",

@@ -1609,6 +1609,9 @@
     "summary": {
       "gasNote": "Votre portefeuille ajoute de petits frais de réseau (gas)."
     },
+    "split": {
+      "title": "Réparti entre {count} destinataires"
+    },
     "trust": {
       "nonCustodial": "Les fonds vont directement au portefeuille du marchand. RSends ne détient jamais votre argent.",
       "contract": "Exécuté par un contrat intelligent immuable.",

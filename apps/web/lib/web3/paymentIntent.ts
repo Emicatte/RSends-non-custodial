@@ -13,7 +13,7 @@
  * observed on-chain; anything after that is between merchant and RSends.
  */
 
-import { getAddress, type Hex } from 'viem'
+import { getAddress, zeroAddress, type Hex } from 'viem'
 
 export interface RawPaymentIntent {
   intent_id?: string
@@ -46,6 +46,14 @@ export interface RawPaymentIntent {
     permitType?: string | null
     permitVersion?: string | null
     feeUnavailable?: boolean
+    // Split fan-out (RSendsSplitRouter): merchant is "" (no single payee),
+    // router is the fee-less split router, fee is "0".
+    split?: {
+      router?: string
+      recipients?: string[]
+      sharesBps?: number[]
+      amounts?: string[] // per-leg base units (server-computed, display only)
+    } | null
   } | null
   // Top-level camelCase also tolerated (alternate backend shape).
   invoiceId?: string
@@ -70,6 +78,15 @@ export interface OnChainIntent {
   permitType: 'eip2612' | 'none'
   /** EIP-712 domain version for the permit signature (only meaningful for eip2612). */
   permitVersion: string
+  /** Split fan-out: when set, `router` is the RSendsSplitRouter (fee-less) and
+   * the checkout calls paySplit* with total + sharesBps — the contract
+   * recomputes per-leg amounts; `amounts` here are display/verification only.
+   * Optional: absent/null ⇒ single-recipient intent. */
+  split?: {
+    recipients: `0x${string}`[]
+    sharesBps: number[]
+    amounts: bigint[]
+  } | null
 }
 
 export interface PaymentIntent {
@@ -133,14 +150,35 @@ export function normalizeIntent(
     oc?.amount ?? raw.amount_base_units ?? (typeof raw.amount === 'string' ? raw.amount : undefined)
   const chainId = oc?.chainId ?? raw.chainId
   const router = oc?.router ?? raw.router
+  const rawSplit = oc?.split ?? null
   if (
-    invoiceId && merchant && token != null &&
+    invoiceId && (merchant || rawSplit) && token != null &&
     amountStr != null && chainId != null && router
   ) {
     try {
+      // Split block: parse + validate the vectors; any malformation (missing
+      // arrays, length mismatch, fewer than 2 legs) throws → graceful "not
+      // available" UI, never a half-parsed split.
+      let split: OnChainIntent['split'] = null
+      if (rawSplit) {
+        const recipients = (rawSplit.recipients ?? []).map((r) => getAddress(r))
+        const sharesBps = (rawSplit.sharesBps ?? []).map((b) => Number(b))
+        const amounts = (rawSplit.amounts ?? []).map((a) => BigInt(a))
+        if (
+          recipients.length < 2 ||
+          recipients.length !== sharesBps.length ||
+          recipients.length !== amounts.length
+        ) {
+          throw new Error('malformed split vectors')
+        }
+        split = { recipients, sharesBps, amounts }
+      }
+
       onchain = {
         invoiceId: invoiceId as Hex,
-        merchant: getAddress(merchant),
+        // Split intents have no single payee (backend sends "") — the split
+        // vectors ARE the payee set; zeroAddress is a never-used placeholder.
+        merchant: merchant ? getAddress(merchant) : zeroAddress,
         token: getAddress(token),
         amount: BigInt(amountStr),
         fee: oc?.fee != null ? BigInt(oc.fee) : null,
@@ -149,6 +187,7 @@ export function normalizeIntent(
         router: getAddress(router),
         permitType: oc?.permitType === 'eip2612' ? 'eip2612' : 'none',
         permitVersion: oc?.permitVersion ?? '1',
+        split,
       }
     } catch {
       // Malformed on-chain fields → fall back to "not available" UI.

@@ -11,8 +11,9 @@
 
 import { useTranslations } from 'next-intl'
 import { C } from '@/app/designTokens'
-import { Mono } from '@/app/pay/_components/payUi'
+import { Mono, truncate } from '@/app/pay/_components/payUi'
 import { formatTokenAmount } from '@/lib/web3/feeMath'
+import type { OnChainIntent } from '@/lib/web3/paymentIntent'
 
 export function TotalHeadline({
   total,
@@ -43,6 +44,87 @@ export function TotalHeadline({
       )}{' '}
       <span style={{ fontSize: 18, color: C.sub }}>{currency}</span>
     </Mono>
+  )
+}
+
+// Leg accents cycle through the semantic palette — position 0 (the primary,
+// which absorbs the integer rounding remainder) always gets the brand accent.
+const SPLIT_LEG_COLORS = [C.purple, C.blue, C.green, C.amber] as const
+
+export function SplitBreakdown({
+  split,
+  currency,
+  decimals,
+}: {
+  split: NonNullable<OnChainIntent['split']>
+  currency: string
+  decimals: number
+}) {
+  const t = useTranslations('pay')
+  return (
+    <div
+      data-testid="split-breakdown"
+      style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
+    >
+      <p style={{ margin: 0, fontFamily: C.D, fontSize: 12, color: C.sub }}>
+        {t('split.title', { count: split.recipients.length })}
+      </p>
+
+      {/* Proportional distribution bar — flex weight IS the bps share. */}
+      <div
+        aria-hidden
+        style={{
+          display: 'flex',
+          height: 6,
+          borderRadius: 3,
+          overflow: 'hidden',
+          gap: 2,
+        }}
+      >
+        {split.sharesBps.map((bps, i) => (
+          <span
+            key={i}
+            style={{
+              flex: bps,
+              background: SPLIT_LEG_COLORS[i % SPLIT_LEG_COLORS.length],
+              borderRadius: 2,
+            }}
+          />
+        ))}
+      </div>
+
+      {split.recipients.map((addr, i) => (
+        <div
+          key={addr}
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'baseline',
+            gap: 12,
+          }}
+        >
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span
+              aria-hidden
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: '50%',
+                background: SPLIT_LEG_COLORS[i % SPLIT_LEG_COLORS.length],
+                flexShrink: 0,
+              }}
+            />
+            <Mono style={{ fontSize: 12.5, color: C.text }}>{truncate(addr)}</Mono>
+            <span style={{ fontFamily: C.D, fontSize: 11.5, color: C.sub }}>
+              {split.sharesBps[i] / 100}%
+            </span>
+          </span>
+          <Mono style={{ fontSize: 12.5, color: C.text }}>
+            {formatTokenAmount(split.amounts[i], decimals)} {currency}
+          </Mono>
+        </div>
+      ))}
+    </div>
   )
 }
 

@@ -28,7 +28,7 @@ import {
 import { ActionArea } from './ActionArea'
 import { CheckoutFrame } from './CheckoutFrame'
 import { CheckoutSkeleton } from './CheckoutSkeleton'
-import { GasNote, TotalHeadline } from './SummarySection'
+import { GasNote, SplitBreakdown, TotalHeadline } from './SummarySection'
 import { TrustFooter } from './TrustFooter'
 import {
   AlreadyPaidView,
@@ -173,7 +173,20 @@ function CheckoutActive({
           decimals={onchain.decimals}
         />
       }
-      summary={<GasNote />}
+      summary={
+        onchain.split ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <SplitBreakdown
+              split={onchain.split}
+              currency={intent.currency}
+              decimals={onchain.decimals}
+            />
+            <GasNote />
+          </div>
+        ) : (
+          <GasNote />
+        )
+      }
       action={
         <ActionArea
           step={checkout.step}

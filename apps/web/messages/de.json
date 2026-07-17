@@ -1609,6 +1609,9 @@
     "summary": {
       "gasNote": "Ihre Wallet fügt eine kleine Netzwerkgebühr (Gas) hinzu."
     },
+    "split": {
+      "title": "Aufgeteilt auf {count} Empfänger"
+    },
     "trust": {
       "nonCustodial": "Die Mittel gehen direkt an die Wallet des Händlers. RSends hält Ihr Geld zu keinem Zeitpunkt.",
       "contract": "Ausgeführt von einem unveränderlichen Smart Contract.",

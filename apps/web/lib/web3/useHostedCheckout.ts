@@ -30,6 +30,7 @@ import {
 } from 'wagmi'
 import { erc20Abi, zeroAddress } from 'viem'
 import { RSENDS_ROUTER_ABI } from '@/lib/rsendsRouterAbi'
+import { RSENDS_SPLIT_ROUTER_ABI } from '@/lib/rsendsSplitRouterAbi'
 import { resolveFeeBreakdown } from '@/lib/web3/feeMath'
 import {
   deriveCheckoutStep,
@@ -81,15 +82,21 @@ export function useHostedCheckout(
   const onCorrectChain = chainId === onchain.chainId
   // STATIC policy from the intent: permit iff the registry says eip2612.
   const usesPermit = !isNative && onchain.permitType === 'eip2612'
+  // Split fan-out: onchain.router IS the fee-less RSendsSplitRouter and the
+  // backend always quotes fee "0" — every other prerequisite (allowance,
+  // balance, permit, receipts) runs identically to the single path.
+  const split = onchain.split ?? null
 
-  // ── Fee: prefer the backend's live quoteFee; else read it on-chain ──
+  // ── Fee: prefer the backend's live quoteFee; else read it on-chain.
+  //    (Split intents never reach this read: the SplitRouter has no quoteFee
+  //    and the backend always sends fee "0".) ──
   const { data: quotedFee } = useReadContract({
     address: onchain.router,
     abi: RSENDS_ROUTER_ABI,
     functionName: 'quoteFee',
     args: [onchain.token, onchain.amount],
     chainId: onchain.chainId,
-    query: { enabled: onchain.fee == null },
+    query: { enabled: onchain.fee == null && split == null },
   })
   const fee: bigint | null = onchain.fee ?? ((quotedFee as bigint | undefined) ?? null)
   const breakdown = resolveFeeBreakdown(onchain.amount, fee)
@@ -247,6 +254,19 @@ export function useHostedCheckout(
     resetPay()
 
     if (isNative) {
+      if (split) {
+        // paySplitNative: value must equal totalAmount exactly. Args carry
+        // ONLY total + sharesBps — the contract recomputes per-leg amounts.
+        writePay({
+          address: onchain.router,
+          abi: RSENDS_SPLIT_ROUTER_ABI,
+          functionName: 'paySplitNative',
+          args: [onchain.invoiceId, onchain.amount, split.recipients, split.sharesBps],
+          value: total,
+          chainId: onchain.chainId,
+        })
+        return
+      }
       writePay({
         address: onchain.router,
         abi: RSENDS_ROUTER_ABI,
@@ -270,12 +290,32 @@ export function useHostedCheckout(
             token: onchain.token,
             owner: address,
             spender: onchain.router,
-            value: total, // permit covers amount + fee
+            value: total, // permit covers amount + fee (split: fee-less total == amount)
             nonce: permitNonce as bigint,
             deadline,
           }),
         )
         const { v, r, s } = splitPermitSignature(signature)
+        if (split) {
+          writePay({
+            address: onchain.router,
+            abi: RSENDS_SPLIT_ROUTER_ABI,
+            functionName: 'paySplitWithPermit',
+            args: [
+              onchain.invoiceId,
+              onchain.token,
+              onchain.amount,
+              split.recipients,
+              split.sharesBps,
+              deadline,
+              v,
+              r,
+              s,
+            ],
+            chainId: onchain.chainId,
+          })
+          return
+        }
         writePay({
           address: onchain.router,
           abi: RSENDS_ROUTER_ABI,
@@ -299,7 +339,17 @@ export function useHostedCheckout(
       return
     }
 
-    // Approve+pay fallback: pay() against the allowance approved above.
+    // Approve+pay fallback: pay()/paySplit() against the allowance approved above.
+    if (split) {
+      writePay({
+        address: onchain.router,
+        abi: RSENDS_SPLIT_ROUTER_ABI,
+        functionName: 'paySplit',
+        args: [onchain.invoiceId, onchain.token, onchain.amount, split.recipients, split.sharesBps],
+        chainId: onchain.chainId,
+      })
+      return
+    }
     writePay({
       address: onchain.router,
       abi: RSENDS_ROUTER_ABI,
@@ -313,6 +363,7 @@ export function useHostedCheckout(
     onchain,
     isNative,
     usesPermit,
+    split,
     fee,
     total,
     maxFee,

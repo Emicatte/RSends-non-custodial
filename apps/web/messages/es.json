@@ -1609,6 +1609,9 @@
     "summary": {
       "gasNote": "Tu cartera añade una pequeña comisión de red (gas)."
     },
+    "split": {
+      "title": "Dividido entre {count} destinatarios"
+    },
     "trust": {
       "nonCustodial": "Los fondos van directamente a la cartera del comercio. RSends nunca retiene tu dinero.",
       "contract": "Ejecutado por un contrato inteligente inmutable.",

@@ -1608,6 +1608,9 @@
     "summary": {
       "gasNote": "Your wallet adds a small network gas fee on top."
     },
+    "split": {
+      "title": "Split between {count} recipients"
+    },
     "trust": {
       "nonCustodial": "Funds go directly to the merchant's wallet. RSends never holds your money.",
       "contract": "Executed by an immutable smart contract.",
