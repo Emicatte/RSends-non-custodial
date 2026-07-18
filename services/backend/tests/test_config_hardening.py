@@ -32,7 +32,6 @@ def _prod_settings(**over):
         hmac_secret="x" * 32,
         admin_api_token="y" * 32,  # dedicated admin bearer — MUST differ from hmac_secret
         database_url="postgresql+asyncpg://u:p@db.internal/rpagos",
-        alchemy_webhook_secret="whsec",
         telegram_bot_token="tg",
         redis_url="rediss://redis.internal:6379/0",
         celery_broker_url="rediss://redis.internal:6379/1",

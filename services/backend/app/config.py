@@ -49,8 +49,6 @@ class Settings(BaseSettings):
 
     # ── Alchemy ───────────────────────────────────────────
     alchemy_api_key: str = ""
-    alchemy_webhook_secret: str = ""
-    alchemy_auth_token: str = ""
 
     # ══════════════════════════════════════════════════════
     #  NON-CUSTODIAL on-chain settlement
@@ -311,14 +309,6 @@ def validate_settings(settings: Settings) -> None:
         warnings.append(
             "RSENDS_ROUTER_ADDRESSES_JSON is empty. The on-chain PaymentMade "
             "indexer will be disabled until per-chain RSendsRouter addresses are set."
-        )
-
-    # ── ALCHEMY_WEBHOOK_SECRET ────────────────────────────
-    if not settings.alchemy_webhook_secret:
-        warnings.append(
-            "ALCHEMY_WEBHOOK_SECRET is empty. "
-            "Falling back to block polling (slower, higher RPC usage). "
-            "Set it in Alchemy Dashboard > Webhooks for real-time TX detection."
         )
 
     # ── Telegram (informational) ──────────────────────────

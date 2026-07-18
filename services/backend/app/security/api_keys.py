@@ -36,7 +36,6 @@ EXEMPT_PATHS = {
     "/metrics",
     "/docs",
     "/openapi.json",
-    "/api/v1/webhooks/alchemy",  # Usa HMAC, non API key
     "/ws/",  # WebSocket
     "/api/v1/keys",  # Key management uses wallet address, not API key
     # ── JWT-authenticated user & org endpoints ──

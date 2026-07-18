@@ -168,7 +168,6 @@ async def lifespan(app: FastAPI):
     # zero Celery workers is the CONFIGURED state, not a degradation.
     app.state.celery_fallback_active = not celery_active
 
-    webhook_mode = "webhook" if settings.alchemy_webhook_secret else "polling"
     db_display = settings.database_url.split("@")[-1] if "@" in settings.database_url else settings.database_url
     logger.info(
         "RPagos Backend Core started",
@@ -177,7 +176,9 @@ async def lifespan(app: FastAPI):
             "db": db_display,
             "redis": settings.redis_url,
             "sentry": bool(settings.sentry_dsn),
-            "tx_detection": webhook_mode,
+            # On-chain PaymentMade polling via the indexer is the ONLY
+            # detection path — there is no inbound webhook.
+            "tx_detection": "polling",
         },
     )
 
@@ -471,7 +472,6 @@ async def health_config(_admin: str = Depends(require_admin)):
             "DATABASE_URL": _check(settings.database_url, required=True),
             "REDIS_URL": _check(settings.redis_url, required=True, prod_only=True),
             "ALCHEMY_API_KEY": _check(settings.alchemy_api_key, required=True),
-            "ALCHEMY_WEBHOOK_SECRET": _check(settings.alchemy_webhook_secret),
             # NON-CUSTODIAL: no SWEEP_PRIVATE_KEY / SIGNER_MODE / KMS_KEY_ID.
             "RSENDS_ROUTER_ADDRESSES": _check(settings.rsends_router_addresses_json),
             "HMAC_SECRET": _check(settings.hmac_secret, required=True, prod_only=True),
