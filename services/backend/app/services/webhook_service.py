@@ -45,6 +45,7 @@ from app.models.merchant_models import (
     MerchantWebhook,
     WebhookDelivery, DeliveryStatus,
 )
+from app.services.router_registry import _canonical_chain, chain_id_for
 
 logger = logging.getLogger(__name__)
 
@@ -590,7 +591,7 @@ async def _complete_intent(
     )
 
     # ── Triggera webhook ─────────────────────────────────
-    event_type = "payment.completed_late" if intent.completed_late else "payment.completed"
+    event_type = _finalize_event_type(intent)
     await _dispatch_event(
         db,
         merchant_id=intent.merchant_id,
@@ -929,9 +930,7 @@ async def finalize_match(
     await db.flush()
 
     # Webhook al merchant
-    event_type = f"payment.{intent.status.value}"
-    if intent.completed_late:
-        event_type = "payment.completed_late"
+    event_type = _finalize_event_type(intent)
 
     logger.info(
         "PaymentIntent %s finalized: status=%s (expected=%.6f, received=%.6f, "
@@ -1022,7 +1021,7 @@ async def _dispatch_event(
     )
     webhooks = result.scalars().all()
 
-    payload = _build_event_payload(event_type, intent, extra=extra_payload)
+    payload = _build_payload(event_type, intent, extra=extra_payload)
 
     for wh in webhooks:
         # Filtra per event type
@@ -1056,13 +1055,26 @@ async def _dispatch_event(
     await db.flush()
 
 
-def _build_event_payload(
+def _build_payload(
     event_type: str,
     intent: PaymentIntent,
     extra: Optional[dict] = None,
 ) -> dict:
-    """Costruisce il payload JSON dell'evento webhook."""
+    """The ONE webhook body builder — every outbound event (lifecycle,
+    settlement, test-fire) goes through here so shapes cannot drift apart.
+
+    This dict is the v1 DATA CONTRACT merchants build against: the exact key
+    set is pinned by tests/test_webhook_contract.py, and the published example
+    (apps/web/app/docs/webhooks/page.tsx) must move in the same PR as any
+    change here. Conventions: `amount` is a STRING; `chain` is the canonical
+    lowercase registry name with numeric `chain_id` (no legacy `network`
+    alias); no `merchant_id` (identity echo, wallet-address-era); no `fee`
+    (subscription model — the on-chain fee stays readable from the PaymentMade
+    event via tx_hash). Per-event extras merge last and may override tx_hash.
+    """
     now = datetime.now(timezone.utc)
+    raw_chain = getattr(intent, "chain", None) or "base"
+    chain = _canonical_chain(raw_chain) or raw_chain.lower()
     payload = {
         # event_id: identificatore univoco e stabile dell'evento (persistito sul
         # delivery, invariato tra i retry) → i merchant possono deduplicare e
@@ -1070,28 +1082,40 @@ def _build_event_payload(
         "event_id": "evt_" + uuid.uuid4().hex,
         "event": event_type,
         "intent_id": intent.intent_id,
-        "merchant_id": intent.merchant_id,
-        "amount": intent.amount,
-        "currency": intent.currency,
-        "chain": getattr(intent, "chain", "BASE") or "BASE",
+        "reference_id": getattr(intent, "reference_id", None),
         "onchain_invoice_id": getattr(intent, "onchain_invoice_id", None),
-        "recipient": intent.recipient,
-        "network": intent.network,
-        "tx_hash": intent.matched_tx_hash or intent.tx_hash,
-        "status": intent.status.value,
-        "metadata": intent.metadata_,
-        "timestamp": now.isoformat(),
-        "completed_late": intent.completed_late or False,
-        "late_minutes": intent.late_minutes,
+        "amount": str(intent.amount),
         "amount_received": getattr(intent, "amount_received", None),
         "overpaid_amount": getattr(intent, "overpaid_amount", None),
         "underpaid_amount": getattr(intent, "underpaid_amount", None),
+        "currency": intent.currency,
+        "chain": chain,
+        "chain_id": chain_id_for(chain),
+        "recipient": intent.recipient,
+        "tx_hash": intent.matched_tx_hash or intent.tx_hash,
+        "status": intent.status.value,
+        "completed_late": intent.completed_late or False,
+        "late_minutes": intent.late_minutes,
+        "metadata": intent.metadata_,
+        "timestamp": now.isoformat(),
         "created_at": intent.created_at.isoformat() if intent.created_at else None,
         "completed_at": intent.completed_at.isoformat() if intent.completed_at else None,
     }
     if extra:
         payload.update(extra)
     return payload
+
+
+def _finalize_event_type(intent: PaymentIntent) -> str:
+    """Event name for a finalized intent. `review` maps to the subscribable
+    `payment.needs_review` — the raw f-string produced `payment.review`,
+    which no allowlist or subscription filter matched, so merchants
+    silently never received it."""
+    if intent.completed_late:
+        return "payment.completed_late"
+    if intent.status == IntentStatus.review:
+        return "payment.needs_review"
+    return f"payment.{intent.status.value}"
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1247,30 +1271,26 @@ async def _attempt_delivery(delivery: WebhookDelivery, webhook: MerchantWebhook)
 # ═══════════════════════════════════════════════════════════════
 
 def _build_test_event_payload(webhook: MerchantWebhook) -> dict:
-    """Standalone 'test' event payload. Chain identity mirrors the production
-    settlement webhook (`_build_merchant_payload` + the indexer's `chain_id`
-    extra): a `chain` name plus numeric `chain_id`, derived from the active
-    network — never a hardcoded mainnet literal, and no legacy `network` key.
-    """
+    """'test' event body — built by the SAME `_build_payload` as every real
+    event (via a synthetic, never-persisted intent), so what the "Send test"
+    button delivers is exactly the production shape. Chain identity derives
+    from the active network — never a hardcoded mainnet literal."""
     from app.services.router_registry import primary_chain_id, chain_name_for_id
 
-    chain_id = primary_chain_id()
-    now = datetime.now(timezone.utc).isoformat()
-    return {
-        "event": "test",
-        "intent_id": "pi_test_000000000000",
-        "merchant_id": webhook.merchant_id,
-        "amount": 10.0,
-        "currency": "USDC",
-        "recipient": "0x" + "0" * 40,
-        "chain": chain_name_for_id(chain_id),
-        "chain_id": chain_id,
-        "tx_hash": None,
-        "status": "completed",
-        "metadata": {"test": True},
-        "created_at": now,
-        "completed_at": now,
-    }
+    now = datetime.now(timezone.utc)
+    intent = PaymentIntent(
+        intent_id="pi_test_000000000000",
+        merchant_id=webhook.merchant_id,
+        amount=10.0,
+        currency="USDC",
+        chain=chain_name_for_id(primary_chain_id()),
+        recipient="0x" + "0" * 40,
+        status=IntentStatus.completed,
+        metadata_={"test": True},
+        created_at=now,
+        completed_at=now,
+    )
+    return _build_payload("test", intent)
 
 
 async def send_test_event(webhook: MerchantWebhook) -> tuple:
@@ -1413,7 +1433,7 @@ async def send_webhook(
         )
         return 0
 
-    payload = _build_merchant_payload(event, intent, extra=extra_payload)
+    payload = _build_payload(event, intent, extra=extra_payload)
     created = 0
 
     for wh in webhooks:
@@ -1469,41 +1489,6 @@ async def send_webhook(
     return created
 
 
-def _build_merchant_payload(
-    event_type: str,
-    intent: PaymentIntent,
-    extra: Optional[dict] = None,
-) -> dict:
-    """
-    Costruisce il payload webhook per merchant con formato completo.
-
-    Include: event, intent_id, amount, currency, chain, tx_hash,
-    deposit_address, metadata, timestamp.
-    """
-    now = datetime.now(timezone.utc)
-    payload = {
-        # Vedi _build_event_payload: id evento univoco/stabile per dedup+ordering.
-        "event_id": "evt_" + uuid.uuid4().hex,
-        "event": event_type,
-        "intent_id": intent.intent_id,
-        "amount": str(intent.amount),
-        "currency": intent.currency,
-        "chain": getattr(intent, "chain", "BASE") or "BASE",
-        "tx_hash": intent.matched_tx_hash or intent.tx_hash,
-        "onchain_invoice_id": getattr(intent, "onchain_invoice_id", None),
-        "metadata": intent.metadata_,
-        "timestamp": now.isoformat(),
-        # ── Campi estesi per reconciliazione merchant ──
-        "status": intent.status.value,
-        "reference_id": intent.reference_id,
-        "amount_received": getattr(intent, "amount_received", None),
-        "overpaid_amount": getattr(intent, "overpaid_amount", None),
-        "underpaid_amount": getattr(intent, "underpaid_amount", None),
-        "completed_late": intent.completed_late or False,
-        "late_minutes": intent.late_minutes,
-        "created_at": intent.created_at.isoformat() if intent.created_at else None,
-        "completed_at": intent.completed_at.isoformat() if intent.completed_at else None,
-    }
-    if extra:
-        payload.update(extra)
-    return payload
+# (the second builder that lived here — `_build_merchant_payload` — was folded
+# into `_build_payload` above: two independent builders were the root cause of
+# the payload-shape drift between lifecycle and settlement webhooks)

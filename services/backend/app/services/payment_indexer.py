@@ -744,10 +744,11 @@ async def _finalize_settlement(db, settlement, chain_id: int) -> None:
     try:
         from app.services.webhook_service import send_webhook
 
+        # chain_id and fee are deliberately NOT extras: chain_id lives in the
+        # base payload contract; fee was removed from the contract (the
+        # on-chain fee stays readable from the PaymentMade event via tx_hash).
         extra_payload = {
-            "chain_id": chain_id,
             "tx_hash": settlement.tx_hash,
-            "fee": str(settlement.fee or 0),
             "settlement": "onchain",
         }
         if settlement.split_legs:

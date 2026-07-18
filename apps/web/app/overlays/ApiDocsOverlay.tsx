@@ -420,11 +420,13 @@ export default function ApiDocsOverlay({ onClose, onGoToCommand }: { onClose: ()
               {'  '}<Kw>{'"amount"'}</Kw><Punc>{': '}</Punc><Str>{'"100.00"'}</Str><Punc>{',\n'}</Punc>
               {'  '}<Kw>{'"currency"'}</Kw><Punc>{': '}</Punc><Str>{'"USDC"'}</Str><Punc>{',\n'}</Punc>
               {'  '}<Kw>{'"chain"'}</Kw><Punc>{': '}</Punc><Str>{'"base"'}</Str><Punc>{',\n'}</Punc>
+              {'  '}<Kw>{'"chain_id"'}</Kw><Punc>{': '}</Punc><Str>{'8453'}</Str><Punc>{',\n'}</Punc>
               {'  '}<Kw>{'"tx_hash"'}</Kw><Punc>{': '}</Punc><Str>{'"0xabcd…ef01"'}</Str><Punc>{',\n'}</Punc>
-              {'  '}<Kw>{'"splits"'}</Kw><Punc>{': ['}</Punc>{'\n'}
-              {'    '}<Punc>{'{ '}</Punc><Kw>{'"to"'}</Kw><Punc>{': '}</Punc><Str>{'"0x…"'}</Str><Punc>{', '}</Punc><Kw>{'"bps"'}</Kw><Punc>{': '}</Punc><Str>{'7000'}</Str><Punc>{' },\n'}</Punc>
-              {'    '}<Punc>{'{ '}</Punc><Kw>{'"to"'}</Kw><Punc>{': '}</Punc><Str>{'"0x…"'}</Str><Punc>{', '}</Punc><Kw>{'"bps"'}</Kw><Punc>{': '}</Punc><Str>{'3000'}</Str><Punc>{' }\n'}</Punc>
-              {'  '}<Punc>{']\n'}</Punc>
+              {'  '}<Kw>{'"split"'}</Kw><Punc>{': ['}</Punc>{'\n'}
+              {'    '}<Punc>{'{ '}</Punc><Kw>{'"address"'}</Kw><Punc>{': '}</Punc><Str>{'"0x…"'}</Str><Punc>{', '}</Punc><Kw>{'"share_bps"'}</Kw><Punc>{': '}</Punc><Str>{'7000'}</Str><Punc>{', '}</Punc><Kw>{'"amount"'}</Kw><Punc>{': '}</Punc><Str>{'"70000000"'}</Str><Punc>{' },\n'}</Punc>
+              {'    '}<Punc>{'{ '}</Punc><Kw>{'"address"'}</Kw><Punc>{': '}</Punc><Str>{'"0x…"'}</Str><Punc>{', '}</Punc><Kw>{'"share_bps"'}</Kw><Punc>{': '}</Punc><Str>{'3000'}</Str><Punc>{', '}</Punc><Kw>{'"amount"'}</Kw><Punc>{': '}</Punc><Str>{'"30000000"'}</Str><Punc>{' }\n'}</Punc>
+              {'  '}<Punc>{'],\n'}</Punc>
+              {'  '}<Cmt>{'// …full field set in /docs/webhooks\n'}</Cmt>
               <Punc>{'}'}</Punc>
             </pre>
           </div>

@@ -26,13 +26,19 @@ const COLORS = {
   blueLight: 'rgba(0, 82, 255, 0.08)',
 }
 
-// Subset of the backend VALID_EVENTS most merchants subscribe to.
+// Mirror of the backend VALID_EVENTS (merchant_models.py) — the three event
+// lists (backend allowlist, this picker, /docs/webhooks table) must agree.
 const EVENT_OPTIONS = [
   'payment.completed',
+  'payment.completed_late',
   'payment.expired',
-  'payment.cancelled',
+  'payment.expired_rejected',
+  'payment.needs_review',
   'payment.partial',
   'payment.overpaid',
+  'payment.reversed',
+  'payment.cancelled', // reserved: subscribable, not yet emitted
+  'payment.ambiguous', // reserved: subscribable, not yet emitted
 ] as const
 
 // Spacing lives in badgeClass; the helper keeps only the tone.

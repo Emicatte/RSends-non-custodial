@@ -126,7 +126,7 @@ def test_test_event_payload_reflects_active_chain(monkeypatch):
 
     assert payload["chain"] == "base_sepolia"
     assert payload["chain_id"] == 84532
-    # Consistent with the production _build_merchant_payload: no legacy `network`
+    # Consistent with the production _build_payload: no legacy `network`
     # key, and certainly no mainnet literal.
     assert "network" not in payload
     assert "BASE_MAINNET" not in json.dumps(payload)
