@@ -57,7 +57,6 @@ ENDPOINT_LIMITS: list[tuple[str, str, int, int, str]] = [
     ("GET",  "/api/v1/merchant/transactions",        60,    60,  "api_key"),
     ("GET",  "/api/v1/public/payment-intent",        20,    60,  "ip"),  # hosted checkout polling (unauthenticated → per-IP)
     ("POST", "/api/v1/tx/callback",                  10,    60,  "ip"),
-    ("POST", "/api/v1/webhooks/alchemy",           1000,    60,  "ip"),
     ("GET",  "/api/v1/audit/log",                    30,    60,  "ip"),
     # Admin approval surface (X-Admin-Token, server-to-server). Most-specific
     # first: the decision subpaths (trailing slash) precede the bare list.

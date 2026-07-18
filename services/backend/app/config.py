@@ -49,8 +49,6 @@ class Settings(BaseSettings):
 
     # ── Alchemy ───────────────────────────────────────────
     alchemy_api_key: str = ""
-    alchemy_webhook_secret: str = ""
-    alchemy_auth_token: str = ""
 
     # ══════════════════════════════════════════════════════
     #  NON-CUSTODIAL on-chain settlement
@@ -65,8 +63,20 @@ class Settings(BaseSettings):
     # for any chain not in this map — set it only after the contract is
     # deployed and the indexer knows the event (see DEPLOY_RUNBOOK 1e).
     split_router_addresses_json: str = ""
-    # JSON map of chain_id → RPC URL (optional; falls back to rpc_manager defaults)
-    indexer_rpc_urls_json: str = ""
+    # Optional JSON map { chain_id : [ {name, url[, priority]} ] } of EXTRA
+    # RPC providers merged into rpc_manager's failover list, between Alchemy
+    # (priority -1) and the built-in public fallbacks (default priority 0,
+    # stable sort → config wins ties). Adding a second paid vendor at mainnet
+    # is one env edit, zero code. Malformed input is ignored with a warning —
+    # never a boot failure.
+    rpc_providers_json: str = ""
+    # Proactive RPC health checks (one eth_blockNumber per provider per 30s,
+    # started for the indexer's chains at app startup). Feeds provider
+    # health-based routing in RPCManager.call, the rpc_provider_healthy /
+    # rpc_block_height gauges and the all-providers-down CRITICAL. One-env
+    # rollback: set false and restart — call() then tries every provider in
+    # priority order exactly as before.
+    rpc_health_checks_enabled: bool = True
     # Confirmation depth (latest - N) used when the finalized tag is disabled
     # (INDEXER_USE_FINALIZED_TAG=false — fix A) or unavailable. A settlement is
     # FINAL (and only then is the invoice marked paid + webhook fired) once its
@@ -175,8 +185,47 @@ class Settings(BaseSettings):
         return _parse_json_map(self.split_router_addresses_json)
 
     @property
-    def indexer_rpc_urls(self) -> dict:
-        return _parse_json_map(self.indexer_rpc_urls_json)
+    def rpc_extra_providers(self) -> dict:
+        """{chain_id(int) -> [ {name, url, priority} ]} parsed from
+        RPC_PROVIDERS_JSON. Entries without a usable name/url and keys that
+        are not chain ids are dropped (with a warning) — never raises."""
+        raw = _parse_json_map(self.rpc_providers_json)
+        out: dict = {}
+        for chain_key, entries in raw.items():
+            try:
+                chain_id = int(chain_key)
+            except (TypeError, ValueError):
+                logger.warning(
+                    "RPC_PROVIDERS_JSON: ignoring non-numeric chain id %r", chain_key
+                )
+                continue
+            if not isinstance(entries, list):
+                logger.warning(
+                    "RPC_PROVIDERS_JSON: chain %s value is not a list — ignored", chain_key
+                )
+                continue
+            cleaned = []
+            for entry in entries:
+                if (
+                    isinstance(entry, dict)
+                    and isinstance(entry.get("name"), str) and entry["name"]
+                    and isinstance(entry.get("url"), str) and entry["url"]
+                ):
+                    cleaned.append(
+                        {
+                            "name": entry["name"],
+                            "url": entry["url"],
+                            "priority": int(entry.get("priority", 0)),
+                        }
+                    )
+                else:
+                    logger.warning(
+                        "RPC_PROVIDERS_JSON: ignoring malformed provider entry "
+                        "for chain %s (need non-empty name and url)", chain_key
+                    )
+            if cleaned:
+                out[chain_id] = cleaned
+        return out
 
     @property
     def indexer_start_blocks(self) -> dict:
@@ -311,14 +360,6 @@ def validate_settings(settings: Settings) -> None:
         warnings.append(
             "RSENDS_ROUTER_ADDRESSES_JSON is empty. The on-chain PaymentMade "
             "indexer will be disabled until per-chain RSendsRouter addresses are set."
-        )
-
-    # ── ALCHEMY_WEBHOOK_SECRET ────────────────────────────
-    if not settings.alchemy_webhook_secret:
-        warnings.append(
-            "ALCHEMY_WEBHOOK_SECRET is empty. "
-            "Falling back to block polling (slower, higher RPC usage). "
-            "Set it in Alchemy Dashboard > Webhooks for real-time TX detection."
         )
 
     # ── Telegram (informational) ──────────────────────────

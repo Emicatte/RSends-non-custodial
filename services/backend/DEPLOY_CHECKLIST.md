@@ -7,7 +7,7 @@ Run through every section in order. Do not skip steps.
 
 ## 1. Pre-Deploy Security Audit
 
-- [ ] **Secrets rotated**: `HMAC_SECRET`, `ALCHEMY_WEBHOOK_SECRET`, DB password
+- [ ] **Secrets rotated**: `HMAC_SECRET`, DB password
 - [ ] **No secrets in code**: `grep -r "password\|secret\|private_key" app/ --include="*.py"` returns only config references
 - [ ] **`.env` not in repo**: `git ls-files .env` returns empty
 - [ ] **CORS origins**: `cors_origins` in `.env` set to production domains only (no `localhost`)
@@ -42,8 +42,6 @@ SWEEP_PRIVATE_KEY=<hot-wallet-key>   # or use KMS
 
 # Alchemy
 ALCHEMY_API_KEY=<key>
-ALCHEMY_WEBHOOK_SECRET=<secret>
-ALCHEMY_AUTH_TOKEN=<token>
 
 # Telegram Notifications
 TELEGRAM_BOT_TOKEN=<token>
@@ -111,8 +109,8 @@ psql -h <host> -U rpagos -d rpagos -c "\dt"
 - [ ] **Hot wallet funded**: minimum 0.1 ETH on Base (chain 8453)
 - [ ] **Nonce synced**: wallet nonce matches on-chain nonce
 - [ ] **Test transaction**: send 0.0001 ETH to a test address, verify via `/health/sweep`
-- [ ] **Alchemy webhook registered**: points to `https://<domain>/api/v1/webhooks/alchemy`
-- [ ] **Webhook verified**: test payload returns 200 with valid HMAC
+- [ ] **Indexer detecting**: on-chain PaymentMade polling is the ONLY tx-detection path
+      (no inbound webhook exists) — check startup log `tx_detection=polling` and `/health`
 
 ```bash
 # Verify hot wallet balance
@@ -267,6 +265,6 @@ Run within 30 minutes of deploy:
 ## 10. Ongoing Maintenance
 
 - **Weekly**: review Grafana dashboards for anomalies
-- **Monthly**: rotate `HMAC_SECRET` and `ALCHEMY_WEBHOOK_SECRET`
+- **Monthly**: rotate `HMAC_SECRET`
 - **Quarterly**: audit forwarding rules, review spending limits
 - **On incident**: update alert thresholds based on learnings

@@ -103,7 +103,7 @@ rpagos-backend/
 │   │   ├── ledger_service.py / reconciliation_service.py # Double-entry + reconcile
 │   │   ├── invoice_service.py     # Commission aggregation + atomic invoice numbering
 │   │   ├── webhook_service.py / split_webhook_bridge.py # Merchant webhook delivery + retry
-│   │   ├── transaction_matcher.py / polling_service.py / alchemy_webhook_manager.py
+│   │   ├── transaction_matcher.py / polling_service.py
 │   │   ├── aml_service.py / anomaly_service.py # 3-level AML + z-score
 │   │   ├── circuit_breaker.py / kill_switch.py # Fail-closed CB + global kill switch
 │   │   ├── alert_service.py / notification_service.py # Telegram/webhook alerts
@@ -120,7 +120,7 @@ rpagos-backend/
 │   │
 │   ├── middleware/    # correlation, structured_logging, rate_limit, idempotency,
 │   │                  # input_sanitization, api_auth, error_handler, request_context
-│   ├── security/      # auth, api_keys, input_validator, webhook_verifier
+│   ├── security/      # auth, api_keys, input_validator
 │   ├── tasks/         # Celery: sweep, webhook, periodic, notification
 │   └── jobs/          # reconciliation_job
 │

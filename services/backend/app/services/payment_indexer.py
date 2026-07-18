@@ -35,8 +35,8 @@ Event (RSendsRouter):
 
 Config (see app/config.py):
   - settings.rsends_router_addresses : {chain_id: "0xRouter", ...}
-  - settings.indexer_rpc_urls        : {chain_id: "https://rpc", ...} (optional;
-                                        falls back to rpc_manager)
+  - settings.rpc_extra_providers     : extra RPC providers merged into the
+                                        rpc_manager failover list (optional)
   - settings.indexer_confirmations   : block confirmations before processing
 
 Checkpointing: Postgres (`indexer_cursors`, migration 0012) is the source of
@@ -1018,10 +1018,7 @@ class PaymentWatcher:
             try:
                 await self._tick()
                 if consecutive_failures >= STALL_TICKS:
-                    logger.warning(
-                        "[indexer] RECOVERED chain=%d after %d failed ticks",
-                        self.chain_id, consecutive_failures,
-                    )
+                    self._note_recovery(consecutive_failures)
                 consecutive_failures = 0
                 INDEXER_STALLED.labels(chain_id=self.chain_id).set(0)
                 _status.setdefault(self.chain_id, {})["stalled"] = False
@@ -1043,8 +1040,8 @@ class PaymentWatcher:
 
     def _note_failure(self, consecutive: int, reason: str) -> None:
         """Fail loud: escalate to a single CRITICAL 'STALLED' signal (log +
-        gauge + /health) once STALL_TICKS consecutive ticks made no progress —
-        a quiet indexer is silent payment loss."""
+        gauge + /health + first-class alert) once STALL_TICKS consecutive
+        ticks made no progress — a quiet indexer is silent payment loss."""
         if consecutive == STALL_TICKS:
             logger.critical(
                 "[indexer] STALLED chain=%d after %d consecutive failed ticks: %s",
@@ -1052,11 +1049,51 @@ class PaymentWatcher:
             )
             INDEXER_STALLED.labels(chain_id=self.chain_id).set(1)
             _status.setdefault(self.chain_id, {})["stalled"] = True
+            self._fire_stall_alert(
+                "INDEXER_STALLED",
+                f"Payment indexer STALLED on chain {self.chain_id}: "
+                f"{consecutive} consecutive failed ticks — payments are NOT "
+                f"being detected. Last error: {reason}",
+                {"chain_id": self.chain_id, "consecutive": consecutive,
+                 "reason": reason},
+            )
         else:
             logger.error(
                 "[indexer] tick failed (chain=%d, consecutive=%d): %s",
                 self.chain_id, consecutive, reason,
             )
+
+    def _note_recovery(self, consecutive: int) -> None:
+        logger.warning(
+            "[indexer] RECOVERED chain=%d after %d failed ticks",
+            self.chain_id, consecutive,
+        )
+        self._fire_stall_alert(
+            "INDEXER_RECOVERED",
+            f"Payment indexer RECOVERED on chain {self.chain_id} after "
+            f"{consecutive} failed ticks",
+            {"chain_id": self.chain_id, "consecutive": consecutive},
+        )
+
+    def _fire_stall_alert(self, alert_type_name: str, message: str,
+                          context: dict) -> None:
+        """Best-effort fire-and-forget dispatch to alert_service (Telegram/
+        webhook when configured; ALWAYS at least a log line there). Same
+        never-raise pattern as circuit_breaker._fire_transition_alert:
+        alerting must never break the watcher loop, and without a running
+        event loop it silently skips (the CRITICAL log above already fired)."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        try:
+            from app.services.alert_service import AlertType, fire_alert
+
+            loop.create_task(
+                fire_alert(AlertType[alert_type_name], message, context)
+            )
+        except Exception:
+            pass
 
     async def _tick(self) -> dict:
         from app.services.rpc_manager import get_rpc_manager

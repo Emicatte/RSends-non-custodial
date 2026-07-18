@@ -121,7 +121,16 @@ async def lifespan(app: FastAPI):
     # ── Start on-chain PaymentMade indexer (non-custodial) ──
     # Watches RSendsRouter.PaymentMade per configured chain. No-op if no
     # RSENDS_ROUTER addresses are configured (e.g. dev/test).
-    await start_indexer_if_needed()
+    watchers = await start_indexer_if_needed()
+
+    # ── Proactive RPC health checks (per indexer chain) ──
+    # One eth_blockNumber per provider per 30s; feeds health-based failover
+    # routing, the rpc_provider_healthy/rpc_block_height gauges and the
+    # all-providers-down CRITICAL. Rollback = RPC_HEALTH_CHECKS_ENABLED=false.
+    if settings.rpc_health_checks_enabled and watchers:
+        from app.services.rpc_manager import start_health_checks
+
+        await start_health_checks([w.chain_id for w in watchers])
 
     # ── Token registry boot guard (defense-in-depth) ──
     # Re-check enabled tokens' on-chain symbol()/decimals() against the registry.
@@ -168,7 +177,6 @@ async def lifespan(app: FastAPI):
     # zero Celery workers is the CONFIGURED state, not a degradation.
     app.state.celery_fallback_active = not celery_active
 
-    webhook_mode = "webhook" if settings.alchemy_webhook_secret else "polling"
     db_display = settings.database_url.split("@")[-1] if "@" in settings.database_url else settings.database_url
     logger.info(
         "RPagos Backend Core started",
@@ -177,7 +185,9 @@ async def lifespan(app: FastAPI):
             "db": db_display,
             "redis": settings.redis_url,
             "sentry": bool(settings.sentry_dsn),
-            "tx_detection": webhook_mode,
+            # On-chain PaymentMade polling via the indexer is the ONLY
+            # detection path — there is no inbound webhook.
+            "tx_detection": "polling",
         },
     )
 
@@ -200,8 +210,15 @@ async def lifespan(app: FastAPI):
             except Exception as _e:  # never let cleanup raise
                 logger.warning("Error awaiting cancelled task during shutdown: %s", _e)
 
-    # 2) Stop indexer / WS managers (these may use the DB/Redis).
+    # 2) Stop indexer / RPC health loops / WS managers (these may use the
+    #    DB/Redis or have HTTP probes in flight).
     await stop_indexer()
+    from app.services.rpc_manager import stop_all_managers
+
+    try:
+        await stop_all_managers()
+    except Exception as _e:  # never let cleanup raise
+        logger.warning("Error stopping RPC health checks during shutdown: %s", _e)
     await payment_manager.shutdown()
 
     # 3) Close shared connections LAST.
@@ -471,7 +488,6 @@ async def health_config(_admin: str = Depends(require_admin)):
             "DATABASE_URL": _check(settings.database_url, required=True),
             "REDIS_URL": _check(settings.redis_url, required=True, prod_only=True),
             "ALCHEMY_API_KEY": _check(settings.alchemy_api_key, required=True),
-            "ALCHEMY_WEBHOOK_SECRET": _check(settings.alchemy_webhook_secret),
             # NON-CUSTODIAL: no SWEEP_PRIVATE_KEY / SIGNER_MODE / KMS_KEY_ID.
             "RSENDS_ROUTER_ADDRESSES": _check(settings.rsends_router_addresses_json),
             "HMAC_SECRET": _check(settings.hmac_secret, required=True, prod_only=True),

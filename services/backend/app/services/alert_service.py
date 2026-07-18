@@ -53,6 +53,10 @@ class AlertType(Enum):
     SWEEP_FAILED = "sweep_failed"
     BALANCE_LOW = "balance_low"
     CB_RECOVERY = "cb_recovery"
+    # Indexer stall (first-class, distinct from the breaker's RPC_DOWN):
+    # STALL_TICKS consecutive failed ticks = payments are NOT being detected.
+    INDEXER_STALLED = "indexer_stalled"
+    INDEXER_RECOVERED = "indexer_recovered"
     # Reconciliation job alerts
     SYSTEM_IMBALANCE = "system_imbalance"
     LEDGER_DISCREPANCY = "ledger_discrepancy"
@@ -72,6 +76,8 @@ SEVERITY_MAP: dict[AlertType, AlertSeverity] = {
     AlertType.AML_BLOCK: AlertSeverity.INFO,
     AlertType.SWEEP_FAILED: AlertSeverity.CRITICAL,
     AlertType.CB_RECOVERY: AlertSeverity.INFO,
+    AlertType.INDEXER_STALLED: AlertSeverity.CRITICAL,
+    AlertType.INDEXER_RECOVERED: AlertSeverity.INFO,
     AlertType.SYSTEM_IMBALANCE: AlertSeverity.EMERGENCY,
     AlertType.LEDGER_DISCREPANCY: AlertSeverity.WARNING,
     AlertType.LEDGER_DISCREPANCY_CRITICAL: AlertSeverity.EMERGENCY,

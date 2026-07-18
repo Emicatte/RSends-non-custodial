@@ -223,6 +223,21 @@ class RPCManager:
                     )
                 )
 
+        # Add config-driven extra providers (RPC_PROVIDERS_JSON) BEFORE the
+        # public defaults: with the default priority 0 the stable sort keeps
+        # them ahead of the equal-priority publics, i.e. between Alchemy (-1)
+        # and the best-effort public fallbacks. Adding a second paid vendor
+        # at mainnet is one env edit, zero code.
+        for cfg in settings.rpc_extra_providers.get(chain_id, []):
+            self._providers.append(
+                RPCProvider(
+                    name=cfg["name"],
+                    url=cfg["url"],
+                    chain_id=chain_id,
+                    priority=cfg["priority"],
+                )
+            )
+
         # Add default public providers
         for cfg in _DEFAULT_PROVIDERS.get(chain_id, []):
             self._providers.append(
@@ -275,8 +290,36 @@ class RPCManager:
 
     async def _check_all_providers(self) -> None:
         """Query each provider for latest block number and update health."""
-        tasks = [self._check_provider(p) for p in self._providers]
-        await asyncio.gather(*tasks, return_exceptions=True)
+        if not self._providers:
+            return  # unconfigured chain: nothing to probe (vacuous "all failed")
+        results = await asyncio.gather(
+            *(self._check_provider(p) for p in self._providers),
+            return_exceptions=True,
+        )
+
+        if not any(r is True for r in results):
+            # Every probe failed this cycle (network/vendor outage). Mark all
+            # providers unhealthy (truthful gauges) and fail LOUD — but do NOT
+            # touch the circuit breakers: call() already tries every provider
+            # as a last resort when none is healthy, so a forced-open
+            # fail-fast window would only delay recovery. (The previous
+            # force-open branch here was unreachable: it keyed on block lag,
+            # and the provider holding max_block always has lag 0.)
+            for p in self._providers:
+                p.healthy = False
+                RPC_HEALTHY.labels(
+                    chain_id=self.chain_id, provider=p.name
+                ).set(0)
+                RPC_BLOCK_HEIGHT.labels(
+                    chain_id=self.chain_id, provider=p.name
+                ).set(p.last_block)
+            logger.critical(
+                "ALL RPC provider health probes failed on chain %d "
+                "(%d providers) — payment detection is degraded until one recovers",
+                self.chain_id, len(self._providers),
+            )
+            self._fire_all_down_alert()
+            return
 
         # Determine the highest known block across all providers
         blocks = [p.last_block for p in self._providers if p.last_block > 0]
@@ -285,11 +328,9 @@ class RPCManager:
         max_block = max(blocks)
 
         # Mark providers behind by >MAX_BLOCK_LAG as unhealthy
-        all_unhealthy = True
         for p in self._providers:
             if p.last_block > 0 and (max_block - p.last_block) <= MAX_BLOCK_LAG:
                 p.healthy = True
-                all_unhealthy = False
             elif p.last_block > 0:
                 p.healthy = False
                 logger.warning(
@@ -304,17 +345,8 @@ class RPCManager:
                 chain_id=self.chain_id, provider=p.name
             ).set(p.last_block)
 
-        # All unhealthy → force-open all circuit breakers
-        if all_unhealthy and blocks:
-            logger.critical(
-                "ALL RPC providers unhealthy on chain %d — opening circuit breakers",
-                self.chain_id,
-            )
-            for p in self._providers:
-                p.cb._transition(p.cb._state.OPEN)
-
-    async def _check_provider(self, provider: RPCProvider) -> None:
-        """Check a single provider's block height."""
+    async def _check_provider(self, provider: RPCProvider) -> bool:
+        """Check a single provider's block height. True on a successful probe."""
         try:
             result = await _raw_rpc_call(
                 provider.url, "eth_blockNumber", [], timeout=5
@@ -322,9 +354,33 @@ class RPCManager:
             block = int(result, 16)
             provider.last_block = block
             provider.last_check = time.monotonic()
+            return True
         except Exception as exc:
             logger.debug("Health check failed for %s: %s", provider.name, exc)
             provider.healthy = False
+            return False
+
+    def _fire_all_down_alert(self) -> None:
+        """Best-effort RPC_DOWN alert (always at least a log line in
+        alert_service; Telegram/webhook when configured). Cooldown in
+        alert_service keeps the 30s loop from paging every cycle. Never
+        raises — alerting must not break the health loop."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        try:
+            from app.services.alert_service import AlertType, fire_alert
+
+            loop.create_task(fire_alert(
+                AlertType.RPC_DOWN,
+                f"ALL RPC provider health probes failed on chain "
+                f"{self.chain_id} ({len(self._providers)} providers)",
+                {"chain_id": self.chain_id,
+                 "providers": [p.name for p in self._providers]},
+            ))
+        except Exception:
+            pass
 
     # ── Healthy providers ─────────────────────────────────
 
@@ -571,6 +627,20 @@ async def start_all_managers() -> None:
     """Start health checks for all registered managers."""
     for mgr in _managers.values():
         await mgr.start()
+
+
+async def start_health_checks(chain_ids: list[int]) -> None:
+    """Instantiate managers for the given chains, then start every registered
+    manager's health loop.
+
+    The instantiation step is load-bearing: the registry is populated lazily
+    (the indexer only calls get_rpc_manager inside its first tick), so calling
+    start_all_managers() alone at lifespan startup would iterate an EMPTY
+    registry and silently start nothing — the footgun that kept this layer
+    inert since it was written."""
+    for chain_id in chain_ids:
+        get_rpc_manager(chain_id)
+    await start_all_managers()
 
 
 async def stop_all_managers() -> None:

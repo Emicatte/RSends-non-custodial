@@ -11,7 +11,6 @@ Se Redis è down: fail-closed per endpoint finanziari, fail-open per il resto.
 
 FINANCIAL ENDPOINTS (fail-closed = rifiuta se non può verificare):
   - POST /api/v1/tx/callback
-  - POST /api/v1/webhooks/alchemy
   - POST /api/v1/forwarding/rules (create = muove configurazione fondi)
 
 NON-FINANCIAL (fail-open = processa comunque):
@@ -30,7 +29,6 @@ logger = logging.getLogger("idempotency")
 
 FINANCIAL_PATHS = {
     "/api/v1/tx/callback",
-    "/api/v1/webhooks/alchemy",
 }
 
 IDEMPOTENCY_TTL = 86400  # 24 ore
