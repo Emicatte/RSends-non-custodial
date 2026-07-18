@@ -40,6 +40,28 @@ except Exception:
 if not (_HAVE_ANVIL and _HAVE_FORGE and _HAVE_WEB3):
     collect_ignore = ["test_money_path_anvil.py"]
 
+# ── Skip (visibly) when the toolchain exists but the HARNESS env does not ─────
+# The money-path tests need RSEND_E2E_ALLOW_LOOPBACK_WEBHOOKS=1 (the SSRF egress
+# guard otherwise blocks the loopback HTTP webhook receiver: scheme_not_https)
+# and an isolated DB. A plain `pytest tests/` must skip them WITH A REASON —
+# green-because-clean, never red-for-a-missing-harness and never silently
+# dropped. `make e2e-anvil` and the CI e2e job set the flag and run them.
+_HAVE_HARNESS = os.getenv("RSEND_E2E_ALLOW_LOOPBACK_WEBHOOKS") == "1"
+
+
+def pytest_collection_modifyitems(config, items):
+    if _HAVE_HARNESS:
+        return
+    skip = pytest.mark.skip(
+        reason=(
+            "requires the e2e harness (RSEND_E2E_ALLOW_LOOPBACK_WEBHOOKS=1 + "
+            "isolated DB) — run `make e2e-anvil`"
+        )
+    )
+    for item in items:
+        if item.get_closest_marker("e2e"):
+            item.add_marker(skip)
+
 # ── Anvil deterministic dev accounts ─────────────────────────────────────────
 # PUBLIC, well-known Anvil/Hardhat dev keys from the standard "test test … junk"
 # mnemonic. LOCAL ONLY — these never hold real funds and must never be used on a

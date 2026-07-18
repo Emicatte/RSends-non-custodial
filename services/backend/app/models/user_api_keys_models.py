@@ -43,9 +43,21 @@ class UserApiKey(Base):
     )
     # Prompt 11: org-scoped. Every row belongs to exactly one org; rows
     # CASCADE-delete when the org is deleted.
+    # use_alter: organizations sits in an FK cycle with users
+    # (users.active_org_id ⇄ organizations.owner_user_id — see
+    # fk_users_active_org in auth_models). Without use_alter here,
+    # SQLAlchemy's drop ordering under that cycle is non-deterministic on
+    # FK-enforcing databases and Base.metadata.drop_all can try to drop
+    # organizations while user_api_keys still references it (the test-suite
+    # "dirty DB" storms). Prod DDL comes from Alembic and is unaffected.
     org_id = Column(
         _UUID(),
-        ForeignKey("organizations.id", ondelete="CASCADE"),
+        ForeignKey(
+            "organizations.id",
+            ondelete="CASCADE",
+            use_alter=True,
+            name="fk_user_api_keys_org",
+        ),
         nullable=False,
         index=True,
     )
