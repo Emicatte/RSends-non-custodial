@@ -302,7 +302,7 @@ async def create_intent(
     environment: str,
     payload: CreatePaymentIntentRequest,
     org_id: str | None = None,
-    key_id: str | None = None,
+    key_id: int | str | None = None,
 ) -> PaymentIntent:
     """Create + persist a PaymentIntent, or raise the appropriate 4xx.
 
@@ -311,6 +311,16 @@ async def create_intent(
     add/flush → audit → (usage increment, key only) → commit. Returns the intent;
     the caller serializes it with `_intent_to_response`.
     """
+    # `key_id` must compare against ApiKey.id (Integer): callers pass it as int
+    # (middleware client dict) or numeric str (session/test callers) — Postgres
+    # has no `integer = varchar` operator, so normalize once here for every
+    # downstream ApiKey.id lookup (monthly limit, org lookup, usage increment).
+    if key_id is not None:
+        try:
+            key_id = int(key_id)
+        except (TypeError, ValueError):
+            key_id = None  # non-numeric (e.g. debug bypass) — skip key-gated steps
+
     requested_chain = (payload.chain or "base").lower()
 
     # Categorical settlement gate: a chain that doesn't canonicalize into the
@@ -379,14 +389,11 @@ async def create_intent(
     else:
         recipient_org = org_id
         if recipient_org is None and key_id is not None:
-            try:
-                recipient_org = (
-                    await db.execute(
-                        select(ApiKey.org_id).where(ApiKey.id == int(key_id))
-                    )
-                ).scalar_one_or_none()
-            except (TypeError, ValueError):
-                recipient_org = None  # non-numeric key_id (e.g. debug bypass)
+            recipient_org = (
+                await db.execute(
+                    select(ApiKey.org_id).where(ApiKey.id == key_id)
+                )
+            ).scalar_one_or_none()
         recipient = await resolve_recipient(
             db, merchant_id, payload.recipient, org_id=recipient_org
         )

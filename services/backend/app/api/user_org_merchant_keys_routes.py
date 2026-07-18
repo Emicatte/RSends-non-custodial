@@ -106,17 +106,18 @@ def _to_item(k: ApiKey) -> MerchantKeyItem:
     )
 
 
-def _tenant_filter(org_id: str, owner: str):
-    """A key belongs to this org's identity if the org minted it (org_id) or
-    it was wallet-minted for the same resolved owner address."""
-    return (ApiKey.org_id == org_id) | (func.lower(ApiKey.owner_address) == owner)
+def _tenant_filter(org_id: str):
+    """org_id is the key tenant since 0014 (every row carries it, NOT NULL).
+    No owner_address arm: a key minted by another org must stay invisible
+    even when the resolved owner address coincides."""
+    return ApiKey.org_id == org_id
 
 
-async def _count_active(db: AsyncSession, org_id: str, owner: str) -> int:
+async def _count_active(db: AsyncSession, org_id: str) -> int:
     return (
         await db.execute(
             select(func.count(ApiKey.id)).where(
-                _tenant_filter(org_id, owner),
+                _tenant_filter(org_id),
                 ApiKey.is_active.is_(True),
                 ApiKey.environment == ENVIRONMENT,
             )
@@ -139,14 +140,14 @@ async def list_merchant_keys(
         (
             await db.execute(
                 select(ApiKey)
-                .where(_tenant_filter(org_id, owner))
+                .where(_tenant_filter(org_id))
                 .order_by(desc(ApiKey.created_at))
             )
         )
         .scalars()
         .all()
     )
-    active = await _count_active(db, org_id, owner)
+    active = await _count_active(db, org_id)
     return MerchantKeyListResponse(
         keys=[_to_item(k) for k in rows],
         max_allowed=MAX_ACTIVE_KEYS,
@@ -165,7 +166,7 @@ async def create_merchant_key(
     user_id, org_id, _role = ctx
     owner = await resolve_owner_address(db, org_id)
 
-    if await _count_active(db, org_id, owner) >= MAX_ACTIVE_KEYS:
+    if await _count_active(db, org_id) >= MAX_ACTIVE_KEYS:
         raise HTTPException(
             status_code=409,
             detail={"code": "max_keys_reached", "max": MAX_ACTIVE_KEYS},
@@ -222,15 +223,15 @@ async def revoke_merchant_key(
     db: AsyncSession = Depends(get_db),
 ):
     """Soft-revoke, idempotent. Tenant scope IN the query → 404 on miss or
-    cross-tenant (never 403 — don't leak existence)."""
+    cross-tenant (never 403 — don't leak existence). Scoped purely by org_id,
+    so no owner-identity resolution (and none of its 409s) is needed."""
     user_id, org_id, _role = ctx
-    owner = await resolve_owner_address(db, org_id)
 
     key = (
         await db.execute(
             select(ApiKey).where(
                 ApiKey.id == key_id,
-                _tenant_filter(org_id, owner),
+                _tenant_filter(org_id),
             )
         )
     ).scalar_one_or_none()

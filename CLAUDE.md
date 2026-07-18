@@ -158,9 +158,9 @@ feeding the /app "Get started" card); `settlement_wallet_conflict` still propaga
 | `GET /api/v1/user/org/webhooks/{id}/deliveries` (Phase E) | `viewer` | webhook resolved with owner+env filter FIRST → **404** on empty (cross-tenant/cross-env/missing); paginated; **excludes `payload`/`response_body`** (OQ-E2, PII/secret avoidance) | 120/min **per IP** |
 | `POST /api/v1/user/org/webhooks` (Phase E) | `operator` | register mirror — SAME `create_merchant_webhook` as the API-key path (SSRF egress guard + env stamp); returns `secret` **once**; 422 `WEBHOOK_URL_FORBIDDEN` on unsafe URL | 5/hour **per IP** |
 | `POST /api/v1/user/org/webhooks/{id}/test` (Phase E) | `operator` | scoped `(id, owner, env)` → **404**/400; SAME `send_test_event` (egress-guarded) | 10/min **per IP** |
-| `POST /api/v1/user/org/merchant-keys` (Option B, 2026-07-15) | `admin` | mints a REAL `rsend_test_` merchant key from the session — SAME `generate_api_key` + `api_keys` table as the wallet route; `owner_address = resolve_owner_address(org)`; scope pinned `write`, env pinned `test`; row stamped `org_id` (migration 0011) so the owner-identity conflict check excludes the org's OWN keys (self-conflict trap); 5-active cap per (owner, env) → 409 `max_keys_reached`; resolver 409s propagate; plaintext returned **once** | 5/hour **per IP** |
-| `GET /api/v1/user/org/merchant-keys` | `viewer` | prefix-only list, `(org_id == org) OR (owner_address == resolved owner)` (includes historical wallet-minted keys of the same identity); never key material | 120/min **per IP** |
-| `POST /api/v1/user/org/merchant-keys/{id}/revoke` | `admin` | soft-revoke, idempotent; tenant scope IN the query → **404** on miss/cross-tenant | 10/min **per IP** |
+| `POST /api/v1/user/org/merchant-keys` (Option B, 2026-07-15) | `admin` | mints a REAL `rsend_test_` merchant key from the session — SAME `generate_api_key` + `api_keys` table as the wallet route; `owner_address = resolve_owner_address(org)`; scope pinned `write`, env pinned `test`; row stamped `org_id` (0011; NOT NULL + tenant key since 0014) so the owner-identity conflict check excludes the org's OWN keys (self-conflict trap); 5-active cap per (org, env) → 409 `max_keys_reached`; resolver 409s propagate; plaintext returned **once** | 5/hour **per IP** |
+| `GET /api/v1/user/org/merchant-keys` | `viewer` | prefix-only list, `org_id == org` ONLY (0014 re-keyed key tenancy on org_id and backfilled historical wallet-minted keys to their org; a foreign org's key stays invisible even on a shared owner address); never key material | 120/min **per IP** |
+| `POST /api/v1/user/org/merchant-keys/{id}/revoke` | `admin` | soft-revoke, idempotent; tenant scope `(id, org_id)` IN the query → **404** on miss/cross-tenant; no owner-identity resolution needed | 10/min **per IP** |
 | `GET /api/v1/user/org/stats` (Phase E) | `viewer` | settlements attributed via the **intent join** (`settlement.intent_id → intent`, `intent.merchant_id == owner` + env) — NOT the broken primary-wallet filter; USD conversion via `price_service` + `app.tokens.registry`; read-only; carries the get-started checklist booleans (`settlement_wallet_set`/`has_api_key`/`has_paid_payment`, response `OrgDashboardStats(DashboardStats)` — the shared `DashboardStats` untouched); fresh-merchant safe: `no_primary_wallet` caught → **200 with zeroed KPIs + booleans**; `settlement_wallet_conflict` still 409 | 120/min **per IP** |
 
 Browser/session counterpart of the API-key merchant API. The `/app` UI
@@ -208,9 +208,12 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
 - **Re-key session tenancy on `org_id` (durable fix for the owner-identity fallback).** The
   wallet-address tenant key is custodial-era; the settlement-wallet fallback (2026-07-12) is a
   safe interim but leaves identity flips and a DoS-not-leak griefing vector (an org copying a
-  wallet-less org's settlement address 409s both). Durable fix: nullable `org_id` on
-  `payment_intents`/`merchant_webhooks` + backfill + re-scope the session queries (~16 sites);
-  API-key visibility needs a union or org-bound keys. Est. 3-5 days, dedicated pass.
+  wallet-less org's settlement address 409s both). **api_keys slice DONE (0014, 2026-07-18):**
+  every key row carries a NOT NULL `org_id` (backfilled report-and-stop), key mint/list/revoke/
+  cap are org-scoped, and both mint routes stamp org fail-closed — keys are org-bound.
+  REMAINING: nullable `org_id` on `payment_intents`/`merchant_webhooks` + backfill + re-scope
+  the session queries (~16 sites); `client_id`/`merchant_id` stamping is still the wallet
+  address. Est. 3-5 days, dedicated pass.
 - **Retire the wallet-authenticated Merchant Dashboard (approved 2026-07-12; WEB SURFACE
   REMOVED 2026-07-16).** Session minting + list/revoke are live
   (`/api/v1/user/org/merchant-keys`, admin role, `resolve_owner_address` identity chain, own
@@ -225,8 +228,11 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
   `wallet_session_routes.py`, the `/api/v1/keys` `EXEMPT_PATHS` entry + `ADMIN_PATHS` middleware
   branch; `require_wallet_auth` itself stays until the dormant custodial surfaces
   (splits/forwarding/distributions) also go. `/pay` and `verify_api_key` untouched. Also decide
-  `rsusr_`'s fate (verification wired to zero routes). Note: migration 0011 (`api_keys.org_id` +
-  resolver own-org carve-out) is the first contained slice of the org_id re-key follow-up above.
+  `rsusr_`'s fate (verification wired to zero routes). Note: 0011 (`api_keys.org_id` + resolver
+  own-org carve-out) and 0014 (backfill + NOT NULL + org-scoped key tenancy; the wallet-signed
+  `POST /api/v1/keys/generate` now resolves the signer's org via `resolve_org_for_wallet` and
+  422s fail-closed instead of minting a NULL-org key) are the completed api_keys slices of the
+  org_id re-key follow-up above.
   Capability gap accepted at removal: /app is test-env-locked, so until it grows an environment
   toggle there is no UI over live/mainnet data (live routers undeployed, so nothing is usable
   there yet anyway).

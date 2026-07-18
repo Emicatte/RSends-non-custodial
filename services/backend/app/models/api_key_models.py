@@ -22,13 +22,17 @@ class ApiKey(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
 
+    # Vestigial for key tenancy since migration 0014 (org_id is the tenant
+    # key), but still authoritative for the request identity: verify_api_key
+    # derives client_id (= merchant_id stamped on intents/webhooks) from it.
+    # Dropping it belongs to the full merchant_id re-key pass.
     owner_address = Column(String(42), nullable=False, index=True)
 
-    # Which org minted this key via the session flow (migration 0011).
-    # NULL for wallet-signed mints (pre-session keys have no org linkage).
-    # Lets owner_identity's conflict check exclude an org's OWN keys, so a
-    # settlement-wallet-fallback org that mints a key doesn't 409 itself.
-    org_id = Column(String(36), nullable=True, index=True)
+    # The key's owning organization — the tenant key for the api_keys surface
+    # (mint/list/revoke/cap/recipient-gate). Added nullable in 0011 for
+    # session mints; backfilled + NOT NULL in 0014, and the wallet-signed
+    # generate route now stamps it fail-closed, so no NULL-org key can exist.
+    org_id = Column(String(36), nullable=False, index=True)
 
     key_hash = Column(String(64), nullable=False, unique=True, index=True)
     key_prefix = Column(String(32), nullable=False)
