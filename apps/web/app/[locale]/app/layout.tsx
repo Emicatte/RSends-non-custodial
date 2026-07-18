@@ -8,9 +8,6 @@ import AppNav from '@/components/app/AppNav'
 import AppSidebar from '@/components/app/AppSidebar'
 import AppBottomNav from '@/components/app/AppBottomNav'
 import AppTopbar from '@/components/app/AppTopbar'
-import { TransactionPersistence } from '@/components/TransactionPersistence'
-import { ContactsPersistence } from '@/components/ContactsPersistence'
-import { PostLoginMerge } from '@/components/auth/PostLoginMerge'
 import { TestnetBanner } from '@/components/app/TestnetBanner'
 
 export const metadata: Metadata = {
@@ -53,9 +50,6 @@ export default async function AppLayout({
         <TestnetBanner />
         {children}
       </div>
-      <TransactionPersistence />
-      <ContactsPersistence />
-      <PostLoginMerge />
     </>
   )
 }

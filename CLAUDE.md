@@ -237,9 +237,13 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
   toggle there is no UI over live/mainnet data (live routers undeployed, so nothing is usable
   there yet anyway).
 - **Dormant custodial residue (audit 2026-07-12, batch as one subtractive pass):**
-  `TransactionPersistence`/`ContactsPersistence`/`PostLoginMerge`/`lib/tx-events`/
-  `useUserTransactions` (listeners without emitters, mounted in the `/app` layout) + the now
-  caller-less `user_transactions`/`user_contacts`/`user_routes` APIs; `merchant_profiles`
+  ~~`TransactionPersistence`/`ContactsPersistence`/`PostLoginMerge`/`lib/tx-events`/
+  `useUserTransactions`~~ — frontend cluster ARCHIVED 2026-07-18 to
+  `apps/web/_archive/custodial-persistence/` (console-404 cleanup pass; the listeners had
+  no emitters and the fetched data no readers). The backend `user_transactions`/
+  `user_contacts`/`user_routes` routers are STILL REGISTERED in main.py (they were never
+  removed — 401/200, not 404) and are now truly caller-less (`useUserRoutes.ts` also
+  caller-less, left in place): remove them in this batch pass; `merchant_profiles`
   (wallet-keyed, superseded by `company_profiles` — migrate billing fields first);
   `blacklisted_wallets` (dead, superseded by `sanctions_list`); dead `EXEMPT_PATHS` entries;
   root non-locale `app/page.tsx` legacy landing (own decision). DB-only orphan tables
@@ -280,11 +284,10 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
   `forwarding/logs` transactions shell, the balances/clients/reports mocks, the `/app/settings`
   mock; sidebar/bottom-nav/topbar pruned and `settings` repointed to the live `/settings`).
   Still to clean in later passes (kept in A to stay subtractive/build-safe):
-  (a) **custodial-tx-history plumbing** — `components/TransactionPersistence.tsx` (mounted in
-  the `/app` layout) + `lib/tx-events.ts` + `components/auth/PostLoginMerge.tsx` +
-  `hooks/useUserTransactions` persist send/swap tx history; now a dead listener (no emitters)
-  but entangled with the auth/layout shell — remove once non-custodial payment-tracking is
-  settled; (b) **root `app/page.tsx`** (non-locale `/`) is a legacy custodial consumer landing
+  (a) **custodial-tx-history plumbing** — DONE 2026-07-18: the persistence cluster
+  (`TransactionPersistence`/`ContactsPersistence`/`PostLoginMerge`/`tx-events`/
+  `useUserTransactions`/`useUserContacts`) was unmounted from the `/app` layout and archived
+  to `apps/web/_archive/custodial-persistence/`; (b) **root `app/page.tsx`** (non-locale `/`) is a legacy custodial consumer landing
   (`useSweepWebSocket`/`useSweepStats`, multi-chain Solana/Tron wiring) — out of the `/app`
   surface, needs its own decision; (c) **backend janitor leftovers** now caller-less from the
   web app — `EXEMPT_PATHS` entries `api/internal/signing` / `api/internal/oracle`,
