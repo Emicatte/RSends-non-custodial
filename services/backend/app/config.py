@@ -70,6 +70,13 @@ class Settings(BaseSettings):
     # is one env edit, zero code. Malformed input is ignored with a warning —
     # never a boot failure.
     rpc_providers_json: str = ""
+    # Proactive RPC health checks (one eth_blockNumber per provider per 30s,
+    # started for the indexer's chains at app startup). Feeds provider
+    # health-based routing in RPCManager.call, the rpc_provider_healthy /
+    # rpc_block_height gauges and the all-providers-down CRITICAL. One-env
+    # rollback: set false and restart — call() then tries every provider in
+    # priority order exactly as before.
+    rpc_health_checks_enabled: bool = True
     # Confirmation depth (latest - N) used when the finalized tag is disabled
     # (INDEXER_USE_FINALIZED_TAG=false — fix A) or unavailable. A settlement is
     # FINAL (and only then is the invoice marked paid + webhook fired) once its
