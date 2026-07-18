@@ -72,10 +72,18 @@ async def setup_db(monkeypatch):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         # Simulate the pre-0014 schema so legacy (org_id NULL) rows are
-        # insertable; the model itself is NOT NULL post-0014.
-        await conn.execute(
-            sa.text("ALTER TABLE api_keys ALTER COLUMN org_id DROP NOT NULL")
-        )
+        # insertable; the model itself is NOT NULL post-0014. Rebuilt from a
+        # metadata copy instead of ALTER COLUMN, which SQLite (the CI engine)
+        # cannot parse; nothing references api_keys by FK, so drop/create is
+        # safe on both engines.
+        def _pre_0014_api_keys(sync_conn):
+            legacy_md = sa.MetaData()
+            tbl = ApiKey.__table__.to_metadata(legacy_md)
+            tbl.columns["org_id"].nullable = True
+            ApiKey.__table__.drop(sync_conn)
+            tbl.create(sync_conn)
+
+        await conn.run_sync(_pre_0014_api_keys)
     yield
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
