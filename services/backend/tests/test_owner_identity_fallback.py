@@ -136,6 +136,9 @@ def _mk_intent(merchant_id, **kw):
 def _mk_api_key(owner_address, *, revoked=False):
     return ApiKey(
         owner_address=owner_address,
+        # A FOREIGN org's key (org_id NOT NULL since 0014) — still a
+        # competing claim; only the org's OWN keys are carved out.
+        org_id=str(uuid4()),
         key_hash=secrets.token_hex(32),
         key_prefix="rsend_test_" + secrets.token_hex(4),
         is_active=not revoked,

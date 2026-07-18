@@ -214,7 +214,11 @@ async def verify_api_key(request: Request) -> Optional[dict]:
 
 def _api_key_to_dict(api_key) -> dict:
     return {
+        # client_id (= merchant_id stamped on intents/webhooks) stays the
+        # owner address until the full merchant_id re-key; org_id is the
+        # key's tenant (0014) for consumers that scope by org.
         "client_id": api_key.owner_address,
+        "org_id": api_key.org_id,
         "name": api_key.label,
         "key_id": api_key.id,
         "scope": api_key.scope or "write",

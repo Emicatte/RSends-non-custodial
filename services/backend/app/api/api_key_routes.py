@@ -19,6 +19,7 @@ from app.db.session import get_db
 from app.models.api_key_models import ApiKey
 from app.security.api_keys import generate_api_key
 from app.security.auth import require_wallet_auth
+from app.services.owner_identity import resolve_org_for_wallet
 
 api_key_router = APIRouter(prefix="/api/v1/keys", tags=["api-keys"])
 
@@ -94,6 +95,10 @@ async def generate_key(
     if req.scope == "admin":
         raise HTTPException(403, "admin scope cannot be self-provisioned")
 
+    # api_keys.org_id is NOT NULL since 0014: the signer's wallet must map to
+    # exactly one org (422 fail-closed otherwise — never a NULL-org key).
+    org_id = await resolve_org_for_wallet(db, owner)
+
     count_q = select(ApiKey).where(
         ApiKey.owner_address == owner,
         ApiKey.is_active == True,  # noqa: E712
@@ -107,6 +112,7 @@ async def generate_key(
 
     api_key = ApiKey(
         owner_address=owner,
+        org_id=org_id,
         **key_fields,
         label=req.label,
         scope=req.scope,

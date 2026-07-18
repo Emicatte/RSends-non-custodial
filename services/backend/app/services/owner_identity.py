@@ -14,10 +14,12 @@ MerchantWebhook.merchant_id`). Precedence:
    - is another org's `settlement_wallet` (the column is not unique);
    - is an `api_keys.owner_address`, active OR revoked (an rsend_ key mint
      proved control via EIP-191 signature) — EXCLUDING keys this same org
-     minted via the session flow (`api_keys.org_id == org_id`, migration
-     0011): without the carve-out, a settlement-wallet-fallback org's first
-     session-minted key would 409 every later resolve, including its own
-     stats/payments reads and the mint of key #2.
+     owns (`api_keys.org_id == org_id`, migration 0011): without the
+     carve-out, a settlement-wallet-fallback org's first session-minted key
+     would 409 every later resolve, including its own stats/payments reads
+     and the mint of key #2. Since 0014 backfilled org_id onto EVERY key,
+     the carve-out also covers the org's historical wallet-minted keys —
+     strictly fewer false-positive 409s; a foreign org's key still conflicts.
    The checks re-run on every request, so a later legitimate claim (e.g. the
    real owner SIWE-links the address) immediately revokes a squatter's fallback.
 
@@ -86,8 +88,9 @@ async def resolve_owner_address(db: AsyncSession, org_id: str) -> str:
         await db.execute(
             select(func.count(ApiKey.id)).where(
                 func.lower(ApiKey.owner_address) == addr,
-                # Session-minted keys of THIS org are our own identity, not a
-                # competing claim (see module docstring; migration 0011).
+                # THIS org's own keys are our identity, not a competing claim
+                # (module docstring; 0011 + 0014). The NULL arm is a belt for
+                # a not-yet-migrated DB — 0014 makes org_id NOT NULL.
                 (ApiKey.org_id.is_(None)) | (ApiKey.org_id != org_id),
             )
         )
@@ -97,3 +100,55 @@ async def resolve_owner_address(db: AsyncSession, org_id: str) -> str:
             status_code=409, detail={"code": "settlement_wallet_conflict"}
         )
     return addr
+
+
+async def resolve_org_for_wallet(db: AsyncSession, wallet_address: str) -> str:
+    """Reverse of `resolve_owner_address`: the ONE org a wallet belongs to.
+
+    Same precedence as 0014's backfill mapping — active `user_wallets` link
+    first, else `organizations.settlement_wallet`. Fail-closed 422 when the
+    wallet maps to no org or to more than one (never guess key tenancy).
+    Used by the legacy wallet-signed key mint to stamp `api_keys.org_id`
+    (NOT NULL since 0014)."""
+    addr = (wallet_address or "").lower()
+
+    org_ids = (
+        (
+            await db.execute(
+                select(UserWallet.org_id)
+                .where(
+                    func.lower(UserWallet.address) == addr,
+                    UserWallet.unlinked_at.is_(None),
+                )
+                .distinct()
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not org_ids:
+        org_ids = (
+            (
+                await db.execute(
+                    select(Organization.id).where(
+                        func.lower(Organization.settlement_wallet) == addr
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+    if len(org_ids) == 1:
+        return str(org_ids[0])
+    raise HTTPException(
+        status_code=422,
+        detail={
+            "code": "org_unresolvable" if not org_ids else "org_ambiguous",
+            "message": (
+                "This wallet does not resolve to exactly one organization; "
+                "link it in /settings/wallets or set it as the organization's "
+                "settlement wallet, then retry."
+            ),
+        },
+    )
