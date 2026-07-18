@@ -37,6 +37,12 @@ OWNER = "0x742d35cc6634c0532925a3b844bc9e7595f2bd18"
 async def setup_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Start from a known-empty table: earlier modules that clean at SETUP
+        # (not teardown — e.g. the indexer suites) leave their intents behind,
+        # and this module's not-persisted assertions count GLOBALLY. Deleting
+        # here keeps those assertions at full strength without inheriting
+        # another module's rows.
+        await conn.execute(PaymentIntent.__table__.delete())
     yield
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)

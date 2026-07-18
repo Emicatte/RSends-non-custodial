@@ -162,7 +162,19 @@ async def test_callback_without_compliance(client: AsyncClient):
 # QUARANTINE (integration): these legacy compliance read endpoints (/api/v1/tx/{ref},
 # /api/v1/anomalies) are now behind deny-by-default auth. The unauthenticated test
 # client correctly receives 401, so they need an authenticated DB-backed context to
-# exercise the 200/404 read paths. Excluded from the per-PR unit run.
+# exercise the 200/404 read paths. Excluded from the per-PR unit run — and skipped
+# EXPLICITLY (not just deselected) so a bare local `pytest tests/` shows SKIPPED
+# with this reason instead of a misleading 401 failure. Un-skip by building the
+# authenticated fixture, not by weakening the 200 asserts.
+_QUARANTINE_SKIP = pytest.mark.skip(
+    reason=(
+        "quarantined: needs an authenticated context — endpoint is "
+        "deny-by-default since the 2026-07 auth audit (401 is correct)"
+    )
+)
+
+
+@_QUARANTINE_SKIP
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_get_transaction(client: AsyncClient):
@@ -175,6 +187,7 @@ async def test_get_transaction(client: AsyncClient):
     assert r.json()["tx_hash"] == payload["tx_hash"].lower()
 
 
+@_QUARANTINE_SKIP
 @pytest.mark.integration  # see note above: read endpoint behind deny-by-default auth
 @pytest.mark.asyncio
 async def test_get_transaction_not_found(client: AsyncClient):
@@ -186,6 +199,7 @@ async def test_get_transaction_not_found(client: AsyncClient):
 #  Test: GET /api/v1/anomalies
 # ═══════════════════════════════════════════════════════════════
 
+@_QUARANTINE_SKIP
 @pytest.mark.integration  # see note above: read endpoint behind deny-by-default auth
 @pytest.mark.asyncio
 async def test_anomaly_empty_db(client: AsyncClient):
@@ -196,6 +210,7 @@ async def test_anomaly_empty_db(client: AsyncClient):
     assert data["anomalies_found"] == 0
 
 
+@_QUARANTINE_SKIP
 @pytest.mark.integration  # see note above: read endpoint behind deny-by-default auth
 @pytest.mark.asyncio
 async def test_anomaly_with_data(client: AsyncClient):

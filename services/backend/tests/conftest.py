@@ -12,6 +12,19 @@ Fix (paired with asyncio_default_fixture_loop_scope="function" in pyproject):
 reset the engine's connection pool around every test, so each test opens and
 uses its connections entirely within its own loop. No app code or per-module
 fixtures are modified.
+
+RUNNER HYGIENE (2026-07-18 suite-trust audit):
+- The local invocation is plain `pytest tests/` (add -m "not e2e and not
+  integration" to mirror CI's unit job). Expected: 0 failed; e2e and the
+  quarantined test_api reads show as SKIPPED with reasons.
+- NEVER pass `-p no:logging`: it disables the plugin that provides `caplog`
+  and fabricates phantom ERRORs in the depth-finality/indexer-cursor/
+  reorg-evidence modules. Quiet output belongs to `--tb=line` / log-level
+  flags instead.
+- e2e money-path tests run only under their harness (`make e2e-anvil`):
+  RSEND_E2E_ALLOW_LOOPBACK_WEBHOOKS=1 + isolated SQLite; without the flag
+  they self-skip (the SSRF egress guard correctly blocks the loopback
+  receiver otherwise).
 """
 
 import pytest_asyncio
