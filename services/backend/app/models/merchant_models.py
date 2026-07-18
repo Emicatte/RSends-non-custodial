@@ -477,10 +477,11 @@ VALID_EVENTS = frozenset({
     "payment.expired",
     "payment.expired_rejected",
     "payment.needs_review",
-    "payment.cancelled",
+    "payment.cancelled",     # reserved: allowlisted, not yet emitted
     "payment.partial",
     "payment.overpaid",
-    "payment.ambiguous",
+    "payment.ambiguous",     # reserved: allowlisted, not yet emitted
+    "payment.reversed",      # reorg reversal (indexer) — subscribable
 })
 
 

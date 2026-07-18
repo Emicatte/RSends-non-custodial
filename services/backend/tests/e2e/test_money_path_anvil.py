@@ -406,4 +406,10 @@ def _assert_one_signed_completed(wired, oc, fee):
     assert payload["event"] == "payment.completed"
     assert payload["event_id"].startswith("evt_")
     assert payload["onchain_invoice_id"].lower() == oc["invoiceId"].lower()
-    assert int(payload["fee"]) == fee
+    # fee was removed from the webhook contract (subscription model); the
+    # on-chain fee stays asserted at the feeCollector balance in each caller,
+    # and remains readable from the PaymentMade event via tx_hash.
+    assert "fee" not in payload
+    assert "network" not in payload and "merchant_id" not in payload
+    assert payload["chain_id"] is not None
+    assert payload["tx_hash"], "settlement tx_hash missing from payload"

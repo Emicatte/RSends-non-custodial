@@ -29,7 +29,7 @@ from app.models.merchant_models import (
     MerchantWebhook, WebhookDelivery, DeliveryStatus,
 )
 from app.services.webhook_service import (
-    send_webhook, _build_merchant_payload,
+    send_webhook, _build_payload,
     compute_webhook_signature, _check_redis_idempotency,
     process_pending_deliveries, expire_stale_intents,
     MAX_RETRIES, BASE_BACKOFF_SECONDS,
@@ -117,13 +117,14 @@ class TestPayloadStructure:
     @pytest.mark.asyncio
     async def test_payload_contains_required_fields(self):
         intent = await _create_intent()
-        payload = _build_merchant_payload("payment.completed", intent)
+        payload = _build_payload("payment.completed", intent)
 
         assert payload["event"] == "payment.completed"
         assert payload["intent_id"] == intent.intent_id
         assert payload["amount"] == str(intent.amount)
         assert payload["currency"] == "USDC"
-        assert payload["chain"] == "BASE"
+        assert payload["chain"] == "base"       # canonical lowercase (contract)
+        assert payload["chain_id"] == 8453
         assert payload["tx_hash"] is not None
         assert payload["onchain_invoice_id"] == ONCHAIN_INVOICE_ID
         assert payload["metadata"] == {"order_id": "ORD-123", "customer": "alice"}
@@ -134,7 +135,7 @@ class TestPayloadStructure:
     @pytest.mark.asyncio
     async def test_payload_extra_fields_merged(self):
         intent = await _create_intent()
-        payload = _build_merchant_payload(
+        payload = _build_payload(
             "payment.completed", intent,
             extra={"custom_field": "value", "amount_received": "50.5"},
         )

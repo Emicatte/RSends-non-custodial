@@ -68,36 +68,48 @@ export default function WebhooksPage() {
           [<Code key="2">payment.expired</Code>, 'Intent reached expires_at with no payment'],
           [<Code key="3">payment.completed_late</Code>, 'Settled after expiry, accepted per your policy'],
           [<Code key="4">payment.overpaid / payment.partial</Code>, 'Matched outside the exact amount, within tolerance'],
-          [<Code key="5">payment.needs_review / payment.ambiguous</Code>, 'Held — could not be matched cleanly'],
-          [<Code key="6">payment.cancelled / payment.expired_rejected</Code>, 'No settlement will occur'],
+          [<Code key="5">payment.needs_review</Code>, 'Held — could not be matched cleanly, awaiting manual resolution'],
+          [<Code key="6">payment.expired_rejected</Code>, 'Late payment rejected per your policy — no settlement will occur'],
+          [<Code key="7">payment.reversed</Code>, 'A delivered payment.completed was rolled back by a chain reorg — un-fulfil'],
+          [<Code key="8">payment.cancelled / payment.ambiguous</Code>, 'Reserved — subscribable today, not yet emitted'],
         ]}
       />
 
       <H2>Event payload</H2>
       <P>
-        Deliveries POST a JSON body. Alongside the intent fields, it carries the{' '}
-        <strong>on-chain proof</strong> of settlement — the transaction hash, the chain, and the{' '}
-        <Code>onchain_invoice_id</Code> you can look up directly.
+        Deliveries POST a JSON body. <strong>Every event carries the same field set</strong> — the
+        example below is the full shape, and the test delivery posts exactly it. Alongside the
+        intent fields, it carries the <strong>on-chain proof</strong> of settlement — the transaction
+        hash, the chain (canonical lowercase name plus numeric <Code>chain_id</Code>), and the{' '}
+        <Code>onchain_invoice_id</Code> you can look up directly. Amount fields are{' '}
+        <strong>strings</strong>; there is no <Code>fee</Code> field — the on-chain fee is read from
+        the <Code>PaymentMade</Code> event via <Code>tx_hash</Code>.
       </P>
       <CodeBlock
         label="payment.completed — body"
         code={`{
   "event_id": "evt_3f9a…",
   "event": "payment.completed",
-  "intent_id": "int_abc123",
+  "intent_id": "pi_abc123…",
   "reference_id": "a1b2c3d4e5f6a7b8",
   "onchain_invoice_id": "0x9f…",        // on-chain key for the PaymentMade event
   "amount": "100",
   "amount_received": "100",
+  "overpaid_amount": null,
+  "underpaid_amount": null,
   "currency": "USDC",
   "chain": "base_sepolia",
+  "chain_id": 84532,
+  "recipient": "0x…",                    // where the funds settled
   "tx_hash": "0x…",                      // the settlement transaction
   "status": "completed",
-  "metadata": { "order_id": "ORD-1024" },
   "completed_late": false,
+  "late_minutes": null,
+  "metadata": { "order_id": "ORD-1024" },
   "timestamp": "2026-06-30T12:00:05+00:00",
   "created_at": "2026-06-30T12:00:00+00:00",
-  "completed_at": "2026-06-30T12:00:05+00:00"
+  "completed_at": "2026-06-30T12:00:05+00:00",
+  "settlement": "onchain"                // extra on settlement events only
 }`}
       />
       <Callout variant="info" title="Deriving full on-chain proof">
