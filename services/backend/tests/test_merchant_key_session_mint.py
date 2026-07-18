@@ -38,7 +38,9 @@ from app.api.user_org_merchant_keys_routes import (
     revoke_merchant_key,
     MerchantKeyCreateRequest,
 )
+from app.models.merchant_models import CreatePaymentIntentRequest
 from app.security.api_keys import verify_api_key
+from app.services.intent_service import create_intent
 from app.services.owner_identity import resolve_owner_address
 
 SETTLE_A = "0x" + "a" * 40
@@ -205,9 +207,6 @@ async def test_minted_key_creates_intent_settling_to_org_wallet(session):
     SIWE-linked wallet for the reverse lookup, but its session-minted key is
     org-stamped (0011) — create_intent must resolve the recipient via the
     MINTING org instead of 422 SETTLEMENT_WALLET_MISSING."""
-    from app.models.merchant_models import CreatePaymentIntentRequest
-    from app.services.intent_service import create_intent
-
     user_id, org_id = await _org(session, SETTLE_A)
     minted = await _mint(session, user_id, org_id)
 
