@@ -223,6 +223,21 @@ class RPCManager:
                     )
                 )
 
+        # Add config-driven extra providers (RPC_PROVIDERS_JSON) BEFORE the
+        # public defaults: with the default priority 0 the stable sort keeps
+        # them ahead of the equal-priority publics, i.e. between Alchemy (-1)
+        # and the best-effort public fallbacks. Adding a second paid vendor
+        # at mainnet is one env edit, zero code.
+        for cfg in settings.rpc_extra_providers.get(chain_id, []):
+            self._providers.append(
+                RPCProvider(
+                    name=cfg["name"],
+                    url=cfg["url"],
+                    chain_id=chain_id,
+                    priority=cfg["priority"],
+                )
+            )
+
         # Add default public providers
         for cfg in _DEFAULT_PROVIDERS.get(chain_id, []):
             self._providers.append(

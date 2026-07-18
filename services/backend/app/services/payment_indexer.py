@@ -35,8 +35,8 @@ Event (RSendsRouter):
 
 Config (see app/config.py):
   - settings.rsends_router_addresses : {chain_id: "0xRouter", ...}
-  - settings.indexer_rpc_urls        : {chain_id: "https://rpc", ...} (optional;
-                                        falls back to rpc_manager)
+  - settings.rpc_extra_providers     : extra RPC providers merged into the
+                                        rpc_manager failover list (optional)
   - settings.indexer_confirmations   : block confirmations before processing
 
 Checkpointing: Postgres (`indexer_cursors`, migration 0012) is the source of
