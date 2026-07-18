@@ -213,7 +213,7 @@ In the `rsends-shared` env group (Render dashboard):
 | `AUTH_JWT_SECRET` | **manual** — `python -c 'import secrets;print(secrets.token_hex(32))'` (≥64 chars; Render's generated value may be too short) |
 | `ADMIN_API_TOKEN` | **manual** — `openssl rand -hex 32` (≥32 chars, **must differ from `HMAC_SECRET`**; startup fails on empty/short/equal) |
 | `ALCHEMY_API_KEY` | your Alchemy key (always required) |
-| `INDEXER_RPC_URLS_JSON` | `{"84532":"https://base-sepolia.g.alchemy.com/v2/<KEY>"}` |
+| `RPC_PROVIDERS_JSON` | optional — extra RPC providers merged into failover (unset = Alchemy + public fallbacks) |
 | `RSENDS_ROUTER_ADDRESSES_JSON` | `{"84532":"<ROUTER_ADDRESS>"}` (from Part 1) |
 | `CORS_ORIGINS` / `APP_URL` | your Vercel URL, e.g. `https://<app>.vercel.app` |
 
@@ -345,7 +345,7 @@ re-deploy re-runs `upgrade head`, which is a no-op once at `0007`.
 | `ADMIN_API_TOKEN` | admin surface bearer (≥32, ≠ `HMAC_SECRET`) | SECRET | **manual** `openssl rand -hex 32` | (64-char hex) |
 | `ALCHEMY_API_KEY` | RPC (always required) | SECRET | dashboard.alchemy.com | `<alchemy_key>` |
 | `RSENDS_ROUTER_ADDRESSES_JSON` | chain→router map | PUBLIC | Part 1 deploy output | `{"84532":"<FILL_AFTER_CONTRACT_DEPLOY>"}` |
-| `INDEXER_RPC_URLS_JSON` | chain→RPC map | SECRET (has key) | Alchemy | `{"84532":"https://base-sepolia.g.alchemy.com/v2/<KEY>"}` |
+| `RPC_PROVIDERS_JSON` | optional extra RPC providers (chain→list) | SECRET (may hold a key) | second vendor, mainnet task | unset |
 | `CORS_ORIGINS` / `APP_URL` | allowed origins / public URL | PUBLIC | your Vercel URL | `https://<app>.vercel.app` |
 | `ENVIRONMENT` / `DEBUG` | guard posture | PUBLIC | `production` / `false` (in blueprint) | — |
 | `WALLET_AUTH_ALLOW_LEGACY` | anti-replay guard | PUBLIC | `false` (in blueprint) | `false` |

@@ -290,6 +290,8 @@ class RPCManager:
 
     async def _check_all_providers(self) -> None:
         """Query each provider for latest block number and update health."""
+        if not self._providers:
+            return  # unconfigured chain: nothing to probe (vacuous "all failed")
         results = await asyncio.gather(
             *(self._check_provider(p) for p in self._providers),
             return_exceptions=True,
