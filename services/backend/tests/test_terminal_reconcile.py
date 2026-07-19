@@ -521,6 +521,44 @@ async def test_tick_depth_mode_truly_final_never_reversed(
 
 
 @pytest.mark.asyncio
+async def test_tick_terminal_ratchet_never_regresses(
+    depth_mode, monkeypatch, webhook_calls
+):
+    """The terminal boundary is a rise-only ratchet: a failover provider
+    reporting an OLDER finalized tag (healthy fetch, lower value) must not
+    lower it — a row already terminal can never be re-opened for reversal,
+    no matter what evidence the lagging provider serves afterwards."""
+    from app.models.settlement_models import SettlementStatus
+    from app.models.merchant_models import IntentStatus
+
+    inv = "0x" + "8d" * 32
+    iid = await _make_intent(invoice_id=inv)
+    rpc = FakeChain()
+    tx = _paid_setup(rpc, invoice=inv, finalized=190)
+
+    cursor = {CHAIN: 180}
+    _wire(monkeypatch, rpc, cursor)
+    w = PaymentWatcher(chain_id=CHAIN, router_address=ROUTER)
+
+    await w._tick()  # paid at depth AND immediately terminal (185 <= 190)
+    assert (await _intent(iid)).status == IntentStatus.paid
+    assert w._terminal_ratchet == 190
+
+    # Failover to a lagging provider: the tag REGRESSES below the settled
+    # block, and the same provider serves full reversal evidence.
+    rpc.finalized = 100
+    rpc.block_hashes[185] = "0x" + "ff" * 32
+    rpc.receipts[tx.lower()] = None
+    for _ in range(TICKS_FINAL + 2):
+        await w._tick()
+
+    assert w._terminal_ratchet == 190  # never went backwards
+    assert (await _settlement(tx)).status == SettlementStatus.final
+    assert (await _intent(iid)).status == IntentStatus.paid
+    assert webhook_calls == ["payment.completed"]  # no payment.reversed
+
+
+@pytest.mark.asyncio
 async def test_tick_depth_mode_tag_outage_loud_but_still_safe(
     depth_mode, monkeypatch, webhook_calls, caplog
 ):
