@@ -59,7 +59,12 @@ export default function WebhooksPage() {
       <P>
         When a payment settles on-chain and RSends matches it to your intent, you receive{' '}
         <Code>payment.completed</Code>. This is the one event you should treat as “money received.”{' '}
-        <Code>payment.expired</Code> fires when an intent lapses unpaid.
+        <Code>payment.expired</Code> fires when an intent lapses unpaid. In the rare case of a deep
+        chain reorganization shortly after completion, <Code>payment.reversed</Code> can follow a{' '}
+        <Code>payment.completed</Code> within roughly the chain’s finality window (~15 minutes on
+        Base) — treat it as “stop fulfilment.” After a <Code>payment.reversed</Code>, poll the
+        intent before writing the order off: if the network re-includes the transaction, the intent
+        returns to <Code>paid</Code> without a second <Code>payment.completed</Code>.
       </P>
       <Table
         head={['Event', 'Meaning']}

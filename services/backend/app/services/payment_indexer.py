@@ -17,7 +17,14 @@ chain. Processing is two-phase and reorg-safe:
     merchant HMAC webhook (payment.completed) exactly once. If a settlement's
     block hash is no longer canonical (reorg / re-inclusion), mark it REORGED
     and reverse its effect (un-pay the intent; signal payment.reversed if the
-    webhook already fired).
+    webhook already fired). A FINAL row stays reconcilable until the chain's
+    TRUE finality (the finalized tag) passes its block — only then is it
+    terminal. In tag mode both boundaries coincide, so final == terminal
+    immediately; in depth mode (pre-L1-finality completion, fix A) a deep
+    reorg inside that window reverses the settlement and fires
+    payment.reversed (F-1). If the finalized tag is unavailable, the
+    degradation is LOUD (gauge + WARNING/CRITICAL) and fail-safe: tag mode
+    refuses to finalize, depth mode freezes the terminal boundary (F-10).
 
 RSends never holds keys or funds — funds move payer -> merchant atomically
 inside the contract call. This indexer is purely an observer.
@@ -51,7 +58,7 @@ from decimal import Decimal
 from typing import Optional
 
 from prometheus_client import Counter as PromCounter, Gauge
-from sqlalchemy import select, update
+from sqlalchemy import and_, or_, select, update
 
 from app.config import get_settings
 # Top-level import ON PURPOSE: registers indexer_cursors on Base at module
@@ -75,6 +82,18 @@ CATCHUP_LOG_LAG = 1_000
 # evidence (canonical hash mismatch AND tx receipt gone) must hold before we
 # reverse it. A single unverified RPC answer must never reverse a payment.
 REORG_EVIDENCE_TICKS = 3
+# F-1: a FINAL row (payment.completed already announced) needs a stricter
+# window than a pending one — reversing an announced payment is the costlier
+# mistake. Applies only while the row is above the TRUE-finality boundary.
+FINAL_REORG_EVIDENCE_TICKS = 6
+# F-10: consecutive ticks with the finalized tag unavailable before the
+# degradation escalates from the transition WARNING to CRITICAL + alert.
+FINALITY_DEGRADED_CRITICAL_TICKS = 3
+# Sentinel default for _finalize_and_reconcile(terminal_head=...): "terminal
+# boundary == final head" — finalized-tag-mode semantics, where the paid gate
+# already IS true finality. Distinct from None, which means "boundary unknown
+# (tag outage): fail SAFE, keep every final row reconcilable".
+_TERMINAL_IS_FINAL = object()
 
 REDIS_LAST_BLOCK_KEY = "indexer:last_block:{chain_id}"
 
@@ -87,6 +106,11 @@ INDEXER_LAG_BLOCKS = Gauge(
 )
 INDEXER_STALLED = Gauge(
     "rsend_indexer_stalled", "1 when the watcher declared itself stalled", ["chain_id"]
+)
+INDEXER_FINALITY_DEGRADED = Gauge(
+    "rsend_indexer_finality_degraded",
+    "1 while the finalized tag is unavailable (finality boundary degraded, F-10)",
+    ["chain_id"],
 )
 INDEXER_CURSOR_WRITE_FAILURES = PromCounter(
     "rsend_indexer_cursor_write_failures_total",
@@ -461,9 +485,16 @@ def _validate_split_event_against_intent(ev: dict, intent) -> list:
 
 
 # ── Finality helpers ─────────────────────────────────────────
-async def _finalized_head(rpc, settings, latest: int) -> int:
-    """Block number that is considered FINAL. Prefers the chain's finalized/safe
-    tag (Base/Ethereum support it); falls back to `latest - indexer_confirmations`."""
+async def _finalized_head(rpc, settings, latest: int) -> Optional[int]:
+    """Block number the PAID gate treats as final.
+
+    Tag mode: the chain's finalized/safe tag — or None when it is unavailable
+    or malformed. F-10: the old code silently fell back to depth semantics
+    here (`except: pass` → latest - conf) while the operator believed "paid =
+    L1-final"; now the caller must refuse to finalize for the tick instead.
+    Depth mode: `latest - indexer_confirmations`, never None, and never
+    consults the tag — paying must not wait for it (the tag only drives the
+    separate TERMINAL boundary, fetched in `_tick`)."""
     if getattr(settings, "indexer_use_finalized_tag", True):
         tag = getattr(settings, "indexer_finalized_tag", "finalized") or "finalized"
         try:
@@ -471,8 +502,10 @@ async def _finalized_head(rpc, settings, latest: int) -> int:
             num = (blk or {}).get("number")
             if num is not None:
                 return int(num, 16)
-        except Exception:  # pragma: no cover - tag unsupported / RPC hiccup
-            pass
+            logger.debug("[indexer] finalized tag '%s' returned no block", tag)
+        except Exception as exc:
+            logger.debug("[indexer] finalized tag '%s' unavailable: %s", tag, exc)
+        return None
     conf = getattr(settings, "indexer_confirmations", DEFAULT_CONFIRMATIONS)
     return latest - conf
 
@@ -576,10 +609,12 @@ async def _record_settlement(chain_id: int, ev: dict) -> str:
             # re-included in a new block after a reorg. Reconcile instead of
             # deduping so we never double-count and never strand a stale row.
             if existing.status == SettlementStatus.final:
-                # B-2: FINALIZED IS TERMINAL. A finalized payment is never
-                # auto-reversed — under finalized-tag operation its block
-                # cannot reorg, so a conflicting re-observation is provider
-                # noise or something that needs a human, not an auto-flip.
+                # B-2/F-1: a FINAL row is never auto-flipped by a conflicting
+                # re-observation. If the tx is alive in a new block, the money
+                # reached the merchant and "paid" stays TRUE (stale block
+                # coordinates are cosmetic); if it truly vanished pre-terminal,
+                # the reconcile evidence path owns the reversal. Either way a
+                # human should look — this is provider noise or a deep reorg.
                 logger.critical(
                     "[indexer] ALERT finalized settlement re-observed in a different "
                     "block (tx=%s log=%s stored=%s/%s new=%s/%s) — NOT auto-reversing "
@@ -738,6 +773,19 @@ async def _finalize_settlement(db, settlement, chain_id: int) -> None:
         .values(webhook_fired_at=now)
     )
     if claim.rowcount != 1:
+        if settlement.reversal_fired_at is not None:
+            # The tx was reversed and later re-included: the intent is paid
+            # again, but payment.completed was already consumed (and the
+            # delivery-layer idem key would dedupe a re-send anyway). The
+            # merchant's last webhook says "reversed" while the intent says
+            # paid — that gap needs a human, not a silent hop.
+            logger.critical(
+                "[indexer] ALERT settlement tx=%s re-finalized after a reversal — "
+                "intent %s is paid again but payment.completed was already "
+                "consumed (no second webhook fires); reconcile with the "
+                "merchant manually",
+                settlement.tx_hash[:16], intent.intent_id,
+            )
         return  # another finalize already claimed the fire → do not double-send
     settlement.webhook_fired_at = now
 
@@ -851,34 +899,57 @@ async def _reverse_settlement(db, settlement) -> None:
             )
 
 
-async def _finalize_and_reconcile(chain_id: int, rpc, final_head: int) -> dict:
-    """Reconcile PENDING settlements against the canonical chain:
+async def _finalize_and_reconcile(
+    chain_id: int, rpc, final_head: Optional[int],
+    terminal_head=_TERMINAL_IS_FINAL,
+) -> dict:
+    """Reconcile settlements against the canonical chain:
 
-      - PENDING + canonical hash + block <= final_head  → FINAL (pay + webhook once)
-      - PENDING + persistent reorg evidence             → REORGED (reverse effect)
-      - PENDING above final_head with canonical hash    → leave pending
+      - PENDING + canonical hash + block <= final_head   → FINAL (pay + webhook once)
+      - PENDING/FINAL + persistent reorg evidence        → REORGED (reverse effect)
+      - PENDING above final_head with canonical hash     → leave pending
+      - FINAL at/below terminal_head                     → terminal (never selected)
 
-    B-2 invariants:
-      * FINALIZED IS TERMINAL — final rows are not re-verified and can never be
-        reverted here. Under finalized-tag operation their blocks cannot reorg;
-        a conflicting later observation surfaces as the CRITICAL "conflict"
-        alert in the ingest path instead.
-      * A single unverified RPC answer never reverses a payment. A pending row
-        is reversed only when, on REORG_EVIDENCE_TICKS consecutive ticks, the
-        canonical block hash differs from the recorded one AND
-        eth_getTransactionReceipt reports the tx gone. Anything less resets
-        the evidence and does nothing — when uncertain, re-check later.
+    Invariants (B-2, refined by F-1):
+      * TRULY-FINAL IS TERMINAL — a final row at or below `terminal_head` (the
+        chain's TRUE finality boundary) is never re-examined and can never be
+        reverted here. In tag mode terminal == final head (the sentinel
+        default), so a payment is terminal the moment it pays — unchanged
+        B-2 behavior. In depth mode a final row stays reconcilable until the
+        finalized tag passes its block: a deep reorg inside that window
+        reverses it and fires payment.reversed (the merchant was told paid —
+        the reversal must be signalled). `terminal_head=None` means the
+        boundary is UNKNOWN (tag outage): fail SAFE, keep every final row
+        reconcilable rather than silently terminal.
+      * A single unverified RPC answer never reverses a payment. A row is
+        reversed only when, on consecutive ticks (REORG_EVIDENCE_TICKS for
+        pending rows, FINAL_REORG_EVIDENCE_TICKS for final ones — reversing
+        an announced payment is the costlier mistake), the canonical block
+        hash differs from the recorded one AND eth_getTransactionReceipt
+        reports the tx gone. Anything less resets the evidence and does
+        nothing — when uncertain, re-check later.
+      * `final_head=None` (tag mode with the tag unavailable — F-10) disables
+        the finalize gate for the tick; evidence checks still run.
     """
     from app.db.session import async_session
     from app.models.settlement_models import PaymentSettlement, SettlementStatus
 
+    if terminal_head is _TERMINAL_IS_FINAL:
+        terminal_head = final_head
+
     finalized = reorged = 0
+
+    # Final rows are selected only while they sit ABOVE the true-finality
+    # boundary; with the boundary unknown, all of them stay reconcilable.
+    final_arm = PaymentSettlement.status == SettlementStatus.final
+    if terminal_head is not None:
+        final_arm = and_(final_arm, PaymentSettlement.block_number > terminal_head)
 
     async with async_session() as db:
         rows = (await db.execute(
             select(PaymentSettlement).where(
                 PaymentSettlement.chain_id == chain_id,
-                PaymentSettlement.status == SettlementStatus.pending,
+                or_(PaymentSettlement.status == SettlementStatus.pending, final_arm),
             )
         )).scalars().all()
 
@@ -893,9 +964,14 @@ async def _finalize_and_reconcile(chain_id: int, rpc, final_head: int) -> dict:
                 _REORG_SUSPECTS.pop(key, None)
                 continue
             if canon == s.block_hash.lower():
-                # Still canonical.
+                # Still canonical. (Final rows need no write here: they fall
+                # out of the selection by chain arithmetic once terminal.)
                 _REORG_SUSPECTS.pop(key, None)
-                if s.block_number <= final_head:
+                if (
+                    s.status == SettlementStatus.pending
+                    and final_head is not None
+                    and s.block_number <= final_head
+                ):
                     await _finalize_settlement(db, s, chain_id)
                     finalized += 1
                 continue
@@ -907,28 +983,34 @@ async def _finalize_and_reconcile(chain_id: int, rpc, final_head: int) -> dict:
                 _REORG_SUSPECTS.pop(key, None)
                 continue
             if receipt_hash is not None:
-                # The tx is alive somewhere. If it moved blocks, the ingest
-                # re-scan owns updating the row (direct log evidence); if the
-                # receipt still points at our stored block, the block read was
-                # provider noise. Either way: no reversal.
+                # The tx is alive somewhere: the money reached the merchant,
+                # so a FINAL row rightly stays paid. If it moved blocks, the
+                # ingest re-scan owns updating a pending row (direct log
+                # evidence); if the receipt still points at our stored block,
+                # the block read was provider noise. Either way: no reversal.
                 _REORG_SUSPECTS.pop(key, None)
                 if receipt_hash != s.block_hash.lower():
                     logger.info(
-                        "[indexer] settlement tx=%s moved (receipt block %s ≠ stored %s)"
+                        "[indexer] settlement tx=%s (%s) moved (receipt block %s ≠ stored %s)"
                         " — awaiting ingest re-inclusion, not reversing",
-                        s.tx_hash[:16], receipt_hash[:18], s.block_hash[:18],
+                        s.tx_hash[:16], s.status.value, receipt_hash[:18], s.block_hash[:18],
                     )
                 continue
 
             # Hash mismatch AND no receipt: reorg evidence for this tick.
+            threshold = (
+                FINAL_REORG_EVIDENCE_TICKS
+                if s.status == SettlementStatus.final
+                else REORG_EVIDENCE_TICKS
+            )
             ticks = _REORG_SUSPECTS.get(key, 0) + 1
-            if ticks < REORG_EVIDENCE_TICKS:
+            if ticks < threshold:
                 _REORG_SUSPECTS[key] = ticks
                 logger.warning(
-                    "[indexer] reorg suspected for settlement tx=%s block=%s "
+                    "[indexer] reorg suspected for settlement tx=%s block=%s status=%s "
                     "(evidence tick %d/%d: canonical=%s, receipt=absent) — not "
                     "reversing yet",
-                    s.tx_hash[:16], s.block_number, ticks, REORG_EVIDENCE_TICKS,
+                    s.tx_hash[:16], s.block_number, s.status.value, ticks, threshold,
                     canon[:18],
                 )
                 continue
@@ -937,8 +1019,8 @@ async def _finalize_and_reconcile(chain_id: int, rpc, final_head: int) -> dict:
             _REORG_SUSPECTS.pop(key, None)
             logger.error(
                 "[indexer] ALERT reorg confirmed over %d ticks for tx=%s block=%s "
-                "(canonical=%s, receipt=absent) — reversing",
-                REORG_EVIDENCE_TICKS, s.tx_hash[:16], s.block_number, canon[:18],
+                "status=%s (canonical=%s, receipt=absent) — reversing",
+                threshold, s.tx_hash[:16], s.block_number, s.status.value, canon[:18],
             )
             await _reverse_settlement(db, s)
             reorged += 1
@@ -966,6 +1048,14 @@ class PaymentWatcher:
         )
         self._running = False
         self._task: Optional[asyncio.Task] = None
+        # TRUE-finality boundary, monotonic ratchet (F-1): the highest
+        # finalized-tag block ever observed. True finality never regresses —
+        # a lagging failover provider must not re-open reversal exposure on
+        # rows already terminal, and a tag outage must not unbound the
+        # reconcile selection. None until the first successful fetch.
+        self._terminal_ratchet: Optional[int] = None
+        # Consecutive ticks with the finalized tag unavailable (F-10).
+        self._degraded_ticks = 0
 
     async def start(self) -> None:
         if self._running:
@@ -1075,6 +1165,60 @@ class PaymentWatcher:
             {"chain_id": self.chain_id, "consecutive": consecutive},
         )
 
+    def _note_finality(self, terminal_raw: Optional[int]) -> None:
+        """Transition-only degradation signals for the finality boundary
+        (F-10): the gauge is always current; WARNING on the first degraded
+        tick, CRITICAL + first-class alert at FINALITY_DEGRADED_CRITICAL_TICKS
+        consecutive, INFO (+ alert) on restore. Never a per-tick log storm."""
+        if terminal_raw is None:
+            self._degraded_ticks += 1
+            INDEXER_FINALITY_DEGRADED.labels(chain_id=self.chain_id).set(1)
+            _status.setdefault(self.chain_id, {})["finality_degraded"] = True
+            if self._degraded_ticks == 1:
+                tag_mode = getattr(
+                    get_settings(), "indexer_use_finalized_tag", True
+                )
+                logger.warning(
+                    "[indexer] finality DEGRADED chain=%d: finalized tag "
+                    "unavailable — %s until it recovers",
+                    self.chain_id,
+                    "finalization is PAUSED" if tag_mode
+                    else "the terminal boundary is frozen (final rows stay "
+                         "reconcilable)",
+                )
+            elif self._degraded_ticks == FINALITY_DEGRADED_CRITICAL_TICKS:
+                logger.critical(
+                    "[indexer] finality DEGRADED chain=%d for %d consecutive "
+                    "ticks — finalized tag still unavailable",
+                    self.chain_id, self._degraded_ticks,
+                )
+                self._fire_stall_alert(
+                    "FINALITY_DEGRADED",
+                    f"Finalized tag unavailable on chain {self.chain_id} for "
+                    f"{self._degraded_ticks} consecutive ticks — finality "
+                    f"boundary degraded",
+                    {"chain_id": self.chain_id,
+                     "consecutive": self._degraded_ticks},
+                )
+            return
+
+        if self._degraded_ticks > 0:
+            logger.info(
+                "[indexer] finality RESTORED chain=%d after %d degraded ticks",
+                self.chain_id, self._degraded_ticks,
+            )
+            if self._degraded_ticks >= FINALITY_DEGRADED_CRITICAL_TICKS:
+                self._fire_stall_alert(
+                    "FINALITY_RESTORED",
+                    f"Finalized tag recovered on chain {self.chain_id} after "
+                    f"{self._degraded_ticks} degraded ticks",
+                    {"chain_id": self.chain_id,
+                     "consecutive": self._degraded_ticks},
+                )
+        self._degraded_ticks = 0
+        INDEXER_FINALITY_DEGRADED.labels(chain_id=self.chain_id).set(0)
+        _status.setdefault(self.chain_id, {})["finality_degraded"] = False
+
     def _fire_stall_alert(self, alert_type_name: str, message: str,
                           context: dict) -> None:
         """Best-effort fire-and-forget dispatch to alert_service (Telegram/
@@ -1102,6 +1246,40 @@ class PaymentWatcher:
         rpc = get_rpc_manager(self.chain_id)
         latest = int(await rpc.call("eth_blockNumber", []), 16)
         final_head = await _finalized_head(rpc, settings, latest)
+        conf = getattr(settings, "indexer_confirmations", DEFAULT_CONFIRMATIONS)
+
+        # ── TRUE-finality boundary (terminal head, F-1) ──
+        if getattr(settings, "indexer_use_finalized_tag", True):
+            # Tag mode: the paid gate IS true finality (None during an outage).
+            terminal_raw: Optional[int] = final_head
+        else:
+            # Depth mode: the paid gate is latest-conf, but final rows stay
+            # reconcilable until the chain's TRUE finality passes them. Fetch
+            # the tag for that boundary only — a failure must degrade (frozen
+            # boundary), never stall the watcher.
+            tag = getattr(settings, "indexer_finalized_tag", "finalized") or "finalized"
+            terminal_raw = None
+            try:
+                blk = await rpc.call("eth_getBlockByNumber", [tag, False])
+                num = (blk or {}).get("number")
+                if num is not None:
+                    terminal_raw = int(num, 16)
+            except Exception as exc:
+                logger.debug(
+                    "[indexer] terminal-boundary tag fetch failed (chain=%d): %s",
+                    self.chain_id, exc,
+                )
+        self._note_finality(terminal_raw)
+        if terminal_raw is not None:
+            self._terminal_ratchet = max(
+                self._terminal_ratchet or terminal_raw, terminal_raw
+            )
+
+        # F-10: with the tag unavailable in tag mode there is NO final head —
+        # refuse to finalize this tick rather than silently paying at depth
+        # under the tag-mode banner. Ingest and the evidence checks continue
+        # on a depth-based window floor.
+        floor_head = final_head if final_head is not None else latest - conf
 
         last = await _get_last_block(self.chain_id)
         if last is None:
@@ -1110,13 +1288,13 @@ class PaymentWatcher:
             # via settings.indexer_start_blocks[chain_id] if backfilling.
             # The init is persisted to Postgres, so it happens once, ever.
             start_blocks = getattr(settings, "indexer_start_blocks", {}) or {}
-            start = int(start_blocks.get(str(self.chain_id), max(final_head, 0)))
+            start = int(start_blocks.get(str(self.chain_id), max(floor_head, 0)))
             await _set_last_block(self.chain_id, start)
             logger.info("[indexer] chain %d initialized at block %d", self.chain_id, start)
             return {"processed": 0}
 
         # Fail-loud visibility: cursor + lag, every tick.
-        lag = max(0, final_head - last)
+        lag = max(0, floor_head - last)
         INDEXER_LAST_BLOCK.labels(chain_id=self.chain_id).set(last)
         INDEXER_LAG_BLOCKS.labels(chain_id=self.chain_id).set(lag)
         _status[self.chain_id] = {
@@ -1130,7 +1308,7 @@ class PaymentWatcher:
             # the loop below walks the whole gap in chunked windows.
             logger.warning(
                 "[indexer] catching up chain=%d from block %d to %d (%d blocks behind)",
-                self.chain_id, last + 1, final_head, lag,
+                self.chain_id, last + 1, floor_head, lag,
             )
 
         # ── INGEST ── Scan up to `latest` (logs are recorded PENDING, never paid
@@ -1138,7 +1316,7 @@ class PaymentWatcher:
         # reorg's re-inclusion / disappearance is observed; this re-scan is cheap
         # and idempotent (dedupe by chain+tx+logIndex+block_hash).
         processed = 0
-        start_block = min(last + 1, final_head + 1)
+        start_block = min(last + 1, floor_head + 1)
         if start_block <= latest:
             end_block = min(latest, start_block + MAX_BLOCKS_PER_TICK - 1)
             # Providers cap the getLogs range (Alchemy free tier: 10 blocks on
@@ -1213,8 +1391,15 @@ class PaymentWatcher:
                 chunk_start = chunk_end + 1
 
         # ── FINALIZE / RECONCILE ── Promote canonical+final rows to paid, reverse
-        # reorged ones. This is where invoices are marked paid and webhooks fire.
-        recon = await _finalize_and_reconcile(self.chain_id, rpc, final_head)
+        # reorged ones (final rows stay reconcilable until the terminal
+        # boundary passes them). This is where invoices are marked paid and
+        # webhooks fire. Both boundaries passed explicitly: final_head is the
+        # PAID gate (None = refuse, F-10), the ratchet is TRUE finality (F-1).
+        recon = await _finalize_and_reconcile(
+            self.chain_id, rpc,
+            final_head=final_head,
+            terminal_head=self._terminal_ratchet,
+        )
 
         return {"processed": processed, "final_head": final_head, **recon}
 

@@ -57,6 +57,10 @@ class AlertType(Enum):
     # STALL_TICKS consecutive failed ticks = payments are NOT being detected.
     INDEXER_STALLED = "indexer_stalled"
     INDEXER_RECOVERED = "indexer_recovered"
+    # Finality boundary degraded (F-10): the finalized tag is unavailable —
+    # tag mode pauses finalization; depth mode freezes the terminal boundary.
+    FINALITY_DEGRADED = "finality_degraded"
+    FINALITY_RESTORED = "finality_restored"
     # Reconciliation job alerts
     SYSTEM_IMBALANCE = "system_imbalance"
     LEDGER_DISCREPANCY = "ledger_discrepancy"
@@ -78,6 +82,8 @@ SEVERITY_MAP: dict[AlertType, AlertSeverity] = {
     AlertType.CB_RECOVERY: AlertSeverity.INFO,
     AlertType.INDEXER_STALLED: AlertSeverity.CRITICAL,
     AlertType.INDEXER_RECOVERED: AlertSeverity.INFO,
+    AlertType.FINALITY_DEGRADED: AlertSeverity.CRITICAL,
+    AlertType.FINALITY_RESTORED: AlertSeverity.INFO,
     AlertType.SYSTEM_IMBALANCE: AlertSeverity.EMERGENCY,
     AlertType.LEDGER_DISCREPANCY: AlertSeverity.WARNING,
     AlertType.LEDGER_DISCREPANCY_CRITICAL: AlertSeverity.EMERGENCY,

@@ -77,25 +77,29 @@ class Settings(BaseSettings):
     # rollback: set false and restart — call() then tries every provider in
     # priority order exactly as before.
     rpc_health_checks_enabled: bool = True
-    # Confirmation depth (latest - N) used when the finalized tag is disabled
-    # (INDEXER_USE_FINALIZED_TAG=false — fix A) or unavailable. A settlement is
-    # FINAL (and only then is the invoice marked paid + webhook fired) once its
-    # block is this deep AND its stored block hash is still canonical. 15 on
-    # Base (2s blocks) ≈ Paid in ~35s, with margin over any observed OP-stack
-    # sequencer reorg and over the B-2 reorg-evidence window (3×5s ticks).
-    # MUST-REVISIT-BEFORE-MAINNET: at depth finality, "final is terminal"
-    # (B-2) means a deeper-than-N reorg is alert-only — raise N or build a
-    # reversible paid tier before real funds ride on this.
+    # Confirmation depth (latest - N) used as the PAID gate when the finalized
+    # tag is disabled (INDEXER_USE_FINALIZED_TAG=false — fix A). A settlement
+    # is FINAL (invoice paid + webhook fired) once its block is this deep AND
+    # its stored block hash is still canonical. 15 on Base (2s blocks) ≈ Paid
+    # in ~35s, with margin over any observed OP-stack sequencer reorg and over
+    # the B-2 reorg-evidence window (3×5s ticks). Depth-final rows stay
+    # RECONCILABLE until the chain's TRUE finality (the finalized tag) passes
+    # them (F-1): a deeper-than-N reorg in that window reverses the settlement
+    # and fires payment.reversed — no longer alert-only.
     indexer_confirmations: int = 15
-    # Prefer the chain's finalized/safe block tag (Base/Ethereum support it) to
-    # decide finality; set False to always use the indexer_confirmations depth.
+    # Prefer the chain's finalized/safe block tag (Base/Ethereum support it)
+    # as the PAID gate; set False to pay at the indexer_confirmations depth
+    # instead. The tag is consulted in BOTH modes — in depth mode it only
+    # drives the terminal (true-finality) boundary, never the paid gate. In
+    # tag mode a tag outage PAUSES finalization loudly (F-10: gauge
+    # rsend_indexer_finality_degraded + WARNING/CRITICAL) instead of silently
+    # degrading to depth semantics.
     indexer_use_finalized_tag: bool = True
     # Block tag treated as final ("finalized" or "safe").
     indexer_finalized_tag: str = "finalized"
-    # INERT since B-2 (finalized is terminal): `final` rows are no longer
-    # re-verified, so this depth is unused. Kept for env compatibility only —
-    # a conflicting re-observation of a finalized log now raises a CRITICAL
-    # "conflict" alert in the ingest path instead of auto-reversing.
+    # INERT: superseded by the true-finality terminal boundary (F-1) — final
+    # rows are re-verified against the finalized tag, not a fixed depth. Kept
+    # for env compatibility only.
     indexer_reorg_safety_depth: int = 64
     # JSON map of chain_id → start block for first-run backfill, e.g. {"8453": 0}
     indexer_start_blocks_json: str = ""

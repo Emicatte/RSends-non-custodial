@@ -274,13 +274,16 @@ async def test_finalized_head_depth_mode_is_latest_minus_n():
 
 
 @pytest.mark.asyncio
-async def test_finalized_head_falls_back_to_depth_when_tag_unavailable():
+async def test_finalized_head_tag_mode_unavailable_returns_none():
+    """F-10: tag mode with the tag unavailable must NOT silently degrade to
+    depth semantics — it returns None and the caller refuses to finalize.
+    (Replaces the pre-F-10 pin that asserted the silent latest−N fallback.)"""
     rpc = FakeChain()
     rpc.tag_raises = True
     s = SimpleNamespace(indexer_use_finalized_tag=True,
                         indexer_finalized_tag="finalized",
                         indexer_confirmations=DEPTH)
-    assert await _finalized_head(rpc, s, latest=200) == 200 - DEPTH
+    assert await _finalized_head(rpc, s, latest=200) is None
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -292,7 +295,8 @@ async def test_tick_depth_mode_pays_once_n_deep_not_before(
 ):
     """latest=200, N=15 → final head 185. A payment at block 185 is Paid on
     the FIRST tick; one at 190 stays pending until the chain advances. The
-    finalized tag is never consulted (it's deliberately stale at 0)."""
+    paid gate never DEPENDS on the finalized tag (it raises here — the
+    terminal-boundary fetch may consult it, but paying must not wait for it)."""
     from app.models.merchant_models import IntentStatus
 
     inv_a, inv_b = "0x" + "71" * 32, "0x" + "72" * 32
@@ -301,7 +305,7 @@ async def test_tick_depth_mode_pays_once_n_deep_not_before(
 
     rpc = FakeChain()
     rpc.latest = 200
-    rpc.finalized = 0  # stale: proves depth mode ignores the tag
+    rpc.tag_raises = True  # paid-at-depth must survive a dead finalized tag
     ha, hb = "0x" + "71" * 32, "0x" + "72" * 32
     rpc.block_hashes[185] = ha
     rpc.block_hashes[190] = hb
@@ -318,7 +322,6 @@ async def test_tick_depth_mode_pays_once_n_deep_not_before(
     assert (await _intent(iid_a)).status == IntentStatus.paid      # 15 deep → paid now
     assert (await _intent(iid_b)).status == IntentStatus.pending   # only 10 deep
     assert webhook_calls == ["payment.completed"]
-    assert rpc.tag_calls == 0
 
     # Chain advances past depth for B → paid on the next tick.
     rpc.latest = 210
