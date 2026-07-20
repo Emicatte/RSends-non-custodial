@@ -263,3 +263,70 @@ async def test_release_then_sweep_refire_delivers_exactly_once(pg, monkeypatch):
     assert attempts["n"] == 2
     s, _ = await _db_state(pg, sid, intent_id)
     assert s.webhook_fired_at is not None
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Site 1b — reversal must not be lost while a sweep-fire is in flight
+# ═══════════════════════════════════════════════════════════════
+
+
+@pytest.mark.asyncio
+async def test_reversal_not_lost_when_sweep_fire_in_flight(pg, monkeypatch):
+    """Reconcile A (sweep) claims webhook_fired_at NULL→now and its dispatch of
+    payment.completed is in flight (uncommitted). Concurrent reconcile B, whose
+    snapshot still reads webhook_fired_at = NULL, reverses the same settlement.
+
+    The merchant was just told "paid" — payment.reversed MUST follow. B's
+    fired-decision must come from the committed row (inside the atomic claim's
+    WHERE), not from a pre-lock snapshot."""
+    intent_id, sid = await _seed_final_paid_unfired(pg)
+
+    events = []
+    completed_in_flight = asyncio.Event()
+    release_completed = asyncio.Event()
+
+    async def _gated(db, *, merchant_id, event, intent, extra_payload=None):
+        events.append(event)
+        if event == "payment.completed":
+            completed_in_flight.set()
+            await release_completed.wait()
+        return 1
+
+    monkeypatch.setattr("app.services.webhook_service.send_webhook", _gated)
+
+    async def sweep_fire():
+        async with pg() as db:
+            s, i = await _load_pair(db, sid, intent_id)
+            await idx._fire_completed_webhook(db, s, i)
+            await db.commit()
+
+    async def reverse():
+        async with pg() as db:
+            s = (await db.execute(
+                select(PaymentSettlement).where(PaymentSettlement.id == sid)
+            )).scalar_one()
+            await idx._reverse_settlement(db, s)
+            await db.commit()
+
+    sweep_task = asyncio.create_task(sweep_fire())
+    await asyncio.wait_for(completed_in_flight.wait(), timeout=5)
+
+    reverse_task = asyncio.create_task(reverse())
+    await asyncio.sleep(0.3)
+    # B must serialize on A's row lock — the fired-decision has to wait for
+    # A's committed row (the fix's guarantee IS this blocking).
+    assert not reverse_task.done(), (
+        "reversal committed while the sweep's claim was uncommitted — "
+        "it cannot have seen the fired webhook"
+    )
+
+    release_completed.set()
+    await asyncio.wait_for(asyncio.gather(sweep_task, reverse_task), timeout=15)
+
+    assert events == ["payment.completed", "payment.reversed"], (
+        f"merchant was told paid but the reversal was lost: {events}"
+    )
+    s, i = await _db_state(pg, sid, intent_id)
+    assert s.status is SettlementStatus.reorged
+    assert s.reversal_fired_at is not None
+    assert i.status is IntentStatus.pending, "reorged settlement must un-pay the intent"
