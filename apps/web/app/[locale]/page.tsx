@@ -575,7 +575,9 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
       {/* Title — split reveal 0.15s / 0.45s / 0.75s */}
       <h1 style={{
         fontFamily: C.D,
-        fontSize: isMobile ? 56 : 'clamp(74px, 8vw, 96px)',
+        // Mobile steps down with the viewport (351px → ~49px); a fixed 56px
+        // broke "Your wallet." awkwardly below ~400px.
+        fontSize: isMobile ? 'clamp(38px, 14vw, 56px)' : 'clamp(74px, 8vw, 96px)',
         fontWeight: 500,
         color: C.text,
         lineHeight: 1.1,

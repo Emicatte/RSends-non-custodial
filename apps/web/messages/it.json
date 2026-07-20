@@ -130,7 +130,7 @@
     "whySignIn": {
       "eyebrow": "COME FUNZIONA",
       "heading": "Dalla fattura al tuo wallet, in quattro passi.",
-      "subheading": "Crei una richiesta, il cliente paga in stablecoin e i fondi si regolano on-chain nel tuo wallet — in automatico.",
+      "subheading": "Crei una richiesta, il cliente paga in stablecoin e i fondi si regolano on-chain nel tuo wallet, in automatico.",
       "routes": {
         "title": "Crea una fattura",
         "description": "Generi una richiesta di pagamento per il cliente dalla dashboard o via API."

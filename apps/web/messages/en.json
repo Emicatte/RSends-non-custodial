@@ -130,7 +130,7 @@
     "whySignIn": {
       "eyebrow": "HOW IT WORKS",
       "heading": "From invoice to your wallet, in four steps.",
-      "subheading": "Create a request, your customer pays in stablecoin, and the funds settle on-chain into your own wallet — automatically.",
+      "subheading": "Create a request, your customer pays in stablecoin, and the funds settle on-chain into your own wallet, automatically.",
       "routes": {
         "title": "Create an invoice",
         "description": "You generate a payment request for your customer in the dashboard or via the API."
