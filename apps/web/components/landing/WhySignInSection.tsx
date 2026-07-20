@@ -146,6 +146,7 @@ export function WhySignInSection() {
                 lineHeight: 1.1,
                 letterSpacing: "-0.5px",
                 margin: "0 0 14px",
+                textWrap: "balance",
               }}
             >
               {t("heading")}
@@ -171,7 +172,15 @@ export function WhySignInSection() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(0,1fr))",
+              // Single full-width column on mobile; from the breakpoint up,
+              // two-up only when each card gets ≥240px (same auto-fit pattern
+              // as the /how-it-works steps). A fixed 2-col grid squeezed cards
+              // to ~140px at 351–430px AND at the 768px tablet boundary, where
+              // the outer image/cards split leaves this column ~330px — body
+              // text wrapped one word per line.
+              gridTemplateColumns: isMobile
+                ? "1fr"
+                : "repeat(auto-fit, minmax(240px, 1fr))",
               gap: 18,
               alignContent: "center",
               height: "100%",
@@ -185,8 +194,10 @@ export function WhySignInSection() {
                   background: C.surface,
                   border: `1px solid ${C.border}`,
                   borderRadius: 16,
-                  padding: 28,
-                  minHeight: 210,
+                  padding: isMobile ? 22 : 28,
+                  // Stacked cards hug their content; the fixed height only
+                  // equalizes the desktop 2×2 grid.
+                  minHeight: isMobile ? 0 : 210,
                   display: "flex",
                   flexDirection: "column",
                   gap: 12,
