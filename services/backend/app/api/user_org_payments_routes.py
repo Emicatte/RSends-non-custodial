@@ -47,7 +47,7 @@ from app.services.chain_access import (
     ChainAccessError,
     check_org_chain_access,
 )
-from app.services.intent_service import create_intent, list_org_intents
+from app.services.intent_service import create_intent, has_settlement_hold, list_org_intents
 
 router = APIRouter(prefix="/api/v1/user/org", tags=["user-org-payments"])
 
@@ -178,6 +178,17 @@ async def cancel_org_payment_intent(
                     f"Cannot cancel intent in '{intent.status.value}' state. "
                     "Only 'pending' intents can be cancelled."
                 ),
+            },
+        )
+
+    # F-5: an observed on-chain payment (pending/final settlement) wins over
+    # cancel — same guard as the expiry writers. rejected/reorged do NOT hold.
+    if await has_settlement_hold(db, intent.intent_id):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "SETTLEMENT_IN_FLIGHT",
+                "message": "An on-chain payment for this intent has been observed; it can no longer be cancelled.",
             },
         )
 
