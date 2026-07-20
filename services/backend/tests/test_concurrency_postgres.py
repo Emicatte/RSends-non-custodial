@@ -40,10 +40,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 
 from app.db.session import Base  # imports every model module → full metadata
+from app.models.auth_models import User
 from app.models.merchant_models import IntentStatus, PaymentIntent
+from app.models.org_models import Membership, Organization
 from app.models.settlement_models import PaymentSettlement, SettlementStatus
+from app.models.user_wallets_models import UserWallet
 import app.services.payment_indexer as idx
 import app.api.merchant_routes as mr
+import app.api.user_org_payments_routes as rt
 
 PG_URL = os.getenv("CONCURRENCY_TEST_DATABASE_URL")
 
@@ -330,3 +334,203 @@ async def test_reversal_not_lost_when_sweep_fire_in_flight(pg, monkeypatch):
     assert s.status is SettlementStatus.reorged
     assert s.reversal_fired_at is not None
     assert i.status is IntentStatus.pending, "reorged settlement must un-pay the intent"
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Site 2 — cancel (F-5 guard) vs settlement ingest: TOCTOU
+# ═══════════════════════════════════════════════════════════════
+
+
+async def _seed_org(sm):
+    """Org whose primary wallet resolves to OWNER — the session cancel path."""
+    async with sm() as db:
+        user = User(
+            id=secrets.token_hex(16),
+            email=f"{secrets.token_hex(6)}@example.com",
+            account_type="individual",
+        )
+        db.add(user)
+        await db.flush()
+        org = Organization(
+            name="Org " + secrets.token_hex(3),
+            slug=secrets.token_hex(8),
+            owner_user_id=user.id,
+            is_personal=False,
+            plan="free",
+        )
+        db.add(org)
+        await db.flush()
+        db.add(Membership(user_id=user.id, org_id=org.id, role="admin"))
+        db.add(UserWallet(
+            user_id=user.id,
+            org_id=org.id,
+            address=OWNER,
+            display_address=OWNER,
+            verified_chain_id=CHAIN,
+            is_primary=True,
+            chain_family="evm",
+        ))
+        await db.commit()
+        return org.id
+
+
+def _api_req(environment="test"):
+    client = {"client_id": OWNER, "environment": environment}
+    return SimpleNamespace(state=SimpleNamespace(client=client))
+
+
+async def _drive_cancel(surface, sm, intent_id, org_id):
+    """Run the real cancel handler in its own transaction; normalize outcome."""
+    async with sm() as db:
+        try:
+            if surface == "api_key":
+                await mr.cancel_payment_intent(intent_id, _api_req(), db=db)
+            else:
+                await rt.cancel_org_payment_intent(
+                    intent_id=intent_id,
+                    ctx=("user-unused", str(org_id), "operator"),
+                    environment="test",
+                    db=db,
+                )
+            return ("ok", 200)
+        except HTTPException as e:
+            return ("http", e.status_code)
+
+
+def _payment_ev(invoice_id, tx_hash):
+    """A decoded PaymentMade event for the REAL _record_settlement ingest."""
+    return {
+        "invoice_id": invoice_id,
+        "merchant": MERCHANT.lower(),
+        "payer": PAYER.lower(),
+        "token": TOKEN,
+        "amount": 100_000_000,
+        "fee": 600000,
+        "tx_hash": tx_hash,
+        "log_index": 0,
+        "block_number": 120,
+        "block_hash": "0x" + secrets.token_hex(32),
+        "block_timestamp": int(datetime.now(timezone.utc).timestamp()),
+    }
+
+
+def _patch_cancel_side_effects(monkeypatch, pg):
+    async def _no_log(*a, **k):
+        return None
+
+    async def _no_onchain(intent):
+        return None
+
+    monkeypatch.setattr(mr, "log_event", _no_log)
+    monkeypatch.setattr(rt, "log_event", _no_log)
+    monkeypatch.setattr(mr, "build_onchain_payment", _no_onchain)
+    # The REAL ingest path opens its own session — point it at this Postgres.
+    monkeypatch.setattr("app.db.session.async_session", pg)
+    # Isolate serialization from event-validation details (suite pattern).
+    monkeypatch.setattr(idx, "_validate_event_against_intent", lambda ev, intent: [])
+
+
+async def _final_state(sm, intent_id, tx_hash):
+    async with sm() as db:
+        intent = (await db.execute(
+            select(PaymentIntent).where(PaymentIntent.intent_id == intent_id)
+        )).scalar_one()
+        settlement = (await db.execute(
+            select(PaymentSettlement).where(PaymentSettlement.tx_hash == tx_hash)
+        )).scalar_one_or_none()
+        return intent, settlement
+
+
+@pytest.mark.parametrize("surface", ["api_key", "session"])
+@pytest.mark.asyncio
+async def test_cancel_vs_ingest_serializes_on_the_intent_row(pg, monkeypatch, surface):
+    """The F-5 TOCTOU: cancel is frozen exactly between its hold check and its
+    commit while the REAL ingest (_record_settlement) commits a pending
+    settlement for the same intent.
+
+    Invariant: a settlement hold committed BEFORE cancel's commit must force
+    409 — the committed state must never pair `cancelled` with a hold that
+    preceded it. The two transactions must serialize on the intent row: with
+    the cancel in flight, ingest blocks until the cancel commits (legal serial
+    late payment) or the cancel sees the hold and refuses."""
+    intent_id = await _seed_intent(pg)
+    org_id = await _seed_org(pg) if surface == "session" else None
+    async with pg() as db:
+        invoice_id = (await db.execute(
+            select(PaymentIntent.onchain_invoice_id)
+            .where(PaymentIntent.intent_id == intent_id)
+        )).scalar_one()
+    tx = "0x" + secrets.token_hex(32)
+
+    _patch_cancel_side_effects(monkeypatch, pg)
+
+    window_open = asyncio.Event()
+    resume = asyncio.Event()
+    mod = mr if surface == "api_key" else rt
+    real_hold = mod.has_settlement_hold
+
+    async def gated_hold(db, iid):
+        held = await real_hold(db, iid)
+        window_open.set()
+        await resume.wait()
+        return held
+
+    monkeypatch.setattr(mod, "has_settlement_hold", gated_hold)
+
+    cancel_task = asyncio.create_task(_drive_cancel(surface, pg, intent_id, org_id))
+    await asyncio.wait_for(window_open.wait(), timeout=5)
+
+    # Cancel is inside the TOCTOU window — now the payer's tx gets ingested.
+    ingest_task = asyncio.create_task(
+        idx._record_settlement(CHAIN, _payment_ev(invoice_id, tx))
+    )
+    await asyncio.sleep(0.4)
+    ingest_landed_in_window = ingest_task.done()
+
+    resume.set()
+    outcome = await asyncio.wait_for(cancel_task, timeout=10)
+    assert await asyncio.wait_for(ingest_task, timeout=10) == "new"
+
+    intent, settlement = await _final_state(pg, intent_id, tx)
+    assert settlement is not None and settlement.intent_id == intent_id
+    assert settlement.status is SettlementStatus.pending  # it IS a hold
+
+    if ingest_landed_in_window:
+        assert outcome == ("http", 409), (
+            "cancelled-but-held: a settlement hold was committed inside the "
+            f"cancel's TOCTOU window, yet cancel returned {outcome} — the payer "
+            "sees cancelled and finalize will silently flip it to paid"
+        )
+    assert not ingest_landed_in_window, (
+        "ingest committed inside the cancel's TOCTOU window — the two "
+        "transactions did not serialize on the intent row"
+    )
+    # Cancel-first order: the cancel committed, then the late payment landed —
+    # the legal serial case (finalize treats a cancelled intent as terminal).
+    assert outcome == ("ok", 200)
+    assert intent.status is IntentStatus.cancelled
+
+
+@pytest.mark.parametrize("surface", ["api_key", "session"])
+@pytest.mark.asyncio
+async def test_cancel_after_committed_ingest_refuses(pg, monkeypatch, surface):
+    """Ingest-first order on Postgres through the REAL ingest: the committed
+    pending settlement holds, cancel refuses with 409 (F-5 pin)."""
+    intent_id = await _seed_intent(pg)
+    org_id = await _seed_org(pg) if surface == "session" else None
+    async with pg() as db:
+        invoice_id = (await db.execute(
+            select(PaymentIntent.onchain_invoice_id)
+            .where(PaymentIntent.intent_id == intent_id)
+        )).scalar_one()
+    tx = "0x" + secrets.token_hex(32)
+
+    _patch_cancel_side_effects(monkeypatch, pg)
+
+    assert await idx._record_settlement(CHAIN, _payment_ev(invoice_id, tx)) == "new"
+    outcome = await _drive_cancel(surface, pg, intent_id, org_id)
+
+    assert outcome == ("http", 409)
+    intent, settlement = await _final_state(pg, intent_id, tx)
+    assert intent.status is IntentStatus.pending
+    assert settlement.status is SettlementStatus.pending
