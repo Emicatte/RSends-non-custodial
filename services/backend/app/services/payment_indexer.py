@@ -910,22 +910,28 @@ async def _reverse_settlement(db, settlement) -> None:
         settlement.tx_hash[:16], settlement.block_number, already_final, fired,
     )
 
-    if fired and intent is not None:
-        # The merchant was already told "paid" — signal the reversal exactly once.
-        # Atomic claim mirrors the paid path: only the reconcile that flips
-        # reversal_fired_at NULL→now sends, so concurrent reconciles can't
-        # double-fire payment.reversed.
+    if intent is not None:
+        # If the merchant was already told "paid", signal the reversal exactly
+        # once. Atomic claim mirrors the paid path — and the fired-condition
+        # lives IN the claim's WHERE, not in the `fired` snapshot above: a
+        # concurrent sweep-fire holds this row's lock with its claim
+        # uncommitted, so this UPDATE blocks and re-evaluates on the COMMITTED
+        # row. Deciding from the snapshot lost payment.reversed whenever the
+        # reversal raced the sweep (snapshot read webhook_fired_at = NULL).
         now = datetime.now(timezone.utc)
         claim = await db.execute(
             update(PaymentSettlement)
             .where(
                 PaymentSettlement.id == settlement.id,
                 PaymentSettlement.reversal_fired_at.is_(None),
+                PaymentSettlement.webhook_fired_at.is_not(None),
             )
             .values(reversal_fired_at=now)
         )
         if claim.rowcount != 1:
-            return  # another reconcile already fired the reversal
+            # Nothing to signal (no completed webhook ever fired) or another
+            # reconcile already fired the reversal.
+            return
         settlement.reversal_fired_at = now
 
         try:
