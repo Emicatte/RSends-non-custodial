@@ -362,7 +362,7 @@ async def create_intent(
     now = datetime.now(timezone.utc)
     intent_id = f"pi_{secrets.token_hex(16)}"
     reference_id = generate_reference_id(merchant_id)
-    onchain_invoice_id = derive_invoice_id(reference_id)
+    onchain_invoice_id = derive_invoice_id(reference_id, chain_id_for(requested_chain))
 
     # RECIPIENT GATE (Phase B): explicit override OR settlement_wallet default —
     # org_id set (session) resolves the org's wallet directly. On the API-key
