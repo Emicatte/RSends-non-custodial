@@ -58,7 +58,7 @@ from decimal import Decimal
 from typing import Optional
 
 from prometheus_client import Counter as PromCounter, Gauge
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import and_, func, or_, select, update
 
 from app.config import get_settings
 # Top-level import ON PURPOSE: registers indexer_cursors on Base at module
@@ -557,15 +557,19 @@ async def _record_settlement(chain_id: int, ev: dict) -> str:
 
     NEVER marks an invoice paid — that happens only in _finalize_and_reconcile
     once the block is final AND its hash is still canonical. Validation failures
-    (wrong merchant/token/under-amount) are persisted as `rejected` and the
-    intent is flagged for review; they never settle.
+    (wrong merchant/token/under-amount) are persisted as `rejected` and NEVER
+    touch the intent (F-4: anyone can read a /pay link's public invoiceId —
+    a stranger's mismatched event must not change a pending intent's
+    user-visible state); they never settle.
 
     Returns: "new" (first sight), "reconciled" (re-included in a different
     block → updated), or "duplicate" (same log+hash already stored).
     """
     from app.db.session import async_session
     from app.models.settlement_models import PaymentSettlement, SettlementStatus
-    from app.models.merchant_models import PaymentIntent, IntentStatus
+    from app.models.merchant_models import PaymentIntent
+    from app.services.chain_access import is_testnet_chain
+    from app.services.router_registry import chain_names_for_id
 
     async with async_session() as db:
         existing = (await db.execute(
@@ -576,10 +580,16 @@ async def _record_settlement(chain_id: int, ev: dict) -> str:
             )
         )).scalar_one_or_none()
 
-        # ── Match the off-chain intent by on-chain invoiceId ──
+        # ── Match the off-chain intent by on-chain invoiceId, scoped by the
+        # event's chain AND its environment (F-3): the invoiceId is public and
+        # native ETH shares ZERO_ADDRESS on every chain, so invoiceId alone
+        # must never be sufficient — a testnet event can't touch a live intent.
+        environment = "test" if is_testnet_chain(chain_id) else "live"
         intent = (await db.execute(
             select(PaymentIntent).where(
-                PaymentIntent.onchain_invoice_id == ev["invoice_id"].lower()
+                PaymentIntent.onchain_invoice_id == ev["invoice_id"].lower(),
+                func.lower(PaymentIntent.chain).in_(chain_names_for_id(chain_id)),
+                PaymentIntent.environment == environment,
             )
         )).scalar_one_or_none()
         # Dispatch by event type — cross-type is fail-closed on BOTH sides: a
@@ -686,12 +696,12 @@ async def _record_settlement(chain_id: int, ev: dict) -> str:
                 ev["invoice_id"][:18], ev["tx_hash"][:16],
             )
         elif mismatches:
-            # Correct invoiceId but wrong merchant/token/under-amount: flag for
-            # manual review, never auto-settle, no webhook.
-            if intent.status == IntentStatus.pending:
-                intent.status = IntentStatus.review
-                intent.matched_tx_hash = ev["tx_hash"]
-                intent.matched_at = datetime.now(timezone.utc)
+            # Correct invoiceId but wrong merchant/token/under-amount: record
+            # rejected + alert, never auto-settle, no webhook — and NEVER touch
+            # the intent (F-4). The invoiceId is public, so this path is
+            # reachable by any stranger for gas cost; flipping the intent to
+            # review here let a 1-wei wrong-merchant payment strand the honest
+            # payer's invoice ("Already paid") for the price of a testnet tx.
             logger.warning(
                 "[indexer] ALERT PaymentMade failed validation for intent %s (tx=%s): %s "
                 "— recorded rejected, no settlement",
@@ -703,17 +713,26 @@ async def _record_settlement(chain_id: int, ev: dict) -> str:
 
 
 # ── Finalization + reorg reconciliation ──────────────────────
-async def _finalize_settlement(db, settlement, chain_id: int) -> None:
+async def _finalize_settlement(db, settlement, chain_id: int) -> bool:
     """Promote a canonical, finalized PENDING settlement to FINAL: mark the
-    matched intent paid and fire the payment.completed webhook exactly once."""
+    matched intent paid and fire the payment.completed webhook exactly once.
+    Returns True iff the row was stamped final (False: rejected at finalize).
+
+    F-4 ORDER INVARIANT: payability and validity are decided BEFORE the row is
+    stamped final. The reconcile loop only revisits `pending` rows, so a row
+    stamped final without paying its intent is stranded forever (webhook never
+    fires, honest payer sees a dead invoice). `final` is only ever written
+    together with paying the intent, or for a genuinely terminal no-op
+    (orphan / intent already handled)."""
     from app.models.settlement_models import PaymentSettlement, SettlementStatus
     from app.models.merchant_models import PaymentIntent, IntentStatus
 
-    settlement.status = SettlementStatus.final
-    settlement.finalized_at = datetime.now(timezone.utc)
-
     if not settlement.intent_id:
-        return  # orphan settlement (no off-chain invoice) — recorded, nothing to pay
+        # Orphan settlement (no off-chain invoice) — record the on-chain fact,
+        # nothing to pay.
+        settlement.status = SettlementStatus.final
+        settlement.finalized_at = datetime.now(timezone.utc)
+        return True
 
     intent = (await db.execute(
         select(PaymentIntent).where(PaymentIntent.intent_id == settlement.intent_id)
@@ -721,14 +740,17 @@ async def _finalize_settlement(db, settlement, chain_id: int) -> None:
     # `expired` is payable too: expiry may have won the race against finality
     # (30-min timer vs ~13-min L1 finality). Money on-chain wins over the
     # timer — rescue the intent instead of stranding a settled payment.
-    if intent is None or intent.status not in (IntentStatus.pending, IntentStatus.expired):
-        return  # already handled / not payable
-    if intent.status == IntentStatus.expired:
-        logger.warning(
-            "[indexer] late settlement rescued expired intent %s (tx=%s) — "
-            "expiry raced ahead of finality",
-            intent.intent_id, settlement.tx_hash[:16],
-        )
+    # `review` is payable for the same reason: a VALID settlement rescues an
+    # intent flagged by a stranger's mismatched event (pre-F-4 grief) or by
+    # the legacy matching path — the mismatch case below still refuses.
+    payable = (IntentStatus.pending, IntentStatus.expired, IntentStatus.review)
+    if intent is None or intent.status not in payable:
+        # Terminal no-op: the money moved on-chain (the row IS final) but the
+        # intent is already handled (paid by another settlement / cancelled /
+        # completed). Stamp and leave — never touch the intent.
+        settlement.status = SettlementStatus.final
+        settlement.finalized_at = datetime.now(timezone.utc)
+        return True
 
     if settlement.split_legs:
         # Rebuild the split view from the recorded on-chain facts and re-run
@@ -751,9 +773,33 @@ async def _finalize_settlement(db, settlement, chain_id: int) -> None:
         }
         invalid = _validate_event_against_intent(ev, intent)
     if invalid:
-        intent.status = IntentStatus.review  # defensive: should already be rejected
-        return
+        # Defensive: should already be rejected at ingest. NOT final — a final
+        # row is never revisited, which would strand the payment; and never
+        # flip the intent (F-4).
+        settlement.status = SettlementStatus.rejected
+        settlement.finalized_at = None
+        logger.error(
+            "[indexer] ALERT settlement tx=%s failed validation AT FINALIZE for "
+            "intent %s (%s) — recorded rejected, intent untouched",
+            settlement.tx_hash[:16], intent.intent_id, "; ".join(invalid),
+        )
+        return False
 
+    if intent.status == IntentStatus.expired:
+        logger.warning(
+            "[indexer] late settlement rescued expired intent %s (tx=%s) — "
+            "expiry raced ahead of finality",
+            intent.intent_id, settlement.tx_hash[:16],
+        )
+    elif intent.status == IntentStatus.review:
+        logger.warning(
+            "[indexer] valid settlement rescued review intent %s (tx=%s) — "
+            "review flag superseded by a fully-valid on-chain payment",
+            intent.intent_id, settlement.tx_hash[:16],
+        )
+
+    settlement.status = SettlementStatus.final
+    settlement.finalized_at = datetime.now(timezone.utc)
     intent.status = IntentStatus.paid
     intent.matched_tx_hash = settlement.tx_hash
     intent.matched_at = datetime.now(timezone.utc)
@@ -786,7 +832,7 @@ async def _finalize_settlement(db, settlement, chain_id: int) -> None:
                 "merchant manually",
                 settlement.tx_hash[:16], intent.intent_id,
             )
-        return  # another finalize already claimed the fire → do not double-send
+        return True  # another finalize already claimed the fire → do not double-send
     settlement.webhook_fired_at = now
 
     try:
@@ -821,6 +867,7 @@ async def _finalize_settlement(db, settlement, chain_id: int) -> None:
             "[indexer] webhook dispatch failed for intent %s (settlement final)",
             intent.intent_id,
         )
+    return True
 
 
 async def _reverse_settlement(db, settlement) -> None:
@@ -972,8 +1019,8 @@ async def _finalize_and_reconcile(
                     and final_head is not None
                     and s.block_number <= final_head
                 ):
-                    await _finalize_settlement(db, s, chain_id)
-                    finalized += 1
+                    if await _finalize_settlement(db, s, chain_id):
+                        finalized += 1
                 continue
 
             # Canonical hash differs — corroborate with the tx receipt before

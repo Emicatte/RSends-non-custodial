@@ -220,13 +220,26 @@ def assert_token_enabled(chain: str, currency: str) -> None:
         raise UnsupportedTokenError(chain, currency)
 
 
-def derive_invoice_id(reference_id: str) -> str:
-    """Deterministic bytes32 invoiceId from the intent reference_id.
+def chain_names_for_id(chain_id: int) -> list[str]:
+    """All chain names (lowercase, aliases included) mapping to `chain_id` —
+    the indexer's SQL scope for matching an event's chain against the
+    merchant-provided PaymentIntent.chain string."""
+    return [name for name, cid in CHAIN_IDS.items() if cid == chain_id]
+
+
+def derive_invoice_id(reference_id: str, chain_id: int) -> str:
+    """Deterministic bytes32 invoiceId: keccak256(f"{chain_id}:{reference_id}").
 
     The payer passes this to RSendsRouter; the indexer matches the emitted
-    PaymentMade.invoiceId back to this intent via onchain_invoice_id.
+    PaymentMade.invoiceId back to this intent via onchain_invoice_id (scoped
+    by chain + environment). Folding the chain id makes the id unique per
+    chain — the same reference paid on another chain derives a different id,
+    so a cross-chain replay is an orphan even before the SQL scoping (F-3).
+    Existing intents keep their STORED onchain_invoice_id (stamped at create;
+    migration 0015 backfilled pre-fix-A NULL rows with the legacy
+    keccak(reference_id) formula) — this derivation applies to new intents.
     """
-    return "0x" + _keccak(reference_id.encode("utf-8")).hex()
+    return "0x" + _keccak(f"{chain_id}:{reference_id}".encode("utf-8")).hex()
 
 
 def to_base_units(amount: float, decimals: int) -> int:
@@ -426,7 +439,10 @@ async def build_onchain_payment(intent) -> Optional[dict]:
 
     token_addr, decimals = tok
     amount_base = to_base_units(intent.amount, decimals)
-    invoice_id = intent.onchain_invoice_id or derive_invoice_id(intent.reference_id)
+    # Stored id ALWAYS wins (it's what the /pay link advertised and what the
+    # indexer matches); post-0015 every intent has one, so the derive fallback
+    # only covers a row created before this code ran its migration.
+    invoice_id = intent.onchain_invoice_id or derive_invoice_id(intent.reference_id, cid)
     merchant = (intent.recipient or "").lower()
     is_native = token_addr == ZERO_ADDRESS
     function = "payNative" if is_native else "pay"

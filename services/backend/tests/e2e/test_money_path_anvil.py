@@ -205,7 +205,7 @@ async def _create_intent(wired, currency, amount):
             currency=currency,
             chain="anvil",
             recipient=merchant,
-            onchain_invoice_id=derive_invoice_id(ref),
+            onchain_invoice_id=derive_invoice_id(ref, CHAIN_ID),
             status=IntentStatus.pending,
             expires_at=datetime.now(timezone.utc) + timedelta(minutes=30),
         )
