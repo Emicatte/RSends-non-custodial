@@ -806,9 +806,20 @@ async def _finalize_settlement(db, settlement, chain_id: int) -> bool:
     intent.completed_at = datetime.now(timezone.utc)
     await db.flush()
 
-    # Fire the merchant webhook exactly once. Atomic claim: only the finalize that
-    # flips webhook_fired_at NULL→now wins; concurrent finalizations of the same
-    # settlement see rowcount 0 and skip, so the webhook can't double-fire.
+    await _fire_completed_webhook(db, settlement, intent)
+    return True
+
+
+async def _fire_completed_webhook(db, settlement, intent) -> None:
+    """Dispatch payment.completed exactly once for a FINAL settlement.
+
+    Atomic claim: only the caller that flips webhook_fired_at NULL→now sends;
+    concurrent attempts see rowcount 0 and skip, so the webhook can't
+    double-fire. On dispatch failure the claim is released — the unfired-
+    webhook sweep in _finalize_and_reconcile re-attempts it every tick until
+    delivery succeeds (a paid merchant MUST eventually be told)."""
+    from app.models.settlement_models import PaymentSettlement
+
     now = datetime.now(timezone.utc)
     claim = await db.execute(
         update(PaymentSettlement)
@@ -832,7 +843,7 @@ async def _finalize_settlement(db, settlement, chain_id: int) -> bool:
                 "merchant manually",
                 settlement.tx_hash[:16], intent.intent_id,
             )
-        return True  # another finalize already claimed the fire → do not double-send
+        return  # another attempt already claimed the fire → do not double-send
     settlement.webhook_fired_at = now
 
     try:
@@ -856,7 +867,7 @@ async def _finalize_settlement(db, settlement, chain_id: int) -> bool:
             extra_payload=extra_payload,
         )
     except Exception:
-        # Release the claim so the next reconcile retries the dispatch.
+        # Release the claim so the unfired-webhook sweep retries the dispatch.
         await db.execute(
             update(PaymentSettlement)
             .where(PaymentSettlement.id == settlement.id)
@@ -867,7 +878,6 @@ async def _finalize_settlement(db, settlement, chain_id: int) -> bool:
             "[indexer] webhook dispatch failed for intent %s (settlement final)",
             intent.intent_id,
         )
-    return True
 
 
 async def _reverse_settlement(db, settlement) -> None:
@@ -980,6 +990,7 @@ async def _finalize_and_reconcile(
     """
     from app.db.session import async_session
     from app.models.settlement_models import PaymentSettlement, SettlementStatus
+    from app.models.merchant_models import PaymentIntent, IntentStatus
 
     if terminal_head is _TERMINAL_IS_FINAL:
         terminal_head = final_head
@@ -993,6 +1004,35 @@ async def _finalize_and_reconcile(
         final_arm = and_(final_arm, PaymentSettlement.block_number > terminal_head)
 
     async with async_session() as db:
+        # ── Unfired-webhook sweep: a paid merchant MUST eventually be told.
+        # A transient payment.completed dispatch failure releases the claim
+        # (webhook_fired_at back to NULL) on an already-FINAL row — which the
+        # finalize gate below never revisits, and which in tag mode is
+        # TERMINAL the moment it pays. Re-attempt here every tick, regardless
+        # of the terminal boundary, until delivery succeeds. Scoped tight in
+        # the SQL: only rows whose intent this settlement actually paid
+        # (paid + matched_tx_hash == tx) — orphans, terminal no-ops and
+        # superseded rows never enter.
+        unfired = (await db.execute(
+            select(PaymentSettlement, PaymentIntent)
+            .join(PaymentIntent,
+                  PaymentIntent.intent_id == PaymentSettlement.intent_id)
+            .where(
+                PaymentSettlement.chain_id == chain_id,
+                PaymentSettlement.status == SettlementStatus.final,
+                PaymentSettlement.webhook_fired_at.is_(None),
+                PaymentSettlement.reversal_fired_at.is_(None),
+                PaymentIntent.status == IntentStatus.paid,
+                PaymentIntent.matched_tx_hash == PaymentSettlement.tx_hash,
+            )
+        )).all()
+        for s, intent in unfired:
+            logger.warning(
+                "[indexer] retrying unfired payment.completed for intent %s "
+                "(tx=%s) — previous dispatch failed",
+                intent.intent_id, s.tx_hash[:16],
+            )
+            await _fire_completed_webhook(db, s, intent)
         rows = (await db.execute(
             select(PaymentSettlement).where(
                 PaymentSettlement.chain_id == chain_id,
