@@ -295,7 +295,10 @@ async def test_validation_mismatch_rejected_not_paid(webhook_calls, field, value
     assert await _record_settlement(CHAIN, ev) == "new"
     s = await _settlement(ev["tx_hash"])
     assert s.status == SettlementStatus.rejected
-    assert (await _intent(iid)).status == IntentStatus.review  # flagged, not paid
+    # F-4: rejected + alert only — the intent is untouched (public invoiceId,
+    # a stranger's mismatch must not flip a pending intent to review).
+    assert (await _intent(iid)).status == IntentStatus.pending
+    assert (await _intent(iid)).matched_tx_hash is None
 
     # Rejected rows never finalize/pay.
     await _finalize_and_reconcile(CHAIN, rpc, final_head=200)

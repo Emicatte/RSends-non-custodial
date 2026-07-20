@@ -317,7 +317,7 @@ class TestRecordSettlement:
             assert stl.status == SettlementStatus.final
 
     @pytest.mark.asyncio
-    async def test_mismatched_merchant_rejected_and_review(self):
+    async def test_mismatched_merchant_rejected_intent_untouched(self):
         from app.db.session import async_session
         from app.models.merchant_models import PaymentIntent, IntentStatus
         from app.models.settlement_models import PaymentSettlement, SettlementStatus
@@ -338,7 +338,10 @@ class TestRecordSettlement:
             intent = (await db.execute(
                 select(PaymentIntent).where(PaymentIntent.intent_id == iid)
             )).scalar_one()
-            assert intent.status == IntentStatus.review     # NOT paid
+            # F-4: a mismatched event never touches the intent (the invoiceId
+            # is public — a stranger's 1-wei payment must not flip state).
+            assert intent.status == IntentStatus.pending    # NOT paid, NOT review
+            assert intent.matched_tx_hash is None
             assert intent.completed_at is None
             # settlement recorded as rejected (audit) with the on-chain fee.
             stl = (await db.execute(

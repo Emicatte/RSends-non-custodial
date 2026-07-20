@@ -285,7 +285,8 @@ async def test_split_event_settles_intent(webhook_calls):
 @pytest.mark.asyncio
 async def test_tampered_leg_amounts_rejected(webhook_calls):
     """Event leg amounts differing from the deterministic math over the stored
-    BPS (e.g. a hostile RPC or a spoofed contract) → rejected, review, no pay."""
+    BPS (e.g. a hostile RPC or a spoofed contract) → rejected, intent
+    untouched (F-4), no pay."""
     from app.models.settlement_models import SettlementStatus
     from app.models.merchant_models import IntentStatus
 
@@ -300,11 +301,11 @@ async def test_tampered_leg_amounts_rejected(webhook_calls):
 
     await _record_settlement(CHAIN, ev)
     assert (await _settlement(ev["tx_hash"])).status == SettlementStatus.rejected
-    assert (await _intent(iid)).status == IntentStatus.review
+    assert (await _intent(iid)).status == IntentStatus.pending
 
     await _finalize_and_reconcile(CHAIN, rpc, final_head=200)
     assert (await _settlement(ev["tx_hash"])).status == SettlementStatus.rejected
-    assert (await _intent(iid)).status == IntentStatus.review
+    assert (await _intent(iid)).status == IntentStatus.pending
     assert webhook_calls == []
 
 
