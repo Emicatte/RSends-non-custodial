@@ -1,3 +1,5 @@
+// @ts-nocheck — archived reference code, excluded from the build (tsconfig "exclude");
+// kept only for future reuse. The IDE type-checks open files regardless of the exclude.
 /**
  * app/TokenDetailView.tsx — Uniswap-style token detail view
  *
