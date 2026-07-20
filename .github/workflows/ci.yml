@@ -49,9 +49,12 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-      # Postgres for the Alembic migration regression test (issue #17). The main
-      # suite stays on SQLite (DATABASE_URL below); only tests/test_migrations_postgres.py
-      # reads ALEMBIC_TEST_DATABASE_URL and runs the real chain against Postgres.
+      # Postgres for the Alembic migration regression test (issue #17) and the
+      # real-concurrency serialization tests. The main suite stays on SQLite
+      # (DATABASE_URL below); tests/test_migrations_postgres.py reads
+      # ALEMBIC_TEST_DATABASE_URL, and tests/test_concurrency_postgres.py reads
+      # CONCURRENCY_TEST_DATABASE_URL (a DEDICATED database name so the two
+      # modules can't interfere — the concurrency fixture auto-creates it).
       postgres:
         image: postgres:16
         env:
@@ -70,6 +73,7 @@ jobs:
       ENVIRONMENT: "test"
       REDIS_URL: "redis://localhost:6379/0"
       ALEMBIC_TEST_DATABASE_URL: "postgresql+asyncpg://postgres:postgres@localhost:5432/rsends_test"
+      CONCURRENCY_TEST_DATABASE_URL: "postgresql+asyncpg://postgres:postgres@localhost:5432/rsends_concurrency"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
