@@ -149,6 +149,9 @@ async def cancel_org_payment_intent(
     _user_id, org_id, _role = ctx
     owner = await _resolve_owner_address(db, org_id)
 
+    # FOR UPDATE: same serialization as the API-key cancel — ingest locks the
+    # intent row before committing a hold, so the hold check below can never
+    # race a concurrently-committed settlement. No-op on SQLite.
     intent = (
         await db.execute(
             select(PaymentIntent).where(
@@ -157,7 +160,7 @@ async def cancel_org_payment_intent(
                     PaymentIntent.merchant_id == owner,
                     PaymentIntent.environment == environment,
                 )
-            )
+            ).with_for_update()
         )
     ).scalar_one_or_none()
 

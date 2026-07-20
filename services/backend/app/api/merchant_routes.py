@@ -504,6 +504,11 @@ async def cancel_payment_intent(
     """
     merchant_id = _get_merchant_id(request)
 
+    # FOR UPDATE: cancel and settlement ingest serialize on the intent row
+    # (ingest locks it before committing a hold), so the hold check below can
+    # never race a concurrently-committed settlement — without the lock, a
+    # hold committed inside this window produced a cancelled-but-held intent
+    # that finalize later silently flipped to paid. No-op on SQLite.
     result = await db.execute(
         select(PaymentIntent).where(
             and_(
@@ -511,7 +516,7 @@ async def cancel_payment_intent(
                 PaymentIntent.merchant_id == merchant_id,
                 PaymentIntent.environment == _get_environment(request),
             )
-        )
+        ).with_for_update()
     )
     intent = result.scalar_one_or_none()
 
