@@ -580,6 +580,37 @@ async def _record_settlement(chain_id: int, ev: dict) -> str:
             )
         )).scalar_one_or_none()
 
+        block_dt = (
+            datetime.fromtimestamp(ev["block_timestamp"], tz=timezone.utc)
+            if ev["block_timestamp"] else None
+        )
+        new_hash = (ev.get("block_hash") or "").lower() or None
+
+        if existing is not None:
+            # Same log already recorded in the same block → true duplicate.
+            if (existing.block_hash or "").lower() == (new_hash or "").lower():
+                return "duplicate"
+            # Different block hash for the same (chain, tx, logIndex): the log was
+            # re-included in a new block after a reorg. Reconcile instead of
+            # deduping so we never double-count and never strand a stale row
+            # (the reconcile write happens below, after intent match + lock).
+            if existing.status == SettlementStatus.final:
+                # B-2/F-1: a FINAL row is never auto-flipped by a conflicting
+                # re-observation. If the tx is alive in a new block, the money
+                # reached the merchant and "paid" stays TRUE (stale block
+                # coordinates are cosmetic); if it truly vanished pre-terminal,
+                # the reconcile evidence path owns the reversal. Either way a
+                # human should look — this is provider noise or a deep reorg.
+                logger.critical(
+                    "[indexer] ALERT finalized settlement re-observed in a different "
+                    "block (tx=%s log=%s stored=%s/%s new=%s/%s) — NOT auto-reversing "
+                    "(finalized is terminal); manual investigation required",
+                    ev["tx_hash"][:16], ev["log_index"],
+                    existing.block_number, existing.block_hash,
+                    ev["block_number"], new_hash,
+                )
+                return "conflict"
+
         # ── Match the off-chain intent by on-chain invoiceId, scoped by the
         # event's chain AND its environment (F-3): the invoiceId is public and
         # native ETH shares ZERO_ADDRESS on every chain, so invoiceId alone
@@ -605,35 +636,21 @@ async def _record_settlement(chain_id: int, ev: dict) -> str:
         else:
             mismatches = _validate_event_against_intent(ev, intent)
 
-        block_dt = (
-            datetime.fromtimestamp(ev["block_timestamp"], tz=timezone.utc)
-            if ev["block_timestamp"] else None
-        )
-        new_hash = (ev.get("block_hash") or "").lower() or None
+        if intent is not None and not mismatches:
+            # F-5 serialization: this transaction is about to commit a HOLD
+            # (a pending settlement) for the intent. Take the intent's row
+            # lock first — a lock, not a write (F-4: ingest never modifies
+            # the intent) — so an in-flight cancel (which fetches the intent
+            # FOR UPDATE) either commits before this hold lands (legal serial
+            # late payment) or sees the hold and refuses with 409. Intent-
+            # first lock order on both sides → no deadlock. No-op on SQLite.
+            await db.execute(
+                select(PaymentIntent.id)
+                .where(PaymentIntent.intent_id == intent.intent_id)
+                .with_for_update()
+            )
 
         if existing is not None:
-            # Same log already recorded in the same block → true duplicate.
-            if (existing.block_hash or "").lower() == (new_hash or "").lower():
-                return "duplicate"
-            # Different block hash for the same (chain, tx, logIndex): the log was
-            # re-included in a new block after a reorg. Reconcile instead of
-            # deduping so we never double-count and never strand a stale row.
-            if existing.status == SettlementStatus.final:
-                # B-2/F-1: a FINAL row is never auto-flipped by a conflicting
-                # re-observation. If the tx is alive in a new block, the money
-                # reached the merchant and "paid" stays TRUE (stale block
-                # coordinates are cosmetic); if it truly vanished pre-terminal,
-                # the reconcile evidence path owns the reversal. Either way a
-                # human should look — this is provider noise or a deep reorg.
-                logger.critical(
-                    "[indexer] ALERT finalized settlement re-observed in a different "
-                    "block (tx=%s log=%s stored=%s/%s new=%s/%s) — NOT auto-reversing "
-                    "(finalized is terminal); manual investigation required",
-                    ev["tx_hash"][:16], ev["log_index"],
-                    existing.block_number, existing.block_hash,
-                    ev["block_number"], new_hash,
-                )
-                return "conflict"
             existing.block_number = ev["block_number"]
             existing.block_hash = new_hash
             existing.block_timestamp = block_dt
@@ -910,22 +927,28 @@ async def _reverse_settlement(db, settlement) -> None:
         settlement.tx_hash[:16], settlement.block_number, already_final, fired,
     )
 
-    if fired and intent is not None:
-        # The merchant was already told "paid" — signal the reversal exactly once.
-        # Atomic claim mirrors the paid path: only the reconcile that flips
-        # reversal_fired_at NULL→now sends, so concurrent reconciles can't
-        # double-fire payment.reversed.
+    if intent is not None:
+        # If the merchant was already told "paid", signal the reversal exactly
+        # once. Atomic claim mirrors the paid path — and the fired-condition
+        # lives IN the claim's WHERE, not in the `fired` snapshot above: a
+        # concurrent sweep-fire holds this row's lock with its claim
+        # uncommitted, so this UPDATE blocks and re-evaluates on the COMMITTED
+        # row. Deciding from the snapshot lost payment.reversed whenever the
+        # reversal raced the sweep (snapshot read webhook_fired_at = NULL).
         now = datetime.now(timezone.utc)
         claim = await db.execute(
             update(PaymentSettlement)
             .where(
                 PaymentSettlement.id == settlement.id,
                 PaymentSettlement.reversal_fired_at.is_(None),
+                PaymentSettlement.webhook_fired_at.is_not(None),
             )
             .values(reversal_fired_at=now)
         )
         if claim.rowcount != 1:
-            return  # another reconcile already fired the reversal
+            # Nothing to signal (no completed webhook ever fired) or another
+            # reconcile already fired the reversal.
+            return
         settlement.reversal_fired_at = now
 
         try:
