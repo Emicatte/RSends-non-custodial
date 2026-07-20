@@ -533,6 +533,17 @@ async def cancel_payment_intent(
             },
         )
 
+    # F-5: un pagamento on-chain osservato (settlement pending/final) vince sul
+    # cancel — stesso guard dei writer di expiry. rejected/reorged NON bloccano.
+    if await has_settlement_hold(db, intent.intent_id):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "SETTLEMENT_IN_FLIGHT",
+                "message": "An on-chain payment for this intent has been observed; it can no longer be cancelled.",
+            },
+        )
+
     intent.status = IntentStatus.cancelled
 
     await log_event(
