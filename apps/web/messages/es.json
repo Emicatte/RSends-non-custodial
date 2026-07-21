@@ -1502,8 +1502,13 @@
         "splitAdd": "Añadir destinatario",
         "splitRemove": "Quitar",
         "splitShare": "Cuota %",
+        "splitShareAuto": "Cuota % (auto)",
         "splitTotal": "Total",
-        "splitHelp": "Las cuotas deben sumar exactamente el 100%."
+        "splitErrorAddress": "Introduce una dirección de billetera válida para cada destinatario.",
+        "splitErrorDuplicate": "Cada dirección solo puede aparecer una vez.",
+        "splitErrorShare": "Introduce cada cuota como porcentaje con hasta dos decimales.",
+        "splitErrorExceeds": "Las cuotas superan el 100%.",
+        "splitHelp": "El último destinatario recibe automáticamente la cuota restante."
       }
     }
   },
