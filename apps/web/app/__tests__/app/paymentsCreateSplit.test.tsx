@@ -221,6 +221,79 @@ it('submits manual bps plus the derived remainder — no recipient key, no settl
   )
 })
 
+// ── Per-row payout preview: derived from the CURRENT amount ──────
+
+it('per-row payouts follow an amount change live; shares stay put', () => {
+  render(
+    <CreatePaymentModal settlementWallet={null} onCreate={jest.fn()} onClose={jest.fn()} />,
+  )
+  fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '100' } })
+  openSplit()
+  setAddress(0, ALICE)
+  setAddress(1, BOB)
+  setShare(0, '43.72')
+
+  expect(screen.getByText('≈ 43.72 USDC')).toBeInTheDocument()
+  expect(screen.getByText('≈ 56.28 USDC')).toBeInTheDocument()
+
+  // The reported repro: change the amount AFTER first entry.
+  fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '30' } })
+
+  expect(screen.getByText('≈ 13.116 USDC')).toBeInTheDocument()
+  expect(screen.getByText('≈ 16.884 USDC')).toBeInTheDocument()
+  expect(screen.queryByText('≈ 43.72 USDC')).not.toBeInTheDocument()
+  // Shares are amount-independent: bps inputs and the share total hold.
+  expect((screen.getAllByLabelText('Share %')[0] as HTMLInputElement).value).toBe('43.72')
+  expect(balanceField().value).toBe('56.28')
+  expect(screen.getByText('Total: 100.00%')).toBeInTheDocument()
+})
+
+it('no payout preview without a valid amount', () => {
+  render(
+    <CreatePaymentModal settlementWallet={null} onCreate={jest.fn()} onClose={jest.fn()} />,
+  )
+  openSplit()
+  setAddress(0, ALICE)
+  setAddress(1, BOB)
+  setShare(0, '40')
+  expect(screen.queryByText(/≈/)).not.toBeInTheDocument()
+})
+
+it('submitting after an amount change carries the current amount, bps unchanged', async () => {
+  const onCreate = jest.fn().mockResolvedValue({
+    intent_id: 'pi_split_amt',
+    recipient: null,
+    amount: 30,
+    currency: 'USDC',
+    chain: 'base_sepolia',
+    status: 'pending',
+  })
+  render(
+    <CreatePaymentModal settlementWallet={null} onCreate={onCreate} onClose={jest.fn()} />,
+  )
+  fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '100' } })
+  openSplit()
+  setAddress(0, ALICE)
+  setAddress(1, BOB)
+  setShare(0, '43.72')
+  fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '30' } })
+
+  fireEvent.click(submitButton())
+
+  await waitFor(() =>
+    expect(onCreate).toHaveBeenCalledWith({
+      amount: 30,
+      currency: 'USDC',
+      chain: 'base_sepolia',
+      expires_in_minutes: 30,
+      split: [
+        { address: ALICE, share_bps: 4372 },
+        { address: BOB, share_bps: 5628 },
+      ],
+    }),
+  )
+})
+
 it('add and remove keep the last row as the balance row within 2..20', () => {
   render(
     <CreatePaymentModal settlementWallet={null} onCreate={jest.fn()} onClose={jest.fn()} />,

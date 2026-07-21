@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { isAddress } from 'viem'
 import { Link } from '@/i18n/navigation'
-import { BPS_TOTAL, bpsToPercent, percentToBps, remainderBps } from '@/lib/splitShares'
+import { BPS_TOTAL, bpsToPercent, payoutAmount, percentToBps, remainderBps } from '@/lib/splitShares'
 import type { CreateInvoiceInput, CreatedInvoice } from '@/hooks/useOrgPayments'
 
 // Phase D — create-payment-request (invoice) modal for /app/payments. Lives in a
@@ -54,6 +54,8 @@ const btnStyle: React.CSSProperties = {
 const SPLIT_MIN = 2
 const SPLIT_MAX = 20
 const SPLIT_LEG_COLORS = ['#C45A3C', '#3B82F6', '#00B27A', '#D99A2B'] as const
+// Same convention as the payments list (AMOUNT_FMT in payments/page.tsx).
+const AMOUNT_FMT = new Intl.NumberFormat(undefined, { maximumFractionDigits: 6 })
 
 interface SplitLegDraft {
   address: string
@@ -415,14 +417,17 @@ export function CreatePaymentModal({
                 </div>
 
                 {legs.map((leg, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  <div
+                    key={i}
+                    style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}
+                  >
                     <input
                       type="text"
                       placeholder="0x…"
                       aria-label={t('create.recipient')}
                       value={leg.address}
                       onChange={(e) => setLeg(i, { address: e.target.value })}
-                      style={{ ...field, flex: 3 }}
+                      style={{ ...field, flex: '3 1 140px' }}
                     />
                     {i < legs.length - 1 ? (
                       <input
@@ -448,6 +453,26 @@ export function CreatePaymentModal({
                           color: COLORS.muted,
                         }}
                       />
+                    )}
+                    {amountValid && legBps[i] != null && (
+                      <span
+                        style={{
+                          fontSize: 11,
+                          color: COLORS.muted,
+                          alignSelf: 'center',
+                          whiteSpace: 'nowrap',
+                          minWidth: 64,
+                          textAlign: 'right',
+                          // On narrow widths the row wraps: payout + Remove
+                          // drop to a right-aligned second line instead of
+                          // crushing the address input.
+                          marginLeft: 'auto',
+                          fontFamily: 'var(--font-mono, monospace)',
+                        }}
+                      >
+                        ≈ {AMOUNT_FMT.format(payoutAmount(amountNum, legBps[i] as number))}{' '}
+                        {token}
+                      </span>
                     )}
                     <button
                       type="button"

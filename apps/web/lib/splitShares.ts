@@ -43,3 +43,10 @@ export function remainderBps(manualBps: Array<number | null>): number | null {
 export function bpsToPercent(bps: number): string {
   return (bps / 100).toFixed(2)
 }
+
+/** One leg's payout: share of the amount, rounded to 6 decimals to kill
+ * float dust. Display-only approximation — the contract floors per-leg
+ * base-unit amounts and sends the division remainder to recipient 0. */
+export function payoutAmount(amount: number, bps: number): number {
+  return Math.round(((amount * bps) / BPS_TOTAL) * 1e6) / 1e6
+}
