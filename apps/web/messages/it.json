@@ -1500,14 +1500,16 @@
         "splitToggle": "Pagamento suddiviso",
         "splitAdd": "Aggiungi destinatario",
         "splitRemove": "Rimuovi",
-        "splitShare": "Quota %",
-        "splitShareAuto": "Quota % (auto)",
+        "splitAmount": "Importo destinatario",
+        "splitAmountAuto": "Importo destinatario (auto)",
         "splitTotal": "Totale",
         "splitErrorAddress": "Inserisci un indirizzo wallet valido per ogni destinatario.",
         "splitErrorDuplicate": "Ogni indirizzo può comparire una sola volta.",
-        "splitErrorShare": "Inserisci ogni quota come percentuale con al massimo due decimali.",
-        "splitErrorExceeds": "Le quote superano il 100%.",
-        "splitHelp": "L'ultimo destinatario riceve automaticamente la quota restante."
+        "splitErrorAmount": "Inserisci un importo valido per ogni destinatario.",
+        "splitErrorExceeds": "Gli importi dei destinatari superano il totale.",
+        "splitErrorTiny": "Un importo è troppo piccolo rispetto al totale per la suddivisione on-chain.",
+        "splitErrorTotal": "Il totale ha troppe cifre decimali per questo token.",
+        "splitHelp": "L'ultimo destinatario riceve automaticamente l'importo restante."
       }
     }
   },

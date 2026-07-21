@@ -1500,14 +1500,16 @@
         "splitToggle": "Split payment",
         "splitAdd": "Add recipient",
         "splitRemove": "Remove",
-        "splitShare": "Share %",
-        "splitShareAuto": "Share % (auto)",
+        "splitAmount": "Recipient amount",
+        "splitAmountAuto": "Recipient amount (auto)",
         "splitTotal": "Total",
         "splitErrorAddress": "Enter a valid wallet address for every recipient.",
         "splitErrorDuplicate": "Each address can only appear once.",
-        "splitErrorShare": "Enter each share as a percent with up to two decimal places.",
-        "splitErrorExceeds": "Shares exceed 100%.",
-        "splitHelp": "The last recipient automatically gets the remaining share."
+        "splitErrorAmount": "Enter a valid amount for every recipient.",
+        "splitErrorExceeds": "Recipient amounts exceed the total.",
+        "splitErrorTiny": "One amount is too small relative to the total to split on-chain.",
+        "splitErrorTotal": "The total has too many decimal places for this token.",
+        "splitHelp": "The last recipient automatically gets the remaining amount."
       }
     }
   },

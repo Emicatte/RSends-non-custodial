@@ -1501,14 +1501,16 @@
         "splitToggle": "Pago dividido",
         "splitAdd": "Añadir destinatario",
         "splitRemove": "Quitar",
-        "splitShare": "Cuota %",
-        "splitShareAuto": "Cuota % (auto)",
+        "splitAmount": "Importe del destinatario",
+        "splitAmountAuto": "Importe del destinatario (auto)",
         "splitTotal": "Total",
         "splitErrorAddress": "Introduce una dirección de billetera válida para cada destinatario.",
         "splitErrorDuplicate": "Cada dirección solo puede aparecer una vez.",
-        "splitErrorShare": "Introduce cada cuota como porcentaje con hasta dos decimales.",
-        "splitErrorExceeds": "Las cuotas superan el 100%.",
-        "splitHelp": "El último destinatario recibe automáticamente la cuota restante."
+        "splitErrorAmount": "Introduce un importe válido para cada destinatario.",
+        "splitErrorExceeds": "Los importes de los destinatarios superan el total.",
+        "splitErrorTiny": "Un importe es demasiado pequeño respecto al total para dividirlo on-chain.",
+        "splitErrorTotal": "El total tiene demasiados decimales para este token.",
+        "splitHelp": "El último destinatario recibe automáticamente el importe restante."
       }
     }
   },
