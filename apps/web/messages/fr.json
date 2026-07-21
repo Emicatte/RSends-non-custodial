@@ -1502,8 +1502,13 @@
         "splitAdd": "Ajouter un destinataire",
         "splitRemove": "Retirer",
         "splitShare": "Part %",
+        "splitShareAuto": "Part % (auto)",
         "splitTotal": "Total",
-        "splitHelp": "Les parts doivent totaliser exactement 100 %."
+        "splitErrorAddress": "Saisissez une adresse de portefeuille valide pour chaque destinataire.",
+        "splitErrorDuplicate": "Chaque adresse ne peut apparaître qu'une seule fois.",
+        "splitErrorShare": "Saisissez chaque part en pourcentage avec deux décimales au maximum.",
+        "splitErrorExceeds": "Les parts dépassent 100 %.",
+        "splitHelp": "Le dernier destinataire reçoit automatiquement la part restante."
       }
     }
   },

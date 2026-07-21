@@ -1501,8 +1501,13 @@
         "splitAdd": "Aggiungi destinatario",
         "splitRemove": "Rimuovi",
         "splitShare": "Quota %",
+        "splitShareAuto": "Quota % (auto)",
         "splitTotal": "Totale",
-        "splitHelp": "Le quote devono sommare esattamente al 100%."
+        "splitErrorAddress": "Inserisci un indirizzo wallet valido per ogni destinatario.",
+        "splitErrorDuplicate": "Ogni indirizzo può comparire una sola volta.",
+        "splitErrorShare": "Inserisci ogni quota come percentuale con al massimo due decimali.",
+        "splitErrorExceeds": "Le quote superano il 100%.",
+        "splitHelp": "L'ultimo destinatario riceve automaticamente la quota restante."
       }
     }
   },

@@ -2,11 +2,16 @@
  * Split payment creation from /app — CreatePaymentModal's split section and
  * useOrgPayments.createIntent's split payload.
  *
- * The client mirror of the server BPS gate: submit is BLOCKED until every
- * address is valid + unique and the shares sum to EXACTLY 100% (10000 bps) —
- * the server 422 remains authoritative. A valid split needs NO settlement
- * wallet (the split IS the recipient set). The POST carries integer
- * share_bps and never a `recipient` key.
+ * The client mirror of the server BPS gate, with the auto-remainder UX:
+ * every row above the LAST one is manual; the last row is the balance row —
+ * its share is always 10000 − sum(manual bps), never typed. Submit is
+ * BLOCKED until every address is valid + unique, every manual share parses
+ * to integer bps, and the balance row keeps at least 1 bps — which makes
+ * the sum exactly 10000 by construction. Each failure names itself (bad
+ * address / duplicate / bad share / over 100%) instead of blaming the sum.
+ * Share inputs parse locale-safely (comma and dot). The POST carries
+ * integer share_bps and never a `recipient` key; the server 422 remains
+ * authoritative.
  */
 import { render, screen, fireEvent, waitFor, renderHook, act } from '@testing-library/react'
 
@@ -50,6 +55,7 @@ import AppPaymentsPage from '@/app/[locale]/app/payments/page'
 
 const ALICE = '0x1111111111111111111111111111111111111111'
 const BOB = '0x3333333333333333333333333333333333333333'
+const CAROL = '0x5555555555555555555555555555555555555555'
 
 afterEach(() => {
   jest.resetAllMocks()
@@ -59,53 +65,126 @@ function openSplit() {
   fireEvent.click(screen.getByLabelText('Split payment'))
 }
 
-function fillLeg(index: number, address: string, percent: string) {
+function setAddress(index: number, address: string) {
   fireEvent.change(screen.getAllByPlaceholderText('0x…')[index], {
     target: { value: address },
   })
+}
+
+/** Type into a MANUAL share input (rows above the balance row). */
+function setShare(index: number, percent: string) {
   fireEvent.change(screen.getAllByLabelText('Share %')[index], {
     target: { value: percent },
   })
 }
 
-// ── Modal: the client BPS gate ───────────────────────────────────
+function balanceField() {
+  return screen.getByLabelText('Share % (auto)') as HTMLInputElement
+}
 
-it('split toggle reveals two legs; submit blocked until shares sum to exactly 100%', () => {
+function submitButton() {
+  return screen.getByRole('button', { name: 'Create payment request' })
+}
+
+// ── Modal: the client BPS gate with the auto-balance row ─────────
+
+it('last row auto-balances to the remainder; submit enables only then', () => {
   render(
     <CreatePaymentModal settlementWallet={null} onCreate={jest.fn()} onClose={jest.fn()} />,
   )
   fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '100' } })
   openSplit()
 
-  // Two leg rows appear (min 2 recipients).
-  expect(screen.getAllByLabelText('Share %')).toHaveLength(2)
-  const submit = screen.getByRole('button', { name: 'Create payment request' })
+  // Two rows appear: one manual share input + the read-only balance row.
+  expect(screen.getAllByLabelText('Share %')).toHaveLength(1)
+  expect(balanceField()).toHaveAttribute('readonly')
 
-  fillLeg(0, ALICE, '70')
-  fillLeg(1, BOB, '20') // 90% — not exact
-  expect(submit).toBeDisabled()
+  setAddress(0, ALICE)
+  setAddress(1, BOB)
+  setShare(0, '43.72')
 
-  fillLeg(1, BOB, '30') // exactly 100%
-  expect(submit).toBeEnabled()
+  expect(balanceField().value).toBe('56.28')
+  expect(submitButton()).toBeEnabled()
 
-  fillLeg(1, BOB, '30.001') // sub-bps precision — rejected, never rounded
-  expect(submit).toBeDisabled()
-})
-
-it('duplicate addresses block submit', () => {
-  render(
-    <CreatePaymentModal settlementWallet={null} onCreate={jest.fn()} onClose={jest.fn()} />,
-  )
-  fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '100' } })
-  openSplit()
-  fillLeg(0, ALICE, '50')
-  fillLeg(1, ALICE, '50')
+  // Sub-bps precision — rejected, never rounded; names the share error.
+  setShare(0, '30.001')
+  expect(submitButton()).toBeDisabled()
   expect(
-    screen.getByRole('button', { name: 'Create payment request' }),
-  ).toBeDisabled()
+    screen.getByText('Enter each share as a percent with up to two decimal places.'),
+  ).toBeInTheDocument()
 })
 
-it('submits integer bps with no recipient key — and needs no settlement wallet', async () => {
+it('parses a locale comma in the share input', () => {
+  render(
+    <CreatePaymentModal settlementWallet={null} onCreate={jest.fn()} onClose={jest.fn()} />,
+  )
+  fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '100' } })
+  openSplit()
+  setAddress(0, ALICE)
+  setAddress(1, BOB)
+  setShare(0, '43,72')
+
+  expect(balanceField().value).toBe('56.28')
+  expect(submitButton()).toBeEnabled()
+})
+
+it('duplicate addresses block submit and say so — not the sum message', () => {
+  render(
+    <CreatePaymentModal settlementWallet={null} onCreate={jest.fn()} onClose={jest.fn()} />,
+  )
+  fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '100' } })
+  openSplit()
+  setAddress(0, ALICE)
+  setAddress(1, ALICE)
+  setShare(0, '50')
+
+  expect(submitButton()).toBeDisabled()
+  expect(
+    screen.getByText('Each address can only appear once.'),
+  ).toBeInTheDocument()
+  expect(
+    screen.queryByText('Shares must total exactly 100%.'),
+  ).not.toBeInTheDocument()
+})
+
+it('manual shares over 100% surface the overflow on the balance row and block', () => {
+  render(
+    <CreatePaymentModal settlementWallet={null} onCreate={jest.fn()} onClose={jest.fn()} />,
+  )
+  fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '100' } })
+  openSplit()
+  fireEvent.click(screen.getByRole('button', { name: 'Add recipient' }))
+
+  setAddress(0, ALICE)
+  setAddress(1, BOB)
+  setAddress(2, CAROL)
+  setShare(0, '70')
+  setShare(1, '40') // 110% across the manual rows — nothing left to balance
+
+  expect(submitButton()).toBeDisabled()
+  expect(screen.getByText('Shares exceed 100%.')).toBeInTheDocument()
+})
+
+it('three rows: two manual shares, the last balances the rest', () => {
+  render(
+    <CreatePaymentModal settlementWallet={null} onCreate={jest.fn()} onClose={jest.fn()} />,
+  )
+  fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '100' } })
+  openSplit()
+  fireEvent.click(screen.getByRole('button', { name: 'Add recipient' }))
+
+  expect(screen.getAllByLabelText('Share %')).toHaveLength(2)
+  setAddress(0, ALICE)
+  setAddress(1, BOB)
+  setAddress(2, CAROL)
+  setShare(0, '43.72')
+  setShare(1, '30')
+
+  expect(balanceField().value).toBe('26.28')
+  expect(submitButton()).toBeEnabled()
+})
+
+it('submits manual bps plus the derived remainder — no recipient key, no settlement wallet', async () => {
   const onCreate = jest.fn().mockResolvedValue({
     intent_id: 'pi_split',
     recipient: null,
@@ -119,10 +198,11 @@ it('submits integer bps with no recipient key — and needs no settlement wallet
   )
   fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '100' } })
   openSplit()
-  fillLeg(0, ALICE, '70')
-  fillLeg(1, BOB, '30')
+  setAddress(0, ALICE)
+  setAddress(1, BOB)
+  setShare(0, '43.72')
 
-  fireEvent.click(screen.getByRole('button', { name: 'Create payment request' }))
+  fireEvent.click(submitButton())
 
   await waitFor(() =>
     expect(onCreate).toHaveBeenCalledWith({
@@ -131,8 +211,8 @@ it('submits integer bps with no recipient key — and needs no settlement wallet
       chain: 'base_sepolia',
       expires_in_minutes: 30,
       split: [
-        { address: ALICE, share_bps: 7000 },
-        { address: BOB, share_bps: 3000 },
+        { address: ALICE, share_bps: 4372 },
+        { address: BOB, share_bps: 5628 },
       ],
     }),
   )
@@ -141,15 +221,20 @@ it('submits integer bps with no recipient key — and needs no settlement wallet
   )
 })
 
-it('can add and remove legs within 2..20', () => {
+it('add and remove keep the last row as the balance row within 2..20', () => {
   render(
     <CreatePaymentModal settlementWallet={null} onCreate={jest.fn()} onClose={jest.fn()} />,
   )
   openSplit()
   fireEvent.click(screen.getByRole('button', { name: 'Add recipient' }))
-  expect(screen.getAllByLabelText('Share %')).toHaveLength(3)
-  fireEvent.click(screen.getAllByRole('button', { name: 'Remove' })[2])
+  // 3 rows = 2 manual + 1 balance.
   expect(screen.getAllByLabelText('Share %')).toHaveLength(2)
+  expect(screen.getAllByLabelText('Share % (auto)')).toHaveLength(1)
+
+  fireEvent.click(screen.getAllByRole('button', { name: 'Remove' })[1])
+  // Back to 1 manual + 1 balance.
+  expect(screen.getAllByLabelText('Share %')).toHaveLength(1)
+  expect(screen.getAllByLabelText('Share % (auto)')).toHaveLength(1)
 })
 
 // ── List: split rows render "Split · N" with a per-leg tooltip ───
