@@ -1501,14 +1501,16 @@
         "splitToggle": "Paiement réparti",
         "splitAdd": "Ajouter un destinataire",
         "splitRemove": "Retirer",
-        "splitShare": "Part %",
-        "splitShareAuto": "Part % (auto)",
+        "splitAmount": "Montant du destinataire",
+        "splitAmountAuto": "Montant du destinataire (auto)",
         "splitTotal": "Total",
         "splitErrorAddress": "Saisissez une adresse de portefeuille valide pour chaque destinataire.",
         "splitErrorDuplicate": "Chaque adresse ne peut apparaître qu'une seule fois.",
-        "splitErrorShare": "Saisissez chaque part en pourcentage avec deux décimales au maximum.",
-        "splitErrorExceeds": "Les parts dépassent 100 %.",
-        "splitHelp": "Le dernier destinataire reçoit automatiquement la part restante."
+        "splitErrorAmount": "Saisissez un montant valide pour chaque destinataire.",
+        "splitErrorExceeds": "Les montants des destinataires dépassent le total.",
+        "splitErrorTiny": "Un montant est trop petit par rapport au total pour être réparti on-chain.",
+        "splitErrorTotal": "Le total comporte trop de décimales pour ce token.",
+        "splitHelp": "Le dernier destinataire reçoit automatiquement le montant restant."
       }
     }
   },

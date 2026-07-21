@@ -1501,14 +1501,16 @@
         "splitToggle": "Aufgeteilte Zahlung",
         "splitAdd": "Empfänger hinzufügen",
         "splitRemove": "Entfernen",
-        "splitShare": "Anteil %",
-        "splitShareAuto": "Anteil % (auto)",
+        "splitAmount": "Empfängerbetrag",
+        "splitAmountAuto": "Empfängerbetrag (auto)",
         "splitTotal": "Gesamt",
         "splitErrorAddress": "Geben Sie für jeden Empfänger eine gültige Wallet-Adresse an.",
         "splitErrorDuplicate": "Jede Adresse darf nur einmal vorkommen.",
-        "splitErrorShare": "Geben Sie jeden Anteil als Prozentwert mit höchstens zwei Dezimalstellen an.",
-        "splitErrorExceeds": "Die Anteile übersteigen 100 %.",
-        "splitHelp": "Der letzte Empfänger erhält automatisch den verbleibenden Anteil."
+        "splitErrorAmount": "Geben Sie für jeden Empfänger einen gültigen Betrag ein.",
+        "splitErrorExceeds": "Die Empfängerbeträge übersteigen den Gesamtbetrag.",
+        "splitErrorTiny": "Ein Betrag ist im Verhältnis zum Gesamtbetrag zu klein für die On-Chain-Aufteilung.",
+        "splitErrorTotal": "Der Gesamtbetrag hat zu viele Dezimalstellen für diesen Token.",
+        "splitHelp": "Der letzte Empfänger erhält automatisch den Restbetrag."
       }
     }
   },

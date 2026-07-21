@@ -4,7 +4,13 @@ import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { isAddress } from 'viem'
 import { Link } from '@/i18n/navigation'
-import { BPS_TOTAL, bpsToPercent, payoutAmount, percentToBps, remainderBps } from '@/lib/splitShares'
+import {
+  amountsToSharesBps,
+  amountToBase,
+  formatBase,
+  onchainAmounts,
+  remainderBase,
+} from '@/lib/splitShares'
 import type { CreateInvoiceInput, CreatedInvoice } from '@/hooks/useOrgPayments'
 
 // Phase D — create-payment-request (invoice) modal for /app/payments. Lives in a
@@ -27,6 +33,10 @@ const COLORS = {
 // testnet (USDC + ETH are the enabled tokens there). No chain picker, no live.
 const CREATE_CHAIN = 'base_sepolia'
 const CREATE_TOKENS = ['USDC', 'ETH'] as const
+// Base-unit decimals for the create tokens. The backend chain registry
+// (SUPPORTED_CHAINS → router_registry) is the SSOT; payTokens.ts covers
+// only the /pay-side ERC-20s and deliberately has no native ETH entry.
+const CREATE_TOKEN_DECIMALS: Record<string, number> = { USDC: 6, ETH: 18 }
 const EXPIRY_OPTIONS = [
   { minutes: 30, key: 'expiry30m' },
   { minutes: 60, key: 'expiry1h' },
@@ -46,20 +56,20 @@ const btnStyle: React.CSSProperties = {
   cursor: 'pointer',
 }
 
-// ── Split (non-custodial, BPS-exact) ─────────────────────────────
-// Client mirror of the server gate: 2..20 legs, valid unique addresses,
-// integer bps summing to EXACTLY 10000. The server 422 stays authoritative.
-// The LAST row is the balance row — its share is always 10000 − sum of the
-// manual rows above it, so a valid form sums to 10000 by construction.
+// ── Split (non-custodial, amounts in / BPS out) ──────────────────
+// The merchant enters AMOUNTS per recipient, never percentages. Rows above
+// the LAST one are manual; the last row balances to `total − sum(manual)`,
+// so the amounts sum to the Amount field by construction. Contract bps are
+// derived from the amount ratios (sum EXACTLY 10000, drift absorbed on
+// recipient 0 — the leg the contract's remainder rule favors). The server
+// 422 stays authoritative.
 const SPLIT_MIN = 2
 const SPLIT_MAX = 20
 const SPLIT_LEG_COLORS = ['#C45A3C', '#3B82F6', '#00B27A', '#D99A2B'] as const
-// Same convention as the payments list (AMOUNT_FMT in payments/page.tsx).
-const AMOUNT_FMT = new Intl.NumberFormat(undefined, { maximumFractionDigits: 6 })
 
 interface SplitLegDraft {
   address: string
-  percent: string
+  amount: string
 }
 
 export function CreatePaymentModal({
@@ -78,8 +88,8 @@ export function CreatePaymentModal({
   const [recipient, setRecipient] = useState('')
   const [splitOn, setSplitOn] = useState(false)
   const [legs, setLegs] = useState<SplitLegDraft[]>([
-    { address: '', percent: '' },
-    { address: '', percent: '' },
+    { address: '', amount: '' },
+    { address: '', amount: '' },
   ])
   const [submitting, setSubmitting] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -95,41 +105,70 @@ export function CreatePaymentModal({
   // OR a valid per-intent override; block the submit otherwise (no blind 422).
   const hasRecipient = Boolean(settlementWallet) || overrideResolves
 
-  // Split validity — the client mirror of the server BPS gate. A valid split
-  // set IS the recipient set: no settlement wallet needed. Manual rows are
-  // everything above the last; the last row balances to 10000 bps.
-  const manualBps = legs.slice(0, -1).map((leg) => percentToBps(leg.percent))
-  const balanceBps = remainderBps(manualBps)
+  // Split validity — amounts in, bps derived. A valid split set IS the
+  // recipient set: no settlement wallet needed. Manual rows are everything
+  // above the last; the last row balances to the total in currency, so
+  // sum(amounts) === total is an exact base-unit identity by construction.
+  const decimals = CREATE_TOKEN_DECIMALS[token] ?? 18
+  const totalBase = amountToBase(amount, decimals)
+  const manualBase = legs.slice(0, -1).map((leg) => amountToBase(leg.amount, decimals))
+  const balanceBase = totalBase != null ? remainderBase(totalBase, manualBase) : null
   const legAddrs = legs.map((leg) => leg.address.trim())
   const addrsValid = legAddrs.every((a) => isAddress(a))
   const addrsUnique =
     new Set(legAddrs.map((a) => a.toLowerCase())).size === legAddrs.length
-  const sharesParsed = manualBps.every((b) => b != null)
-  const balanceOk = balanceBps != null && balanceBps >= 1
+  const amountsParsed = manualBase.every((b) => b != null)
+  const balanceOk = balanceBase != null && balanceBase > 0n
+  const sharesBps =
+    totalBase != null && balanceOk && amountsParsed
+      ? amountsToSharesBps([...(manualBase as bigint[]), balanceBase], totalBase)
+      : null
   const splitValid =
     legs.length >= SPLIT_MIN &&
     legs.length <= SPLIT_MAX &&
     addrsValid &&
     addrsUnique &&
-    sharesParsed &&
-    balanceOk
-  // Per-leg bps for display/payload: manual rows + the derived balance.
-  const legBps = legs.map((_, i) =>
-    i < legs.length - 1 ? manualBps[i] : balanceOk ? balanceBps : null,
-  )
-  const bpsSum = balanceOk
-    ? BPS_TOTAL
-    : manualBps.reduce<number>((acc, b) => acc + (b ?? 0), 0)
+    sharesBps != null
+  // The contract mirror: what each leg actually receives on-chain. A row
+  // shows its ≈ figure ONLY when the typed amount is not a clean bps
+  // fraction of the total (exact rows show nothing extra).
+  const onchain =
+    sharesBps != null && totalBase != null ? onchainAmounts(totalBase, sharesBps) : null
+  const legPreview = legs.map((_, i) => {
+    if (onchain == null) return null
+    const typed = i < legs.length - 1 ? manualBase[i] : balanceBase
+    if (typed == null || onchain[i] === typed) return null
+    return `≈ ${formatBase(onchain[i], decimals)} ${token}`
+  })
+  // Bar widths: derived bps when valid; else raw amount/total proportions so
+  // an over-allocated bar still clips full red instead of emptying out.
+  const legWidthPct = legs.map((_, i) => {
+    if (sharesBps != null) return sharesBps[i] / 100
+    if (totalBase == null || totalBase <= 0n) return 0
+    const base = i < legs.length - 1 ? manualBase[i] : balanceBase
+    if (base == null || base <= 0n) return 0
+    return Number((base * 10000n) / totalBase) / 100
+  })
+  // Currency total line: the assigned sum, red unless it equals the total.
+  const assignedBase =
+    totalBase != null && balanceOk && amountsParsed
+      ? totalBase
+      : manualBase.reduce<bigint>((acc, b) => acc + (b ?? 0n), 0n)
+  const assignedMatches = totalBase != null && assignedBase === totalBase && balanceOk
   // One failure names itself — never blame the sum for an address problem.
   const splitError = !addrsValid
     ? 'splitErrorAddress'
     : !addrsUnique
       ? 'splitErrorDuplicate'
-      : !sharesParsed
-        ? 'splitErrorShare'
-        : balanceBps != null && balanceBps < 1
-          ? 'splitErrorExceeds'
-          : null
+      : amountValid && totalBase == null
+        ? 'splitErrorTotal'
+        : !amountsParsed
+          ? 'splitErrorAmount'
+          : balanceBase != null && balanceBase <= 0n
+            ? 'splitErrorExceeds'
+            : totalBase != null && balanceOk && sharesBps == null
+              ? 'splitErrorTiny'
+              : null
 
   const canSubmit =
     amountValid &&
@@ -154,7 +193,7 @@ export function CreatePaymentModal({
           ? {
               split: legs.map((leg, i) => ({
                 address: leg.address.trim(),
-                share_bps: legBps[i] as number,
+                share_bps: (sharesBps as number[])[i],
               })),
             }
           : override
@@ -382,7 +421,7 @@ export function CreatePaymentModal({
 
             {splitOn ? (
               <div style={{ marginBottom: 8 }}>
-                {/* Preview bar — absolute widths against the 10000-bps track:
+                {/* Preview bar — absolute widths from the derived bps:
                     under-allocation leaves empty track, overflow tints it red */}
                 <div
                   aria-hidden
@@ -392,7 +431,7 @@ export function CreatePaymentModal({
                     borderRadius: 3,
                     overflow: 'hidden',
                     background:
-                      balanceBps != null && balanceBps < 1
+                      balanceBase != null && balanceBase <= 0n
                         ? COLORS.redLight
                         : COLORS.border,
                     marginBottom: 10,
@@ -402,13 +441,13 @@ export function CreatePaymentModal({
                     <span
                       key={i}
                       style={{
-                        width: `${(legBps[i] ?? 0) / 100}%`,
+                        width: `${legWidthPct[i]}%`,
                         // No shrink: an over-allocated bar must NOT be
                         // normalized back to a full clean bar — it clips
                         // and goes red instead.
                         flexShrink: 0,
                         background:
-                          balanceBps != null && balanceBps < 1
+                          balanceBase != null && balanceBase <= 0n
                             ? COLORS.red
                             : SPLIT_LEG_COLORS[i % SPLIT_LEG_COLORS.length],
                       }}
@@ -433,9 +472,9 @@ export function CreatePaymentModal({
                       <input
                         type="text"
                         inputMode="decimal"
-                        aria-label={t('create.splitShare')}
-                        value={leg.percent}
-                        onChange={(e) => setLeg(i, { percent: e.target.value })}
+                        aria-label={t('create.splitAmount')}
+                        value={leg.amount}
+                        onChange={(e) => setLeg(i, { amount: e.target.value })}
                         style={{ ...field, flex: 1, minWidth: 74 }}
                       />
                     ) : (
@@ -443,8 +482,8 @@ export function CreatePaymentModal({
                         type="text"
                         readOnly
                         tabIndex={-1}
-                        aria-label={t('create.splitShareAuto')}
-                        value={balanceOk ? bpsToPercent(balanceBps) : ''}
+                        aria-label={t('create.splitAmountAuto')}
+                        value={balanceOk ? formatBase(balanceBase, decimals) : ''}
                         style={{
                           ...field,
                           flex: 1,
@@ -454,7 +493,7 @@ export function CreatePaymentModal({
                         }}
                       />
                     )}
-                    {amountValid && legBps[i] != null && (
+                    {legPreview[i] != null && (
                       <span
                         style={{
                           fontSize: 11,
@@ -463,15 +502,14 @@ export function CreatePaymentModal({
                           whiteSpace: 'nowrap',
                           minWidth: 64,
                           textAlign: 'right',
-                          // On narrow widths the row wraps: payout + Remove
+                          // On narrow widths the row wraps: preview + Remove
                           // drop to a right-aligned second line instead of
                           // crushing the address input.
                           marginLeft: 'auto',
                           fontFamily: 'var(--font-mono, monospace)',
                         }}
                       >
-                        ≈ {AMOUNT_FMT.format(payoutAmount(amountNum, legBps[i] as number))}{' '}
-                        {token}
+                        {legPreview[i]}
                       </span>
                     )}
                     <button
@@ -513,7 +551,7 @@ export function CreatePaymentModal({
                         prev.length < SPLIT_MAX
                           ? [
                               ...prev.slice(0, -1),
-                              { address: '', percent: '' },
+                              { address: '', amount: '' },
                               prev[prev.length - 1],
                             ]
                           : prev,
@@ -535,10 +573,10 @@ export function CreatePaymentModal({
                       fontSize: 12,
                       fontWeight: 600,
                       fontFamily: 'var(--font-mono, monospace)',
-                      color: bpsSum === BPS_TOTAL ? COLORS.ink : COLORS.red,
+                      color: assignedMatches ? COLORS.ink : COLORS.red,
                     }}
                   >
-                    {t('create.splitTotal')}: {bpsToPercent(bpsSum)}%
+                    {t('create.splitTotal')}: {formatBase(assignedBase, decimals)} {token}
                   </span>
                 </div>
                 <p
