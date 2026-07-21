@@ -6,7 +6,7 @@
  * is locale-safe (comma and dot both accepted as the decimal separator)
  * and rejects sub-bps precision — never silently rounds.
  */
-import { percentToBps, remainderBps, bpsToPercent } from '@/lib/splitShares'
+import { percentToBps, remainderBps, bpsToPercent, payoutAmount } from '@/lib/splitShares'
 
 describe('percentToBps', () => {
   it('parses whole percents to bps', () => {
@@ -77,6 +77,19 @@ describe('remainderBps', () => {
 
   it('is 10000 for an empty manual set', () => {
     expect(remainderBps([])).toBe(10000)
+  })
+})
+
+describe('payoutAmount', () => {
+  it('computes a leg payout as share of the amount', () => {
+    expect(payoutAmount(30, 4372)).toBe(13.116)
+    expect(payoutAmount(30, 5628)).toBe(16.884)
+    expect(payoutAmount(100, 5000)).toBe(50)
+  })
+
+  it('kills float dust', () => {
+    expect(payoutAmount(0.1, 3000)).toBe(0.03)
+    expect(payoutAmount(0.3, 3333)).toBe(0.09999)
   })
 })
 
