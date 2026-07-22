@@ -237,9 +237,7 @@ async def test_wire_body_shape_and_signature_settlement_path():
     intent = await _create_intent()
 
     mock_client, captured = _mock_httpx_capture()
-    with patch("app.services.webhook_service._check_redis_idempotency",
-               new_callable=AsyncMock, return_value=False), \
-         patch("app.services.webhook_service.httpx.AsyncClient",
+    with patch("app.services.webhook_service.httpx.AsyncClient",
                return_value=mock_client):
         async with async_session() as db:
             intent_db = (await db.execute(

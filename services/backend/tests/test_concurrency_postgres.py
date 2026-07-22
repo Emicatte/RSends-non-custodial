@@ -30,6 +30,7 @@ import os
 import secrets
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import asyncpg
 import pytest
@@ -534,3 +535,67 @@ async def test_cancel_after_committed_ingest_refuses(pg, monkeypatch, surface):
     intent, settlement = await _final_state(pg, intent_id, tx)
     assert intent.status is IntentStatus.pending
     assert settlement.status is SettlementStatus.pending
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Site 4 — expire task: pending→expired claim, single winner
+# ═══════════════════════════════════════════════════════════════
+
+
+@pytest.mark.asyncio
+async def test_concurrent_expire_workers_fire_expired_exactly_once(pg, monkeypatch):
+    """Celery beat and the asyncio fallback loop can run the expire task
+    concurrently. Both select the same overdue pending intent; the flip must
+    be an atomic claim: the loser's UPDATE blocks on the winner's row lock,
+    re-evaluates `status == pending` on the committed row, and skips — no
+    IntegrityError on the UNIQUE idempotency_key, no second delivery, no
+    lost expiration. Redis is absent by construction (its pre-claim was
+    fail-open, i.e. no guarantee): exactly-once must hold from the DB alone."""
+    from app.models.merchant_models import MerchantWebhook, WebhookDelivery
+    import app.db.session as dbs
+    import app.tasks.webhook_tasks as wt
+
+    intent_id = await _seed_intent(pg)
+    async with pg() as db:
+        intent = (await db.execute(
+            select(PaymentIntent).where(PaymentIntent.intent_id == intent_id)
+        )).scalar_one()
+        intent.expires_at = datetime.now(timezone.utc) - timedelta(minutes=5)
+        db.add(MerchantWebhook(
+            merchant_id=OWNER,
+            environment="test",
+            url="https://merchant.example/hook",
+            secret="whsec_" + secrets.token_hex(16),
+            events=[],
+            is_active=True,
+        ))
+        await db.commit()
+
+    monkeypatch.setattr(dbs, "async_session", pg)
+    monkeypatch.setattr(  # Redis unavailable — the no-guarantee scenario
+        "app.services.cache_service.get_redis", AsyncMock(return_value=None)
+    )
+
+    async def _slow_delivery(delivery, wh):
+        await asyncio.sleep(0.3)  # hold the winner's tx open past the loser's SELECT
+        return True
+
+    monkeypatch.setattr(
+        "app.services.webhook_service._attempt_delivery", _slow_delivery
+    )
+
+    results = await asyncio.gather(
+        wt._expire_pending_intents_async(),
+        wt._expire_pending_intents_async(),
+    )
+
+    assert sum(r["expired"] for r in results) == 1
+    assert sum(r["webhooks_triggered"] for r in results) == 1
+    async with pg() as db:
+        intent = (await db.execute(
+            select(PaymentIntent).where(PaymentIntent.intent_id == intent_id)
+        )).scalar_one()
+        assert intent.status is IntentStatus.expired
+        rows = (await db.execute(select(WebhookDelivery))).scalars().all()
+        assert len(rows) == 1
+        assert rows[0].event_type == "payment.expired"

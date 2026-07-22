@@ -30,7 +30,7 @@ from app.models.merchant_models import (
 )
 from app.services.webhook_service import (
     send_webhook, _build_payload,
-    compute_webhook_signature, _check_redis_idempotency,
+    compute_webhook_signature,
     process_pending_deliveries, expire_stale_intents,
     MAX_RETRIES, BASE_BACKOFF_SECONDS,
 )
@@ -182,9 +182,8 @@ class TestSendWebhookSuccess:
     """Verifica delivery immediata con risposta 2xx."""
 
     @pytest.mark.asyncio
-    @patch("app.services.webhook_service._check_redis_idempotency", new_callable=AsyncMock, return_value=False)
     @patch("app.services.webhook_service.httpx.AsyncClient")
-    async def test_immediate_delivery_success(self, mock_client_cls, mock_redis):
+    async def test_immediate_delivery_success(self, mock_client_cls):
         # Setup mock HTTP response
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -230,9 +229,8 @@ class TestSendWebhookSuccess:
         uuid.UUID(headers["X-RSend-Delivery"])
 
     @pytest.mark.asyncio
-    @patch("app.services.webhook_service._check_redis_idempotency", new_callable=AsyncMock, return_value=False)
     @patch("app.services.webhook_service.httpx.AsyncClient")
-    async def test_delivery_creates_record(self, mock_client_cls, mock_redis):
+    async def test_delivery_creates_record(self, mock_client_cls):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.text = "OK"
@@ -276,9 +274,8 @@ class TestRetryOnFailure:
     """Verifica che una delivery fallita scheduli un retry con backoff."""
 
     @pytest.mark.asyncio
-    @patch("app.services.webhook_service._check_redis_idempotency", new_callable=AsyncMock, return_value=False)
     @patch("app.services.webhook_service.httpx.AsyncClient")
-    async def test_failure_schedules_retry(self, mock_client_cls, mock_redis):
+    async def test_failure_schedules_retry(self, mock_client_cls):
         mock_resp = MagicMock()
         mock_resp.status_code = 500
         mock_resp.text = "Internal Server Error"
@@ -329,9 +326,8 @@ class TestIdempotency:
     """Verifica che la stessa TX non generi webhook duplicati."""
 
     @pytest.mark.asyncio
-    @patch("app.services.webhook_service._check_redis_idempotency", new_callable=AsyncMock, return_value=False)
     @patch("app.services.webhook_service.httpx.AsyncClient")
-    async def test_db_idempotency_no_duplicate(self, mock_client_cls, mock_redis):
+    async def test_db_idempotency_no_duplicate(self, mock_client_cls):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.text = "OK"
@@ -381,24 +377,6 @@ class TestIdempotency:
             count = result.scalar()
             assert count == 1
 
-    @pytest.mark.asyncio
-    async def test_redis_idempotency_hit(self):
-        """Simula Redis che ritorna hit (duplicato)."""
-        mock_redis_instance = AsyncMock()
-        mock_redis_instance.set = AsyncMock(return_value=False)  # Key gia' presente
-
-        mock_get_redis = AsyncMock(return_value=mock_redis_instance)
-        with patch("app.services.cache_service.get_redis", mock_get_redis):
-            is_dup = await _check_redis_idempotency("pi_test:payment.completed:1")
-            assert is_dup is True
-
-    @pytest.mark.asyncio
-    async def test_redis_unavailable_proceeds(self):
-        """Se Redis non e' disponibile, procede comunque (fail-open)."""
-        mock_get_redis = AsyncMock(return_value=None)
-        with patch("app.services.cache_service.get_redis", mock_get_redis):
-            is_dup = await _check_redis_idempotency("pi_test:payment.completed:1")
-            assert is_dup is False
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -408,8 +386,7 @@ class TestIdempotency:
 class TestInactiveWebhook:
 
     @pytest.mark.asyncio
-    @patch("app.services.webhook_service._check_redis_idempotency", new_callable=AsyncMock, return_value=False)
-    async def test_inactive_webhook_not_triggered(self, mock_redis):
+    async def test_inactive_webhook_not_triggered(self):
         intent = await _create_intent()
         wh = await _create_webhook(is_active=False)
 
@@ -428,8 +405,7 @@ class TestInactiveWebhook:
         assert created == 0
 
     @pytest.mark.asyncio
-    @patch("app.services.webhook_service._check_redis_idempotency", new_callable=AsyncMock, return_value=False)
-    async def test_event_filter_respected(self, mock_redis):
+    async def test_event_filter_respected(self):
         """Webhook che ascolta solo payment.expired non riceve payment.completed."""
         intent = await _create_intent()
         wh = await _create_webhook(events=["payment.expired"])
