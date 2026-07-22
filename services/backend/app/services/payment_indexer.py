@@ -72,6 +72,13 @@ logger = logging.getLogger("payment_indexer")
 # ── Constants ────────────────────────────────────────────────
 POLL_INTERVAL = 5                # seconds between ticks
 MAX_BLOCKS_PER_TICK = 500        # getLogs range cap per tick
+# The getLogs upper bound stays this many blocks below the eth_blockNumber
+# answer: the head query and the getLogs are not pinned to one provider (and
+# even one provider URL is a load-balanced fleet), so a node one block behind
+# rejects toBlock == head with -32602 "beyond current head" (tip race,
+# observed Base Sepolia 2026-07). Costs ≤2 blocks of tip latency, recovered
+# next tick by the unfinalized-tail re-scan.
+HEAD_SAFETY_MARGIN = 2
 DEFAULT_CONFIRMATIONS = 15  # keep in sync with Settings.indexer_confirmations
 # Consecutive failed ticks before the watcher declares itself STALLED
 # (CRITICAL log + gauge). Fail loud: a stuck indexer is silent payment loss.
@@ -508,6 +515,14 @@ async def _finalized_head(rpc, settings, latest: int) -> Optional[int]:
         return None
     conf = getattr(settings, "indexer_confirmations", DEFAULT_CONFIRMATIONS)
     return latest - conf
+
+
+def _is_tip_race(exc: Exception) -> bool:
+    """A getLogs toBlock briefly beyond the serving backend's head — the
+    -32602 'block range extends beyond current head block' rejection. Kept
+    transient by rpc_manager's classifier; here it only picks the WARNING
+    log level for the failed tick (self-heals next tick)."""
+    return "beyond current head" in str(exc).lower()
 
 
 # B-2 reorg-evidence counters: (chain_id, settlement.id) → consecutive ticks
@@ -1235,13 +1250,22 @@ class PaymentWatcher:
                 )
             except Exception as exc:
                 consecutive_failures += 1
-                self._note_failure(consecutive_failures, str(exc))
+                self._note_failure(
+                    consecutive_failures, str(exc),
+                    transient_hint=_is_tip_race(exc),
+                )
             await asyncio.sleep(POLL_INTERVAL)
 
-    def _note_failure(self, consecutive: int, reason: str) -> None:
+    def _note_failure(self, consecutive: int, reason: str, *,
+                      transient_hint: bool = False) -> None:
         """Fail loud: escalate to a single CRITICAL 'STALLED' signal (log +
         gauge + /health + first-class alert) once STALL_TICKS consecutive
-        ticks made no progress — a quiet indexer is silent payment loss."""
+        ticks made no progress — a quiet indexer is silent payment loss.
+
+        transient_hint downgrades the below-threshold per-tick line to
+        WARNING for known self-healing conditions (tip race) so alerting
+        isn't tripped by a benign one-tick failure; the STALLED escalation
+        is untouched."""
         if consecutive == STALL_TICKS:
             logger.critical(
                 "[indexer] STALLED chain=%d after %d consecutive failed ticks: %s",
@@ -1256,6 +1280,12 @@ class PaymentWatcher:
                 f"being detected. Last error: {reason}",
                 {"chain_id": self.chain_id, "consecutive": consecutive,
                  "reason": reason},
+            )
+        elif transient_hint and consecutive < STALL_TICKS:
+            logger.warning(
+                "[indexer] tick failed (chain=%d, consecutive=%d): transient "
+                "tip race — will retry next tick: %s",
+                self.chain_id, consecutive, reason,
             )
         else:
             logger.error(
@@ -1421,14 +1451,15 @@ class PaymentWatcher:
                 self.chain_id, last + 1, floor_head, lag,
             )
 
-        # ── INGEST ── Scan up to `latest` (logs are recorded PENDING, never paid
+        # ── INGEST ── Scan up to `latest − HEAD_SAFETY_MARGIN` (logs are recorded PENDING, never paid
         # here). Always re-scan the *unfinalized* tail (down to final_head+1) so a
         # reorg's re-inclusion / disappearance is observed; this re-scan is cheap
         # and idempotent (dedupe by chain+tx+logIndex+block_hash).
         processed = 0
+        safe_head = max(0, latest - HEAD_SAFETY_MARGIN)
         start_block = min(last + 1, floor_head + 1)
-        if start_block <= latest:
-            end_block = min(latest, start_block + MAX_BLOCKS_PER_TICK - 1)
+        if start_block <= safe_head:
+            end_block = min(safe_head, start_block + MAX_BLOCKS_PER_TICK - 1)
             # Providers cap the getLogs range (Alchemy free tier: 10 blocks on
             # Base Sepolia) — scan the window in chunks the provider accepts.
             # The cursor advances PER CHUNK, so a mid-window failure keeps the

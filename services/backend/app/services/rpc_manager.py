@@ -139,12 +139,22 @@ _PERMANENT_ERROR_PATTERNS = (
     "exceed",
     "invalid param",
 )
+# Overrides checked FIRST: error shapes that carry a permanent code/pattern but
+# are actually transient. A getLogs toBlock briefly beyond the serving
+# backend's head (tip race / cross-provider head divergence) arrives as -32602
+# "block range extends beyond current head block" (observed Base Sepolia
+# 2026-07) yet self-heals as soon as the lagging node catches up.
+_TRANSIENT_OVERRIDE_PATTERNS = (
+    "beyond current head",
+)
 
 
 def _is_permanent_rpc_error(error: dict) -> bool:
+    message = str(error.get("message", "")).lower()
+    if any(p in message for p in _TRANSIENT_OVERRIDE_PATTERNS):
+        return False
     if error.get("code") in _PERMANENT_ERROR_CODES:
         return True
-    message = str(error.get("message", "")).lower()
     return any(p in message for p in _PERMANENT_ERROR_PATTERNS)
 
 
