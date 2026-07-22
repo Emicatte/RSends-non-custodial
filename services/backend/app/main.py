@@ -33,7 +33,6 @@ from app.api.routes import router
 from app.services.cache_service import close_redis
 from app.services.payment_indexer import start_indexer_if_needed, stop_indexer
 from app.services.price_service import fetch_all_prices, price_refresh_loop
-from app.api.payment_ws import payment_ws_router, payment_manager
 from app.logging_config import setup_logging
 logger = logging.getLogger(__name__)
 
@@ -114,9 +113,6 @@ async def lifespan(app: FastAPI):
         telegram_chat_id=alert_chat or None,
         webhook_url=settings.alert_webhook_url or None,
     )
-
-    # ── Start WebSocket background tasks ─────────────
-    payment_manager.start_heartbeat()
 
     # ── Start on-chain PaymentMade indexer (non-custodial) ──
     # Watches RSendsRouter.PaymentMade per configured chain. No-op if no
@@ -219,7 +215,6 @@ async def lifespan(app: FastAPI):
         await stop_all_managers()
     except Exception as _e:  # never let cleanup raise
         logger.warning("Error stopping RPC health checks during shutdown: %s", _e)
-    await payment_manager.shutdown()
 
     # 3) Close shared connections LAST.
     await close_db()
@@ -318,7 +313,6 @@ except ImportError:
 
 # ── Routes ───────────────────────────────────────────────
 app.include_router(router)
-app.include_router(payment_ws_router)
 from app.api.audit_routes import audit_router
 app.include_router(audit_router)
 from app.api.price_routes import price_router
@@ -398,7 +392,6 @@ async def health():
         "redis": "connected" if redis_ok else "disconnected",
         "idempotency": "active" if redis_ok else "FAIL-CLOSED (webhooks rejected)",
         "indexer": indexer or "disabled",
-        "ws_connections": payment_manager.active_connections,
     }
 
 
