@@ -36,7 +36,6 @@ def _prod_settings(**over):
         redis_url="rediss://redis.internal:6379/0",
         celery_broker_url="rediss://redis.internal:6379/1",
         auth_jwt_secret="a" * 64,
-        internal_proxy_secret="ips",  # required in prod since H3
         email_dev_mode=False,  # prod sends real email
         app_url="https://app.rsends.io",  # required for verification links in prod
         wallet_auth_allow_legacy=False,  # H4: legacy replayable bearer off in prod

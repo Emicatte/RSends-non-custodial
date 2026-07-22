@@ -329,8 +329,6 @@ from app.api.public_routes import public_router  # payer-facing, id-as-secret
 app.include_router(public_router)
 from app.api.health_routes import health_router
 app.include_router(health_router)
-from app.api.ratelimit_routes import ratelimit_router
-app.include_router(ratelimit_router)
 from app.api.aml_routes import aml_router
 app.include_router(aml_router)
 from app.api.admin_approval_routes import admin_approval_router  # X-Admin-Token only

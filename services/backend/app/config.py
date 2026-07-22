@@ -30,10 +30,6 @@ class Settings(BaseSettings):
     # fully denied (fail-closed in require_admin).
     admin_api_token: str = ""
 
-    # Shared secret for Next.js → backend internal endpoints (/api/internal/*).
-    # MUST match INTERNAL_PROXY_SECRET on the Next.js side (H3).
-    internal_proxy_secret: str = ""
-
     # H4 transition flag: accept the legacy replayable wallet-signature bearer
     # (RSends:{address}:{timestamp}) IN ADDITION to the new session-HMAC scheme.
     # Set to false once both backend and frontend are deployed, to fully close
@@ -414,14 +410,6 @@ def validate_settings(settings: Settings) -> None:
             errors.append(
                 f"AUTH_JWT_SECRET is too short ({len(settings.auth_jwt_secret)} chars). "
                 "Must be >= 64 characters (hex-encoded 32 random bytes) in production."
-            )
-
-        # ── Internal endpoint secret (H3) ──
-        if not settings.internal_proxy_secret:
-            errors.append(
-                "INTERNAL_PROXY_SECRET is empty in production. "
-                "The /api/internal/* endpoints require it (X-Internal-Secret); "
-                "set the SAME value on the Next.js side (INTERNAL_PROXY_SECRET)."
             )
 
     # ── APP_URL (email verification links) ───────────────
