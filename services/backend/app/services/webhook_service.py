@@ -57,7 +57,6 @@ MAX_RETRIES = 5
 BASE_BACKOFF_SECONDS = 30       # 30s * 4^retry → 30s, 2m, 8m, 32m, 2h
 DELIVERY_TIMEOUT = 10.0         # httpx timeout per singolo attempt
 WEBHOOK_USER_AGENT = "RSend-Webhook/1.0"
-REDIS_IDEM_TTL = 7 * 86400              # 7 giorni TTL per chiave idempotenza Redis
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -189,7 +188,6 @@ async def create_merchant_webhook(
     db.add(webhook)
     await db.flush()
     return webhook
-REDIS_IDEM_PREFIX = "wh:delivery:idem:"  # Prefisso Redis per idempotenza delivery
 
 # ── Matching thresholds (legacy — used by match_and_complete_intent) ─
 AMOUNT_TOLERANCE_EXACT = 0.001  # 0.1% — match esatto
@@ -1343,47 +1341,16 @@ async def send_test_event(webhook: MerchantWebhook) -> tuple:
 
 
 # ═══════════════════════════════════════════════════════════════
-#  6. Redis Idempotency — TTL-based dedup prima del DB check
+#  6. send_webhook() — Public API per transaction_matcher & altri
 # ═══════════════════════════════════════════════════════════════
-
-async def _check_redis_idempotency(idem_key: str) -> bool:
-    """
-    Check se un delivery è già stato schedulato via Redis SETNX.
-
-    Returns:
-        True  → chiave già presente, è un duplicato → skip
-        False → chiave nuova, procedi con delivery
-
-    Se Redis è down, logga warning e ritorna False (fail-open per webhook
-    outbound — diverso dal fail-closed per webhook inbound Alchemy).
-    """
-    try:
-        from app.services.cache_service import get_redis
-        r = await get_redis()
-        if r is None:
-            logger.warning(
-                "Redis unavailable for webhook idempotency check — proceeding anyway"
-            )
-            return False
-
-        redis_key = f"{REDIS_IDEM_PREFIX}{idem_key}"
-        was_set = await r.set(redis_key, "1", nx=True, ex=REDIS_IDEM_TTL)
-        if not was_set:
-            logger.debug("Redis idempotency hit: %s — skipping", idem_key)
-            return True
-        return False
-
-    except Exception as exc:
-        logger.warning(
-            "Redis idempotency check failed (%s) — proceeding anyway: %s",
-            idem_key, exc,
-        )
-        return False
-
-
-# ═══════════════════════════════════════════════════════════════
-#  7. send_webhook() — Public API per transaction_matcher & altri
-# ═══════════════════════════════════════════════════════════════
+# NOTE (idempotency): NO out-of-band pre-claim here. Delivery idempotency
+# lives entirely in the DB transaction that owns the WebhookDelivery row
+# (dedup SELECT + UNIQUE idempotency_key), so it commits or rolls back WITH
+# the row. The removed Redis SETNX pre-claim survived rollbacks its row did
+# not — orphan claim, 7 days of silently suppressed retries — and was
+# fail-open on Redis loss, so it guaranteed nothing. Cross-process
+# exactly-once is owned by the callers' atomic claims (webhook_fired_at /
+# reversal_fired_at / the expire task's pending→expired UPDATE-WHERE).
 
 async def send_webhook(
     db: AsyncSession,
@@ -1401,10 +1368,9 @@ async def send_webhook(
 
     Workflow:
       1. Trova tutti i webhook attivi del merchant che ascoltano `event`
-      2. Per ciascuno, controlla idempotenza Redis (TTL 7gg)
-      3. Se nuovo, controlla idempotenza DB (WebhookDelivery)
-      4. Crea WebhookDelivery con status=pending
-      5. Tenta delivery immediata; se fallisce, schedula retry
+      2. Per ciascuno, controlla idempotenza DB (WebhookDelivery, stessa tx)
+      3. Crea WebhookDelivery con status=pending
+      4. Tenta delivery immediata; se fallisce, schedula retry
 
     Args:
         db: Sessione DB asincrona
@@ -1443,11 +1409,7 @@ async def send_webhook(
 
         idem_key = f"{intent.intent_id}:{event}:{wh.id}"
 
-        # ── Redis idempotency (fast, TTL-based) ──
-        if await _check_redis_idempotency(idem_key):
-            continue
-
-        # ── DB idempotency (durable) ──
+        # ── DB idempotency (durable, dies with this transaction) ──
         existing = await db.execute(
             select(WebhookDelivery).where(
                 WebhookDelivery.idempotency_key == idem_key,

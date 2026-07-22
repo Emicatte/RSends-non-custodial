@@ -161,11 +161,7 @@ async def test_send_webhook_scoped_to_intent_environment(session, monkeypatch):
     async def _delivered(delivery, wh):
         return True
 
-    async def _not_seen(idem_key):
-        return False
-
     monkeypatch.setattr(ws, "_attempt_delivery", _delivered)
-    monkeypatch.setattr(ws, "_check_redis_idempotency", _not_seen)
 
     live_wh = _webhook("live")
     test_wh = _webhook("test")

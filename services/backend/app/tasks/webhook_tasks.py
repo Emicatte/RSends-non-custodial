@@ -77,6 +77,37 @@ def expire_pending_intents() -> dict:
     return _run_async(_expire_pending_intents_async())
 
 
+async def _claim_intent_expiry(session, intent) -> bool:
+    """Atomic pending→expired claim (single winner across transactions).
+
+    payment.expired has no re-driver, so the flip itself must be the claim:
+    an UPDATE whose WHERE re-checks `status == pending` AND the B-1
+    settlement hold on the COMMITTED row (a concurrent worker's claim, or a
+    settlement landing between our SELECT and this UPDATE, makes rowcount 0).
+    Same claim-in-the-WHERE pattern as the indexer's webhook_fired_at claim.
+    Returns True iff this transaction won and owns the expiry webhook.
+    """
+    from app.services.intent_service import settlement_hold_exists
+    from app.models.merchant_models import PaymentIntent, IntentStatus
+    from sqlalchemy import update
+
+    claim = await session.execute(
+        update(PaymentIntent)
+        .where(
+            PaymentIntent.id == intent.id,
+            PaymentIntent.status == IntentStatus.pending,
+            ~settlement_hold_exists(),
+        )
+        .values(status=IntentStatus.expired)
+        .execution_options(synchronize_session=False)
+    )
+    if claim.rowcount != 1:
+        return False
+    # Keep the in-memory object consistent for the webhook payload build.
+    intent.status = IntentStatus.expired
+    return True
+
+
 async def _expire_pending_intents_async() -> dict:
     from app.db.session import async_session
     from app.services.webhook_service import send_webhook
@@ -107,7 +138,10 @@ async def _expire_pending_intents_async() -> dict:
             webhook_count = 0
 
             for intent in expired_intents:
-                intent.status = IntentStatus.expired
+                # Celery beat and the asyncio fallback loop can run this task
+                # concurrently: only the claim winner sends the webhook.
+                if not await _claim_intent_expiry(session, intent):
+                    continue
                 expired_count += 1
 
                 # Triggera webhook "payment.expired" via send_webhook
