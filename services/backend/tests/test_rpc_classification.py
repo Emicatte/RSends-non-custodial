@@ -45,6 +45,25 @@ def test_availability_errors_are_transient():
     assert not _is_permanent_rpc_error({"code": -32603, "message": "internal error"})
     assert not _is_permanent_rpc_error({"message": "upstream timeout"})
     assert not _is_permanent_rpc_error({})
+    # Provider-fleet outage (observed Base Sepolia 2026-07): availability, not request.
+    assert not _is_permanent_rpc_error(
+        {"code": -32011, "message": "no backend is currently healthy to serve traffic"}
+    )
+
+
+def test_head_race_32602_is_transient():
+    """A getLogs toBlock briefly beyond the serving backend's head (tip race /
+    cross-provider head divergence, observed Base Sepolia 2026-07) self-heals
+    next tick — it must NOT take the permanent will-not-self-heal path, even
+    though it arrives as -32602 with 'block range' in the message."""
+    err = {
+        "code": -32602,
+        "message": (
+            "block range extends beyond current head block: "
+            "requested 44477130, head 44477129"
+        ),
+    }
+    assert not _is_permanent_rpc_error(err)
 
 
 # ── Breaker behavior ──────────────────────────────────────────────

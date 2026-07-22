@@ -149,7 +149,8 @@ def _assert_contiguous(ranges, start, end, max_range):
 @pytest.mark.asyncio
 async def test_getlogs_never_exceeds_max_range_and_covers_gap(no_redis, watcher):
     await _pg_set_cursor(CHAIN, 100)
-    chain = RecordingChain(latest=180)
+    # +margin: the scan window tops out at latest − HEAD_SAFETY_MARGIN.
+    chain = RecordingChain(latest=180 + idx.HEAD_SAFETY_MARGIN)
     w = watcher(chain)
 
     await w._tick()
@@ -166,7 +167,7 @@ async def test_far_behind_cursor_backfills_across_ticks_no_skip(no_redis, watche
     the whole gap in contiguous ≤max_range windows. Nothing is skipped."""
     head = 5_000
     await _pg_set_cursor(CHAIN, head - 1_200)
-    chain = RecordingChain(latest=head)
+    chain = RecordingChain(latest=head + idx.HEAD_SAFETY_MARGIN)
     w = watcher(chain)
 
     for _ in range(10):  # 1200 blocks / 500 per tick → 3 ticks; margin for safety
@@ -185,7 +186,7 @@ async def test_cold_start_resumes_from_postgres_not_head(no_redis, watcher):
     """Redis empty (flushed/restarted) + Postgres cursor present → resume
     from the persisted cursor. This is the silent-payment-loss fix."""
     await _pg_set_cursor(CHAIN, 100)
-    chain = RecordingChain(latest=150)
+    chain = RecordingChain(latest=150 + idx.HEAD_SAFETY_MARGIN)
     w = watcher(chain)
 
     await w._tick()
@@ -199,7 +200,7 @@ async def test_legacy_redis_cursor_is_adopted_into_postgres(fake_redis, watcher)
     """Deploy safety: pre-0012 installs have the cursor only in Redis. The
     first read adopts it into Postgres instead of re-initializing at head."""
     fake_redis.store[REDIS_KEY] = "120"
-    chain = RecordingChain(latest=150)
+    chain = RecordingChain(latest=150 + idx.HEAD_SAFETY_MARGIN)
     w = watcher(chain)
 
     await w._tick()

@@ -418,7 +418,8 @@ async def test_restart_resumes_from_last_block_no_miss_no_duplicate(monkeypatch,
 
     H = "0x" + "18" * 32
     rpc = FakeChain()
-    rpc.latest = 110
+    # +margin: the scan window tops out at latest − HEAD_SAFETY_MARGIN (=110).
+    rpc.latest = 110 + idx.HEAD_SAFETY_MARGIN
     rpc.finalized = 108
     rpc.block_hashes[105] = H
     rpc.logs = [_make_log(invoice_id=inv, tx_hash="0x" + "18" * 32, block_number=105,
@@ -508,7 +509,7 @@ async def test_getlogs_chunked_within_provider_limit(monkeypatch, webhook_calls)
     iid_b = await _make_intent(invoice_id=inv_b)
 
     rpc = RangeLimitedChain(max_range=10)
-    rpc.latest = 160
+    rpc.latest = 160 + idx.HEAD_SAFETY_MARGIN  # window still ends at 160
     rpc.finalized = 158
     ha, hb = "0x" + "21" * 32, "0x" + "22" * 32
     rpc.block_hashes[105] = ha
@@ -545,7 +546,7 @@ async def test_chunk_failure_preserves_partial_progress(monkeypatch, webhook_cal
     iid = await _make_intent(invoice_id=inv)
 
     rpc = RangeLimitedChain(max_range=10)
-    rpc.latest = 160
+    rpc.latest = 160 + idx.HEAD_SAFETY_MARGIN  # window still ends at 160
     rpc.finalized = 158
     h = "0x" + "23" * 32
     rpc.block_hashes[105] = h
