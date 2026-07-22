@@ -135,21 +135,20 @@ def indexer_status() -> dict[int, dict]:
 
 ZERO_ADDRESS = "0x" + "0" * 40
 
-# keccak256("PaymentMade(bytes32,address,address,address,uint256,uint256,uint256)")
-# Computed at import when eth_utils is available; the literal is the canonical
-# fallback so the indexer still works in minimal environments.
+# topic0 = keccak256 of the signature, computed at import (fail-loud; the
+# literal hashes are pinned by tests/test_indexer_topic_hashes.py).
 # NOTE: the trailing uint256 is `fee` — added when the router started emitting it.
 _PAYMENT_MADE_SIG = "PaymentMade(bytes32,address,address,address,uint256,uint256,uint256)"
 
 
 def _payment_made_topic() -> str:
-    try:
-        from eth_utils import keccak  # type: ignore
+    # Fail-loud: computed at module import, so a broken eth_utils aborts boot
+    # with the real cause. A placeholder topic would instead stall the watcher
+    # against a live chain (invalid getLogs filter) while the process reports
+    # itself running.
+    from eth_utils import keccak
 
-        return "0x" + keccak(text=_PAYMENT_MADE_SIG).hex()
-    except Exception:  # pragma: no cover - fallback for minimal envs
-        # NOTE: if you change the event signature, recompute this constant.
-        return "0xUNRESOLVED_RECOMPUTE_TOPIC"
+    return "0x" + keccak(text=_PAYMENT_MADE_SIG).hex()
 
 
 PAYMENT_MADE_TOPIC = _payment_made_topic()
@@ -174,13 +173,10 @@ _SPLIT_PAYMENT_MADE_SIG = (
 
 
 def _split_payment_made_topic() -> str:
-    try:
-        from eth_utils import keccak  # type: ignore
+    # Fail-loud like _payment_made_topic: no placeholder may reach the filter.
+    from eth_utils import keccak
 
-        return "0x" + keccak(text=_SPLIT_PAYMENT_MADE_SIG).hex()
-    except Exception:  # pragma: no cover - fallback for minimal envs
-        # NOTE: if you change the event signature, recompute this constant.
-        return "0xUNRESOLVED_RECOMPUTE_SPLIT_TOPIC"
+    return "0x" + keccak(text=_SPLIT_PAYMENT_MADE_SIG).hex()
 
 
 SPLIT_PAYMENT_MADE_TOPIC = _split_payment_made_topic()
