@@ -48,10 +48,11 @@ async def _setup_db():
     import app.models.merchant_models  # noqa: F401 — register tables
     import app.models.settlement_models  # noqa: F401
     from app.models.settlement_models import PaymentSettlement
-    from app.models.merchant_models import PaymentIntent
+    from app.models.merchant_models import PaymentIntent, PaymentIntentRecipient
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.execute(PaymentSettlement.__table__.delete())
+        await conn.execute(PaymentIntentRecipient.__table__.delete())  # FK child before parent
         await conn.execute(PaymentIntent.__table__.delete())
     yield
 
