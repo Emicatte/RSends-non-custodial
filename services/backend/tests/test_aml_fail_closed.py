@@ -7,7 +7,9 @@ Verifies:
   - _update_daily_total raises AMLDataUnavailableError on failure
   - _get_monthly_total_eur raises AMLDataUnavailableError on failure
   - _get_velocity_count raises AMLDataUnavailableError on failure
-  - _check_structuring returns True (suspicious) on DB error
+  - _check_structuring raises AMLDataUnavailableError on DB error (an infra
+    failure is NOT evidence of structuring: it must never fabricate a
+    detection/alert row — it forces review via the caller, logged)
   - monitor_transaction forces review when counters are unavailable
 
 Run:
@@ -109,8 +111,14 @@ async def test_get_velocity_count_raises_on_failure():
 
 
 @pytest.mark.asyncio
-async def test_check_structuring_returns_true_on_error():
-    """Structuring check DB error → returns True (suspicious, fail-closed)."""
+async def test_check_structuring_raises_unavailable_on_db_error(caplog):
+    """Structuring check DB error → AMLDataUnavailableError, logged at ERROR.
+
+    A DB failure is not evidence of structuring: it must never surface as a
+    positive detection (the old behavior returned True, which wrote a real
+    `structuring` AMLAlert indistinguishable from a detection)."""
+    import logging
+
     from app.services.aml_service import _check_structuring
 
     cfg = {
@@ -126,8 +134,97 @@ async def test_check_structuring_returns_true_on_error():
         mock_ctx.execute = AsyncMock(side_effect=Exception("db down"))
         mock_sess.return_value = mock_ctx
 
-        result = await _check_structuring("0xabc", 950.0, 1000.0, cfg)
-        assert result is True
+        with caplog.at_level(logging.ERROR, logger="aml"):
+            with pytest.raises(AMLDataUnavailableError):
+                await _check_structuring("0xabc", 950.0, 1000.0, cfg)
+
+    assert any(
+        record.levelno == logging.ERROR and "structuring" in record.message.lower()
+        for record in caplog.records
+    )
+
+
+@pytest.mark.asyncio
+async def test_monitor_transaction_structuring_unavailable_holds_without_alert():
+    """Structuring check unavailable → review hold, NO fabricated alert.
+
+    The conservative posture (risk high + manual review) is applied by the
+    caller under an explicit unable-to-screen path; a `structuring` alert row
+    must not be written on infra failure."""
+    from app.services.aml_service import monitor_transaction
+
+    with patch("app.services.aml_service._get_thresholds", new_callable=AsyncMock) as mock_thresh, \
+         patch("app.services.aml_service._update_daily_total", new_callable=AsyncMock) as mock_daily, \
+         patch("app.services.aml_service._get_monthly_total_eur", new_callable=AsyncMock) as mock_monthly, \
+         patch("app.services.aml_service._get_velocity_count", new_callable=AsyncMock) as mock_velocity, \
+         patch("app.services.aml_service._check_structuring", new_callable=AsyncMock) as mock_struct, \
+         patch("app.services.aml_service._create_alert", new_callable=AsyncMock) as mock_create:
+
+        mock_thresh.return_value = {
+            "single": 1000.0,
+            "daily": 5000.0,
+            "monthly": 15000.0,
+            "velocity": 10,
+            "structuring_window_hours": 24,
+            "structuring_min_count": 5,
+            "structuring_threshold_pct": 0.9,
+        }
+        mock_daily.return_value = 100.0
+        mock_monthly.return_value = 200.0
+        mock_velocity.return_value = 1
+        mock_struct.side_effect = AMLDataUnavailableError("db down")
+
+        result = await monitor_transaction(
+            sender="0xabc",
+            recipient="0xdef",
+            amount_eur=950.0,
+        )
+
+        assert result.requires_manual_review is True
+        assert result.risk_level == "high"
+        assert result.approved is True
+        assert "structuring" not in result.alerts
+        mock_create.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_monitor_transaction_real_structuring_still_alerts():
+    """Genuine detection unchanged: structuring True → alert row written."""
+    from app.services.aml_service import monitor_transaction
+    from app.models.aml_models import AlertType
+
+    with patch("app.services.aml_service._get_thresholds", new_callable=AsyncMock) as mock_thresh, \
+         patch("app.services.aml_service._update_daily_total", new_callable=AsyncMock) as mock_daily, \
+         patch("app.services.aml_service._get_monthly_total_eur", new_callable=AsyncMock) as mock_monthly, \
+         patch("app.services.aml_service._get_velocity_count", new_callable=AsyncMock) as mock_velocity, \
+         patch("app.services.aml_service._check_structuring", new_callable=AsyncMock) as mock_struct, \
+         patch("app.services.aml_service._create_alert", new_callable=AsyncMock) as mock_create:
+
+        mock_thresh.return_value = {
+            "single": 1000.0,
+            "daily": 5000.0,
+            "monthly": 15000.0,
+            "velocity": 10,
+            "structuring_window_hours": 24,
+            "structuring_min_count": 5,
+            "structuring_threshold_pct": 0.9,
+        }
+        mock_daily.return_value = 100.0
+        mock_monthly.return_value = 200.0
+        mock_velocity.return_value = 1
+        mock_struct.return_value = True
+
+        result = await monitor_transaction(
+            sender="0xabc",
+            recipient="0xdef",
+            amount_eur=950.0,
+        )
+
+        assert "structuring" in result.alerts
+        assert result.requires_manual_review is True
+        assert result.risk_level == "high"
+        alert_types = [c.kwargs["alert_type"] for c in mock_create.await_args_list]
+        assert AlertType.structuring in alert_types
 
 
 @pytest.mark.asyncio

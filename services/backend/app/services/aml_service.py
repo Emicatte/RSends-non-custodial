@@ -339,8 +339,13 @@ async def _check_structuring(
             )
             count = result.scalar_one()
             return count >= cfg["structuring_min_count"]
-    except Exception:
-        return True
+    except Exception as e:
+        # An infra failure is NOT evidence of structuring: never fabricate a
+        # positive (the caller records True as a real AMLAlert). Raise like
+        # the counter helpers; the caller applies the fail-closed review hold.
+        logger.error("AML structuring check unavailable: %s", e, exc_info=True)
+        from app.services.aml_exceptions import AMLDataUnavailableError
+        raise AMLDataUnavailableError(f"Structuring check unavailable: {e}")
 
 
 async def monitor_transaction(
@@ -413,8 +418,15 @@ async def monitor_transaction(
         requires_review = True
 
     # ── Structuring detection ────────────────────────────
-    if await _check_structuring(sender, amount_eur, cfg["single"], cfg):
-        alerts.append(AlertType.structuring.value)
+    try:
+        if await _check_structuring(sender, amount_eur, cfg["single"], cfg):
+            alerts.append(AlertType.structuring.value)
+            risk = "high"
+            requires_review = True
+    except AMLDataUnavailableError:
+        # Unable to screen ≠ detected: hold for review, but never write a
+        # structuring alert on an infra failure.
+        logger.error("AML structuring check unavailable — forcing review (fail-closed)")
         risk = "high"
         requires_review = True
 
