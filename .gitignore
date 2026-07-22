@@ -73,3 +73,8 @@ apps/web/.next/
 services/backend/scripts/manual/
 venv/
 *.dump
+
+# Backend local artifacts — never track runtime DBs/dumps (ponytail cut, slice 1)
+services/backend/*.db
+services/backend/*.db.*
+services/backend/dump.rdb
