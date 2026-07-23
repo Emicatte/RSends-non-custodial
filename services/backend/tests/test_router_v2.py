@@ -24,7 +24,13 @@ from app.services.payment_indexer import (
     _decode_payment_made_v2,
     _record_settlement,
 )
-from app.services.router_registry import token_for, to_base_units
+from app.services import router_registry
+from app.services.router_registry import (
+    build_onchain_payment,
+    token_for,
+    to_base_units,
+    _selector,
+)
 
 USDC_ADDR, USDC_DEC = token_for("base", "USDC")
 MERCHANT = "0x" + "1" * 40
@@ -351,6 +357,155 @@ class TestStartIndexerUnion:
             for w in watchers:
                 await w.stop()
             idx._watchers = []
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Config — RSENDS_ROUTER_V2_ADDRESSES_JSON plumbing
+# ═══════════════════════════════════════════════════════════════
+class TestConfigV2Addresses:
+    def test_v2_addresses_json_parses(self):
+        from app.config import Settings
+
+        s = Settings(rsends_router_v2_addresses_json='{"8453": "0x' + "a2" * 20 + '"}')
+        assert s.rsends_router_v2_addresses == {"8453": "0x" + "a2" * 20}
+
+    def test_empty_default_is_empty_map(self):
+        from app.config import Settings
+
+        assert Settings().rsends_router_v2_addresses == {}
+
+
+# ═══════════════════════════════════════════════════════════════
+#  build_onchain_payment — the v2 branch (no quote, no maxFee)
+# ═══════════════════════════════════════════════════════════════
+from types import SimpleNamespace  # noqa: E402
+
+
+class TestBuildOnchainPaymentV2:
+    def _intent(self, currency="USDC"):
+        return SimpleNamespace(
+            chain="base", currency=currency, amount=100.0, recipient=MERCHANT,
+            onchain_invoice_id="0x" + "ab" * 32, reference_id="ref-v2",
+        )
+
+    def _wire_v2(self, monkeypatch, *, v1=None):
+        monkeypatch.setattr(router_registry, "router_address_for", lambda chain: v1)
+        monkeypatch.setattr(router_registry, "router_v2_address_for", lambda chain: ROUTER_V2)
+
+        async def _boom(*a, **k):
+            raise AssertionError("quote_fee_onchain must never be called on the v2 path")
+        monkeypatch.setattr(router_registry, "quote_fee_onchain", _boom)
+
+    @pytest.mark.asyncio
+    async def test_v2_branch_fee_zero_no_quote_call(self, monkeypatch):
+        self._wire_v2(monkeypatch)
+        out = await build_onchain_payment(self._intent())
+        amount_base = to_base_units(100.0, USDC_DEC)
+
+        assert out["routerVersion"] == 2
+        assert out["router"] == ROUTER_V2
+        assert out["fee"] == "0"
+        assert out["total"] == str(amount_base)
+        assert out["maxFee"] is None
+        assert out["feeUnavailable"] is False
+        assert out["function"] == "pay"
+        # calldata is pay(invoiceId, merchant, token, amount): selector + 4 words.
+        assert out["calldata"].startswith(
+            "0x" + _selector("pay(bytes32,address,address,uint256)").hex()
+        )
+        assert len(out["calldata"]) == 2 + 8 + 64 * 4
+        # permit template: selector + 8 words (deadline/v/r/s zeroed).
+        assert out["payWithPermitCalldata"].startswith(
+            "0x" + _selector(
+                "payWithPermit(bytes32,address,address,uint256,uint256,uint8,bytes32,bytes32)"
+            ).hex()
+        )
+        assert len(out["payWithPermitCalldata"]) == 2 + 8 + 64 * 8
+
+    @pytest.mark.asyncio
+    async def test_v2_wins_when_both_maps_configured(self, monkeypatch):
+        """A chain present in BOTH maps creates v2 intents (the indexer still
+        watches both, so in-flight v1 payments keep settling)."""
+        self._wire_v2(monkeypatch, v1="0x" + "a1" * 20)
+        out = await build_onchain_payment(self._intent())
+        assert out["routerVersion"] == 2
+        assert out["router"] == ROUTER_V2
+
+    @pytest.mark.asyncio
+    async def test_v2_native_exact_value(self, monkeypatch):
+        self._wire_v2(monkeypatch)
+        out = await build_onchain_payment(self._intent(currency="ETH"))
+        amount_base = to_base_units(100.0, 18)
+
+        assert out["routerVersion"] == 2
+        assert out["function"] == "payNative"
+        assert out["isNative"] is True
+        assert out["fee"] == "0"
+        assert out["total"] == str(amount_base)   # value == amount, no fee term
+        assert out["maxFee"] is None
+        # calldata is payNative(invoiceId, merchant, amount): selector + 3 words.
+        assert out["calldata"].startswith(
+            "0x" + _selector("payNative(bytes32,address,uint256)").hex()
+        )
+        assert len(out["calldata"]) == 2 + 8 + 64 * 3
+        assert out["payWithPermitCalldata"] is None
+
+    @pytest.mark.asyncio
+    async def test_v1_branch_unchanged_and_versioned_1(self, monkeypatch):
+        """No-regression pin: a v1-only chain keeps today's fields byte-for-byte
+        and now also carries routerVersion == 1."""
+        V1 = "0x" + "a1" * 20
+        monkeypatch.setattr(router_registry, "router_address_for", lambda chain: V1)
+        monkeypatch.setattr(router_registry, "router_v2_address_for", lambda chain: None)
+
+        async def fake_quote(cid, router, token, amount):
+            return 600000
+        monkeypatch.setattr(router_registry, "quote_fee_onchain", fake_quote)
+
+        out = await build_onchain_payment(self._intent())
+        amount_base = to_base_units(100.0, USDC_DEC)
+        assert out["routerVersion"] == 1
+        assert out["router"] == V1
+        assert out["fee"] == "600000"
+        assert out["total"] == str(amount_base + 600000)
+        assert out["maxFee"] == "600000"
+        assert out["calldata"].startswith(
+            "0x" + _selector("pay(bytes32,address,address,uint256,uint256)").hex()
+        )
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Registry loader — fee keys optional (v2 chains won't carry them)
+# ═══════════════════════════════════════════════════════════════
+class TestRegistryLoaderFeeKeysOptional:
+    def test_entry_without_fee_keys_loads_as_zero(self, monkeypatch, tmp_path):
+        import json
+
+        reg = {
+            "8453": {
+                "name": "base",
+                "symbols": ["USDC"],
+                "tokens": {
+                    "USDC": {
+                        "address": "0x" + "b1" * 20,
+                        "decimals": 6,
+                        "permitType": "eip2612",
+                        "enabled": True,
+                        # NO flatFee / threshold / aboveFee — a v2-era entry.
+                    }
+                },
+            }
+        }
+        p = tmp_path / "registry.json"
+        p.write_text(json.dumps(reg))
+        monkeypatch.setenv("TOKEN_REGISTRY_PATH", str(p))
+
+        tokens, policy = router_registry._load_registry()
+        pol = policy["base"]["USDC"]
+        assert pol["flatFee"] == 0
+        assert pol["threshold"] == 0
+        assert pol["aboveFee"] == 0
+        assert pol["enabled"] is True
 
 
 class TestRecordSettlementV2:

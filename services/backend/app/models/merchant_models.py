@@ -421,7 +421,13 @@ class OnchainPayment(BaseModel):
     total: Optional[str] = None     # amount + fee (what the payer parts with overall)
     maxFee: Optional[str] = None    # payer ceiling passed to pay/payWithPermit/payNative (== fee)
     chainId: int
-    router: str              # RSendsRouter contract address
+    router: str              # router contract address (family per routerVersion)
+    # Which RSends router family `router`/`calldata` target (meaningful when
+    # `split` is None): 1 = RSendsRouter (testnet, on-chain flat fee, maxFee
+    # args), 2 = RSendsRouterV2 (fee-less/ownerless mainnet router — fee is
+    # literally "0", maxFee None, calldata carries no fee word). The frontend
+    # forks its ABI/args on this.
+    routerVersion: int = 1
     calldata: Optional[str] = None  # ready-to-send pay()/payNative() calldata (None if fee unavailable)
     payWithPermitCalldata: Optional[str] = None  # template; permit (deadline,v,r,s) filled client-side
     function: str            # "pay" (ERC20, needs approve first) | "payNative"
