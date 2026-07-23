@@ -159,13 +159,6 @@ async def _expire_pending_intents_async() -> dict:
                         intent.intent_id,
                     )
 
-                # Notify checkout WebSocket clients
-                try:
-                    from app.api.payment_ws import notify_payment_expired
-                    await notify_payment_expired(intent.intent_id)
-                except Exception:
-                    pass  # WS notification is best-effort
-
             if expired_count:
                 logger.info(
                     "Expired %d stale intents, triggered %d webhooks",
