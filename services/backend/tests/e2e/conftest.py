@@ -165,6 +165,7 @@ def deployed(anvil):
             addrs[tx["contractName"]] = Web3.to_checksum_address(tx["contractAddress"])
     return {
         "router": addrs["RSendsRouter"],
+        "router_v2": addrs["RSendsRouterV2"],
         "usdc": addrs["MockUSDC6"],
         "usdt": addrs["MockUSDT6"],
     }
