@@ -58,12 +58,20 @@ On v1, a payment through a token the owner had not enabled reverted on-chain
 The surviving token verification is entirely off-chain, in two places:
 
 1. **Intent creation (load-bearing).** An intent can only be born on a token
-   the backend registry has `enabled`
-   (`token_is_enabled` → `assert_token_enabled`, called in
-   `intent_service.create_intent`). This is now the ONLY thing preventing a
-   payment intent on an arbitrary or fee-on-transfer token, and it is
-   explicitly load-bearing: weakening it is a security regression even though
-   no contract changes.
+   the backend registry has `enabled` (`token_is_enabled`, called in
+   `intent_service.create_intent` — the single construction site). This is
+   now the ONLY thing preventing a payment intent on an arbitrary or
+   fee-on-transfer token, and it is explicitly load-bearing: weakening it is
+   a security regression even though no contract changes. The damage scenario
+   it defends against is not a griefer (the settlement match eats that) but a
+   merchant-created intent on a FoT/unregistered token, where the payer would
+   part with funds that arrive short and settle nothing. **Pinned by
+   `services/backend/tests/test_creation_token_gate.py`**: registry-absent
+   and registry-disabled tokens are rejected 400 `UNSUPPORTED_TOKEN` with no
+   intent row born, plus a control proving the rejection is attributable to
+   this gate (with the gate mocked open the identical request succeeds) —
+   the Pydantic schema whitelist alone is NOT sufficient (it admits
+   registry-absent/disabled symbols).
 2. **Settlement matching.** The indexer's event↔intent match
    (`_validate_event_against_intent`,
    `services/backend/app/services/payment_indexer.py`) rejects a settlement
