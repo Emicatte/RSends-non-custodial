@@ -46,6 +46,7 @@ function splitIntent(overrides: Partial<OnChainIntent> = {}): OnChainIntent {
     decimals: 6,
     chainId: 84532,
     router: SPLIT_ROUTER,
+    routerVersion: 1,
     permitType: 'none',
     permitVersion: '1',
     split: { recipients: RECIPIENTS, sharesBps: SHARES, amounts: AMOUNTS },

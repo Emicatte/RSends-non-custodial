@@ -38,7 +38,7 @@ except Exception:
     _HAVE_WEB3 = False
 
 if not (_HAVE_ANVIL and _HAVE_FORGE and _HAVE_WEB3):
-    collect_ignore = ["test_money_path_anvil.py"]
+    collect_ignore = ["test_money_path_anvil.py", "test_money_path_anvil_v2.py"]
 
 # ── Skip (visibly) when the toolchain exists but the HARNESS env does not ─────
 # The money-path tests need RSEND_E2E_ALLOW_LOOPBACK_WEBHOOKS=1 (the SSRF egress
@@ -165,6 +165,7 @@ def deployed(anvil):
             addrs[tx["contractName"]] = Web3.to_checksum_address(tx["contractAddress"])
     return {
         "router": addrs["RSendsRouter"],
+        "router_v2": addrs["RSendsRouterV2"],
         "usdc": addrs["MockUSDC6"],
         "usdt": addrs["MockUSDT6"],
     }

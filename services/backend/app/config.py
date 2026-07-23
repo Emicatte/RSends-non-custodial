@@ -54,6 +54,12 @@ class Settings(BaseSettings):
     # ══════════════════════════════════════════════════════
     # JSON map of chain_id → RSendsRouter address, e.g. {"8453":"0xRouter..."}
     rsends_router_addresses_json: str = ""
+    # JSON map of chain_id → RSendsRouterV2 address (ownerless, FEE-LESS
+    # single-merchant — the mainnet router: payer→merchant only). A chain in
+    # this map creates v2 intents (v2 wins over v1 if both are set; the
+    # indexer watches both so in-flight v1 payments still settle) — the
+    # mainnet cutover is this one env var.
+    rsends_router_v2_addresses_json: str = ""
     # JSON map of chain_id → RSendsSplitRouter address (ownerless, fee-less
     # N-way split). FAIL-CLOSED: split intent creation 422s SPLIT_UNAVAILABLE
     # for any chain not in this map — set it only after the contract is
@@ -178,6 +184,11 @@ class Settings(BaseSettings):
     def rsends_router_addresses(self) -> dict:
         """{chain_id(str) -> RSendsRouter address} parsed from the JSON env."""
         return _parse_json_map(self.rsends_router_addresses_json)
+
+    @property
+    def rsends_router_v2_addresses(self) -> dict:
+        """{chain_id(str) -> RSendsRouterV2 address} parsed from the JSON env."""
+        return _parse_json_map(self.rsends_router_v2_addresses_json)
 
     @property
     def split_router_addresses(self) -> dict:

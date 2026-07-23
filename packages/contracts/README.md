@@ -1,16 +1,35 @@
-# RSends Contracts — `RSendsRouter.sol`
+# RSends Contracts
 
-Foundry project for the non-custodial payment router. One production contract:
-[`src/RSendsRouter.sol`](src/RSendsRouter.sol) (Solidity `^0.8.24`,
-`Ownable2Step + Pausable + ReentrancyGuard`, OpenZeppelin v5).
+Foundry project for the non-custodial payment routers. Three production
+contracts (Solidity `^0.8.24`, OpenZeppelin v5):
 
-## What the router does — and can't do
+- [`src/RSendsRouterV2.sol`](src/RSendsRouterV2.sol) — **the mainnet design**:
+  fee-less, **ownerless** single-merchant router (payer → merchant only, one
+  transfer per payment, `ReentrancyGuard` and nothing else). Design decisions
+  and their consequences: [`AUDIT_HANDOFF_ROUTERV2.md`](AUDIT_HANDOFF_ROUTERV2.md).
+- [`src/RSendsRouter.sol`](src/RSendsRouter.sol) — the v1 testnet router
+  (`Ownable2Step + Pausable + ReentrancyGuard`): on-chain flat fee, deployed
+  and immutable on Base Sepolia.
+- [`src/RSendsSplitRouter.sol`](src/RSendsSplitRouter.sol) — ownerless,
+  fee-less N-way splitter (all-or-nothing, payer → recipients direct).
 
-A payment is **two direct transfers in one transaction**: payer → merchant for
-the full amount, payer → `feeCollector` for a flat fee. The contract never
-holds a balance and has no withdrawal, sweep, or rescue path for user funds.
-The owner can configure per-token fees, change the fee collector, and
-`pause()`/`unpause()` — it **cannot** move, retain, or redirect merchant money.
+## What the routers do — and can't do
+
+**RSendsRouterV2 (mainnet design):** a payment is **one direct transfer** —
+payer → merchant, for exactly `amount`. No fee leg, no fee state, no fee
+events; no owner, pause, or whitelist (no privileged role exists). The
+contract never holds a balance and has no withdrawal, sweep, or rescue path.
+Functions: `pay(invoiceId, merchant, token, amount)`,
+`payWithPermit(…, deadline, v, r, s)`, `payNative(invoiceId, merchant,
+amount)`; event `PaymentMade(invoiceId, merchant, payer, token, amount,
+blockTimestamp)` (6 args — no fee word).
+
+**RSendsRouter (v1, testnet):** a payment is **two direct transfers in one
+transaction**: payer → merchant for the full amount, payer → `feeCollector`
+for a flat fee. The contract never holds a balance and has no withdrawal,
+sweep, or rescue path for user funds. The owner can configure per-token fees,
+change the fee collector, and `pause()`/`unpause()` — it **cannot** move,
+retain, or redirect merchant money.
 
 | Function | Purpose |
 |---|---|
@@ -23,9 +42,11 @@ Emits `PaymentMade(invoiceId, merchant, payer, token, amount, fee,
 blockTimestamp)` — the event the backend indexer settles payment intents
 against. Config events: `FeeConfigSet`, `FeeCollectorSet`.
 
-## Fee model
+## Fee model (v1/testnet only)
 
-Flat and EUR-denominated per token — never a percentage, no price oracle:
+**RSendsRouterV2 has no fee model** — nothing below applies to it; pricing is
+an off-chain subscription. The v1 testnet fee is flat and EUR-denominated per
+token — never a percentage, no price oracle:
 `fee = baseFee + (amount >= threshold ? surcharge : 0)`. Currently **€0.60**
 below €1,000 and **€3.00** at or above. Native ETH is feeless (no oracle for a
 EUR peg).
@@ -41,11 +62,17 @@ config from it.
 
 | Path | Contents |
 |---|---|
-| `src/RSendsRouter.sol` | the router (only production contract) |
+| `src/RSendsRouterV2.sol` | the fee-less, ownerless mainnet router (see `AUDIT_HANDOFF_ROUTERV2.md`) |
+| `src/RSendsRouter.sol` | the v1 testnet router (on-chain flat fee, owner-configured) |
+| `src/RSendsSplitRouter.sol` | ownerless, fee-less N-way splitter |
+| `test/RSendsRouterV2.t.sol` | 23 tests: single-transfer conservation fuzz, no-owner negatives (every v1 selector must revert), no-custody negatives, permit trio, FoT documented-not-gated, event-topic literal pin |
 | `test/RSendsRouter.t.sol` | 34 tests: fee math, maxFee guard, permit fallback, pause, ownership; mocks incl. `MockERC20Permit`, USDT-style no-return, fee-on-transfer |
-| `test/SetFeeConfig.t.sol` | registry ↔ on-chain config integration |
-| `script/SetFeeConfig.s.sol` | wires per-chain token policy from the registry; asserts on-chain `symbol()`/`decimals()` before whitelisting; signs via Foundry keystore (`--account`), never a raw key |
-| `script/E2EDeploy.s.sol` | local-Anvil fixture (mock tokens) for the repo-root `make e2e-anvil` money-path E2E |
+| `test/RSendsSplitRouter.t.sol` | 23 tests: split math/conservation, atomicity, permit, reentrancy |
+| `test/SetFeeConfig.t.sol` | registry ↔ on-chain config integration (v1 only) |
+| `script/DeployRouterV2.s.sol` | no-args v2 deploy (nothing to configure after) |
+| `script/DeploySplitRouter.s.sol` | no-args split-router deploy |
+| `script/SetFeeConfig.s.sol` | **v1 only** — wires per-chain token policy from the registry; asserts on-chain `symbol()`/`decimals()` before whitelisting; signs via Foundry keystore (`--account`), never a raw key. Never point it at a v2 deployment |
+| `script/E2EDeploy.s.sol` | local-Anvil fixture (v1 + v2 + mock tokens) for the repo-root `make e2e-anvil` money-path E2E |
 | `archive/` | **quarantined legacy custodial contracts** (FeeRouter lineage, CCIP, forwarders) — not compiled, not deployed, not product; see [`archive/README.md`](archive/README.md) |
 | `DEPRECATED.md` | audit findings on the deprecated FeeRouterV3 (historical record) |
 
@@ -61,7 +88,15 @@ both the permit and approve paths) from the repo root: `make e2e-anvil`.
 
 `foundry.toml`: optimizer on (200 runs), `via_ir = true`.
 
-## Deploy (Base Sepolia — testnet)
+## Deploy
+
+**RSendsRouterV2 (mainnet, operator-only):** `forge script
+script/DeployRouterV2.s.sol:DeployRouterV2 --rpc-url <chain> --account
+<keystore> --broadcast` — no constructor args, no post-deploy config; record
+the address in `RSENDS_ROUTER_V2_ADDRESSES_JSON`. **No mainnet deployment
+exists yet**; the artifact ships audit-ready for the RPagos review first.
+
+### v1 (Base Sepolia — testnet)
 
 There is intentionally **no testnet deploy script**; deploy directly with
 `forge create` using a Foundry keystore (`cast wallet import` — the private key

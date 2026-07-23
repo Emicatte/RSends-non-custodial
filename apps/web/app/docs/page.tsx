@@ -62,8 +62,8 @@ export default function OverviewPage() {
             <strong key="3">3. Settle on-chain</strong>,
             <>
               The browser calls <Code>pay(...)</Code> on the router. The stablecoin moves payer →
-              your wallet, the flat fee moves payer → fee collector, and a <Code>PaymentMade</Code>{' '}
-              event is emitted — all atomically.
+              your wallet — one transfer, no fee in the flow — and a <Code>PaymentMade</Code>{' '}
+              event is emitted, all atomically.
             </>,
           ],
           [

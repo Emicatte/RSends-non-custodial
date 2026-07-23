@@ -46,6 +46,9 @@ export interface RawPaymentIntent {
     permitType?: string | null
     permitVersion?: string | null
     feeUnavailable?: boolean
+    // 1 = RSendsRouter (testnet, on-chain fee + maxFee args); 2 =
+    // RSendsRouterV2 (fee-less/ownerless — fee "0", no maxFee). Absent ⇒ 1.
+    routerVersion?: number
     // Split fan-out (RSendsSplitRouter): merchant is "" (no single payee),
     // router is the fee-less split router, fee is "0".
     split?: {
@@ -74,6 +77,10 @@ export interface OnChainIntent {
   decimals: number
   chainId: number
   router: `0x${string}`
+  /** Router family this intent pays through: 1 = RSendsRouter (fee + maxFee),
+   * 2 = RSendsRouterV2 (fee-less/ownerless — the hook forks ABI/args on this).
+   * Anything other than an explicit 2 normalizes to 1 (backward compatible). */
+  routerVersion: 1 | 2
   /** permit policy from the intent: "eip2612" → permit flow, else approve+pay. */
   permitType: 'eip2612' | 'none'
   /** EIP-712 domain version for the permit signature (only meaningful for eip2612). */
@@ -185,6 +192,7 @@ export function normalizeIntent(
         decimals: oc?.decimals ?? 18,
         chainId: chainId,
         router: getAddress(router),
+        routerVersion: oc?.routerVersion === 2 ? 2 : 1,
         permitType: oc?.permitType === 'eip2612' ? 'eip2612' : 'none',
         permitVersion: oc?.permitVersion ?? '1',
         split,

@@ -87,8 +87,9 @@ export default function WebhooksPage() {
         intent fields, it carries the <strong>on-chain proof</strong> of settlement — the transaction
         hash, the chain (canonical lowercase name plus numeric <Code>chain_id</Code>), and the{' '}
         <Code>onchain_invoice_id</Code> you can look up directly. Amount fields are{' '}
-        <strong>strings</strong>; there is no <Code>fee</Code> field — the on-chain fee is read from
-        the <Code>PaymentMade</Code> event via <Code>tx_hash</Code>.
+        <strong>strings</strong>; there is no <Code>fee</Code> field — no fee exists in the payment
+        flow (the fee-less router moves exactly the amount, payer → merchant; RSends pricing is an
+        off-chain subscription).
       </P>
       <CodeBlock
         label="payment.completed — body"
@@ -120,9 +121,13 @@ export default function WebhooksPage() {
       <Callout variant="info" title="Deriving full on-chain proof">
         From <Code>tx_hash</Code> on{' '}
         <A href="https://sepolia.basescan.org">sepolia.basescan.org</A> you can read the rest of the
-        proof — the <strong>block number</strong>, the <strong>payer address</strong>, the exact{' '}
-        <Code>amount</Code> and <Code>fee</Code>, and an <strong>explorer URL</strong> — straight from
-        the <Code>PaymentMade</Code> event. Richer proof fields embedded directly in the payload are
+        proof — the <strong>block number</strong>, the <strong>payer address</strong> and the exact{' '}
+        <Code>amount</Code> — straight from the <Code>PaymentMade</Code> event. Two event shapes
+        exist, keyed by <Code>topics[0]</Code>: the fee-less router emits{' '}
+        <Code>PaymentMade(bytes32,address,address,address,uint256,uint256)</Code> (topic{' '}
+        <Code>0xc3e210e1…cc843241</Code> — token, amount, blockTimestamp), while the legacy testnet
+        router emits the 7-argument shape with a trailing <Code>fee</Code> word (topic{' '}
+        <Code>0xab7ccb7f…deb04947</Code>). Richer proof fields embedded directly in the payload are
         on the roadmap; today the load-bearing handle is <Code>tx_hash</Code> + <Code>onchain_invoice_id</Code>.
       </Callout>
 

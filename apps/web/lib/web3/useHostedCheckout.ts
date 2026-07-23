@@ -30,6 +30,7 @@ import {
 } from 'wagmi'
 import { erc20Abi, zeroAddress } from 'viem'
 import { RSENDS_ROUTER_ABI } from '@/lib/rsendsRouterAbi'
+import { RSENDS_ROUTER_V2_ABI } from '@/lib/rsendsRouterV2Abi'
 import { RSENDS_SPLIT_ROUTER_ABI } from '@/lib/rsendsSplitRouterAbi'
 import { resolveFeeBreakdown } from '@/lib/web3/feeMath'
 import {
@@ -86,19 +87,25 @@ export function useHostedCheckout(
   // backend always quotes fee "0" — every other prerequisite (allowance,
   // balance, permit, receipts) runs identically to the single path.
   const split = onchain.split ?? null
+  // RSendsRouterV2 (fee-less, ownerless): no quoteFee exists and no fee leg
+  // exists in the flow — fee is STRUCTURALLY 0 (never null), so the checkout
+  // can never hang quoting against a contract that has nothing to quote.
+  const isV2 = onchain.routerVersion === 2
 
   // ── Fee: prefer the backend's live quoteFee; else read it on-chain.
-  //    (Split intents never reach this read: the SplitRouter has no quoteFee
-  //    and the backend always sends fee "0".) ──
+  //    (Split and v2 intents never reach this read: neither contract has a
+  //    quoteFee — split fee is "0" by design, v2 fee is structurally 0.) ──
   const { data: quotedFee } = useReadContract({
     address: onchain.router,
     abi: RSENDS_ROUTER_ABI,
     functionName: 'quoteFee',
     args: [onchain.token, onchain.amount],
     chainId: onchain.chainId,
-    query: { enabled: onchain.fee == null && split == null },
+    query: { enabled: onchain.fee == null && split == null && !isV2 },
   })
-  const fee: bigint | null = onchain.fee ?? ((quotedFee as bigint | undefined) ?? null)
+  const fee: bigint | null = isV2
+    ? 0n
+    : (onchain.fee ?? ((quotedFee as bigint | undefined) ?? null))
   const breakdown = resolveFeeBreakdown(onchain.amount, fee)
   const total = breakdown?.total ?? null
   const maxFee = breakdown?.maxFee ?? null
@@ -267,6 +274,18 @@ export function useHostedCheckout(
         })
         return
       }
+      if (isV2) {
+        // v2: no maxFee argument; value == exactly amount (total === amount).
+        writePay({
+          address: onchain.router,
+          abi: RSENDS_ROUTER_V2_ABI,
+          functionName: 'payNative',
+          args: [onchain.invoiceId, onchain.merchant, onchain.amount],
+          value: total,
+          chainId: onchain.chainId,
+        })
+        return
+      }
       writePay({
         address: onchain.router,
         abi: RSENDS_ROUTER_ABI,
@@ -316,6 +335,27 @@ export function useHostedCheckout(
           })
           return
         }
+        if (isV2) {
+          // v2: 8 args — the permit (signed for exactly `amount`) slots
+          // straight in with no maxFee word.
+          writePay({
+            address: onchain.router,
+            abi: RSENDS_ROUTER_V2_ABI,
+            functionName: 'payWithPermit',
+            args: [
+              onchain.invoiceId,
+              onchain.merchant,
+              onchain.token,
+              onchain.amount,
+              deadline,
+              v,
+              r,
+              s,
+            ],
+            chainId: onchain.chainId,
+          })
+          return
+        }
         writePay({
           address: onchain.router,
           abi: RSENDS_ROUTER_ABI,
@@ -350,6 +390,16 @@ export function useHostedCheckout(
       })
       return
     }
+    if (isV2) {
+      writePay({
+        address: onchain.router,
+        abi: RSENDS_ROUTER_V2_ABI,
+        functionName: 'pay',
+        args: [onchain.invoiceId, onchain.merchant, onchain.token, onchain.amount],
+        chainId: onchain.chainId,
+      })
+      return
+    }
     writePay({
       address: onchain.router,
       abi: RSENDS_ROUTER_ABI,
@@ -364,6 +414,7 @@ export function useHostedCheckout(
     isNative,
     usesPermit,
     split,
+    isV2,
     fee,
     total,
     maxFee,

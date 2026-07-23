@@ -6,7 +6,7 @@ import { H2, H3, P, A, Code, Endpoint, Table, PageHeader, PageNav } from '../_co
 export const metadata: Metadata = {
   title: 'Reporting',
   description:
-    'List RSends transactions and summarize volume. The data is sourced from indexed on-chain PaymentMade events — not an internal ledger. Your principal arrives whole; the fee is paid on-chain to the fee collector.',
+    'List RSends transactions and summarize volume. The data is sourced from indexed on-chain PaymentMade events — not an internal ledger. Your principal arrives whole; no fee is taken in the payment flow.',
 }
 
 export default function ReportingPage() {
@@ -69,22 +69,24 @@ export default function ReportingPage() {
       </P>
       <Callout variant="chain" title="Reconcile against the chain">
         For any record, take its <Code>tx_hash</Code> to BaseScan and confirm the{' '}
-        <Code>PaymentMade</Code> event yourself — amount, recipient, payer, fee. Your books and the
+        <Code>PaymentMade</Code> event yourself — amount, recipient, payer. Your books and the
         chain should match exactly, because the chain is what RSends indexed in the first place.
       </Callout>
 
-      <H2>Fees and what you receive</H2>
+      <H2>What you receive</H2>
       <P>
-        The amount you see settled is the <strong>whole principal you asked for</strong>. The flat
-        fee was paid <strong>on-chain to the fee collector by the payer</strong>, on top of your
-        amount, in the same transaction — it is never deducted from your settlement.
+        The amount you see settled is the <strong>whole principal you asked for</strong>. On the
+        fee-less router a payment is a single transfer — the payer parts with exactly the amount
+        and you receive exactly the amount. Nothing is added on top and nothing is deducted;
+        RSends pricing is a flat subscription, entirely off-chain. (Payments made through the
+        legacy testnet router carried its old on-chain flat fee, paid by the payer on top — never
+        netted from your settlement.)
       </P>
       <Table
         head={['Figure', 'Meaning']}
         rows={[
           [<Code key="a">amount</Code>, 'What you requested — and exactly what landed in your wallet'],
           [<Code key="ar">amount_received</Code>, 'The matched on-chain amount (equals amount within your tolerance)'],
-          [<Code key="f">fee</Code>, <>Paid by the payer to the fee collector on-chain — readable from the <Code>PaymentMade</Code> event, not netted from your principal</>],
         ]}
       />
       <Callout variant="info" title="No withholding">

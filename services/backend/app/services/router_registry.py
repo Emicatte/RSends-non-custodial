@@ -105,9 +105,12 @@ def _load_registry() -> tuple[dict, dict]:
                 "assetType": t.get("assetType"),
                 "issuer": t.get("issuer"),
                 "reason": t.get("reason"),
-                "flatFee": int(t["flatFee"]),
-                "threshold": int(t["threshold"]),
-                "aboveFee": int(t["aboveFee"]),
+                # Fee keys are OPTIONAL (default 0): they configure the v1
+                # RSendsRouter only — chains served by the fee-less
+                # RSendsRouterV2 ignore them and may omit them entirely.
+                "flatFee": int(t.get("flatFee", 0)),
+                "threshold": int(t.get("threshold", 0)),
+                "aboveFee": int(t.get("aboveFee", 0)),
                 "enabled": bool(t["enabled"]),
                 "verified": bool(t.get("verified", False)),
             }
@@ -131,11 +134,14 @@ def chain_id_for(chain: str) -> Optional[int]:
 
 def primary_chain_id() -> int:
     """Chain id representing the system's current network, derived from the
-    configured RSendsRouter map (the same source the indexer builds watchers
-    from). First configured chain, else Base Sepolia (84532) — the testnet we
-    run on — when unconfigured (local/dev/test)."""
-    routers = getattr(get_settings(), "rsends_router_addresses", {}) or {}
-    for k in routers:
+    configured RSendsRouter maps (the same source the indexer builds watchers
+    from — union of v1 and v2, v1 first for stability). First configured
+    chain, else Base Sepolia (84532) — the testnet we run on — when
+    unconfigured (local/dev/test)."""
+    settings = get_settings()
+    routers = getattr(settings, "rsends_router_addresses", {}) or {}
+    routers_v2 = getattr(settings, "rsends_router_v2_addresses", {}) or {}
+    for k in list(routers) + list(routers_v2):
         try:
             return int(k)
         except (TypeError, ValueError):
@@ -161,6 +167,20 @@ def router_address_for(chain: str) -> Optional[str]:
     if cid is None:
         return None
     routers = getattr(get_settings(), "rsends_router_addresses", {}) or {}
+    return routers.get(str(cid)) or routers.get(cid)
+
+
+def router_v2_address_for(chain: str) -> Optional[str]:
+    """RSendsRouterV2 address for the chain (settings.rsends_router_v2_addresses).
+
+    v2 is the fee-less, ownerless router: a chain in this map creates v2
+    intents (v2 wins over v1 when both are configured; the indexer watches
+    both, so in-flight v1 payments still settle).
+    """
+    cid = chain_id_for(chain)
+    if cid is None:
+        return None
+    routers = getattr(get_settings(), "rsends_router_v2_addresses", {}) or {}
     return routers.get(str(cid)) or routers.get(cid)
 
 
@@ -320,6 +340,58 @@ def build_pay_with_permit_calldata(
     )
 
 
+def build_pay_calldata_v2(
+    invoice_id: str, merchant: str, token: str, amount_base_units: int
+) -> str:
+    """calldata for RSendsRouterV2.pay(bytes32 invoiceId, address merchant, address token, uint256 amount) — no fee, no maxFee."""
+    sel = _selector("pay(bytes32,address,address,uint256)").hex()
+    return (
+        "0x"
+        + sel
+        + _enc_bytes32(invoice_id)
+        + _enc_addr(merchant)
+        + _enc_addr(token)
+        + _enc_uint(amount_base_units)
+    )
+
+
+def build_pay_native_calldata_v2(
+    invoice_id: str, merchant: str, amount_base_units: int
+) -> str:
+    """calldata for RSendsRouterV2.payNative(bytes32 invoiceId, address merchant, uint256 amount) — value = exactly amount."""
+    sel = _selector("payNative(bytes32,address,uint256)").hex()
+    return (
+        "0x"
+        + sel
+        + _enc_bytes32(invoice_id)
+        + _enc_addr(merchant)
+        + _enc_uint(amount_base_units)
+    )
+
+
+def build_pay_with_permit_calldata_v2(
+    invoice_id: str, merchant: str, token: str, amount_base_units: int
+) -> str:
+    """TEMPLATE calldata for RSendsRouterV2.payWithPermit(...) — permit value is
+    exactly `amount` (no fee term); deadline/v/r/s zeroed, client fills after
+    signing (same convention as the v1 template)."""
+    sel = _selector(
+        "payWithPermit(bytes32,address,address,uint256,uint256,uint8,bytes32,bytes32)"
+    ).hex()
+    return (
+        "0x"
+        + sel
+        + _enc_bytes32(invoice_id)
+        + _enc_addr(merchant)
+        + _enc_addr(token)
+        + _enc_uint(amount_base_units)
+        + _enc_uint(0)  # deadline   — client fills
+        + _enc_uint(0)  # v          — client fills
+        + _enc_uint(0)  # r (bytes32)— client fills
+        + _enc_uint(0)  # s (bytes32)— client fills
+    )
+
+
 def loaded_split_recipients(intent) -> list:
     """The intent's split legs WITHOUT ever triggering an async lazy-load
     (which would raise MissingGreenlet outside a greenlet context).
@@ -433,8 +505,9 @@ async def build_onchain_payment(intent) -> Optional[dict]:
     chain = intent.chain or "base"
     cid = chain_id_for(chain)
     router = router_address_for(chain)
+    router_v2 = router_v2_address_for(chain)
     tok = token_for(chain, intent.currency)
-    if cid is None or router is None or tok is None:
+    if cid is None or (router is None and router_v2 is None) or tok is None:
         return None
 
     token_addr, decimals = tok
@@ -499,6 +572,40 @@ async def build_onchain_payment(intent) -> Optional[dict]:
             },
         }
 
+    # ── RSendsRouterV2 (fee-less, ownerless) — v2 wins when both configured ──
+    # No quoteFee exists on v2 and no fee leg exists in the flow: fee is a
+    # literal "0", total == amount, maxFee has no meaning (None), and the
+    # calldata carries no fee word. feeUnavailable can never be True here.
+    if router_v2 is not None:
+        if is_native:
+            calldata = build_pay_native_calldata_v2(invoice_id, merchant, amount_base)
+            permit_calldata = None  # native has no permit path
+        else:
+            calldata = build_pay_calldata_v2(invoice_id, merchant, token_addr, amount_base)
+            permit_calldata = build_pay_with_permit_calldata_v2(
+                invoice_id, merchant, token_addr, amount_base
+            )
+        return {
+            "invoiceId": invoice_id,
+            "merchant": merchant,
+            "token": token_addr,
+            "amount": str(amount_base),
+            "chainId": cid,
+            "router": router_v2,
+            "routerVersion": 2,
+            "function": function,
+            "decimals": decimals,
+            "isNative": is_native,
+            "permitType": pol.get("permitType", "none"),
+            "permitVersion": pol.get("permitVersion"),
+            "fee": "0",
+            "total": str(amount_base),
+            "maxFee": None,
+            "calldata": calldata,
+            "payWithPermitCalldata": permit_calldata,
+            "feeUnavailable": False,
+        }
+
     out = {
         "invoiceId": invoice_id,
         "merchant": merchant,
@@ -506,6 +613,7 @@ async def build_onchain_payment(intent) -> Optional[dict]:
         "amount": str(amount_base),
         "chainId": cid,
         "router": router,
+        "routerVersion": 1,
         "function": function,
         "decimals": decimals,
         "isNative": is_native,
@@ -609,14 +717,19 @@ async def verify_enabled_tokens_onchain(*, retries: int = 3, backoff: float = 2.
     and continue (do NOT crash-loop). No-op when no router addresses are configured
     (dev/test) — the deploy-script gate remains the primary backstop.
     """
-    routers = getattr(get_settings(), "rsends_router_addresses", {}) or {}
-    if not routers:
+    settings = get_settings()
+    routers = getattr(settings, "rsends_router_addresses", {}) or {}
+    routers_v2 = getattr(settings, "rsends_router_v2_addresses", {}) or {}
+    # The identity guard (symbol/decimals) is fee-independent — it must also
+    # cover v2-only chains, so gate on the UNION of the two maps.
+    all_router_chains = set(map(str, routers)) | set(map(str, routers_v2))
+    if not all_router_chains:
         logger.info("[registry-guard] no router addresses configured — skipping on-chain token verification")
         return
 
     for name, syms in FEE_POLICY.items():
         cid = CHAIN_IDS.get(name)
-        if cid is None or not (str(cid) in routers or cid in routers):
+        if cid is None or str(cid) not in all_router_chains:
             continue  # no router deployed for this chain → nothing to verify
         for sym, pol in syms.items():
             if pol["native"] or not pol["enabled"]:

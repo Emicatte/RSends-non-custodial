@@ -32,6 +32,7 @@ const ONCHAIN: OnChainIntent = {
   decimals: 6,
   chainId: 84532,
   router: ROUTER,
+  routerVersion: 1,
   permitType: 'eip2612',
   permitVersion: '2',
 }
