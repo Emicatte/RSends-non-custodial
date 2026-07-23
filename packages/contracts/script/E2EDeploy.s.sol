@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import "forge-std/Script.sol";
 import "../src/RSendsRouter.sol";
+import {RSendsRouterV2} from "../src/RSendsRouterV2.sol";
 import {MockUSDC6, MockUSDT6} from "../test/mocks/E2EMocks.sol";
 
 /// @title E2EDeploy — deploy the full money-path stack to a local Anvil node.
@@ -42,6 +43,7 @@ contract E2EDeploy is Script {
         vm.startBroadcast();
 
         RSendsRouter router = new RSendsRouter(owner, feeCollector);
+        RSendsRouterV2 routerV2 = new RSendsRouterV2(); // ownerless/fee-less: no config
 
         MockUSDC6 usdc = new MockUSDC6();
         MockUSDT6 usdt = new MockUSDT6();
@@ -56,6 +58,7 @@ contract E2EDeploy is Script {
 
         // Addresses also surface in the broadcast artifact; log for debugging.
         console2.log("router", address(router));
+        console2.log("routerV2", address(routerV2));
         console2.log("usdc", address(usdc));
         console2.log("usdt", address(usdt));
     }
