@@ -153,6 +153,24 @@ def _payment_made_topic() -> str:
 
 PAYMENT_MADE_TOPIC = _payment_made_topic()
 
+# RSendsRouterV2 (ownerless, fee-less single-merchant — the mainnet router):
+# same event as v1 MINUS the fee word. Different signature → different topic0;
+# the watcher filters on BOTH and dispatches by (address, topic) pairing. A v2
+# deploy watched with only the v1 topic would detect zero payments while the
+# process reports itself healthy — the literal is pinned in
+# tests/test_indexer_topic_hashes.py and mirrored in RSendsRouterV2.t.sol.
+_PAYMENT_MADE_V2_SIG = "PaymentMade(bytes32,address,address,address,uint256,uint256)"
+
+
+def _payment_made_v2_topic() -> str:
+    # Fail-loud like _payment_made_topic: no placeholder may reach the filter.
+    from eth_utils import keccak
+
+    return "0x" + keccak(text=_PAYMENT_MADE_V2_SIG).hex()
+
+
+PAYMENT_MADE_V2_TOPIC = _payment_made_v2_topic()
+
 # RSendsSplitRouter (ownerless, fee-less N-way split) — ONE aggregate event per
 # split payment:
 #   SplitPaymentMade(
@@ -321,6 +339,46 @@ def _decode_payment_made(log: dict) -> Optional[dict]:
         "token": token.lower(),
         "amount": amount,
         "fee": fee,
+        "block_timestamp": block_ts,
+        "tx_hash": (log.get("transactionHash") or "").lower(),
+        "log_index": int(log.get("logIndex", "0x0"), 16),
+        "block_number": int(log.get("blockNumber", "0x0"), 16),
+        "block_hash": (log.get("blockHash") or "").lower(),
+    }
+
+
+def _decode_payment_made_v2(log: dict) -> Optional[dict]:
+    """Decode an RSendsRouterV2 PaymentMade log (3 data words, no fee), or None.
+
+    Same shape as _decode_payment_made with `fee` normalized to 0 — the
+    SplitPaymentMade precedent: _record_settlement stores Decimal(0), truthful
+    "no fee charged", and everything downstream is version-blind.
+    """
+    topics = log.get("topics", [])
+    if len(topics) < 4:
+        return None
+    if topics[0].lower() != PAYMENT_MADE_V2_TOPIC.lower():
+        return None
+
+    invoice_id = topics[1]                       # bytes32 hex (0x...)
+    merchant = _addr_from_topic(topics[2])
+    payer = _addr_from_topic(topics[3])
+
+    data = (log.get("data") or "0x")[2:]
+    # 3 non-indexed words: token (address), amount (uint256), blockTimestamp
+    if len(data) < 64 * 3:
+        return None
+    token = "0x" + data[0:64][-40:]
+    amount = int(data[64:128], 16)
+    block_ts = int(data[128:192], 16)
+
+    return {
+        "invoice_id": invoice_id,
+        "merchant": merchant,
+        "payer": payer,
+        "token": token.lower(),
+        "amount": amount,
+        "fee": 0,
         "block_timestamp": block_ts,
         "tx_hash": (log.get("transactionHash") or "").lower(),
         "log_index": int(log.get("logIndex", "0x0"), 16),
