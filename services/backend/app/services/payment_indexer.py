@@ -1212,19 +1212,28 @@ async def _finalize_and_reconcile(
 # ── Per-chain watcher ────────────────────────────────────────
 class PaymentWatcher:
     """Watches RSendsRouter.PaymentMade — and, when configured,
+    RSendsRouterV2.PaymentMade (6-arg, fee-less) and/or
     RSendsSplitRouter.SplitPaymentMade — on a single chain via eth_getLogs."""
 
     def __init__(
         self,
         chain_id: int,
-        router_address: str,
+        router_address: Optional[str] = None,
         split_router_address: Optional[str] = None,
+        router_v2_address: Optional[str] = None,
     ) -> None:
         self.chain_id = chain_id
-        self.router_address = router_address.lower()
+        self.router_address = router_address.lower() if router_address else None
+        self.router_v2_address = (
+            router_v2_address.lower() if router_v2_address else None
+        )
         self.split_router_address = (
             split_router_address.lower() if split_router_address else None
         )
+        if not (self.router_address or self.router_v2_address or self.split_router_address):
+            raise ValueError(
+                f"PaymentWatcher(chain={chain_id}): at least one router address required"
+            )
         self._running = False
         self._task: Optional[asyncio.Task] = None
         # TRUE-finality boundary, monotonic ratchet (F-1): the highest
@@ -1241,10 +1250,16 @@ class PaymentWatcher:
             return
         self._running = True
         self._task = asyncio.create_task(self._loop())
-        logger.info(
-            "[indexer] watching RSendsRouter %s on chain %d",
-            self.router_address, self.chain_id,
-        )
+        if self.router_address:
+            logger.info(
+                "[indexer] watching RSendsRouter %s on chain %d",
+                self.router_address, self.chain_id,
+            )
+        if self.router_v2_address:
+            logger.info(
+                "[indexer] watching RSendsRouterV2 %s on chain %d",
+                self.router_v2_address, self.chain_id,
+            )
         if self.split_router_address:
             logger.info(
                 "[indexer] watching RSendsSplitRouter %s on chain %d",
@@ -1522,15 +1537,23 @@ class PaymentWatcher:
             max_range = max(
                 1, int(getattr(settings, "indexer_getlogs_max_range", 10))
             )
-            # One filter over BOTH contracts (address array + topic0 OR-list)
-            # when the split router is configured; byte-identical single-router
-            # filter otherwise.
+            # One filter over EVERY configured contract (address array +
+            # topic0 OR-list); byte-identical scalar filter when only one is
+            # configured. Each (address, topic0) pair travels together so the
+            # per-log source-authenticity guard below can reject cross-pairs.
+            addresses: list[str] = []
+            topic0s: list[str] = []
+            if self.router_address:
+                addresses.append(self.router_address)
+                topic0s.append(PAYMENT_MADE_TOPIC)
+            if self.router_v2_address:
+                addresses.append(self.router_v2_address)
+                topic0s.append(PAYMENT_MADE_V2_TOPIC)
             if self.split_router_address:
-                filter_address: object = [self.router_address, self.split_router_address]
-                filter_topics = [[PAYMENT_MADE_TOPIC, SPLIT_PAYMENT_MADE_TOPIC]]
-            else:
-                filter_address = self.router_address
-                filter_topics = [PAYMENT_MADE_TOPIC]
+                addresses.append(self.split_router_address)
+                topic0s.append(SPLIT_PAYMENT_MADE_TOPIC)
+            filter_address: object = addresses if len(addresses) > 1 else addresses[0]
+            filter_topics: list = [topic0s] if len(topic0s) > 1 else [topic0s[0]]
 
             chunk_start = start_block
             while chunk_start <= end_block:
@@ -1552,8 +1575,18 @@ class PaymentWatcher:
                     # from the split router; any other pairing is dropped.
                     addr = (log.get("address") or "").lower()
                     topic0 = ((log.get("topics") or [""])[0] or "").lower()
-                    if topic0 == PAYMENT_MADE_TOPIC.lower() and addr == self.router_address:
+                    if (
+                        self.router_address
+                        and topic0 == PAYMENT_MADE_TOPIC.lower()
+                        and addr == self.router_address
+                    ):
                         ev = _decode_payment_made(log)
+                    elif (
+                        self.router_v2_address
+                        and topic0 == PAYMENT_MADE_V2_TOPIC.lower()
+                        and addr == self.router_v2_address
+                    ):
+                        ev = _decode_payment_made_v2(log)
                     elif (
                         self.split_router_address
                         and topic0 == SPLIT_PAYMENT_MADE_TOPIC.lower()
@@ -1615,17 +1648,23 @@ async def start_indexer_if_needed() -> list[PaymentWatcher]:
 
     settings = get_settings()
     routers = getattr(settings, "rsends_router_addresses", {}) or {}
-    if not routers:
+    routers_v2 = getattr(settings, "rsends_router_v2_addresses", {}) or {}
+    if not routers and not routers_v2:
         logger.info("[indexer] no RSENDS_ROUTER addresses configured — indexer disabled")
         return []
 
     # RSendsSplitRouter addresses ride the SAME per-chain watcher — a chain
-    # gets split indexing only if its base router is configured too (true for
-    # every deployment: the split router is deployed alongside the router).
+    # gets split indexing only if a base router (v1 or v2) is configured too
+    # (true for every deployment: the split router is deployed alongside one).
     split_routers = getattr(settings, "split_router_addresses", {}) or {}
 
-    for chain_id_str, addr in routers.items():
-        if not addr:
+    # Watcher chains = UNION of the v1 and v2 maps: a v2-only mainnet chain
+    # must get a watcher, or its payments are silently invisible.
+    chain_keys = list(dict.fromkeys(list(routers.keys()) + list(routers_v2.keys())))
+    for chain_id_str in chain_keys:
+        addr = routers.get(chain_id_str) or None
+        addr_v2 = routers_v2.get(chain_id_str) or None
+        if not addr and not addr_v2:
             continue
         try:
             chain_id = int(chain_id_str)
@@ -1638,7 +1677,8 @@ async def start_indexer_if_needed() -> list[PaymentWatcher]:
             or None
         )
         watcher = PaymentWatcher(
-            chain_id=chain_id, router_address=addr, split_router_address=split_addr
+            chain_id=chain_id, router_address=addr,
+            split_router_address=split_addr, router_v2_address=addr_v2,
         )
         await watcher.start()
         _watchers.append(watcher)

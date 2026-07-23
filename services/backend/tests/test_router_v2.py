@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
+import pytest_asyncio
 from sqlalchemy import select
 
 from app.services.payment_indexer import (
@@ -28,6 +29,23 @@ from app.services.router_registry import token_for, to_base_units
 USDC_ADDR, USDC_DEC = token_for("base", "USDC")
 MERCHANT = "0x" + "1" * 40
 PAYER = "0x" + "2" * 40
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _setup_db():
+    from app.db.session import engine
+    from app.models.db_models import Base
+    import app.models.merchant_models  # noqa: F401 — register tables
+    import app.models.settlement_models  # noqa: F401
+    from app.models.merchant_models import PaymentIntent, PaymentIntentRecipient
+    from app.models.settlement_models import PaymentSettlement
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+        # FK-ordered wipe: recipients reference intents — children first.
+        await conn.execute(PaymentIntentRecipient.__table__.delete())
+        await conn.execute(PaymentSettlement.__table__.delete())
+        await conn.execute(PaymentIntent.__table__.delete())
+    yield
 
 
 # ── log builders (v2 layout: 3 data words — token, amount, blockTimestamp) ──
@@ -124,6 +142,215 @@ async def _make_intent(*, invoice_id, recipient=MERCHANT, amount=100.0,
         ))
         await db.commit()
     return iid
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Watcher filter + dispatch — both topics, source-authenticity pairing
+# ═══════════════════════════════════════════════════════════════
+ROUTER_V1 = ("0x" + "a1" * 20).lower()
+ROUTER_V2 = ("0x" + "a2" * 20).lower()
+SPLIT_ROUTER = ("0x" + "a3" * 20).lower()
+CHAIN = 8453
+
+
+class CapturingChain:
+    """FakeChain twin that also CAPTURES every eth_getLogs filter object, so
+    the tests can assert the exact address/topics shape sent to the RPC."""
+
+    def __init__(self):
+        self.latest = 0
+        self.finalized = 0
+        self.block_hashes: dict[int, str] = {}
+        self.logs: list[dict] = []
+        self.receipts: dict[str, str | None] = {}
+        self.captured_filters: list[dict] = []
+
+    async def call(self, method, params, **kw):
+        if method == "eth_blockNumber":
+            return hex(self.latest)
+        if method == "eth_getBlockByNumber":
+            tag = params[0]
+            if tag in ("finalized", "safe"):
+                return {"number": hex(self.finalized),
+                        "hash": self.block_hashes.get(self.finalized, "0x" + "00" * 32)}
+            bn = int(tag, 16)
+            h = self.block_hashes.get(bn)
+            return None if h is None else {"number": hex(bn), "hash": h}
+        if method == "eth_getLogs":
+            self.captured_filters.append(params[0])
+            f = int(params[0]["fromBlock"], 16)
+            t = int(params[0]["toBlock"], 16)
+            # Intentionally ignores the address filter (hostile-RPC simulation):
+            # the per-log (address, topic) pairing guard is the thing under test.
+            return [lg for lg in self.logs if f <= int(lg["blockNumber"], 16) <= t]
+        if method == "eth_getTransactionReceipt":
+            h = self.receipts.get(params[0].lower())
+            return None if h is None else {"blockHash": h}
+        raise AssertionError(f"unexpected RPC {method}")
+
+
+def _async_return(v):
+    async def _c():
+        return v
+    return _c()
+
+
+def _async_set(store, c, b):
+    async def _c():
+        store[c] = b
+    return _c()
+
+
+def _wire(monkeypatch, rpc, cursor):
+    import app.services.payment_indexer as idx
+    monkeypatch.setattr("app.services.rpc_manager.get_rpc_manager", lambda cid: rpc)
+    monkeypatch.setattr(idx, "_get_last_block", lambda c: _async_return(cursor.get(c)))
+    monkeypatch.setattr(idx, "_set_last_block", lambda c, b: _async_set(cursor, c, b))
+
+
+class TestWatcherDualTopicFilter:
+    @pytest.mark.asyncio
+    async def test_v1_only_filter_shape_unchanged(self, monkeypatch):
+        """Today's single-router deployments must produce the byte-identical
+        scalar filter (no list wrapping) — zero behavioural drift."""
+        from app.services.payment_indexer import PaymentWatcher
+
+        rpc = CapturingChain()
+        rpc.latest = 300
+        rpc.finalized = 200
+        _wire(monkeypatch, rpc, {CHAIN: 100})
+
+        w = PaymentWatcher(chain_id=CHAIN, router_address=ROUTER_V1)
+        await w._tick()
+
+        assert rpc.captured_filters, "tick issued no getLogs"
+        f = rpc.captured_filters[0]
+        assert f["address"] == ROUTER_V1
+        assert f["topics"] == [PAYMENT_MADE_TOPIC]
+
+    @pytest.mark.asyncio
+    async def test_filter_covers_all_three_contracts(self, monkeypatch):
+        from app.services.payment_indexer import (
+            PaymentWatcher, SPLIT_PAYMENT_MADE_TOPIC,
+        )
+
+        rpc = CapturingChain()
+        rpc.latest = 300
+        rpc.finalized = 200
+        _wire(monkeypatch, rpc, {CHAIN: 100})
+
+        w = PaymentWatcher(
+            chain_id=CHAIN, router_address=ROUTER_V1,
+            router_v2_address=ROUTER_V2, split_router_address=SPLIT_ROUTER,
+        )
+        await w._tick()
+
+        f = rpc.captured_filters[0]
+        assert f["address"] == [ROUTER_V1, ROUTER_V2, SPLIT_ROUTER]
+        assert f["topics"] == [[PAYMENT_MADE_TOPIC, PAYMENT_MADE_V2_TOPIC,
+                                SPLIT_PAYMENT_MADE_TOPIC]]
+
+    @pytest.mark.asyncio
+    async def test_v2_only_watcher_ingests_v2_log(self, monkeypatch):
+        """A v2-only chain (mainnet cutover) must construct a working watcher
+        with NO v1 router configured, and ingest via the v2 topic."""
+        from app.db.session import async_session
+        from app.models.settlement_models import PaymentSettlement
+        from app.services.payment_indexer import PaymentWatcher
+
+        inv = "0x" + "e3" * 32
+        await _make_intent(invoice_id=inv)
+        bhash = "0x" + "e4" * 32
+
+        rpc = CapturingChain()
+        rpc.latest = 300
+        rpc.finalized = 200
+        rpc.block_hashes[150] = bhash
+        log = make_v2_log(invoice_id=inv, merchant=MERCHANT, payer=PAYER,
+                          token=USDC_ADDR, amount=to_base_units(100.0, USDC_DEC),
+                          ts=1_700_000_000, tx_hash="0x" + "e5" * 32,
+                          block=150, block_hash=bhash)
+        log["address"] = ROUTER_V2
+        rpc.logs = [log]
+        _wire(monkeypatch, rpc, {CHAIN: 100})
+
+        w = PaymentWatcher(chain_id=CHAIN, router_v2_address=ROUTER_V2)
+        await w._tick()
+
+        f = rpc.captured_filters[0]
+        assert f["address"] == ROUTER_V2
+        assert f["topics"] == [PAYMENT_MADE_V2_TOPIC]
+        async with async_session() as db:
+            stl = (await db.execute(
+                select(PaymentSettlement).where(PaymentSettlement.tx_hash == log["transactionHash"])
+            )).scalar_one()
+            assert stl.fee == Decimal(0)
+
+    @pytest.mark.asyncio
+    async def test_v2_log_from_v1_address_dropped(self, monkeypatch):
+        """Source authenticity: a v2-topic log claiming to come from the v1
+        router address is a wrong (address, topic) pairing — dropped."""
+        from app.services.payment_indexer import PaymentWatcher
+
+        inv = "0x" + "e6" * 32
+        await _make_intent(invoice_id=inv)
+
+        rpc = CapturingChain()
+        rpc.latest = 300
+        rpc.finalized = 200
+        log = make_v2_log(invoice_id=inv, merchant=MERCHANT, payer=PAYER,
+                          token=USDC_ADDR, amount=to_base_units(100.0, USDC_DEC),
+                          ts=1_700_000_000, tx_hash="0x" + "e7" * 32, block=150)
+        log["address"] = ROUTER_V1                 # wrong source for a v2 topic
+        rpc.logs = [log]
+        _wire(monkeypatch, rpc, {CHAIN: 100})
+
+        w = PaymentWatcher(chain_id=CHAIN, router_address=ROUTER_V1,
+                           router_v2_address=ROUTER_V2)
+        await w._tick()
+
+        from app.db.session import async_session
+        from app.models.settlement_models import PaymentSettlement
+        async with async_session() as db:
+            stl = (await db.execute(
+                select(PaymentSettlement).where(PaymentSettlement.tx_hash == log["transactionHash"])
+            )).scalar_one_or_none()
+            assert stl is None
+
+    def test_watcher_requires_at_least_one_router(self):
+        from app.services.payment_indexer import PaymentWatcher
+
+        with pytest.raises(ValueError):
+            PaymentWatcher(chain_id=CHAIN)
+
+
+class TestStartIndexerUnion:
+    @pytest.mark.asyncio
+    async def test_v2_only_settings_still_start_a_watcher(self, monkeypatch):
+        """The watcher-chains set is the UNION of the v1 and v2 address maps —
+        a v2-only mainnet must get a watcher (and the split rule is unchanged)."""
+        from types import SimpleNamespace
+        import app.services.payment_indexer as idx
+
+        monkeypatch.setattr(idx, "_watchers", [])
+        monkeypatch.setattr(idx, "get_settings", lambda: SimpleNamespace(
+            rsends_router_addresses={},
+            rsends_router_v2_addresses={"8453": ROUTER_V2},
+            split_router_addresses={},
+            indexer_use_finalized_tag=True,
+            indexer_finalized_tag="finalized",
+        ))
+
+        watchers = await idx.start_indexer_if_needed()
+        try:
+            assert len(watchers) == 1
+            assert watchers[0].chain_id == 8453
+            assert watchers[0].router_address is None
+            assert watchers[0].router_v2_address == ROUTER_V2
+        finally:
+            for w in watchers:
+                await w.stop()
+            idx._watchers = []
 
 
 class TestRecordSettlementV2:
