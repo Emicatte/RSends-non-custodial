@@ -35,6 +35,7 @@ function intent(overrides: Partial<OnChainIntent> = {}): OnChainIntent {
     decimals: 6,
     chainId: 84532,
     router: ROUTER,
+    routerVersion: 1,
     permitType: 'eip2612',
     permitVersion: '2',
     ...overrides,
@@ -238,6 +239,116 @@ describe('native path', () => {
         chainId: 84532,
       }),
     )
+  })
+})
+
+describe('RSendsRouterV2 (fee-less, ownerless) — version-aware args', () => {
+  const v2Intent = (overrides: Partial<OnChainIntent> = {}) =>
+    intent({ routerVersion: 2, fee: 0n, ...overrides })
+
+  it('v2 fallback path: approve exactly amount, then 4-arg pay (no maxFee)', () => {
+    fresh({ reads: { balanceOf: 100_000_000n, allowance: 0n } })
+    const { result, rerender } = render(v2Intent({ permitType: 'none' }))
+    expect(result.current.step).toBe('needs_approve')
+    expect(result.current.fee).toBe(0n)
+    expect(result.current.total).toBe(50_000_000n) // total == amount, no fee term
+
+    act(() => result.current.approve())
+    expect(mockWagmi.approveWrite.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: TOKEN,
+        functionName: 'approve',
+        args: [ROUTER, 50_000_000n], // exactly amount — no fee in the flow
+        chainId: 84532,
+      }),
+    )
+
+    mockWagmi.reads.allowance = 50_000_000n
+    rerender({ backendPaid: false })
+    act(() => {
+      void result.current.pay()
+    })
+    expect(mockWagmi.payWrite.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: ROUTER,
+        functionName: 'pay',
+        args: [INVOICE, ROUTER, TOKEN, 50_000_000n], // 4 args — no maxFee word
+        chainId: 84532,
+      }),
+    )
+  })
+
+  it('v2 permit path: signs value == exactly amount, 8-arg payWithPermit', async () => {
+    fresh()
+    const account = (await import('viem/accounts')).privateKeyToAccount(
+      '0x0123456789012345678901234567890123456789012345678901234567890123',
+    )
+    Object.assign(mockWagmi, { address: account.address })
+    let captured: unknown
+    mockWagmi.signTypedDataAsync.mockImplementation(async (typed: never) => {
+      captured = typed
+      return account.signTypedData(typed)
+    })
+
+    const { result } = render(v2Intent())
+    expect(result.current.step).toBe('ready')
+
+    await act(async () => {
+      await result.current.pay()
+    })
+
+    expect(captured).toMatchObject({
+      primaryType: 'Permit',
+      message: expect.objectContaining({
+        spender: ROUTER,
+        value: 50_000_000n, // permit covers exactly amount — no fee term
+      }),
+    })
+
+    expect(mockWagmi.payWrite.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: ROUTER,
+        functionName: 'payWithPermit',
+        chainId: 84532,
+      }),
+    )
+    const args = mockWagmi.payWrite.writeContract.mock.calls[0][0].args
+    expect(args).toHaveLength(8) // no maxFee: invoiceId, merchant, token, amount, deadline, v, r, s
+    expect(args.slice(0, 4)).toEqual([INVOICE, ROUTER, TOKEN, 50_000_000n])
+    expect(args[5] === 27 || args[5] === 28).toBe(true) // v directly after deadline
+  })
+
+  it('v2 native path: 3-arg payNative with value == exactly amount', () => {
+    fresh({ nativeBalance: { value: 10n ** 18n } })
+    const oc = v2Intent({
+      token: zeroAddress,
+      permitType: 'none',
+      decimals: 18,
+      amount: 10n ** 16n,
+    })
+    const { result } = render(oc)
+    expect(result.current.step).toBe('ready')
+
+    act(() => {
+      void result.current.pay()
+    })
+    expect(mockWagmi.payWrite.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: 'payNative',
+        args: [INVOICE, ROUTER, 10n ** 16n], // 3 args — no maxFee
+        value: 10n ** 16n,
+        chainId: 84532,
+      }),
+    )
+  })
+
+  it('v2 never quotes: fee is structurally 0 even on a malformed fee:null payload', () => {
+    fresh()
+    const { result } = render(v2Intent({ fee: null }))
+    // No quoteFee exists on v2 — the hook must not hang in `quoting`.
+    expect(result.current.step).toBe('ready')
+    expect(result.current.fee).toBe(0n)
+    expect(result.current.total).toBe(50_000_000n)
   })
 })
 

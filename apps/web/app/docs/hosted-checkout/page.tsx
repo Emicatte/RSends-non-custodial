@@ -43,13 +43,15 @@ export default function HostedCheckoutPage() {
         </LI>
         <LI>
           <strong>Approve, then pay.</strong> For an ERC-20 token, the wallet first approves{' '}
-          <Code>amount + fee</Code> to the router, then calls{' '}
-          <Code>pay(invoiceId, merchant, token, amount, maxFee)</Code>. Native ETH skips approval and
-          calls <Code>payNative(...)</Code> with <Code>msg.value</Code>.
+          exactly <Code>amount</Code> to the router, then calls{' '}
+          <Code>pay(invoiceId, merchant, token, amount)</Code>. Native ETH skips approval and calls{' '}
+          <Code>payNative(...)</Code> with <Code>msg.value</Code> equal to the amount. (On the
+          legacy testnet router — <Code>routerVersion 1</Code> — the calls carry an extra{' '}
+          <Code>maxFee</Code> argument and the approval covers <Code>amount + fee</Code>.)
         </LI>
         <LI>
-          <strong>Settle atomically.</strong> In one transaction the router sends your amount to your
-          wallet, the fee to the fee collector, and emits <Code>PaymentMade</Code>.
+          <strong>Settle atomically.</strong> One transaction, one transfer: the router moves your
+          amount to your wallet and emits <Code>PaymentMade</Code>. No fee leg exists in the flow.
         </LI>
       </UL>
       <CodeBlock
@@ -58,9 +60,8 @@ export default function HostedCheckoutPage() {
 router.pay(
   invoiceId,   // onchain.invoiceId  (bytes32, derived from your reference)
   merchant,    // onchain.merchant   (your destination wallet)
-  token,       // onchain.token      (e.g. test USDC)
-  amount,      // onchain.amount     (base units)
-  maxFee       // onchain.maxFee     (payer's ceiling; reverts if quoteFee exceeds it)
+  token,       // onchain.token      (e.g. USDC)
+  amount       // onchain.amount     (base units — exactly what the payer parts with)
 )`}
       />
 
@@ -97,7 +98,7 @@ router.pay(
       <H3>Build your own checkout?</H3>
       <P>
         You don&apos;t have to use the hosted page. Because the intent response hands you the full{' '}
-        <Code>onchain</Code> object (router, invoiceId, token, amount, fee, calldata), you can drive{' '}
+        <Code>onchain</Code> object (router, routerVersion, invoiceId, token, amount, calldata), you can drive{' '}
         <Code>pay(...)</Code> from your own front-end. The settlement and reconciliation model is
         identical — the webhook and the chain remain the source of truth.
       </P>

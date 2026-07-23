@@ -91,6 +91,22 @@ describe('normalizeIntent', () => {
     expect(normalizeIntent(raw, 'pi_bad').onchain).toBeNull()
   })
 
+  it('normalizes routerVersion: 2 → 2, absent → 1, junk → 1', () => {
+    const v2 = {
+      ...RAW_BASE,
+      onchain: { ...RAW_BASE.onchain, routerVersion: 2, fee: '0', total: '50000000', maxFee: null },
+    }
+    expect(normalizeIntent(v2, 'pi_v2').onchain!.routerVersion).toBe(2)
+    // absent (pre-P3 backend) → v1
+    expect(normalizeIntent(RAW_BASE, 'pi_v1').onchain!.routerVersion).toBe(1)
+    // junk values never produce a v2 flow
+    const junk = {
+      ...RAW_BASE,
+      onchain: { ...RAW_BASE.onchain, routerVersion: 99 as unknown as number },
+    }
+    expect(normalizeIntent(junk, 'pi_junk').onchain!.routerVersion).toBe(1)
+  })
+
   it('surfaces the settlement tx hash (matched first)', () => {
     expect(
       normalizeIntent({ ...RAW_BASE, matched_tx_hash: '0xm', tx_hash: '0xt' }, 'x')

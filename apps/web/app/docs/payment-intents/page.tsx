@@ -6,7 +6,7 @@ import { H2, H3, P, A, Code, Endpoint, Table, PageHeader, PageNav } from '../_co
 export const metadata: Metadata = {
   title: 'Payment intents',
   description:
-    'Create, fetch and cancel RSends payment intents. The amount is denominated in the settlement token; the reference is the on-chain matching key; the fee is the on-chain quoteFee, paid on top by the payer.',
+    'Create, fetch and cancel RSends payment intents. The amount is denominated in the settlement token; the reference is the on-chain matching key; on mainnet the payer pays exactly the amount — there is no fee in the flow.',
 }
 
 export default function PaymentIntentsPage() {
@@ -86,11 +86,12 @@ export default function PaymentIntentsPage() {
     "merchant":  "0xYourMerchantWallet...",
     "token":     "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
     "amount":    "100000000",             // base units (USDC has 6 decimals)
-    "fee":       "...",                   // live quoteFee, in base units
-    "total":     "...",                   // amount + fee — what the payer parts with
-    "maxFee":    "...",                   // payer ceiling passed to pay() (== fee)
+    "fee":       "0",                     // routerVersion 2: always "0" — no fee in the flow
+    "total":     "100000000",             // == amount: exactly what the payer parts with
+    "maxFee":    null,                    // routerVersion 2: no fee ceiling exists
     "chainId":   84532,
     "router":    "0x2Ec353815F2Cd382628d0D399F8d80959C1758CA",
+    "routerVersion": 2,                   // 2 = fee-less router; 1 = legacy testnet router
     "function":  "pay",                   // "pay" (ERC-20) | "payNative" (ETH)
     "decimals":  6,
     "isNative":  false
@@ -103,7 +104,8 @@ export default function PaymentIntentsPage() {
           [<Code key="r">reference_id</Code>, <>Your <strong>on-chain matching key</strong>. RSends derives the bytes32 <Code>invoiceId</Code> from it and matches the emitted <Code>PaymentMade</Code> event back to this intent.</>],
           [<Code key="i">onchain.invoiceId</Code>, <>The <Code>invoiceId</Code> argument to <Code>pay(...)</Code>.</>],
           [<Code key="ro">onchain.router</Code>, <>The immutable RSends router the payment goes through.</>],
-          [<Code key="f">onchain.fee</Code>, <>The flat fee read <strong>live</strong> from the router&apos;s <Code>quoteFee</Code>.</>],
+          [<Code key="rv">onchain.routerVersion</Code>, <><Code>2</Code> — the fee-less router (mainnet design): one transfer, payer → you, no fee arguments. <Code>1</Code> — the legacy testnet router, which still quotes an on-chain flat fee.</>],
+          [<Code key="f">onchain.fee</Code>, <>Always <Code>&quot;0&quot;</Code> on <Code>routerVersion 2</Code>. On version 1 (testnet) it is the flat fee read live from that router&apos;s <Code>quoteFee</Code>.</>],
           [<Code key="s">status</Code>, <>Lifecycle state — see below.</>],
         ]}
       />
@@ -119,18 +121,20 @@ export default function PaymentIntentsPage() {
         payer&apos;s wallet — see <A href="/docs/hosted-checkout">Hosted checkout</A>.
       </P>
 
-      <H2>The fee is paid on top, by the payer</H2>
+      <H2>No fee in the payment flow</H2>
       <P>
-        RSends charges a <strong>flat fee</strong>, computed on-chain by the router&apos;s{' '}
-        <Code>quoteFee(token, amount)</Code>. It is <strong>added on top</strong> of your amount and
-        paid by the payer to the fee collector in the same transaction. You receive the{' '}
-        <strong>full principal</strong> — the fee never comes out of your <Code>amount</Code>.
+        On the fee-less router (<Code>routerVersion 2</Code>) a payment is{' '}
+        <strong>one transfer</strong>: the payer sends exactly <Code>amount</Code>, you receive
+        exactly <Code>amount</Code>, and no other party receives anything. The contract has no fee
+        configuration, no owner and no pause — nothing on-chain can redirect or withhold a
+        payment. RSends pricing is a flat subscription, entirely off-chain.
       </P>
       <Callout variant="info" title="What the payer signs for">
-        The payer&apos;s wallet authorizes <Code>amount + fee</Code> (the <Code>total</Code>). The
-        router sends <Code>amount</Code> to your wallet and <Code>fee</Code> to the fee collector,
-        and reverts if the live fee would exceed <Code>maxFee</Code>. You always net the whole
-        amount you asked for.
+        The payer&apos;s wallet authorizes exactly <Code>amount</Code> (which equals{' '}
+        <Code>total</Code>) — an approve or permit for that value, then one router call that moves
+        it straight to your wallet. On the legacy testnet router (<Code>routerVersion 1</Code>) the
+        old on-chain flat fee still applies: the payer authorizes <Code>amount + fee</Code> and the
+        checkout passes <Code>maxFee</Code>; use <Code>routerVersion</Code> to tell the two apart.
       </Callout>
 
       <H2>Intent lifecycle</H2>
