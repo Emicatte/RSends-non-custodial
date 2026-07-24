@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
+import { waitForToken } from '@/lib/auth-client'
 import { getOnboardingState } from '@/lib/onboarding-client'
 import type { OnboardingState } from '@/lib/onboarding'
 
@@ -37,14 +38,28 @@ export function useOnboarding() {
   }, [])
 
   const reload = useCallback(async () => {
-    if (status !== 'authenticated' || !tokenRef.current) {
+    if (status !== 'authenticated') {
       setState(null)
       setError(false)
       setLoading(status === 'loading')
       return
     }
+    let token = tokenRef.current
+    if (!token) {
+      // NextAuth reports 'authenticated' a beat before the access token lands
+      // in the session. Wait briefly; on timeout resolve to the error state —
+      // the old no-state/no-error limbo left the gate page loading forever.
+      try {
+        token = await waitForToken(tokenRef)
+      } catch {
+        setState(null)
+        setError(true)
+        setLoading(false)
+        return
+      }
+    }
     try {
-      const data = await getOnboardingState(tokenRef.current)
+      const data = await getOnboardingState(token)
       setState(data)
       setError(false)
     } catch (e) {

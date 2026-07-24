@@ -123,6 +123,9 @@
       "no_token": "Sie sind nicht angemeldet.",
       "auth_unavailable": "Authentifizierungsdienst vorübergehend nicht verfügbar.",
       "session_expired": "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.",
+      "network_error": "Der Server konnte nicht erreicht werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+      "approval_pending": "Ihr Konto wartet auf die Freigabe.",
+      "approval_declined": "Ihr Kontoantrag wurde abgelehnt.",
       "unknown": "Etwas ist schiefgelaufen. Bitte erneut versuchen.",
       "retryIn": "erneut versuchen in {seconds}s",
       "password_already_set": "Für dieses Konto ist bereits ein Passwort gesetzt.",
@@ -1533,6 +1536,7 @@
       "unreachable": {
         "heading": "Wir konnten den Dienst nicht erreichen",
         "body": "Die Verbindung hat das Zeitlimit überschritten. Das behebt sich in der Regel innerhalb weniger Sekunden.",
+        "connecting": "Verbindung zum Dienst wird hergestellt…",
         "retry": "Erneut versuchen"
       }
     },

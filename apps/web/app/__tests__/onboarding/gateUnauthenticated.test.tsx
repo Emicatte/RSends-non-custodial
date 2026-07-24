@@ -36,7 +36,9 @@ describe('OnboardingGatePage with a dead session', () => {
     render(<OnboardingGatePage />)
     await act(async () => {})
 
-    expect(mockReplace).toHaveBeenCalledWith('/login?redirect=/onboarding')
+    expect(mockReplace).toHaveBeenCalledWith(
+      '/login?redirect=/onboarding&error=session_expired',
+    )
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })

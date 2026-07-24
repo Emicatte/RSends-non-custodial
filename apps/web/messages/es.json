@@ -123,6 +123,9 @@
       "no_token": "No has iniciado sesión.",
       "auth_unavailable": "Servicio de autenticación no disponible temporalmente.",
       "session_expired": "Tu sesión ha expirado. Inicia sesión de nuevo.",
+      "network_error": "No se pudo conectar con el servidor. Comprueba tu conexión e inténtalo de nuevo.",
+      "approval_pending": "Tu cuenta está pendiente de aprobación.",
+      "approval_declined": "Tu solicitud de cuenta fue rechazada.",
       "unknown": "Algo salió mal. Inténtalo de nuevo.",
       "retryIn": "reintentar en {seconds}s",
       "password_already_set": "Ya hay una contraseña establecida para esta cuenta.",
@@ -1533,6 +1536,7 @@
       "unreachable": {
         "heading": "No hemos podido conectar con el servicio",
         "body": "Se agotó el tiempo de conexión. Suele resolverse en unos segundos.",
+        "connecting": "Conectando con el servicio…",
         "retry": "Inténtalo de nuevo"
       }
     },

@@ -25,7 +25,10 @@ export default function OnboardingGatePage() {
   // case — previously an infinite "Checking your account status...").
   useEffect(() => {
     if (status === 'unauthenticated') {
-      router.replace('/login?redirect=/onboarding')
+      // Middleware already bounces signed-out visitors before this page
+      // mounts, so unauthenticated here means the session died client-side
+      // (performLogout after a failed refresh) — surface why on the login page.
+      router.replace('/login?redirect=/onboarding&error=session_expired')
     }
   }, [status, router])
 

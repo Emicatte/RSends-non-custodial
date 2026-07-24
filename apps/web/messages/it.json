@@ -122,6 +122,9 @@
       "no_token": "Non hai effettuato l'accesso.",
       "auth_unavailable": "Servizio di autenticazione temporaneamente non disponibile.",
       "session_expired": "La sessione è scaduta. Accedi di nuovo.",
+      "network_error": "Impossibile raggiungere il server. Controlla la connessione e riprova.",
+      "approval_pending": "Il tuo account è in attesa di approvazione.",
+      "approval_declined": "La richiesta di apertura account è stata rifiutata.",
       "unknown": "Qualcosa è andato storto. Riprova.",
       "retryIn": "riprova tra {seconds}s",
       "password_already_set": "Una password è già impostata per questo account.",
@@ -1532,6 +1535,7 @@
       "unreachable": {
         "heading": "Non riusciamo a raggiungere il servizio",
         "body": "La connessione è scaduta. Di solito si risolve in pochi secondi.",
+        "connecting": "Connessione al servizio…",
         "retry": "Riprova"
       }
     },

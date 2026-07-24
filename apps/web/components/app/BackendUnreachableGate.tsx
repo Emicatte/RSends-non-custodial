@@ -78,7 +78,9 @@ export function BackendUnreachableGate() {
   useEffect(() => {
     if (phase !== 'retrying') return
     if (status === 'unauthenticated') {
-      router.replace('/login')
+      // This gate only mounts inside the authed layouts, so an unauthenticated
+      // session here means a forced logout — tell the login page why.
+      router.replace('/login?error=session_expired')
       return
     }
     // Wait for a token before probing — a tokenless probe would 401 and
@@ -122,8 +124,9 @@ export function BackendUnreachableGate() {
         const httpStatus = (e as { status?: number } | null)?.status
         if (message === 'session_expired' || httpStatus === 401) {
           // Session is genuinely dead (refresh failed, or a fresh token is
-          // still rejected) — retrying would loop.
-          router.replace('/login')
+          // still rejected) — retrying would loop. Never bounce silently: the
+          // login page maps this param to the session-expired copy.
+          router.replace('/login?error=session_expired')
           return
         }
         if (typeof httpStatus === 'number' && httpStatus < 500) {
@@ -156,10 +159,15 @@ export function BackendUnreachableGate() {
         data-testid="backend-unreachable-skeleton"
       >
         <style>{`@keyframes rsendsPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
-        <div className="max-w-md mx-auto space-y-3" aria-hidden="true">
-          <div style={{ ...PULSE, height: 20, width: '40%' }} />
-          <div style={{ ...PULSE, height: 42 }} />
-          <div style={{ ...PULSE, height: 42 }} />
+        <div className="max-w-md mx-auto space-y-3">
+          <p className="text-sm" style={{ color: '#888780' }} role="status">
+            {t('connecting')}
+          </p>
+          <div className="space-y-3" aria-hidden="true">
+            <div style={{ ...PULSE, height: 20, width: '40%' }} />
+            <div style={{ ...PULSE, height: 42 }} />
+            <div style={{ ...PULSE, height: 42 }} />
+          </div>
         </div>
       </div>
     )

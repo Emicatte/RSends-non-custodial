@@ -123,6 +123,9 @@
       "no_token": "Vous n'êtes pas connecté.",
       "auth_unavailable": "Service d'authentification temporairement indisponible.",
       "session_expired": "Votre session a expiré. Reconnectez-vous.",
+      "network_error": "Impossible de joindre le serveur. Vérifiez votre connexion et réessayez.",
+      "approval_pending": "Votre compte est en attente d'approbation.",
+      "approval_declined": "Votre demande de compte a été refusée.",
       "unknown": "Une erreur est survenue. Réessayez.",
       "retryIn": "réessayez dans {seconds}s",
       "password_already_set": "Un mot de passe est déjà défini pour ce compte.",
@@ -1533,6 +1536,7 @@
       "unreachable": {
         "heading": "Nous n'avons pas pu joindre le service",
         "body": "La connexion a expiré. Cela se résout généralement en quelques secondes.",
+        "connecting": "Connexion au service…",
         "retry": "Réessayer"
       }
     },
