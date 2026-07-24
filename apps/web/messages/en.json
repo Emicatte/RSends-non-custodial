@@ -122,6 +122,9 @@
       "no_token": "You're not signed in.",
       "auth_unavailable": "Authentication service temporarily unavailable.",
       "session_expired": "Your session has expired. Please log in again.",
+      "network_error": "Could not reach the server. Check your connection and try again.",
+      "approval_pending": "Your account is awaiting approval.",
+      "approval_declined": "Your account application was declined.",
       "unknown": "Something went wrong. Please try again.",
       "retryIn": "retry in {seconds}s",
       "password_already_set": "A password is already set for this account.",
@@ -1532,6 +1535,7 @@
       "unreachable": {
         "heading": "We could not reach the service",
         "body": "The connection timed out. This usually resolves in a few seconds.",
+        "connecting": "Connecting to the service…",
         "retry": "Try again"
       }
     },

@@ -73,7 +73,12 @@ export function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<EmailAuthErrorShape | null>(null)
+  // Forced-logout bounces (dead session detected post-login) land here with
+  // ?error=session_expired. Whitelisted: the param feeds a translation key,
+  // so an arbitrary value must never reach EmailAuthError.
+  const [error, setError] = useState<EmailAuthErrorShape | null>(() =>
+    params.get('error') === 'session_expired' ? { code: 'session_expired' } : null,
+  )
   const [resendState, setResendState] = useState<'idle' | 'sending' | 'sent'>('idle')
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -90,13 +95,23 @@ export function LoginForm() {
         email: login.email,
       })
       if (!res || res.error) {
-        setError({ code: 'invalid_credentials', status: 401 })
+        // backendLogin already succeeded, so this is a session-bridge failure
+        // (NextAuth /auth/me verification), not bad credentials.
+        setError({ code: 'auth_unavailable' })
         return
       }
       const redirect = params.get('redirect') ?? `/${locale}/app`
       router.push(redirect)
     } catch (err) {
-      setError(err as EmailAuthErrorShape)
+      // backendLogin throws a shaped error (always carries .status); anything
+      // else is a fetch-level failure (TypeError) whose raw message would
+      // render unlocalized ("Failed to fetch").
+      const shaped = err as Partial<EmailAuthErrorShape> | null
+      setError(
+        typeof shaped?.status === 'number'
+          ? (shaped as EmailAuthErrorShape)
+          : { code: 'network_error' },
+      )
     } finally {
       setLoading(false)
     }

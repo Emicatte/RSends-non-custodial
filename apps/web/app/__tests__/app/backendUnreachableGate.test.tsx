@@ -70,6 +70,8 @@ const stateMock = getOnboardingState as jest.Mock
 const HEADING = 'We could not reach the service'
 const BODY = 'The connection timed out. This usually resolves in a few seconds.'
 const RETRY = 'Try again'
+const CONNECTING = 'Connecting to the service…'
+const LOGIN_EXPIRED = '/login?error=session_expired'
 
 /** An apiCall-style rejection carrying an HTTP status. */
 function httpError(status: number, code = `code_${status}`) {
@@ -128,6 +130,8 @@ it('shows the pulsing skeleton and no error copy while retrying', async () => {
   await flush(0)
 
   expect(screen.getByTestId('backend-unreachable-skeleton')).toBeInTheDocument()
+  // The wait is never wordless: the connecting line is visible copy.
+  expect(screen.getByText(CONNECTING)).toBeInTheDocument()
   expect(screen.queryByText(HEADING)).not.toBeInTheDocument()
   expect(screen.queryByRole('button')).not.toBeInTheDocument()
 })
@@ -230,7 +234,7 @@ it('session_expired replaces to login and stops retrying', async () => {
   render(<BackendUnreachableGate />)
   await flush(0)
 
-  expect(mockReplace).toHaveBeenCalledWith('/login')
+  expect(mockReplace).toHaveBeenCalledWith(LOGIN_EXPIRED)
   expect(mockRefresh).not.toHaveBeenCalled()
   await flush(120_000)
   expect(stateMock).toHaveBeenCalledTimes(1)
@@ -241,7 +245,7 @@ it('a 401 surviving the one-shot refresh replaces to login', async () => {
   render(<BackendUnreachableGate />)
   await flush(0)
 
-  expect(mockReplace).toHaveBeenCalledWith('/login')
+  expect(mockReplace).toHaveBeenCalledWith(LOGIN_EXPIRED)
   await flush(120_000)
   expect(stateMock).toHaveBeenCalledTimes(1)
 })
@@ -268,6 +272,6 @@ it('unauthenticated session replaces to login without calling the API', async ()
   render(<BackendUnreachableGate />)
   await flush(0)
 
-  expect(mockReplace).toHaveBeenCalledWith('/login')
+  expect(mockReplace).toHaveBeenCalledWith(LOGIN_EXPIRED)
   expect(stateMock).not.toHaveBeenCalled()
 })

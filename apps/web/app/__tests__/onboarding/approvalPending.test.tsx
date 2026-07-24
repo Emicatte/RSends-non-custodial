@@ -173,7 +173,10 @@ describe('ApprovalPendingScreen', () => {
 
     expect(screen.getByRole('alert')).toHaveTextContent('Your session expired')
     const link = screen.getByRole('link', { name: 'Log in again' })
-    expect(link).toHaveAttribute('href', '/login?redirect=/onboarding/pending')
+    expect(link).toHaveAttribute(
+      'href',
+      '/login?redirect=/onboarding/pending&error=session_expired',
+    )
 
     // No infinite silent retry: no further polls after the terminal error.
     const callsAfterError = stateMock.mock.calls.length

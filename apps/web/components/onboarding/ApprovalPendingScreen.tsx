@@ -27,7 +27,7 @@ import { getOnboardingState } from '@/lib/onboarding-client'
 // ~2.5 min of consecutive failures (15+30+60+60s) before surfacing trouble.
 export const TRANSIENT_NOTICE_THRESHOLD = 4
 
-const LOGIN_HREF = '/login?redirect=/onboarding/pending'
+const LOGIN_HREF = '/login?redirect=/onboarding/pending&error=session_expired'
 
 export function ApprovalPendingScreen() {
   const t = useTranslations('onboarding.pending')

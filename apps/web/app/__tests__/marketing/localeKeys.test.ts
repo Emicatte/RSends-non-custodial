@@ -17,7 +17,11 @@ const LOCALES: Record<string, Record<string, unknown>> = {
   fr: frMessages,
   de: deMessages,
 }
-const NAMESPACES = ['vision', 'team', 'onboarding', 'pricing', 'howItWorks'] as const
+const NAMESPACES = ['vision', 'team', 'onboarding', 'pricing', 'howItWorks', 'auth'] as const
+
+// Keys whose value is deliberately empty in every locale (not a missing
+// translation): the strength meter renders no label before the user types.
+const EMPTY_ALLOWED = new Set(['auth.password.empty'])
 
 /** Recursively collect dot-paths of every leaf, tagging arrays with length. */
 function keyShape(node: unknown, prefix = ''): string[] {
@@ -32,13 +36,21 @@ function keyShape(node: unknown, prefix = ''): string[] {
   return [prefix]
 }
 
-/** Recursively collect every leaf string value. */
-function leafStrings(node: unknown): string[] {
-  if (Array.isArray(node)) return node.flatMap(leafStrings)
-  if (node !== null && typeof node === 'object') {
-    return Object.values(node as Record<string, unknown>).flatMap(leafStrings)
+/** Recursively collect every leaf string value with its dot-path. */
+function leafEntries(node: unknown, prefix = ''): Array<[string, string]> {
+  if (Array.isArray(node)) {
+    return node.flatMap((item, i) => leafEntries(item, `${prefix}[${i}]`))
   }
-  return typeof node === 'string' ? [node] : []
+  if (node !== null && typeof node === 'object') {
+    return Object.entries(node as Record<string, unknown>).flatMap(([k, v]) =>
+      leafEntries(v, prefix ? `${prefix}.${k}` : k),
+    )
+  }
+  return typeof node === 'string' ? [[prefix, node]] : []
+}
+
+function leafStrings(node: unknown): string[] {
+  return leafEntries(node).map(([, s]) => s)
 }
 
 describe.each(NAMESPACES)('"%s" namespace', namespace => {
@@ -58,8 +70,12 @@ describe.each(NAMESPACES)('"%s" namespace', namespace => {
   )
 
   it.each(Object.keys(LOCALES))('%s has no empty strings', locale => {
-    for (const s of leafStrings(LOCALES[locale][namespace])) {
-      expect(s.trim()).not.toBe('')
+    for (const [path, s] of leafEntries(LOCALES[locale][namespace])) {
+      if (EMPTY_ALLOWED.has(`${namespace}.${path}`)) continue
+      expect({ path: `${namespace}.${path}`, empty: s.trim() === '' }).toEqual({
+        path: `${namespace}.${path}`,
+        empty: false,
+      })
     }
   })
 })
