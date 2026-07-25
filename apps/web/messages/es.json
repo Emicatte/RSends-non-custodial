@@ -157,7 +157,7 @@
     "eyebrow": "",
     "titleLine1": "Your money.",
     "titleLine2": "Your wallet.",
-    "subtitle": "Una pasarela de pagos non-custodial para empresas. Una suscripción mensual, sin comisión por transacción. Los fondos se liquidan on-chain directamente en tu cartera; RSends nunca los retiene.",
+    "subtitle": "Una pasarela de pagos non-custodial para empresas. Una suscripción mensual — y desde el lanzamiento en mainnet, sin comisión por transacción. Los fondos se liquidan on-chain directamente en tu cartera; RSends nunca los retiene.",
     "ctaPrimary": "Create an invoice →",
     "ctaSecondary": "Read the spec",
     "metrics": {
@@ -184,7 +184,7 @@
     "businesses": {
       "eyebrow": "SUSCRIPCIÓN",
       "title": "Una suscripción, no una parte de tus ventas",
-      "body": "Pagas un precio mensual fijo por el software, acordado contigo en el onboarding. RSends no cobra comisión por transacción ni porcentaje de tu volumen, así tu margen sigue siendo tuyo mientras creces.",
+      "body": "Pagas un precio mensual fijo por el software, acordado contigo en el onboarding. RSends no cobra porcentaje de tu volumen — y desde el lanzamiento en mainnet, tampoco comisión por transacción — así tu margen sigue siendo tuyo mientras creces.",
       "b1": "Suscripción mensual fija",
       "b2": "Precio acordado en el onboarding",
       "b3": "Sin % de tu volumen",
@@ -1233,7 +1233,7 @@
         },
         {
           "q": "¿Hay una comisión por transacción?",
-          "a": "No. La suscripción cubre el servicio. RSends no cobra por pago ni se queda un porcentaje de tu volumen."
+          "a": "Desde el lanzamiento en mainnet, no: la suscripción cubre el servicio y el router de mainnet no añade comisión por transacción. En la red de prueba actual los pagos pasan por el router v1, que aplica una pequeña comisión fija on-chain. RSends no se queda un porcentaje de tu volumen."
         },
         {
           "q": "¿Qué chains y tokens están soportados?",

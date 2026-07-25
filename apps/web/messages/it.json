@@ -156,7 +156,7 @@
     "eyebrow": "",
     "titleLine1": "I tuoi soldi.",
     "titleLine2": "Il tuo wallet.",
-    "subtitle": "Un gateway di pagamento non-custodial per le aziende. Un abbonamento mensile, nessuna fee per transazione. I fondi si regolano on-chain direttamente nel tuo wallet; RSends non li detiene mai.",
+    "subtitle": "Un gateway di pagamento non-custodial per le aziende. Un abbonamento mensile — e dal lancio su mainnet, nessuna fee per transazione. I fondi si regolano on-chain direttamente nel tuo wallet; RSends non li detiene mai.",
     "ctaPrimary": "Crea una fattura →",
     "ctaSecondary": "Leggi le specifiche",
     "metrics": {
@@ -183,7 +183,7 @@
     "businesses": {
       "eyebrow": "ABBONAMENTO",
       "title": "Un abbonamento, non una quota delle tue vendite",
-      "body": "Paghi un canone mensile fisso per il software, concordato con te all'onboarding. RSends non applica fee per transazione né percentuali sul tuo volume, così il tuo margine resta tuo mentre cresci.",
+      "body": "Paghi un canone mensile fisso per il software, concordato con te all'onboarding. RSends non applica percentuali sul tuo volume — e dal lancio su mainnet, nessuna fee per transazione — così il tuo margine resta tuo mentre cresci.",
       "b1": "Abbonamento mensile fisso",
       "b2": "Prezzo concordato all'onboarding",
       "b3": "Nessuna % sul volume",
@@ -1232,7 +1232,7 @@
         },
         {
           "q": "C'è una fee per transazione?",
-          "a": "No. L'abbonamento copre il servizio. RSends non prezza i singoli pagamenti e non prende percentuali sul tuo volume."
+          "a": "Dal lancio su mainnet, no: l'abbonamento copre il servizio e il router mainnet non aggiunge alcuna fee per transazione. Sulla rete di test attuale i pagamenti passano dal router v1, che applica una piccola fee fissa on-chain. RSends non prende percentuali sul tuo volume."
         },
         {
           "q": "Quali chain e token sono supportati?",

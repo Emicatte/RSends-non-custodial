@@ -157,7 +157,7 @@
     "eyebrow": "",
     "titleLine1": "Your money.",
     "titleLine2": "Your wallet.",
-    "subtitle": "Une passerelle de paiement non-custodial pour les entreprises. Un abonnement mensuel, pas de frais par transaction. Les fonds se règlent on-chain directement dans votre portefeuille ; RSends ne les détient jamais.",
+    "subtitle": "Une passerelle de paiement non-custodial pour les entreprises. Un abonnement mensuel — et dès le lancement sur le mainnet, pas de frais par transaction. Les fonds se règlent on-chain directement dans votre portefeuille ; RSends ne les détient jamais.",
     "ctaPrimary": "Create an invoice →",
     "ctaSecondary": "Read the spec",
     "metrics": {
@@ -184,7 +184,7 @@
     "businesses": {
       "eyebrow": "ABONNEMENT",
       "title": "Un abonnement, pas une part de vos ventes",
-      "body": "Vous payez un prix mensuel fixe pour le logiciel, convenu avec vous à l'onboarding. RSends ne prend ni frais par transaction ni pourcentage de votre volume : votre marge reste la vôtre à mesure que vous grandissez.",
+      "body": "Vous payez un prix mensuel fixe pour le logiciel, convenu avec vous à l'onboarding. RSends ne prend aucun pourcentage de votre volume — et dès le lancement sur le mainnet, aucuns frais par transaction — votre marge reste la vôtre à mesure que vous grandissez.",
       "b1": "Abonnement mensuel fixe",
       "b2": "Prix convenu à l'onboarding",
       "b3": "Aucun % de votre volume",
@@ -1233,7 +1233,7 @@
         },
         {
           "q": "Y a-t-il des frais par transaction ?",
-          "a": "Non. L'abonnement couvre le service. RSends ne facture pas au paiement et ne prend aucun pourcentage de votre volume."
+          "a": "Dès le lancement sur le mainnet, non : l'abonnement couvre le service et le routeur mainnet n'ajoute aucuns frais par transaction. Sur le réseau de test actuel, les paiements passent par le routeur v1, qui applique de petits frais fixes on-chain. RSends ne prend aucun pourcentage de votre volume."
         },
         {
           "q": "Quelles chains et quels tokens sont pris en charge ?",

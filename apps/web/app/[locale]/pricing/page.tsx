@@ -8,7 +8,7 @@ import ScrubCascade from '@/components/motion/ScrubCascade'
 export const metadata: Metadata = {
   title: 'Pricing — RSends',
   description:
-    'RSends is a flat monthly software subscription. No per-transaction fee. The price is sized to your volume and agreed at onboarding.',
+    'RSends is a flat monthly software subscription — no per-transaction fee from mainnet launch. The price is sized to your volume and agreed at onboarding.',
 }
 
 type PageProps = { params: Promise<{ locale: string }> }
