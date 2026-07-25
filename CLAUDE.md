@@ -95,9 +95,17 @@ Outbound webhook dispatch (`webhook_service.py`) also filters
 events and vice versa.
 
 **Recipient gate (non-custodial invariant, Phase B; construction site moved in Phase D).** A
-`PaymentIntent` **cannot** be created without a resolvable on-chain recipient — the single
-construction site is now `intent_service.create_intent` (one `PaymentIntent(...)`,
-`grep "PaymentIntent(" services/backend/app` = one hit), shared by BOTH the API-key create route
+`PaymentIntent` **cannot** be created without a resolvable on-chain recipient — the invariant is
+**exactly one persisted construction site**: `intent_service.create_intent` (the only place a
+`PaymentIntent(...)` reaches `db.add`). Known, named exception:
+`webhook_service._build_test_event_payload` constructs a **synthetic, never-persisted** intent
+(the function has no `db` handle; the object only feeds `_build_payload("test", …)` so the
+"Send test" event ships the exact production shape — PR #48). It cannot bypass the gate because
+it never touches the DB. Mechanical check:
+`grep -rn "PaymentIntent(" services/backend/app | grep -v "class PaymentIntent"` = exactly these
+**two** hits (the persisted site + the synthetic one). Any third hit is a **review stop**: either
+it is a recipient-gate bypass, or it must be added here as a named, justified exception in the
+same review. `create_intent` is shared by BOTH the API-key create route
 (`merchant_routes.create_payment_intent`, a thin wrapper passing `key_id` for monthly-limit +
 usage-increment) and the session create route
 (`user_org_payments_routes.create_org_payment_intent`, passing `org_id`). It calls
