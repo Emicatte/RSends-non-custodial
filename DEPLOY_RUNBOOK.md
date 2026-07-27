@@ -1,4 +1,4 @@
-# RSends Non-Custodial — Deploy Runbook (Base Sepolia / testnet)
+# RSends Non-Custodial — Deploy Runbook (Base Sepolia / testnet · Part 6 = mainnet cutover)
 
 This runbook deploys the **non-custodial** stack: an `RSendsRouter` contract on
 Base Sepolia (chainId **84532**), a FastAPI backend + Celery + the on-chain
@@ -84,6 +84,7 @@ The one friction point is infra/setup, not a relaxation: Redis must be a TLS
 [3] Frontend  → Vercel (root = apps/web)
 [4] Wire-up   → paste router addr + matching secrets across all three
 [5] Smoke test
+[6] Mainnet cutover (RouterV2) — LATER, gated on audit/MiCA/legal (Part 6)
 ```
 
 ---
@@ -151,7 +152,10 @@ forge script script/SetFeeConfig.s.sol:SetFeeConfig \
 ### 1d. Record the router address + indexer backfill safety-net **[AZIONE UTENTE]**
 You'll paste `<ROUTER_ADDRESS>` into:
 - backend `RSENDS_ROUTER_ADDRESSES_JSON={"84532":"<ROUTER_ADDRESS>"}`
-- frontend `NEXT_PUBLIC_RSENDS_ROUTER_BASE_SEPOLIA=<ROUTER_ADDRESS>`
+- frontend `NEXT_PUBLIC_RSENDS_ROUTER_BASE_SEPOLIA=<ROUTER_ADDRESS>` — ⚠️ VESTIGIAL:
+  zero consumers in `apps/web` (grep 2026-07-27); the checkout takes the router
+  address + version from the backend `onchain` intent payload
+  (`lib/web3/paymentIntent.ts`). Setting it is harmless but does nothing.
 
 Also set the backend **`INDEXER_START_BLOCKS_JSON={"84532":"<DEPLOY_BLOCK>"}`**
 (the router's deployment block from step 1b). This is a **safety-net**: if Redis
@@ -344,7 +348,8 @@ re-deploy re-runs `upgrade head`, which is a no-op once at `0007`.
 | `AUTH_JWT_SECRET` | session JWT (≥64) | SECRET | **manual** `token_hex(32)` | (64-char hex) |
 | `ADMIN_API_TOKEN` | admin surface bearer (≥32, ≠ `HMAC_SECRET`) | SECRET | **manual** `openssl rand -hex 32` | (64-char hex) |
 | `ALCHEMY_API_KEY` | RPC (always required) | SECRET | dashboard.alchemy.com | `<alchemy_key>` |
-| `RSENDS_ROUTER_ADDRESSES_JSON` | chain→router map | PUBLIC | Part 1 deploy output | `{"84532":"<FILL_AFTER_CONTRACT_DEPLOY>"}` |
+| `RSENDS_ROUTER_ADDRESSES_JSON` | chain→router map (v1) | PUBLIC | Part 1 deploy output | `{"84532":"<FILL_AFTER_CONTRACT_DEPLOY>"}` |
+| `RSENDS_ROUTER_V2_ADDRESSES_JSON` | chain→RouterV2 map — **the mainnet cutover** (Part 6) | PUBLIC | Part 6 deploy output; **manual on Render: NOT in `render.yaml`**, the blueprint will never carry it | unset until cutover |
 | `RPC_PROVIDERS_JSON` | optional extra RPC providers (chain→list) | SECRET (may hold a key) | second vendor, mainnet task | unset |
 | `CORS_ORIGINS` / `APP_URL` | allowed origins / public URL | PUBLIC | your Vercel URL | `https://<app>.vercel.app` |
 | `ENVIRONMENT` / `DEBUG` | guard posture | PUBLIC | `production` / `false` (in blueprint) | — |
@@ -359,7 +364,7 @@ re-deploy re-runs `upgrade head`, which is a no-op once at `0007`.
 | `NEXT_PUBLIC_RPAGOS_BACKEND_URL` / `NEXT_PUBLIC_API_URL` | backend (client) | PUBLIC | same | same |
 | `INTERNAL_PROXY_SECRET` | proxy auth | SECRET | **match backend** | (copy from Render) |
 | `HMAC_SECRET` | callback signing | SECRET | **match backend** | (copy from Render) |
-| `NEXT_PUBLIC_RSENDS_ROUTER_BASE_SEPOLIA` | router fallback | PUBLIC | Part 1 deploy output | `<FILL_AFTER_CONTRACT_DEPLOY>` |
+| `NEXT_PUBLIC_RSENDS_ROUTER_BASE_SEPOLIA` | ⚠️ vestigial — zero consumers (see 1d) | PUBLIC | Part 1 deploy output | `<FILL_AFTER_CONTRACT_DEPLOY>` |
 | `NEXT_PUBLIC_TARGET_CHAIN_ID` | active chain | PUBLIC | — | `84532` |
 | `ALLOWED_ORIGINS` | CORS for `/api/*` | PUBLIC | your Vercel URL | `https://<app>.vercel.app` |
 | `NEXTAUTH_URL` / `NEXTAUTH_SECRET` | NextAuth | SECRET | self / `openssl rand -base64 32` | (optional testnet) |
@@ -389,3 +394,90 @@ with) the first production-posture deploy:
 2. **Monitoring (optional).** Backend env: `SENTRY_DSN` (errors),
    `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` / `TELEGRAM_ALERT_CHAT_ID`
    (alerts), `ALERT_WEBHOOK_URL` (Slack/Discord webhook).
+
+---
+
+## Part 6 — Mainnet cutover (RSendsRouterV2) **[DO NOT RUN before prerequisites]**
+
+The mainnet router is `RSendsRouterV2` — ownerless, fee-less, single-transfer
+(payer → merchant, full amount; see `packages/contracts/AUDIT_HANDOFF_ROUTERV2.md`).
+Everything above this section deploys the **testnet/v1** stack and stays untouched:
+the cutover ADDS a v2 chain next to it. Written 2026-07-27, while the RPagos audit
+window is open — review this section against the code again if the cutover happens
+after further backend changes.
+
+### 6.0 Prerequisites **[GATE — all three, no exceptions]**
+- **RPagos internal audit verdict** on PR #73 / `AUDIT_HANDOFF_ROUTERV2.md`.
+- **MiCA written opinion** in hand.
+- **Terms §6 legal pass done** — the "subscription-only" sentence must be updated
+  BEFORE real-money traffic (the "nothing deducted from settlements" sentence is
+  accurate as-is: v2 is a single full-amount transfer, and even v1 pays the fee
+  payer-side — `src/RSendsRouter.sol:72-73`).
+
+### 6a. Deploy `RSendsRouterV2` on mainnet **[AZIONE UTENTE]**
+No constructor args, no owner, nothing to configure after deploy:
+```bash
+cd packages/contracts
+forge script script/DeployRouterV2.s.sol:DeployRouterV2 \
+  --rpc-url https://mainnet.base.org --account rsends-deployer --broadcast
+```
+Capture the deployed address → **`<ROUTER_V2_ADDRESS>`** and the **deployment
+block number** → **`<V2_DEPLOY_BLOCK>`**.
+
+### 6b. ⚠️ Do NOT run `SetFeeConfig.s.sol` against v2 **[NON-STEP]**
+`script/SetFeeConfig.s.sol` is **v1-only**. v2 has no fee config and no owner —
+any such call reverts (`token_registry.json` `_comment` documents the same). The
+registry fee keys (`flatFee`/`threshold`/`aboveFee`) are ignored on v2 chains;
+the backend reads only enabled/permit/identity there. There is no on-chain
+config step for v2. Skipping this is the point.
+
+### 6c. Backend env cutover **[AZIONE UTENTE — manual on Render dashboard]**
+```
+RSENDS_ROUTER_V2_ADDRESSES_JSON={"8453":"<ROUTER_V2_ADDRESS>"}
+```
+- **This env var is NOT in `render.yaml`** — the blueprint will never carry it.
+  Set it by hand on the `rsends-shared` env group (this is deliberate: the
+  blueprint stays testnet-complete, the cutover is an explicit manual act).
+- A chain in this map creates **v2 intents**; v2 **wins over v1** if both are
+  set for the same chain; the indexer watches v1 and v2 **side by side**, so
+  in-flight v1 payments still settle (`app/config.py:57-62`,
+  `router_registry.py`).
+- Also extend `INDEXER_START_BLOCKS_JSON` with `"8453":"<V2_DEPLOY_BLOCK>"` —
+  same Redis-cursor-loss safety-net as step 1d, for the new chain.
+- Rollback = remove the map entry (intent creation falls back to whatever v1
+  serves; v2 has no state to unwind — it never holds balance).
+
+### 6d. Frontend: nothing to set **[NO ACTION]**
+The `/pay` checkout receives the router **address and version** from the backend
+`onchain` intent payload (`apps/web/lib/web3/paymentIntent.ts` — `router`,
+`routerVersion`; the v2 ABI ships in `apps/web/lib/rsendsRouterV2Abi.ts`). No
+`NEXT_PUBLIC_*` router var exists for v2 and none is needed (the Sepolia one in
+Part 3b is vestigial, see 1d).
+
+### 6e. Copy flip — the zero-fee claims become present-tense **[AZIONE UTENTE → PR]**
+PR #75 (2026-07-25) made every zero-fee claim conditional ("from mainnet
+launch"). At cutover those claims flip to true and the conditional wording must
+go. Surfaces (all 5 locales, from the PR #75 body):
+- `hero.subtitle` (landing), `twoPaths.businesses.body` (landing)
+- `pricing.faq.items[1].a` ("Is there a per-transaction fee?")
+- `app/[locale]/pricing/page.tsx` hardcoded SEO meta description (EN-only)
+
+Ship as a PR in the same window as 6c; the copy-pinning jest test
+(`app/__tests__/marketing/localeKeys.test.ts`) must move in the same PR.
+
+### 6f. Post-cutover verification **[AZIONE UTENTE]**
+1. `GET /health` → the new chain id appears in `indexer` with `lag` sane.
+2. Create a real payment intent on chain 8453 and pay a minimal amount from a
+   real wallet: assert the merchant receives the **full** amount, the settlement
+   records `fee 0`, and the signed webhook arrives (this is the production
+   mirror of `tests/e2e/test_money_path_anvil_v2.py`).
+3. Registry coverage caveat: the scheduled **`onchain-verify` workflow covers v1
+   chains only** — its parity check reconstructs the enabled set from
+   `FeeConfigSet` logs, which v2 never emits, and it keys off
+   `RSENDS_ROUTER_ADDRESSES_JSON` (the v1 secret). Do **not** add the v2 address
+   to that secret (the parity check would false-alarm). Accepted consequence:
+   v2 chains get no scheduled on-chain cross-check — there is no on-chain config
+   to drift; token enable/disable for v2 chains is backend-side only
+   (`token_registry.json` + creation gate, `tests/test_creation_token_gate.py`).
+   If symbol/decimals cross-checking for the v2 chain is ever wanted, that is a
+   small code change to `scripts/verify_onchain_registry.py`, out of scope here.
