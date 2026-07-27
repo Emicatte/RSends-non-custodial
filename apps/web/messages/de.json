@@ -157,7 +157,7 @@
     "eyebrow": "",
     "titleLine1": "Your money.",
     "titleLine2": "Your wallet.",
-    "subtitle": "Ein non-custodial Zahlungsgateway für Unternehmen. Ein Monatsabo, keine Gebühr pro Transaktion. Gelder werden on-chain direkt in Ihre Wallet abgewickelt; RSends hält sie zu keinem Zeitpunkt.",
+    "subtitle": "Ein non-custodial Zahlungsgateway für Unternehmen. Ein Monatsabo — und ab dem Mainnet-Start keine Gebühr pro Transaktion. Gelder werden on-chain direkt in Ihre Wallet abgewickelt; RSends hält sie zu keinem Zeitpunkt.",
     "ctaPrimary": "Create an invoice →",
     "ctaSecondary": "Read the spec",
     "metrics": {
@@ -184,7 +184,7 @@
     "businesses": {
       "eyebrow": "ABO",
       "title": "Ein Abo, kein Anteil an Ihren Verkäufen",
-      "body": "Sie zahlen einen festen Monatspreis für die Software, beim Onboarding mit Ihnen vereinbart. RSends nimmt keine Gebühr pro Transaktion und keinen Prozentsatz Ihres Volumens, Ihre Marge bleibt also Ihre, während Sie wachsen.",
+      "body": "Sie zahlen einen festen Monatspreis für die Software, beim Onboarding mit Ihnen vereinbart. RSends nimmt keinen Prozentsatz Ihres Volumens — und ab dem Mainnet-Start keine Gebühr pro Transaktion — Ihre Marge bleibt also Ihre, während Sie wachsen.",
       "b1": "Festes Monatsabo",
       "b2": "Preis beim Onboarding vereinbart",
       "b3": "Kein % Ihres Volumens",
@@ -1233,7 +1233,7 @@
         },
         {
           "q": "Gibt es eine Gebühr pro Transaktion?",
-          "a": "Nein. Das Abo deckt den Dienst ab. RSends berechnet nichts pro Zahlung und nimmt keinen Prozentsatz Ihres Volumens."
+          "a": "Ab dem Mainnet-Start: nein — das Abo deckt den Dienst ab und der Mainnet-Router erhebt keine Gebühr pro Transaktion. Im aktuellen Testnetz laufen Zahlungen über den v1-Router, der eine kleine feste On-chain-Gebühr erhebt. RSends nimmt keinen Prozentsatz Ihres Volumens."
         },
         {
           "q": "Welche Chains und Tokens werden unterstützt?",

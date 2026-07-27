@@ -156,7 +156,7 @@
     "eyebrow": "",
     "titleLine1": "Your money.",
     "titleLine2": "Your wallet.",
-    "subtitle": "A non-custodial payment gateway for business. One monthly subscription, no per-transaction fee. Funds settle on-chain directly into your wallet; RSends never holds them.",
+    "subtitle": "A non-custodial payment gateway for business. One monthly subscription — and from mainnet launch, no per-transaction fee. Funds settle on-chain directly into your wallet; RSends never holds them.",
     "ctaPrimary": "Create an invoice →",
     "ctaSecondary": "Read the spec",
     "metrics": {
@@ -183,7 +183,7 @@
     "businesses": {
       "eyebrow": "SUBSCRIPTION",
       "title": "A subscription, not a cut of your sales",
-      "body": "You pay a flat monthly price for the software, agreed with you at onboarding. RSends takes no fee per transaction and no percentage of your volume, so your margin stays yours as you grow.",
+      "body": "You pay a flat monthly price for the software, agreed with you at onboarding. RSends takes no percentage of your volume — and from mainnet launch, no fee per transaction — so your margin stays yours as you grow.",
       "b1": "Flat monthly subscription",
       "b2": "Price agreed at onboarding",
       "b3": "No % of your volume",
@@ -1232,7 +1232,7 @@
         },
         {
           "q": "Is there a per-transaction fee?",
-          "a": "No. The subscription covers the service. RSends does not price per payment and takes no percentage of your volume."
+          "a": "From mainnet launch, no: the subscription covers the service and the mainnet router adds no per-transaction fee. On the current test network, payments route through the v1 router, which applies a small fixed on-chain fee. RSends takes no percentage of your volume."
         },
         {
           "q": "Which chains and tokens are supported?",
