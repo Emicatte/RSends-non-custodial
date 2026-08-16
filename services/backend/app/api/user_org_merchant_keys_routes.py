@@ -197,13 +197,15 @@ async def create_merchant_key(
         )
 
     plaintext_key, key_fields = generate_api_key(environment=ENVIRONMENT)
+    # `environment` comes from key_fields, NOT from a second variable: it is the
+    # same decision that produced the prefix inside plaintext_key, so the row and
+    # the key string cannot disagree.
     api_key = ApiKey(
         owner_address=owner,
         org_id=org_id,
         **key_fields,
         label=payload.label,
         scope="write",
-        environment=ENVIRONMENT,
     )
     db.add(api_key)
     # Commit BEFORE the audit call: record_auth_event opens its OWN session

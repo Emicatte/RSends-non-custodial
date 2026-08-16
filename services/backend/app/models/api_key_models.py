@@ -2,7 +2,18 @@
 import enum
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, String, Boolean, DateTime, Integer, SmallInteger, Index
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    Index,
+    Integer,
+    SmallInteger,
+    String,
+)
+from sqlalchemy.orm import validates
+
 from app.models.db_models import Base
 
 
@@ -47,8 +58,13 @@ class ApiKey(Base):
     # Scope — what this key can do
     scope = Column(String(16), nullable=False, default="write")
 
-    # Environment — test or live
-    environment = Column(String(8), nullable=False, default="live")
+    # Environment — test or live. The insert default is the POWERLESS one: a row
+    # created without an explicit environment must not be able to move real
+    # money. This is deliberately the mirror image of the READ-side fallbacks
+    # (api_keys._api_key_to_dict, merchant_routes._get_environment), which
+    # resolve a missing value to "live" so an unstamped key meets the STRICT
+    # gate. Two different questions; do not "align" them.
+    environment = Column(String(8), nullable=False, default="test")
 
     # Per-key rate limit (requests per minute)
     rate_limit_rpm = Column(Integer, nullable=False, default=100)
@@ -73,4 +89,27 @@ class ApiKey(Base):
     __table_args__ = (
         Index("ix_api_keys_owner_active", "owner_address", "is_active"),
         Index("ix_api_keys_env", "environment"),
+        CheckConstraint(
+            "environment IN ('test', 'live')", name="ck_api_keys_environment"
+        ),
     )
+
+    @validates("environment")
+    def _validate_environment(self, _key, value):
+        """Bind KeyEnvironment to the column it was written for.
+
+        The enum was declared and referenced nowhere, so the column was a plain
+        String(8) that would accept any short string — including one that
+        contradicts the key's own prefix. Migration 0016 adds the matching CHECK
+        at the database level; this catches it at the ORM boundary with a usable
+        error instead of an IntegrityError at flush time.
+        """
+        if value is None:
+            return value
+        try:
+            return KeyEnvironment(value).value
+        except ValueError:
+            raise ValueError(
+                f"environment must be one of "
+                f"{sorted(e.value for e in KeyEnvironment)}, got {value!r}"
+            ) from None

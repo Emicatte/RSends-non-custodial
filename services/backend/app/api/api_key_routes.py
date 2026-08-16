@@ -130,13 +130,15 @@ async def generate_key(
 
     plaintext_key, key_fields = generate_api_key(environment=req.environment)
 
+    # `environment` comes from key_fields, NOT from req: it is the same decision
+    # that produced the prefix inside plaintext_key, so the row and the key
+    # string cannot disagree.
     api_key = ApiKey(
         owner_address=owner,
         org_id=org_id,
         **key_fields,
         label=req.label,
         scope=req.scope,
-        environment=req.environment,
     )
     db.add(api_key)
     await db.commit()

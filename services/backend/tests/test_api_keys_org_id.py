@@ -142,13 +142,15 @@ async def _link_wallet(session, user_id, org_id, address, primary=True):
 async def _legacy_key(session, owner_address):
     """A wallet-minted key as it exists pre-0014: org_id NULL."""
     plaintext, fields = generate_api_key(environment="test")
+    # `environment` now arrives inside `fields` (generate_api_key is the single
+    # source, so the column can't contradict the prefix) — passing it again here
+    # would be a duplicate keyword argument.
     key = ApiKey(
         owner_address=owner_address.lower(),
         org_id=None,
         **fields,
         label="legacy",
         scope="write",
-        environment="test",
     )
     session.add(key)
     await session.commit()
