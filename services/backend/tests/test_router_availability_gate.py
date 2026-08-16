@@ -16,7 +16,9 @@ test_merchant_chain_gate.py: fake `request.state.client`, real SQLite.
 """
 
 import logging
+import secrets
 from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
 import pytest_asyncio
@@ -26,8 +28,10 @@ from sqlalchemy import func, select
 from app.api.merchant_routes import create_payment_intent
 from app.db.session import async_session, engine
 from app.models.api_key_models import ApiKey
+from app.models.auth_models import User
 from app.models.db_models import Base
 from app.models.merchant_models import CreatePaymentIntentRequest, PaymentIntent
+from app.models.org_models import Organization
 from app.security.api_keys import generate_api_key
 
 OWNER = "0x742d35cc6634c0532925a3b844bc9e7595f2bd18"
@@ -87,10 +91,33 @@ def _unconfigure_routers(monkeypatch):
 
 
 async def _make_key(session, environment: str) -> ApiKey:
+    """A key whose org is ACTIVATED for mainnet.
+
+    The router gate sits downstream of the mainnet activation gate, so a test
+    that wants to reach it on a mainnet chain has to satisfy activation first —
+    otherwise it would be asserting the wrong refusal.
+    """
+    user = User(
+        id=str(uuid4()),
+        email=f"{secrets.token_hex(6)}@example.com",
+        account_type="individual",
+    )
+    session.add(user)
+    await session.flush()
+    org = Organization(
+        name="Org " + secrets.token_hex(3),
+        slug=secrets.token_hex(8),
+        owner_user_id=user.id,
+        is_personal=False,
+        plan="free",
+        activation_status="active",
+    )
+    session.add(org)
+    await session.flush()
     _plaintext, fields = generate_api_key(environment=environment)
     key = ApiKey(
         owner_address=OWNER,
-        org_id="org-router-gate",
+        org_id=str(org.id),
         **fields,
         label="router-gate",
         scope="write",
@@ -106,8 +133,12 @@ async def _make_key(session, environment: str) -> ApiKey:
 @pytest.mark.asyncio
 async def test_live_key_on_unrouted_chain_refused_and_not_persisted(session):
     """`ethereum` is in the token registry but has no router → 422, nothing written."""
+    key = await _make_key(session, "live")
+
     with pytest.raises(HTTPException) as exc:
-        await create_payment_intent(_payload("ethereum"), _req("live"), db=session)
+        await create_payment_intent(
+            _payload("ethereum"), _req("live", key_id=key.id), db=session
+        )
 
     assert exc.value.status_code == 422
     assert exc.value.detail["error"] == "ROUTER_UNAVAILABLE"
@@ -138,7 +169,7 @@ async def test_session_path_refused_on_unrouted_chain(session, monkeypatch):
     with pytest.raises(HTTPException) as exc:
         await create_intent(
             session, OWNER, "test", _payload("base_sepolia"),
-            org_id="org-router-gate", key_id=None,
+            org_id=str(uuid4()), key_id=None,
         )
 
     assert exc.value.status_code == 422
@@ -166,10 +197,12 @@ async def test_quota_not_consumed_on_refusal(session):
 @pytest.mark.asyncio
 async def test_refusal_is_logged_at_warning(session, caplog):
     """Silent degradation is the bug being fixed — the refusal must be observable."""
+    key = await _make_key(session, "live")
+
     with caplog.at_level(logging.WARNING, logger="app.services.intent_service"):
         with pytest.raises(HTTPException):
             await create_payment_intent(
-                _payload("ethereum"), _req("live"), db=session
+                _payload("ethereum"), _req("live", key_id=key.id), db=session
             )
 
     records = [r for r in caplog.records if "ROUTER_UNAVAILABLE" in r.getMessage()]

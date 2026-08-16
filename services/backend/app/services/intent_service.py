@@ -32,6 +32,11 @@ from app.models.org_models import Organization
 from app.models.settlement_models import PaymentSettlement, SettlementStatus
 from app.models.user_wallets_models import UserWallet
 from app.services.audit_service import log_event
+from app.services.chain_access import (
+    ChainAccessError,
+    check_org_chain_access,
+    is_testnet_chain,
+)
 from app.services.key_usage_service import (
     check_monthly_limits,
     increment_intent_count,
@@ -344,12 +349,57 @@ async def create_intent(
             "message": f"Live API keys cannot create intents on testnet chains. Requested: {requested_chain}.",
         })
 
+    # Org identity for the gates below. The session path passes org_id; on the
+    # API-key path the key carries its minting org (org_id is NOT NULL since
+    # migration 0014). Resolved once here and reused by the recipient gate.
+    resolved_org_id = org_id
+    if resolved_org_id is None and key_id is not None:
+        resolved_org_id = (
+            await db.execute(select(ApiKey.org_id).where(ApiKey.id == key_id))
+        ).scalar_one_or_none()
+
     # Token policy gate (single source of truth: app/token_registry.json).
     if not token_is_enabled(requested_chain, payload.currency):
         raise HTTPException(400, {
             "error": "UNSUPPORTED_TOKEN",
             "message": f"Token {payload.currency} is not enabled on chain {requested_chain}.",
         })
+
+    # MAINNET ACTIVATION GATE. `check_org_chain_access` is the single definition
+    # of "may this org transact on this chain", but until now only the session
+    # route called it — so a merchant API key could create a mainnet intent for
+    # an org whose business verification was never completed. Enforced here, at
+    # the shared construction site, so both entry paths go through one call.
+    #
+    # Scoped to mainnet deliberately: the same function also enforces the
+    # testnet `company_profile_required` rule, a session-onboarding concept the
+    # API-key path has never had. Applying it to every chain here would change
+    # testnet behaviour, so the session route keeps its own (broader) call.
+    chain_id = chain_id_for(requested_chain)
+    if chain_id is not None and not is_testnet_chain(chain_id):
+        org_row = None
+        if resolved_org_id is not None:
+            org_row = (
+                await db.execute(
+                    select(
+                        Organization.onboarding_status,
+                        Organization.activation_status,
+                    ).where(Organization.id == resolved_org_id)
+                )
+            ).one_or_none()
+        if org_row is None:
+            # No org resolved (or the row is gone): activation cannot be
+            # verified, so mainnet cannot be allowed. Deny, never assume.
+            logger.warning(
+                "mainnet_activation_required: refusing intent on chain=%s — no "
+                "resolvable org (merchant=%s, key_id=%s)",
+                requested_chain, merchant_id, key_id,
+            )
+            raise HTTPException(403, {"code": "mainnet_activation_required"})
+        try:
+            check_org_chain_access(org_row[0], org_row[1], chain_id)
+        except ChainAccessError as e:
+            raise HTTPException(403, {"code": e.code})
 
     # SETTLEMENT-ROUTER GATE (fail-closed). A chain can be in the token registry
     # and still have no deployed/configured RSendsRouter — mainnet today. Without
@@ -408,15 +458,8 @@ async def create_intent(
             })
         recipient = None
     else:
-        recipient_org = org_id
-        if recipient_org is None and key_id is not None:
-            recipient_org = (
-                await db.execute(
-                    select(ApiKey.org_id).where(ApiKey.id == key_id)
-                )
-            ).scalar_one_or_none()
         recipient = await resolve_recipient(
-            db, merchant_id, payload.recipient, org_id=recipient_org
+            db, merchant_id, payload.recipient, org_id=resolved_org_id
         )
 
     # NETWORK is DERIVED from the (already validated + env-gated) chain, never
