@@ -15,8 +15,10 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps.approval_policy import approval_denial
 from app.db.session import get_db
 from app.models.api_key_models import ApiKey
+from app.models.org_models import Organization
 from app.security.api_keys import generate_api_key
 from app.security.auth import require_wallet_auth
 from app.services.owner_identity import resolve_org_for_wallet
@@ -28,7 +30,10 @@ class GenerateKeyRequest(BaseModel):
     owner_address: str
     label: str = "Default"
     scope: str = "write"
-    environment: str = "live"
+    # Defaults to the POWERLESS environment. A caller who omits the field gets a
+    # sandbox key; minting a live one has to be asked for explicitly, and is
+    # gated below. The previous default was "live".
+    environment: str = "test"
 
     @field_validator("scope")
     @classmethod
@@ -98,6 +103,21 @@ async def generate_key(
     # api_keys.org_id is NOT NULL since 0014: the signer's wallet must map to
     # exactly one org (422 fail-closed otherwise — never a NULL-org key).
     org_id = await resolve_org_for_wallet(db, owner)
+
+    # APPROVAL GATE. This route is exempt from the API-key middleware and its
+    # only auth is a wallet signature, so without this a wallet that resolves to
+    # one org could mint a LIVE key for an org nobody ever approved. Same policy
+    # object as the merchant API and session surfaces — `declined` blocks in both
+    # environments, the sandbox carve-out applies only to "test", and anything
+    # that is not an explicit approval fails closed on "live".
+    approval_status = (
+        await db.execute(
+            select(Organization.approval_status).where(Organization.id == org_id)
+        )
+    ).scalar_one_or_none()
+    denial = approval_denial(approval_status, environment=req.environment)
+    if denial is not None:
+        raise denial
 
     count_q = select(ApiKey).where(
         ApiKey.owner_address == owner,
