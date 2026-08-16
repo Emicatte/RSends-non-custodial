@@ -37,6 +37,7 @@ from app.services.key_usage_service import (
     increment_intent_count,
 )
 from app.services.router_registry import (
+    chain_has_settlement_router,
     chain_id_for,
     chain_is_supported,
     derive_invoice_id,
@@ -348,6 +349,26 @@ async def create_intent(
         raise HTTPException(400, {
             "error": "UNSUPPORTED_TOKEN",
             "message": f"Token {payload.currency} is not enabled on chain {requested_chain}.",
+        })
+
+    # SETTLEMENT-ROUTER GATE (fail-closed). A chain can be in the token registry
+    # and still have no deployed/configured RSendsRouter — mainnet today. Without
+    # this, creation succeeded and `build_onchain_payment` returned None, so the
+    # merchant got 201 with `onchain: null`: an intent with no payment
+    # instructions, no indexer watcher for the chain, and therefore no settlement
+    # and no webhook — silently, with the key's quota already spent. Refuse here,
+    # BEFORE the monthly-limit check and before anything is persisted.
+    if not chain_has_settlement_router(requested_chain):
+        logger.warning(
+            "ROUTER_UNAVAILABLE: refusing intent on chain=%s (environment=%s, "
+            "merchant=%s, org=%s) — no RSendsRouter v1/v2 configured",
+            requested_chain, environment, merchant_id, org_id,
+        )
+        raise HTTPException(422, {
+            "error": "ROUTER_UNAVAILABLE",
+            "message": (
+                f"No settlement router is configured for chain {requested_chain}."
+            ),
         })
 
     # Monthly limits — API-key path only.

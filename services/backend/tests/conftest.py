@@ -27,10 +27,45 @@ RUNNER HYGIENE (2026-07-18 suite-trust audit):
   receiver otherwise).
 """
 
+import os
+
+import pytest
 import pytest_asyncio
 from sqlalchemy import event
 
 from app.models.org_models import Organization
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _configure_settlement_routers():
+    """Give the suite a settleable router map before any test runs.
+
+    Intent creation fail-closes with 422 ROUTER_UNAVAILABLE on a chain that has
+    no configured RSendsRouter (v1 or v2). The test environment configures none
+    — `.env` carries no RSENDS_ROUTER_* keys and app/config.py defaults them to
+    "" — so without this every intent-creating test would 422 on a precondition
+    it never meant to exercise.
+
+    Base Sepolia mirrors production. Base mainnet is here because
+    test_merchant_chain_gate::test_base_still_accepted_on_live_key asserts a
+    live key is not CATEGORICALLY refused on `base`; that invariant needs the
+    chain routed. Ethereum (chain id 1) is deliberately left unrouted so the
+    router-availability tests have a supported-but-unsettleable chain to use.
+
+    Set via the environment (not by mutating a Settings instance) because
+    get_settings() is @lru_cache'd and every consumer reads the map through a
+    property; a test that needs the unconfigured shape monkeypatches the
+    settings object directly.
+    """
+    os.environ.setdefault(
+        "RSENDS_ROUTER_ADDRESSES_JSON",
+        '{"84532": "0x1111111111111111111111111111111111111111",'
+        ' "8453": "0x2222222222222222222222222222222222222222"}',
+    )
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    yield
 
 
 @event.listens_for(Organization, "init")
