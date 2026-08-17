@@ -66,14 +66,23 @@ describe('resolveOnboardingRedirect', () => {
     ).toBe('/en/onboarding/company')
   })
 
-  it('routes a pending merchant to the waiting screen (never /app)', () => {
+  it('lets a pending merchant into the dashboard once KYB is submitted', () => {
+    // 2026-08-08: the submitted company profile IS the sandbox gate. A merchant
+    // waiting on manual approval still gets /app (test-locked) and a working
+    // sandbox key — no operator in the loop. Backend agrees: the `test` branch
+    // of services/backend/app/api/deps/approval_policy.py.
     expect(
       resolveOnboardingRedirect(state({ approval_status: 'pending_approval' }), 'en'),
-    ).toBe('/en/onboarding/pending')
-    // Unknown/missing approval state fails closed to the waiting screen too.
+    ).toBeNull()
     expect(
       resolveOnboardingRedirect(state({ approval_status: null }), 'en'),
-    ).toBe('/en/onboarding/pending')
+    ).toBeNull()
+  })
+
+  it('still stops a declined merchant before the dashboard', () => {
+    expect(
+      resolveOnboardingRedirect(state({ approval_status: 'declined' }), 'en'),
+    ).not.toBeNull()
   })
 
   it('routes a declined merchant to the decline page', () => {
