@@ -8,7 +8,7 @@ type CacheEntry<T> = {
   ttl: number;
 };
 
-const STORAGE_PREFIX = 'rs_cg_';
+const STORAGE_PREFIX = 'rs_gc_';
 const MEMORY_CACHE = new Map<string, CacheEntry<any>>();
 
 export function getCached<T>(key: string): T | null {
