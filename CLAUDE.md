@@ -5,6 +5,36 @@ Monorepo for a non-custodial crypto payment platform:
 - `services/backend` — Python FastAPI merchant API
 - `packages/contracts` — Solidity contracts (Foundry): immutable fee router
 
+## Integrator compatibility contract (read before changing a wire surface)
+
+Third-party integrations run on servers we do not control, at whatever version the merchant
+installed, for months — we cannot force an upgrade. The surfaces they depend on are
+therefore **frozen**, and what exactly is frozen is written down in
+**`docs/INTEGRATION_CONTRACT.md`** (normative copy, every promise anchored to `file:line`).
+
+**Breaking a promise in that document is a review stop**, not a judgement call. Read it
+before touching any of:
+
+- `services/backend/app/services/webhook_service.py` — payload key set, signature scheme,
+  header names, `X-RSend-Delivery-Id` format
+- `services/backend/app/api/merchant_routes.py`, `app/services/intent_service.py`,
+  `app/models/merchant_models.py` — request/response field names, `intent_id`/`reference_id`
+  formats, enumerated values, error envelope shapes
+- `services/backend/app/security/api_keys.py`, `app/middleware/api_auth.py` — key prefixes,
+  the `Bearer` scheme, scope semantics
+- `apps/web/app/pay/**` — the `/pay/{intent_id}` path shape and the 500 × 720 rendering floor
+- the `headers()` block in `apps/web/next.config.mjs` — `frame-ancestors 'none'` and
+  `X-Frame-Options: DENY` are promised permanently; the checkout must stay un-frameable
+
+Adding a promise means adding or citing the test that holds it. Compatible additions (new
+payload keys, new optional fields, **new enumerated values**) are always allowed — integrators
+are contractually required to tolerate them.
+
+Open work list: `contract-gaps-2026-08-12.md` (unenforced promises, ranked; plus known
+inconsistencies). Its item 1 — the idempotency cache key is not tenant-scoped
+(`app/middleware/idempotency.py:56`) — is a live cross-merchant data-leak path, not just a
+missing test.
+
 ## Security
 
 These rules reflect the verified state of the backend security audit (2026-07). Apply them to
