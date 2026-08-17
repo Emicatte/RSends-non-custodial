@@ -32,9 +32,10 @@ export default function ReportingPage() {
       <Table
         head={['Query param', 'Notes']}
         rows={[
-          [<Code key="s">status</Code>, 'pending · completed · expired · cancelled · review · refunded · partial · overpaid'],
-          [<Code key="c">currency</Code>, 'Settlement token filter, e.g. USDC'],
-          [<Code key="p">page / per_page</Code>, 'Pagination'],
+          [<Code key="s">status</Code>, <>One of <Code>pending</Code> · <Code>paid</Code> · <Code>completed</Code> · <Code>expired</Code> · <Code>cancelled</Code> · <Code>review</Code> · <Code>refunded</Code> · <Code>partial</Code> · <Code>overpaid</Code>. Anything else is rejected with <Code>400 INVALID_STATUS</Code> — never silently ignored</>],
+          [<Code key="c">currency</Code>, 'Settlement token filter, e.g. USDC. Exact match'],
+          [<Code key="p">page</Code>, 'Page number, ≥ 1. Default 1'],
+          [<Code key="pp">per_page</Code>, 'Results per page, 1–100. Default 20'],
         ]}
       />
       <CodeBlock
@@ -45,21 +46,32 @@ export default function ReportingPage() {
   "per_page": 20,
   "records": [
     {
-      "intent_id": "int_abc123",
+      "intent_id": "pi_9f1c4a7e2b5d8036c1e94ab7d2508f63",
       "onchain_invoice_id": "0x9f…",
-      "amount": 100,
+      "amount": 100.0,
       "amount_received": "100",
+      "overpaid_amount": null,
+      "underpaid_amount": null,
       "currency": "USDC",
       "chain": "base_sepolia",
       "status": "completed",
+      "recipient": "0xyourdestinationwallet00000000000000000000",
       "tx_hash": "0x…",
+      "matched_tx_hash": "0x…",
+      "completed_late": false,
+      "late_minutes": null,
       "metadata": { "order_id": "ORD-1024" },
-      "created_at": "2026-06-30T12:00:00+00:00",
-      "completed_at": "2026-06-30T12:00:05+00:00"
+      "created_at": "2026-08-06T12:00:00+00:00",
+      "expires_at": "2026-08-06T12:30:00+00:00",
+      "completed_at": "2026-08-06T12:00:05+00:00"
     }
   ]
 }`}
       />
+      <P>
+        Results are scoped to your account <em>and</em> your key&apos;s environment: a test key
+        never sees live intents, and vice versa. Newest first.
+      </P>
 
       <H2>Where the numbers come from</H2>
       <P>
@@ -75,12 +87,11 @@ export default function ReportingPage() {
 
       <H2>What you receive</H2>
       <P>
-        The amount you see settled is the <strong>whole principal you asked for</strong>. On the
-        fee-less router a payment is a single transfer — the payer parts with exactly the amount
-        and you receive exactly the amount. Nothing is added on top and nothing is deducted;
-        RSends pricing is a flat subscription, entirely off-chain. (Payments made through the
-        legacy testnet router carried its old on-chain flat fee, paid by the payer on top — never
-        netted from your settlement.)
+        The amount you see settled is the <strong>whole principal you asked for</strong>. Nothing
+        is ever deducted from a settlement: RSends never takes custody, and its pricing is a flat
+        off-chain subscription. Where the deployed router charges an on-chain flat fee, the{' '}
+        <em>payer</em> pays it on top of your amount — it is never netted out of what reaches you.
+        The fee-less router arriving at the mainnet cutover removes it from the flow entirely.
       </P>
       <Table
         head={['Figure', 'Meaning']}
