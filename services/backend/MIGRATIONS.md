@@ -68,12 +68,27 @@ fails fast instead of hanging the deploy.
 
 ## Known pre-existing risky migrations (ALREADY APPLIED — do NOT rewrite)
 
+> **Stale section — read this first.** The migrations listed below belong to the *pre-squash*
+> numbering. That chain was replaced by `0001_noncustodial_baseline` (which builds the schema
+> from `Base.metadata`), the files were deleted at commit `9a425616`, and the links in this
+> table no longer resolve. They are kept as cautionary examples only; none of them is "already
+> applied" to anything you can inspect today. The live chain is `0001` → `0017`.
+>
+> One of them left a real hole. `0030` also created two **partial unique indexes** on
+> `user_wallets` (`uq_user_wallets_active_org`, `uq_user_wallets_one_primary_org`), and the
+> squash dropped them on the floor: the model carried no `__table_args__`, so `create_all` never
+> reproduced them, and `pg_indexes` on production confirmed their absence. Nothing enforced "one
+> active primary wallet per org" or "no duplicate active address per org" — the tenancy key for
+> payments, webhooks and API keys — and the `IntegrityError` → 409 handlers written against them
+> were inert. Restored by **`0017_user_wallets_uniques`**, in the model *and* in a revision,
+> since `create_all` covers only new databases and a revision covers only migrated ones.
+
 These are in production and **must not be edited**. They are listed as cautionary examples
 of what the rule above exists to prevent.
 
 | Migration | Risk (one line) |
 |-----------|-----------------|
-| [0030_org_scope_api_keys_wallets](alembic/versions/0030_org_scope_api_keys_wallets.py) | Flips `user_api_keys.org_id` and `user_wallets.org_id` from nullable to `NOT NULL` (+ index drop/recreate); old code unaware of `org_id` ⇒ NOT NULL violation during the rolling window. |
+| `0030_org_scope_api_keys_wallets` *(deleted in the squash; see the note above)* | Flips `user_api_keys.org_id` and `user_wallets.org_id` from nullable to `NOT NULL` (+ index drop/recreate); old code unaware of `org_id` ⇒ NOT NULL violation during the rolling window. Its **index half was lost in the squash and never existed in production** — restored by `0017_user_wallets_uniques`. |
 | [0032_github_auth](alembic/versions/0032_github_auth.py) | `CREATE UNIQUE INDEX ix_users_github_sub` **not** concurrently ⇒ write-blocking lock on `users` during the build. |
 | [0036_split_exec_unique_srctx](alembic/versions/0036_split_exec_unique_srctx.py) | Dedup `DELETE` on `split_executions` then `ADD UNIQUE(contract_id, source_tx_hash)` — destructive pre-step + new unique constraint in one release. |
 | [0037_add_account_type](alembic/versions/0037_add_account_type.py) | Adds `users.account_type` `NOT NULL` with a **temporary** `server_default` then **drops** the default ⇒ afterward the column is `NOT NULL` with no default; old pods inserting a user hit a NOT NULL violation. |

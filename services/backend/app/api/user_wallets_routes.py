@@ -95,6 +95,38 @@ async def _active_by_address_for_org(
     return result.scalar_one_or_none()
 
 
+#: The two partial unique indexes on user_wallets (model `__table_args__` +
+#: migration 0017), with the columns each one covers. The column list is what
+#: SQLite reports; Postgres reports the index name.
+IDX_ACTIVE_ADDRESS = ("uq_user_wallets_active_org", ("org_id", "chain_family", "address"))
+IDX_ONE_PRIMARY = ("uq_user_wallets_one_primary_org", ("org_id", "chain_family"))
+
+
+def _violated(exc: IntegrityError, index: Tuple[str, Tuple[str, ...]]) -> bool:
+    """True when `exc` is a violation of `index`, on either dialect.
+
+    The two dialects identify the offending index differently: Postgres names it
+    (`exc.orig.diag.constraint_name`), SQLite names the COLUMNS —
+    ``UNIQUE constraint failed: user_wallets.org_id, user_wallets.chain_family``.
+    Discriminating matters because both handlers below map an IntegrityError to
+    a specific 409: without this, an unrelated violation (a future constraint, a
+    NOT NULL, an FK) would be reported to the caller as `wallet_already_linked`,
+    which is a lie about what went wrong.
+    """
+    name, columns = index
+    diag = getattr(getattr(exc, "orig", None), "diag", None)
+    constraint = getattr(diag, "constraint_name", None)
+    if constraint:
+        return constraint == name
+    message = str(getattr(exc, "orig", exc))
+    if "UNIQUE constraint failed" not in message:
+        return False
+    reported = {
+        part.strip().split(".")[-1] for part in message.split(":", 1)[1].split(",")
+    }
+    return reported == set(columns)
+
+
 def _sanitize_label(raw: Optional[str]) -> str:
     if raw is None:
         return ""
@@ -261,8 +293,11 @@ async def post_verify(
     db.add(wallet)
     try:
         await db.flush()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
+        if not _violated(exc, IDX_ACTIVE_ADDRESS):
+            # Not the duplicate-address index — don't mislabel it.
+            raise
         raise HTTPException(
             status_code=409, detail={"code": "wallet_already_linked"}
         )
@@ -295,6 +330,11 @@ async def _promote_primary(
 ) -> None:
     """Clear any other active primary in the same (org, chain_family), then
     mark `wallet` primary. Partial unique index is the backstop on races.
+
+    The closing flush is load-bearing: `patch_wallet` guards this call with
+    `except IntegrityError`, but the ORM UPDATE for `wallet.is_primary` would
+    otherwise not be sent until `db.commit()`, which sits outside that guard —
+    a concurrent promotion would then escape as a 500 instead of being retried.
     """
     await db.execute(
         UserWallet.__table__.update()
@@ -311,6 +351,7 @@ async def _promote_primary(
     )
     wallet.is_primary = True
     wallet.updated_at = datetime.now(timezone.utc)
+    await db.flush()
 
 
 @router.patch("/{wallet_id}", response_model=WalletResponse)
@@ -358,8 +399,10 @@ async def patch_wallet(
         if payload.is_primary is True and wallet.is_primary is False:
             try:
                 await _promote_primary(db, wallet)
-            except IntegrityError:
+            except IntegrityError as exc:
                 await db.rollback()
+                if not _violated(exc, IDX_ONE_PRIMARY):
+                    raise
                 # refetch and retry once
                 result = await db.execute(
                     select(UserWallet).where(
@@ -375,8 +418,10 @@ async def patch_wallet(
                     )
                 try:
                     await _promote_primary(db, wallet)
-                except IntegrityError:
+                except IntegrityError as exc:
                     await db.rollback()
+                    if not _violated(exc, IDX_ONE_PRIMARY):
+                        raise
                     raise HTTPException(
                         status_code=409, detail={"code": "primary_race"}
                     )
