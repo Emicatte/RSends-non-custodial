@@ -49,6 +49,8 @@ from app.models.user_wallets_models import UserWallet
 import app.services.payment_indexer as idx
 import app.api.merchant_routes as mr
 import app.api.user_org_payments_routes as rt
+import app.api.user_wallets_routes as wr
+from app.models.user_wallets_schemas import WalletPatchRequest
 
 PG_URL = os.getenv("CONCURRENCY_TEST_DATABASE_URL")
 
@@ -599,3 +601,120 @@ async def test_concurrent_expire_workers_fire_expired_exactly_once(pg, monkeypat
         rows = (await db.execute(select(WebhookDelivery))).scalars().all()
         assert len(rows) == 1
         assert rows[0].event_type == "payment.expired"
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Site 3 — one active primary wallet per org, across transactions
+# ═══════════════════════════════════════════════════════════════
+
+
+async def _seed_org_with_wallets(sm, addresses):
+    """Org + one wallet per address; the FIRST is primary (the link flow's
+    `is_first` rule). Returns (org_id, [wallet_id, ...])."""
+    async with sm() as db:
+        user = User(
+            id=secrets.token_hex(16),
+            email=f"{secrets.token_hex(6)}@example.com",
+            account_type="individual",
+        )
+        db.add(user)
+        await db.flush()
+        org = Organization(
+            name="Org " + secrets.token_hex(3),
+            slug=secrets.token_hex(8),
+            owner_user_id=user.id,
+            is_personal=False,
+            plan="free",
+        )
+        db.add(org)
+        await db.flush()
+        db.add(Membership(user_id=user.id, org_id=org.id, role="admin"))
+        ids = []
+        for i, addr in enumerate(addresses):
+            w = UserWallet(
+                user_id=user.id,
+                org_id=org.id,
+                address=addr,
+                display_address=addr,
+                verified_chain_id=CHAIN,
+                is_primary=(i == 0),
+                chain_family="evm",
+            )
+            db.add(w)
+            await db.flush()
+            ids.append(str(w.id))
+        await db.commit()
+        return str(org.id), ids
+
+
+async def _drive_promote(sm, wallet_id, org_id):
+    """Run the real PATCH handler in its own transaction; normalize outcome.
+
+    An IntegrityError reaching this frame is itself the failure being guarded
+    against: it means the violation escaped the handler's try block (i.e. the
+    promote never flushed inside it) and the user would have got a 500.
+    """
+    async with sm() as db:
+        try:
+            await wr.patch_wallet(
+                wallet_id=wallet_id,
+                payload=WalletPatchRequest(is_primary=True),
+                ctx=("user-unused", org_id, "admin"),
+                db=db,
+            )
+            return ("ok", 200)
+        except HTTPException as e:
+            return ("http", e.status_code)
+
+
+@pytest.mark.asyncio
+async def test_one_primary_wallet_survives_concurrent_promotion(pg, monkeypatch):
+    """Two transactions promote a different wallet in the SAME org at once.
+
+    `uq_user_wallets_one_primary_org` is the backstop the promote flow was
+    written against (`_promote_primary`'s docstring). Postgres serializes the
+    two on the outgoing primary's row lock: the loser's UPDATE re-evaluates
+    after the winner commits, its snapshot still predates the winner's new
+    primary, so its own flush violates the index — inside the handler's try —
+    and the retry (fresh snapshot) then succeeds.
+
+    What this pins: no request ends in an unhandled IntegrityError (a 500), the
+    IntegrityError arm is actually entered, and exactly ONE active primary is
+    committed. The inner `primary_race` 409 needs the RETRY to lose as well,
+    i.e. a third concurrent promoter, so it stays unreachable here by design.
+    """
+    org_id, wallet_ids = await _seed_org_with_wallets(
+        pg, ["0x" + c * 40 for c in ("a", "b", "c")]
+    )
+
+    calls = {"n": 0}
+    real_promote = wr._promote_primary
+
+    async def _counting_promote(db, wallet):
+        calls["n"] += 1
+        return await real_promote(db, wallet)
+
+    monkeypatch.setattr(wr, "_promote_primary", _counting_promote)
+
+    results = await asyncio.gather(
+        _drive_promote(pg, wallet_ids[1], org_id),
+        _drive_promote(pg, wallet_ids[2], org_id),
+    )
+
+    # Neither request may 500: every outcome is a handled one.
+    assert all(r[1] in (200, 409) for r in results), results
+    assert any(r == ("ok", 200) for r in results), results
+
+    # The retry ran ⇒ an IntegrityError was caught inside the guarded block,
+    # which is only possible if the promote flushes there.
+    assert calls["n"] > 2, f"no retry observed ({calls['n']} promote calls)"
+
+    async with pg() as db:
+        rows = (await db.execute(
+            select(UserWallet).where(UserWallet.org_id == org_id)
+        )).scalars().all()
+        assert len(rows) == 3
+        primaries = [r for r in rows if r.is_primary and r.unlinked_at is None]
+        assert len(primaries) == 1, [
+            (str(r.id), r.is_primary) for r in rows
+        ]
