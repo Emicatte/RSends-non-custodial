@@ -9,8 +9,16 @@ MerchantWebhook.merchant_id`). Precedence:
 2. The org's `settlement_wallet` — the email-onboarded merchant path — but ONLY
    if the address has no competing identity claim anywhere. Fail-closed 409
    `settlement_wallet_conflict` when the address:
-   - appears in `user_wallets` for ANY org, INCLUDING unlinked/historical rows
-     (someone once proved control via SIWE; their data stays keyed to it);
+   - appears in `user_wallets` for any OTHER org, INCLUDING unlinked/historical
+     rows (someone else once proved control via SIWE; their data stays keyed to
+     it) — EXCLUDING rows belonging to THIS org (`user_wallets.org_id ==
+     org_id`): the org's own history is not a competing claim. The primary
+     lookup above skips unlinked and non-primary rows, so without the carve-out
+     an org that SIWE-linked its own settlement address and later unlinked it
+     409s against itself on every resolve, permanently and with no in-product
+     remedy (observed in production 2026-08-18). Unlinked rows are deliberately
+     NOT filtered globally — a squatter's fallback must die the moment the real
+     owner proves control, and stay dead if they later unlink.
    - is another org's `settlement_wallet` (the column is not unique);
    - is an `api_keys.owner_address`, active OR revoked (an rsend_ key mint
      proved control via EIP-191 signature) — EXCLUDING keys this same org
@@ -20,8 +28,13 @@ MerchantWebhook.merchant_id`). Precedence:
      and the mint of key #2. Since 0014 backfilled org_id onto EVERY key,
      the carve-out also covers the org's historical wallet-minted keys —
      strictly fewer false-positive 409s; a foreign org's key still conflicts.
-   The checks re-run on every request, so a later legitimate claim (e.g. the
-   real owner SIWE-links the address) immediately revokes a squatter's fallback.
+   All three checks exclude the resolving org itself and nothing more. The two
+   over a nullable tenant column (`user_wallets.org_id`, `api_keys.org_id`)
+   carry a NULL arm — `is_(None) | (… != org_id)` — because a bare `!= org_id`
+   would not count a NULL-org row, opening a hole instead of closing one; the
+   settlement-wallet check needs none (`Organization.id` is a PK). The checks
+   re-run on every request, so a later legitimate claim (e.g. the real owner
+   SIWE-links the address) immediately revokes a squatter's fallback.
 
 Neither wallet configured → 409 `no_primary_wallet` (the pre-fallback error,
 kept for frontend compatibility — remedy: link a wallet or set the settlement
@@ -72,7 +85,18 @@ async def resolve_owner_address(db: AsyncSession, org_id: str) -> str:
     claimed = (
         await db.execute(
             select(func.count(UserWallet.id)).where(
-                func.lower(UserWallet.address) == addr
+                func.lower(UserWallet.address) == addr,
+                # THIS org's own rows are its own history, not a competing
+                # claim. The primary lookup above skips unlinked/non-primary
+                # rows, so without the carve-out an org that SIWE-linked its
+                # settlement address and later unlinked it 409s against itself
+                # forever, with no in-product remedy. Mirrors `keyed` below,
+                # NULL arm included — a bare `!= org_id` would not count a
+                # NULL-org row (SQL three-valued logic), opening a hole
+                # instead of closing one. Unlinked rows are deliberately NOT
+                # filtered globally: a squatter's fallback must die the moment
+                # the real owner proves control, even if they later unlink.
+                (UserWallet.org_id.is_(None)) | (UserWallet.org_id != org_id),
             )
         )
     ).scalar()
