@@ -11,6 +11,12 @@ in the same merchant scope as everything else.
 Security posture (per the 2026-07-15 product decision):
 - Minting requires the org **admin** role (stricter than rsusr_'s operator).
 - Scope is pinned to `write` (admin scope is never self-provisionable).
+- Approval: since 2026-08-08 a SUBMITTED COMPANY PROFILE is the gate for a
+  sandbox key — `require_org_approved` lets `pending_approval` through for the
+  test environment, so nobody waits on an operator to evaluate the API. The
+  mint handler re-asserts real approval for any NON-test environment (see the
+  guard in `create_merchant_key`), so lifting the `ENVIRONMENT` pin below can
+  never hand out a live key to an unapproved org. Policy: deps/approval_policy.
 - Environment is pinned to `test` — /app is hard-locked to test (mainnet
   routers undeployed); handing out `rsend_live_` keys that cannot transact
   would be a footgun. Lift when mainnet ships.
@@ -37,9 +43,11 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import func
 
+from app.api.deps.approval_policy import SANDBOX_ENVIRONMENT, approval_denial
 from app.api.deps.require_org_approved import require_org_approved
 from app.db.session import get_db
 from app.models.api_key_models import ApiKey
+from app.models.org_models import Organization
 from app.security.api_keys import generate_api_key
 from app.services.auth_audit import record_auth_event
 from app.services.owner_identity import resolve_owner_address
@@ -164,6 +172,22 @@ async def create_merchant_key(
     db: AsyncSession = Depends(get_db),
 ):
     user_id, org_id, _role = ctx
+
+    # ENVIRONMENT is pinned to "test" below, so `require_org_approved`'s sandbox
+    # rule (KYB submitted, approval not required) is the right gate today. The
+    # DAY THAT PIN IS LIFTED this guard becomes load-bearing: minting a key for
+    # any other environment demands a genuinely approved org, because that key
+    # moves real money. Unreachable now, deliberately — a silent hole otherwise.
+    if ENVIRONMENT != SANDBOX_ENVIRONMENT:
+        approval = (
+            await db.execute(
+                select(Organization.approval_status).where(Organization.id == org_id)
+            )
+        ).scalar_one_or_none()
+        denial = approval_denial(approval, environment=ENVIRONMENT)
+        if denial is not None:
+            raise denial
+
     owner = await resolve_owner_address(db, org_id)
 
     if await _count_active(db, org_id) >= MAX_ACTIVE_KEYS:
@@ -173,13 +197,15 @@ async def create_merchant_key(
         )
 
     plaintext_key, key_fields = generate_api_key(environment=ENVIRONMENT)
+    # `environment` comes from key_fields, NOT from a second variable: it is the
+    # same decision that produced the prefix inside plaintext_key, so the row and
+    # the key string cannot disagree.
     api_key = ApiKey(
         owner_address=owner,
         org_id=org_id,
         **key_fields,
         label=payload.label,
         scope="write",
-        environment=ENVIRONMENT,
     )
     db.add(api_key)
     # Commit BEFORE the audit call: record_auth_event opens its OWN session

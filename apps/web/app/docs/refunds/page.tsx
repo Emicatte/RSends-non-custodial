@@ -57,13 +57,23 @@ export default function RefundsPage() {
       <Endpoint method="POST" path="/api/v1/merchant/payment-intent/{intent_id}/resolve" />
       <CodeBlock
         label="record a refund (resolve action)"
-        code={`curl https://pay.rsends.io/api/v1/merchant/payment-intent/int_abc123/resolve \\
-  -H "Authorization: Bearer rk_test_YOUR_KEY" \\
+        code={`curl -X POST https://pay.rsends.io/api/backend/api/v1/merchant/payment-intent/\\
+pi_9f1c4a7e2b5d8036c1e94ab7d2508f63/resolve \\
+  -H "Authorization: Bearer rsend_test_YOUR_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "action": "refund" }'
 
 // → intent.status becomes "refunded" (a record). No funds move.`}
       />
+      <Callout variant="warn" title="This endpoint only accepts intents in review">
+        <Code>resolve</Code> is the decision point for a payment held in <Code>review</Code> — the
+        state a late payment lands in under <Code>late_payment_policy: &quot;review&quot;</Code>.
+        Calling it on a normally-completed payment returns <Code>400 INVALID_STATE</Code>. There is
+        currently <strong>no endpoint that records a refund against a completed intent</strong>: for
+        those, keep the refund in your own books and reconcile against the on-chain transfer you
+        sent. The other action here is <Code>{'{"action": "complete"}'}</Code>, which accepts the
+        held payment and fires <Code>payment.completed_late</Code>.
+      </Callout>
       <Callout variant="warn" title="The record is not the refund">
         Marking an intent <Code>refunded</Code> does not pay anyone. Always send the on-chain transfer
         first, then record it. If you record without sending, your customer is still out of pocket.
@@ -72,7 +82,7 @@ export default function RefundsPage() {
       <H3>What this means in practice</H3>
       <UL>
         <LI>You control refund policy and timing entirely — there is no processor window or reserve.</LI>
-        <LI>Refunds are <strong>merchant-recorded</strong>, not processor-driven; there is no inbound “refund” webhook from RSends.</LI>
+        <LI>Refunds are <strong>merchant-recorded</strong>, not processor-driven; there is no inbound “refund” webhook from RSends, and no <Code>payment.refunded</Code> event exists.</LI>
         <LI>The refund transfer is itself a public on-chain transaction your customer can verify.</LI>
       </UL>
 

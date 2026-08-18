@@ -4,8 +4,8 @@
  * PURE module (no client/server-only imports): `resolveOnboardingRedirect`
  * is shared by the server layout guard (lib/onboarding-guard.ts) and the
  * client gate page (/onboarding). Consents and the 18+ attestation come
- * first, then the company-profile step; only a fully onboarded session
- * reaches the dashboard. The session API helpers live in
+ * first, then the company-profile step; submitting the profile is the last
+ * gate before the dashboard. The session API helpers live in
  * lib/onboarding-client.ts (client-only, via apiCall).
  */
 
@@ -66,14 +66,20 @@ export function resolveOnboardingRedirect(
   if (state.onboarding_status !== 'company_submitted') {
     return `/${locale}/onboarding/company`
   }
-  // Post-KYB manual approval: only an approved org reaches the dashboard —
-  // without this branch a pending merchant would slip into /app and see raw
-  // 403 approval_pending errors from every widget.
+  // An explicit operator decline still stops here — it is a decision, not a
+  // queue position.
   if (state.approval_status === 'declined') {
     return `/${locale}/onboarding/declined`
   }
-  if (state.approval_status !== 'approved') {
-    return `/${locale}/onboarding/pending`
-  }
+  // `pending_approval` reaches the dashboard (2026-08-08). The submitted
+  // company profile IS the gate for the sandbox, and /app is hard-locked to
+  // testnet, so a pending merchant gets a working dashboard and a working
+  // sandbox key with no operator in the loop. The backend agrees — see
+  // deps/approval_policy.py; the old 403-from-every-widget hazard this branch
+  // guarded against no longer exists.
+  //
+  // The waiting screen (/onboarding/pending) is intentionally kept: it is the
+  // right destination again when mainnet activation ships, where real approval
+  // is required. Route to it from the live-activation flow, not from here.
   return null
 }

@@ -25,6 +25,14 @@ export default function WebhooksPage() {
 
       <H2>Register a webhook</H2>
       <Endpoint method="POST" path="/api/v1/merchant/webhook/register" />
+      <P>
+        The URL must be <strong>HTTPS</strong> and must resolve to a publicly routable address.
+        Loopback, private, link-local and otherwise reserved addresses are rejected at registration
+        with <Code>422 WEBHOOK_URL_FORBIDDEN</Code>, and re-checked immediately before every
+        delivery — so a hostname that later starts resolving to an internal address stops being
+        delivered to. Webhooks are environment-scoped: one registered with a test key never
+        receives live events, and vice versa. Registration is limited to 5 per hour.
+      </P>
       <CodeBlock
         label="request"
         code={`{
@@ -87,9 +95,10 @@ export default function WebhooksPage() {
         intent fields, it carries the <strong>on-chain proof</strong> of settlement — the transaction
         hash, the chain (canonical lowercase name plus numeric <Code>chain_id</Code>), and the{' '}
         <Code>onchain_invoice_id</Code> you can look up directly. Amount fields are{' '}
-        <strong>strings</strong>; there is no <Code>fee</Code> field — no fee exists in the payment
-        flow (the fee-less router moves exactly the amount, payer → merchant; RSends pricing is an
-        off-chain subscription).
+        <strong>strings</strong>, and <Code>amount</Code> is what settled to you — whole, never
+        net of anything. There is deliberately no <Code>fee</Code> field: RSends is paid by
+        off-chain subscription, and where the deployed router charges the <em>payer</em> an
+        on-chain fee it is readable from the transaction itself via <Code>tx_hash</Code>.
       </P>
       <CodeBlock
         label="payment.completed — body"
@@ -123,12 +132,14 @@ export default function WebhooksPage() {
         <A href="https://sepolia.basescan.org">sepolia.basescan.org</A> you can read the rest of the
         proof — the <strong>block number</strong>, the <strong>payer address</strong> and the exact{' '}
         <Code>amount</Code> — straight from the <Code>PaymentMade</Code> event. Two event shapes
-        exist, keyed by <Code>topics[0]</Code>: the fee-less router emits{' '}
-        <Code>PaymentMade(bytes32,address,address,address,uint256,uint256)</Code> (topic{' '}
-        <Code>0xc3e210e1…cc843241</Code> — token, amount, blockTimestamp), while the legacy testnet
-        router emits the 7-argument shape with a trailing <Code>fee</Code> word (topic{' '}
-        <Code>0xab7ccb7f…deb04947</Code>). Richer proof fields embedded directly in the payload are
-        on the roadmap; today the load-bearing handle is <Code>tx_hash</Code> + <Code>onchain_invoice_id</Code>.
+        exist, keyed by <Code>topics[0]</Code>: the router deployed today (
+        <Code>routerVersion 1</Code>) emits the 7-argument shape with a trailing <Code>fee</Code>{' '}
+        word (topic <Code>0xab7ccb7f…deb04947</Code>), while the fee-less router arriving at the
+        mainnet cutover emits{' '}
+        <Code>PaymentMade(bytes32,address,address,address,uint256,uint256)</Code> — token, amount,
+        blockTimestamp (topic <Code>0xc3e210e1…cc843241</Code>). Richer proof fields embedded
+        directly in the payload are on the roadmap; today the load-bearing handle is{' '}
+        <Code>tx_hash</Code> + <Code>onchain_invoice_id</Code>.
       </Callout>
 
       <H2>Delivery headers &amp; signature</H2>
@@ -175,6 +186,34 @@ function verifyRSendsWebhook(secret, headers, rawBody) {
         <Code>{'"{timestamp}.{raw_body}"'}</Code>, confirm the timestamp is within 5 minutes, and
         compare in constant time <strong>before</strong> reading any field. This is the load-bearing
         rule of the integration. Use <Code>X-RSend-Delivery-Id</Code> to dedupe retries.
+      </Callout>
+
+      <H2>Retries</H2>
+      <P>
+        A delivery counts as accepted when your endpoint answers <strong>2xx</strong>. Anything
+        else — a non-2xx status, a timeout, a connection error — is retried. Each attempt has a{' '}
+        <strong>10-second</strong> timeout, and there are up to <strong>5 retries</strong> with
+        exponential backoff:
+      </P>
+      <Table
+        head={['Attempt', 'Sent after the previous failure']}
+        rows={[
+          ['1st retry', '30 seconds'],
+          ['2nd retry', '2 minutes'],
+          ['3rd retry', '8 minutes'],
+          ['4th retry', '32 minutes'],
+          ['5th retry', '2 hours'],
+        ]}
+      />
+      <P>
+        After the 5th retry the delivery is marked failed and is not attempted again — reconcile
+        from <A href="/docs/reporting">Reporting</A> or the chain. Answer quickly and do the work
+        asynchronously: a slow handler that exceeds 10 seconds is treated as a failure even if it
+        eventually succeeds, which turns into duplicate deliveries.
+      </P>
+      <Callout variant="warn" title="Dedupe on the delivery id, not the event">
+        Every retry of the same event carries the same <Code>X-RSend-Delivery-Id</Code>. Key your
+        handler on it and make it idempotent — that is the whole retry contract.
       </Callout>
 
       <H3>Refund events are merchant-recorded</H3>

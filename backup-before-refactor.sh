@@ -52,7 +52,7 @@ If the visual refactor goes wrong, run ONE of these to restore the site:
 \`\`\`bash
 git fetch origin
 git reset --hard $BACKUP_TAG
-git push origin main --force
+git push origin main 
 \`\`\`
 
 This wipes main and replaces it with the pre-refactor state. Vercel will auto-deploy the original site within 2-3 minutes.

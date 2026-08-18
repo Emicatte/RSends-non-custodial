@@ -184,6 +184,24 @@ def router_v2_address_for(chain: str) -> Optional[str]:
     return routers.get(str(cid)) or routers.get(cid)
 
 
+def chain_has_settlement_router(chain: str) -> bool:
+    """True iff the chain has a configured RSendsRouter (v1 or v2).
+
+    The address resolvers return None both for "chain unknown" and for "chain
+    known but not configured", and `build_onchain_payment` turns that None into
+    a null `onchain` block on an otherwise-successful 201 — an intent nobody can
+    pay and no indexer watches. Callers on the money path use this predicate to
+    fail closed instead; the registry itself stays free of HTTP concerns.
+
+    Deliberately NOT the same question as `chain_is_supported`, which only asks
+    whether the chain canonicalizes into the token registry.
+    """
+    return (
+        router_address_for(chain) is not None
+        or router_v2_address_for(chain) is not None
+    )
+
+
 def split_router_address_for(chain: str) -> Optional[str]:
     """RSendsSplitRouter address for the chain (settings.split_router_addresses).
 

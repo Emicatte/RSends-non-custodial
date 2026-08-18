@@ -27,6 +27,11 @@ logger = logging.getLogger("api_keys")
 
 PREFIX_LEN = 24
 
+# The only environments a key may carry. Kept in step with
+# app.models.api_key_models.KeyEnvironment, which enforces the same set on the
+# column; importing it here would be a cycle (models import this module's peers).
+_VALID_ENVIRONMENTS = frozenset({"test", "live"})
+
 # Endpoints esenti da API key auth
 EXEMPT_PATHS = {
     "/health",
@@ -112,20 +117,35 @@ def _v2_verify(key: str, hashed: str) -> bool:
         return False
 
 
-def generate_api_key(environment: str = "live") -> tuple[str, dict]:
+def generate_api_key(environment: str = "test") -> tuple[str, dict]:
     """Generate a new API key with v2 (bcrypt) hashing.
 
     Returns (plaintext_key, db_fields). The plaintext is shown once to the
-    merchant and never stored. db_fields contains all columns for ApiKey.
+    merchant and never stored. db_fields contains all columns for ApiKey —
+    INCLUDING `environment`, so a caller that does `ApiKey(**db_fields)` cannot
+    end up with a row whose column contradicts the prefix baked into the key
+    string. Verification reads the column while the merchant reads the string;
+    they must be one decision, made here.
+
+    The value is normalized and validated rather than defaulted: the branch used
+    to be `"rsend_test_" if environment == "test" else "rsend_live_"`, so any
+    value that was not exactly "test" — a typo, a casing variant, an empty
+    string — silently produced a live-looking key. Raises ValueError instead.
     """
-    prefix = "rsend_test_" if environment == "test" else "rsend_live_"
-    plaintext = f"{prefix}{secrets.token_hex(24)}"
+    env = (environment or "").strip().lower()
+    if env not in _VALID_ENVIRONMENTS:
+        raise ValueError(
+            f"environment must be one of {sorted(_VALID_ENVIRONMENTS)}, got {environment!r}"
+        )
+
+    plaintext = f"rsend_{env}_{secrets.token_hex(24)}"
     db_fields = {
         "key_hash": hash_api_key(plaintext),
         "key_prefix": plaintext[:PREFIX_LEN],
         "display_prefix": plaintext[:20] + "...",
         "key_hash_v2": _v2_hash(plaintext),
         "hash_version": 2,
+        "environment": env,
     }
     return plaintext, db_fields
 

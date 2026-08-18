@@ -16,16 +16,23 @@ Direct-handler tests (no live server), same pattern as
 test_merchant_env_isolation.py: fake `request.state.client`, real SQLite.
 """
 
+import secrets
+
 import pytest
 import pytest_asyncio
 from types import SimpleNamespace
+from uuid import uuid4
 
 from fastapi import HTTPException
 from sqlalchemy import func, select
 
 from app.db.session import async_session, engine
 from app.models.db_models import Base
+from app.models.api_key_models import ApiKey
+from app.models.auth_models import User
 from app.models.merchant_models import CreatePaymentIntentRequest, PaymentIntent
+from app.models.org_models import Organization
+from app.security.api_keys import generate_api_key
 from app.api.merchant_routes import create_payment_intent
 
 OWNER = "0x742d35cc6634c0532925a3b844bc9e7595f2bd18"
@@ -54,10 +61,50 @@ async def session():
         yield s
 
 
-def _req(environment: str, *, owner: str = OWNER):
+def _req(environment: str, *, owner: str = OWNER, key_id=None):
     """Fake Request as APIKeyMiddleware would leave it for an authenticated key."""
     client = {"client_id": owner, "environment": environment}
+    if key_id is not None:
+        client["key_id"] = key_id
     return SimpleNamespace(state=SimpleNamespace(client=client))
+
+
+async def _activated_key(session) -> ApiKey:
+    """A live key whose org has completed business verification.
+
+    Mainnet creation goes through check_org_chain_access at the shared
+    construction site, so reaching the CHAIN gate on a mainnet chain requires an
+    activated org first. This is a precondition of the test, not what it asserts.
+    """
+    user = User(
+        id=str(uuid4()),
+        email=f"{secrets.token_hex(6)}@example.com",
+        account_type="individual",
+    )
+    session.add(user)
+    await session.flush()
+    org = Organization(
+        name="Org " + secrets.token_hex(3),
+        slug=secrets.token_hex(8),
+        owner_user_id=user.id,
+        is_personal=False,
+        plan="free",
+        activation_status="active",
+    )
+    session.add(org)
+    await session.flush()
+    _plaintext, fields = generate_api_key(environment="live")
+    key = ApiKey(
+        owner_address=OWNER,
+        org_id=str(org.id),
+        **fields,
+        label="chain-gate",
+        scope="write",
+    )
+    session.add(key)
+    await session.commit()
+    await session.refresh(key)
+    return key
 
 
 def _payload(chain: str) -> CreatePaymentIntentRequest:
@@ -172,8 +219,11 @@ async def test_base_sepolia_still_creates_on_test_key(session, monkeypatch):
 async def test_base_still_accepted_on_live_key(session, monkeypatch):
     """Intended-pending-mainnet chain (in the registry): behavior unchanged."""
     _stub_side_effects(monkeypatch)
+    key = await _activated_key(session)
 
-    resp = await create_payment_intent(_payload("base"), _req("live"), db=session)
+    resp = await create_payment_intent(
+        _payload("base"), _req("live", key_id=key.id), db=session
+    )
 
     row = (await session.execute(
         select(PaymentIntent).where(PaymentIntent.intent_id == resp.intent_id)

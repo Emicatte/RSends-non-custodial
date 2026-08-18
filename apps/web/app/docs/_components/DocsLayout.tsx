@@ -20,6 +20,7 @@ export const NAV: NavGroup[] = [
     title: 'Get started',
     items: [
       { href: '/docs', label: 'Overview' },
+      { href: '/docs/quickstart', label: 'Quickstart' },
       { href: '/docs/authentication', label: 'Authentication' },
       { href: '/docs/testing', label: 'Testing' },
     ],

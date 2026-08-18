@@ -1,4 +1,4 @@
-"""Router-level dependency: the merchant API-key surface requires an APPROVED org.
+"""Router-level dependency: the merchant API-key surface and the org approval gate.
 
 The API key's `client_id` (== owner wallet address) is resolved to its org —
 the reverse of app/services/owner_identity.py's org->address resolution:
@@ -7,11 +7,20 @@ the reverse of app/services/owner_identity.py's org->address resolution:
     2. else an org whose `settlement_wallet` is that address (the
        email-onboarded merchant path).
 
-Either way the resolution must be UNAMBIGUOUS (exactly one org) and that org
-must be `approved`; declined orgs get the distinct `approval_declined` code.
-Unresolvable or ambiguous owners are denied `approval_pending` — fail closed.
+The resolution must be UNAMBIGUOUS (exactly one org). Unresolvable or ambiguous
+owners are denied `approval_pending` — fail closed, in EVERY environment: this
+is a tenant-safety property, not an approval one, and it never relaxed.
+
+What the resolved org must then satisfy is environment-scoped and lives in
+app/api/deps/approval_policy.py:
+
+    `rsend_test_` key -> passes unless the org is `declined`. A sandbox key can
+                         only touch Base Sepolia with faucet tokens, and the
+                         company profile was already required to mint it.
+    `rsend_live_` key -> UNCHANGED: the org must be `approved`.
+
 Every org that existed before the approval feature was backfilled 'approved'
-by migration 0010, so no live key loses access at rollout.
+by migration 0010, so no live key loses access.
 
 An unauthenticated request (no `request.state.client`) is NOT this gate's job:
 it falls through so the route's own `_get_merchant_id` raises its canonical
@@ -24,6 +33,7 @@ from fastapi import Depends, HTTPException, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps.approval_policy import approval_denial
 from app.db.session import get_db
 from app.models.org_models import Organization
 from app.models.user_wallets_models import UserWallet
@@ -45,6 +55,9 @@ async def require_approved_merchant(
         return  # handler's _get_merchant_id raises the canonical 401
 
     owner = str(client["client_id"]).lower()
+    # Same field merchant_routes._get_environment reads; "live" when absent so
+    # an unstamped key gets the STRICT rule, never the sandbox carve-out.
+    environment = client.get("environment") or "live"
 
     org_ids = (
         (
@@ -81,9 +94,10 @@ async def require_approved_merchant(
             )
         )
     ).one_or_none()
-    status = row[0] if row else None
-    if status == "approved":
-        return
-    if status == "declined":
-        raise _deny("approval_declined", row[1] or "")
-    raise _deny("approval_pending")
+    denial = approval_denial(
+        row[0] if row else None,
+        environment=environment,
+        decline_reason=row[1] if row else None,
+    )
+    if denial is not None:
+        raise denial
