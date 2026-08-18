@@ -173,10 +173,17 @@ client-supplied) and is environment-scoped (`Literal["test","live"]`, default `t
 primary EVM wallet (SIWE-linked in `/settings/wallets`) — always wins, orgs with a linked wallet
 resolve exactly as before; (2) fail-closed fallback to `organizations.settlement_wallet` — the
 email-onboarded merchant path — ONLY if the address has no competing claim anywhere: any
-`user_wallets` row (ANY org, **including unlinked/historical**), any other org's
+**other org's** `user_wallets` row (**including unlinked/historical**), any other org's
 `settlement_wallet`, or any `api_keys.owner_address` (active OR revoked) → 409
 `settlement_wallet_conflict`, never a cross-tenant read (re-checked per request, so a later
-SIWE link by the real owner immediately revokes a squatter's fallback). Neither wallet → 409
+SIWE link by the real owner immediately revokes a squatter's fallback). All three checks carve
+out the **resolving org itself and nothing more** — the two over a nullable tenant column
+(`user_wallets.org_id`, `api_keys.org_id`) with a NULL arm, since a bare `!= org_id` would not
+count a NULL-org row. The foreign-org promise is unchanged, unlinked rows included; only
+self-claims stopped counting (fixed 2026-08-18 — an org whose `settlement_wallet` was an
+address it had SIWE-linked and later unlinked 409'd against itself permanently, locking its
+own dashboard/stats/keys with no in-product remedy; the `user_wallets` check was the one of
+the three that lacked the carve-out). Neither wallet → 409
 `no_primary_wallet` (kept for frontend compat). Accepted trade-off: linking a primary wallet
 that differs from the settlement wallet flips the dashboard identity and settlement-keyed
 intents drop out of view (still payable/settleable — checkout/indexer key by intent). Pinned by

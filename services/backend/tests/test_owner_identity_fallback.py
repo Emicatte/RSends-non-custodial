@@ -7,8 +7,10 @@ only a settlement wallet got 409 `no_primary_wallet` on every org route. The
 fallback: when no primary wallet exists, resolve the org's `settlement_wallet` —
 but ONLY if that address has no competing identity claim anywhere (fail-closed):
 
-- any `user_wallets` row with the address, ANY org, INCLUDING unlinked/historical
-  rows (someone once proved control via SIWE);
+- any `user_wallets` row with the address belonging to any OTHER org, INCLUDING
+  unlinked/historical rows (someone else once proved control via SIWE) — but NOT
+  the org's own rows: its own history is not a competing claim, and counting it
+  409'd a real merchant against itself for two days (fix 2026-08-18);
 - any OTHER org with the same `settlement_wallet` (column is not unique);
 - any `api_keys.owner_address` equal to it, active OR revoked (an rsend_ mint
   proved control via EIP-191).
@@ -147,6 +149,29 @@ def _mk_api_key(owner_address, *, revoked=False):
     )
 
 
+async def _make_org_id_nullable(session):
+    """Make `user_wallets.org_id` temporarily nullable so a legacy NULL-org row
+    can be seeded (the model and the DB are NOT NULL).
+
+    Same technique as tests/test_api_keys_org_id.py's pre-0014 rebuild —
+    drop/create rather than ALTER COLUMN, which SQLite (the test engine) cannot
+    parse — but applied to the live Table object so the FKs to users/
+    organizations survive the round trip. Nothing FK-references user_wallets,
+    so dropping it is safe; the flag is restored immediately after the DDL.
+    """
+    table = UserWallet.__table__
+
+    def _rebuild(sync_conn):
+        table.drop(sync_conn)
+        table.columns["org_id"].nullable = True
+        try:
+            table.create(sync_conn)
+        finally:
+            table.columns["org_id"].nullable = False
+
+    await (await session.connection()).run_sync(_rebuild)
+
+
 def _ctx(org, role="operator"):
     return ("user-unused", str(org.id), role)
 
@@ -237,6 +262,55 @@ async def test_unlinked_wallet_still_blocks_fallback(session):
 
     with pytest.raises(HTTPException) as exc:
         await _resolve_owner_address(session, str(org_b.id))
+    assert exc.value.status_code == 409
+    assert exc.value.detail["code"] == "settlement_wallet_conflict"
+
+
+@pytest.mark.asyncio
+async def test_own_unlinked_wallet_does_not_block_own_fallback(session):
+    """The org's OWN historical row is its own history, not a competing claim.
+
+    Reproduces the production lock-out: an org SIWE-linked its settlement
+    address, later unlinked it, and then 409'd `settlement_wallet_conflict` on
+    every resolve — the primary lookup skips unlinked rows, the claim count did
+    not, so the org competed with itself with no in-product remedy. Mirror of
+    test_unlinked_wallet_still_blocks_fallback above: same row, own org.
+    """
+    org = await _make_org(session, settlement=SETTLE_A, unlinked_wallet=SETTLE_A)
+
+    assert await _resolve_owner_address(session, str(org.id)) == SETTLE_A
+
+    # …and the dashboard routes are unblocked end to end — this is what 409'd.
+    page = await _list(org, session)
+    assert page.total == 0
+
+
+@pytest.mark.asyncio
+async def test_null_org_wallet_row_still_blocks_fallback(session):
+    """A `user_wallets` row with a NULL org_id is not this org's row → 409.
+
+    Pins the NULL arm of the carve-out: a bare `org_id != org_id` would not
+    count such a row (SQL three-valued logic), turning a fail-closed check into
+    a hole. org_id is NOT NULL today, so this is the belt for a not-yet-
+    migrated DB — same reason `keyed` carries the arm for api_keys.
+    """
+    await _make_org_id_nullable(session)
+    org = await _make_org(session, settlement=SETTLE_A)
+    session.add(
+        UserWallet(
+            user_id=org.owner_user_id,
+            org_id=None,
+            address=SETTLE_A,
+            display_address=SETTLE_A,
+            verified_chain_id=84532,
+            is_primary=False,
+            chain_family="evm",
+        )
+    )
+    await session.commit()
+
+    with pytest.raises(HTTPException) as exc:
+        await _resolve_owner_address(session, str(org.id))
     assert exc.value.status_code == 409
     assert exc.value.detail["code"] == "settlement_wallet_conflict"
 
