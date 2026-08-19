@@ -1096,3 +1096,68 @@ body.admin-mode::after {
    (reduced-motion / no-JS users keep this static visible state). */
 .rs-reveal { opacity: 1; }
 .rs-card { opacity: 1; }
+
+/* ─── Home hero + page entrance ───────────────────────────────────────────────
+   These animations used to be framer-motion `initial` props and an
+   `opacity: ready ? 1 : 0` gate flipped by an effect, which meant the served
+   HTML was blank until React hydrated. Here every element RESTS in its natural,
+   visible state and the entrance is layered on top as an override — so a slow,
+   failed or disabled bundle leaves readable content behind.
+
+   The media query below is the CSS half of MOTION_QUERY in lib/motion.ts.
+   CSS cannot import a TS constant: change one, change the other. Below 768px,
+   and under prefers-reduced-motion, none of these rules exist at all — mobile
+   gets no entrance animation, which is the point.
+
+   `backwards` (not `both`/`forwards`) is load-bearing: it holds the `from` state
+   through the delay and then leaves the element on its own visible styles, so
+   nothing is ever left hidden by a finished or interrupted animation. */
+@keyframes rsPageIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes rsHeroRise {
+  from { opacity: 0; transform: translateY(var(--rs-hero-y, 12px)); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes rsHeroLine {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+@keyframes rsHeroWord {
+  from { transform: translateY(110%); }
+  to   { transform: translateY(0); }
+}
+/* Both frames keep the -50% vertical centring the element rests on. */
+@keyframes rsHeroGlobe {
+  from { opacity: 0; transform: translateY(-50%) scale(0.9); }
+  to   { opacity: 1; transform: translateY(-50%) scale(1); }
+}
+
+@media (min-width: 768px) and (prefers-reduced-motion: no-preference) {
+  .main-content {
+    animation: rsPageIn 0.9s ease backwards;
+  }
+  .rs-hero-rise {
+    animation: rsHeroRise var(--rs-hero-dur, 0.6s) cubic-bezier(0.22, 1, 0.36, 1)
+               var(--rs-hero-delay, 0s) backwards;
+  }
+  .rs-hero-line {
+    animation: rsHeroLine 1.2s cubic-bezier(0.22, 1, 0.36, 1)
+               var(--rs-hero-delay, 0s) backwards;
+  }
+  /* Its own variable, not --rs-hero-delay: custom properties inherit, so a
+     .rs-hero-rise ancestor would otherwise hand its delay to every word. */
+  .rs-hero-word {
+    animation: rsHeroWord 0.9s cubic-bezier(0.22, 1, 0.36, 1)
+               var(--rs-hero-word-delay, 0s) backwards;
+  }
+  .rs-hero-globe {
+    animation: rsHeroGlobe 1.2s cubic-bezier(0.22, 1, 0.36, 1) 0.4s backwards;
+  }
+  /* The clip box exists ONLY while the words actually travel. Outside this
+     query the wrapper does not clip, so the headline can never be hidden. */
+  .rs-hero-word-clip {
+    overflow: hidden;
+  }
+}

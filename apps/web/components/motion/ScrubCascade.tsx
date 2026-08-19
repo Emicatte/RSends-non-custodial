@@ -3,6 +3,7 @@
 import { ReactNode, useRef, useLayoutEffect, useEffect } from 'react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
+import { MOTION_QUERY } from '@/lib/motion'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -32,8 +33,13 @@ type Props = {
  * so they reveal strictly one after another in DOM order (1 -> 2 -> 3 -> 4), even when
  * several share a grid row. Each later card starts a bit deeper in the viewport, which
  * breaks the pairwise sync of a 2x2 grid. Progress still scrubs with the wheel/trackpad
- * (stop -> hold, scroll up -> reverse). Respects prefers-reduced-motion; the base CSS
- * `.rs-card { opacity: 1 }` keeps content visible when the animation never runs.
+ * (stop -> hold, scroll up -> reverse).
+ *
+ * Gated on `MOTION_QUERY`: below 768px, and under prefers-reduced-motion, the
+ * triggers are never created (gsap.matchMedia scopes them and reverts them
+ * itself if the viewport crosses the breakpoint). The base CSS
+ * `.rs-card { opacity: 1 }` keeps content visible whenever the animation does
+ * not run — nothing here is responsible for making content appear.
  */
 export default function ScrubCascade({
   children,
@@ -49,7 +55,7 @@ export default function ScrubCascade({
 
   useIsoLayoutEffect(() => {
     const mm = gsap.matchMedia()
-    mm.add('(prefers-reduced-motion: no-preference)', () => {
+    mm.add(MOTION_QUERY, () => {
       const ctx = gsap.context(() => {
         // Scope to THIS section's own .rs-card so multiple cascades don't cross-target.
         const q = gsap.utils.selector(ref)

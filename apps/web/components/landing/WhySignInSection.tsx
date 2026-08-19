@@ -8,6 +8,7 @@ import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { C } from "@/app/designTokens";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { MOTION_QUERY } from "@/lib/motion";
 import ScrubCascade from "@/components/motion/ScrubCascade";
 
 gsap.registerPlugin(ScrollTrigger);
@@ -32,7 +33,9 @@ export function WhySignInSection() {
 
   useIsoLayoutEffect(() => {
     const mm = gsap.matchMedia();
-    mm.add("(prefers-reduced-motion: no-preference)", () => {
+    // Gated on MOTION_QUERY: no triggers below 768px or under reduced motion.
+    // The copy has no hidden base state, so it simply stays visible there.
+    mm.add(MOTION_QUERY, () => {
       const root = textRef.current;
       if (!root) return;
       const ctx = gsap.context(() => {

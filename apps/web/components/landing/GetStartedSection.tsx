@@ -6,6 +6,7 @@ import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { ShieldCheck, Code2, type LucideIcon } from 'lucide-react'
 import { C } from '@/app/designTokens'
+import { MOTION_QUERY } from '@/lib/motion'
 import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 
@@ -45,7 +46,9 @@ export default function GetStartedSection() {
   // footer). The photo is static; reverses on scroll-up; nothing is hover-triggered.
   useIsoLayoutEffect(() => {
     const mm = gsap.matchMedia()
-    mm.add('(prefers-reduced-motion: no-preference)', () => {
+    // Gated on MOTION_QUERY: no timeline below 768px or under reduced motion.
+    // `.rs-gs-text` has no hidden base state, so it simply stays visible there.
+    mm.add(MOTION_QUERY, () => {
       const ctx = gsap.context(() => {
         const items = gsap.utils.toArray<HTMLElement>('.rs-gs-text')
         if (!items.length) return
