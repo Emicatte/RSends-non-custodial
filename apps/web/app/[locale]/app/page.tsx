@@ -2,8 +2,10 @@
 
 import { useTranslations } from 'next-intl'
 import { GetStartedChecklist } from '@/components/app/GetStartedChecklist'
+import { VolumeTrendChart } from '@/components/app/VolumeTrendChart'
 import { appPage, card } from '@/components/app/pageStyles'
 import { useOrgStats } from '@/hooks/useOrgStats'
+import { useOrgVolumeSeries } from '@/hooks/useOrgVolumeSeries'
 
 const COLORS = {
   ink: '#1a1a1a',
@@ -81,6 +83,13 @@ export default function AppDashboardPage() {
   // org stats (settlement_wallet join + USD conversion) instead of the
   // wallet-signature `dashboard/stats` whose primary-wallet scope broke post-B.
   const { stats, loading, error } = useOrgStats()
+  // Separate, unpolled read — see useOrgVolumeSeries. An error renders the
+  // designed empty state rather than a chart built from nothing.
+  const {
+    buckets: series,
+    loading: seriesLoading,
+    error: seriesError,
+  } = useOrgVolumeSeries(7)
 
   const showErr = error || !stats
   const pct = stats?.volume_24h_delta_pct ?? 0
@@ -189,18 +198,10 @@ export default function AppDashboardPage() {
         >
           {t('volumeTrend.title')}
         </h2>
-        <div
-          className="flex h-60 items-center justify-center rounded-lg"
-          style={{
-            border: `1px dashed ${COLORS.border}`,
-            color: COLORS.subtle,
-            fontFamily: 'var(--font-display)',
-            fontSize: 13,
-            fontWeight: 500,
-          }}
-        >
-          {t('volumeTrend.comingSoon')}
-        </div>
+        <VolumeTrendChart
+          buckets={seriesError ? null : series}
+          loading={seriesLoading && !series}
+        />
       </section>
 
       {/* Recent transactions */}

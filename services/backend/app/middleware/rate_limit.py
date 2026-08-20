@@ -83,7 +83,11 @@ ENDPOINT_LIMITS: list[tuple[str, str, int, int, str]] = [
     ("POST",   "/api/v1/user/org/merchant-keys/",    10,    60,  "ip"),  # {id}/revoke
     ("POST",   "/api/v1/user/org/merchant-keys",      5,  3600,  "ip"),  # mint
     ("GET",    "/api/v1/user/org/merchant-keys",     120,    60,  "ip"),  # list
-    # Session-authed org stats (Phase E) — per-IP.
+    # Session-authed org stats (Phase E) — per-IP. The volume-series SUBPATH must
+    # precede the bare `stats` prefix: _match_endpoint returns the first
+    # startswith hit, so the bare entry would otherwise shadow it into dead code.
+    # Lower ceiling than the tiles because the /app card does not poll it.
+    ("GET",    "/api/v1/user/org/stats/volume-series", 60,   60,  "ip"),
     ("GET",    "/api/v1/user/org/stats",             120,    60,  "ip"),
     # Session-authed onboarding (state, consents, company profile) — per-IP
     # (JWT, no API key). The submit subpath MUST precede the bare
