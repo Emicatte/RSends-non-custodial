@@ -74,6 +74,13 @@ jobs:
       REDIS_URL: "redis://localhost:6379/0"
       ALEMBIC_TEST_DATABASE_URL: "postgresql+asyncpg://postgres:postgres@localhost:5432/rsends_test"
       CONCURRENCY_TEST_DATABASE_URL: "postgresql+asyncpg://postgres:postgres@localhost:5432/rsends_concurrency"
+      # tests/test_user_wallets_violated_asyncpg.py — the wallet 409 handlers
+      # discriminate on a constraint name, which asyncpg and SQLite expose
+      # differently. With DATABASE_URL on SQLite above, CI would only ever run
+      # the SQLite branch; that blind spot let `_violated` return False on
+      # asyncpg (500 instead of 409) while CI stayed green. Own database name,
+      # same rule as the two above.
+      WALLETS_PG_TEST_DATABASE_URL: "postgresql+asyncpg://postgres:postgres@localhost:5432/rsends_wallets"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

@@ -283,9 +283,12 @@ async def test_promote_primary_flushes_inside_the_guarded_block(session):
     `is_primary` is only sent at `db.commit()` — which sits OUTSIDE that try. If
     the promote does not flush, a one-primary violation escapes the handler and
     the caller gets a 500 instead of the retry-then-409 the code was written to
-    do. Pinned here because the cross-transaction proof needs real Postgres
-    (test_concurrency_postgres.py) and cannot run on the suite's shared-
-    connection SQLite engine.
+    do. Pinned here as a cheap structural check because the cross-transaction
+    proof needs two real connections (test_concurrency_postgres.py) and cannot
+    run on a shared-connection SQLite engine — which is what this module gets
+    under CI's `DATABASE_URL=sqlite+aiosqlite://`, though a local run gets
+    Postgres. See test_user_wallets_violated_asyncpg.py for the asyncpg-pinned
+    half of this behaviour.
     """
     user_id, org_id = await _make_org(session)
     first = _wallet(user_id, org_id, ADDR_A, primary=True)
@@ -307,9 +310,15 @@ async def test_promote_primary_flushes_inside_the_guarded_block(session):
 @pytest.mark.asyncio
 async def test_create_all_produces_both_partial_indexes(session):
     """Asserted against the database catalogue, not the model — the whole defect
-    was that the model and the database disagreed. Dialect-aware: the suite runs
-    SQLite, production runs Postgres, and a `postgresql_where`-only index would
-    silently degrade to a FULL unique index on SQLite.
+    was that the model and the database disagreed.
+
+    Dialect-aware because this module has NO fixed dialect: it uses the app's
+    global engine, whose driver comes from an ambient `DATABASE_URL` the test
+    does not control. A plain local `pytest` runs **Postgres/asyncpg** (from
+    `.env`); **CI overrides it to `sqlite+aiosqlite://`**. So both branches are
+    live, and each is only ever observed in one of the two places. A
+    `postgresql_where`-only index would silently degrade to a FULL unique index
+    on the SQLite side, which is why the model supplies both predicates.
     """
     dialect = session.bind.dialect.name
 

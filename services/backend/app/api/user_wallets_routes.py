@@ -102,29 +102,76 @@ IDX_ACTIVE_ADDRESS = ("uq_user_wallets_active_org", ("org_id", "chain_family", "
 IDX_ONE_PRIMARY = ("uq_user_wallets_one_primary_org", ("org_id", "chain_family"))
 
 
+def _constraint_name(exc: IntegrityError) -> Optional[str]:
+    """The offending constraint's name, or None when the driver doesn't say.
+
+    **asyncpg** (what production runs) carries `constraint_name` directly on its
+    own exception, and SQLAlchemy's dialect re-raises the wrapper with
+    ``raise translated_error from error`` — so the object holding the name is
+    the `__cause__`, not `exc.orig` itself:
+
+        exc.orig              AsyncAdapt_asyncpg_dbapi.IntegrityError
+        exc.orig.__cause__    asyncpg.exceptions.UniqueViolationError
+        …__cause__.constraint_name   'uq_user_wallets_active_org'
+
+    There is no `.diag` on this driver — reading `exc.orig.diag.constraint_name`
+    (the psycopg2 shape) silently yielded None, which is how both 409 handlers
+    came to return 500 in production while the SQLite-backed CI stayed green.
+    `exc.orig` is probed first so a future SQLAlchemy that surfaces the name
+    directly keeps working.
+    """
+    orig = getattr(exc, "orig", None)
+    for candidate in (orig, getattr(orig, "__cause__", None)):
+        name = getattr(candidate, "constraint_name", None)
+        if name:
+            return str(name)
+    # psycopg2 shape. Not installed today; kept so introducing a sync driver
+    # cannot silently drop back to the unrecognised-shape path below.
+    diag = getattr(orig, "diag", None)
+    name = getattr(diag, "constraint_name", None)
+    return str(name) if name else None
+
+
 def _violated(exc: IntegrityError, index: Tuple[str, Tuple[str, ...]]) -> bool:
     """True when `exc` is a violation of `index`, on either dialect.
 
     The two dialects identify the offending index differently: Postgres names it
-    (`exc.orig.diag.constraint_name`), SQLite names the COLUMNS —
+    (see `_constraint_name`), SQLite names the COLUMNS —
     ``UNIQUE constraint failed: user_wallets.org_id, user_wallets.chain_family``.
     Discriminating matters because both handlers below map an IntegrityError to
     a specific 409: without this, an unrelated violation (a future constraint, a
     NOT NULL, an FK) would be reported to the caller as `wallet_already_linked`,
     which is a lie about what went wrong.
+
+    An unrecognised shape returns False, which re-raises and surfaces a 500 —
+    ugly but honest, and never a confidently wrong 409. It logs, because the
+    absence of any signal is precisely why the asyncpg gap survived unnoticed.
     """
     name, columns = index
-    diag = getattr(getattr(exc, "orig", None), "diag", None)
-    constraint = getattr(diag, "constraint_name", None)
+    constraint = _constraint_name(exc)
     if constraint:
+        # A different constraint is understood, not unknown: no warning.
         return constraint == name
+
     message = str(getattr(exc, "orig", exc))
-    if "UNIQUE constraint failed" not in message:
-        return False
-    reported = {
-        part.strip().split(".")[-1] for part in message.split(":", 1)[1].split(",")
-    }
-    return reported == set(columns)
+    if "UNIQUE constraint failed" in message:
+        reported = {
+            part.strip().split(".")[-1] for part in message.split(":", 1)[1].split(",")
+        }
+        return reported == set(columns)
+
+    orig = getattr(exc, "orig", None)
+    # Types only — a Postgres duplicate-key message appends
+    # `DETAIL: Key (…)=(0x…) already exists`, and this module logs address
+    # PREFIXES, never whole addresses (see the module docstring).
+    log.warning(
+        "IntegrityError shape not recognised; not mapped to a 409 "
+        "(orig=%s, cause=%s, index=%s)",
+        type(orig).__name__,
+        type(getattr(orig, "__cause__", None)).__name__,
+        name,
+    )
+    return False
 
 
 def _sanitize_label(raw: Optional[str]) -> str:
