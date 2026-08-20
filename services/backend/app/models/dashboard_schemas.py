@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date as date_
 from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict
@@ -43,3 +44,32 @@ class OrgDashboardStats(DashboardStats):
     settlement_wallet_set: bool
     has_api_key: bool
     has_paid_payment: bool
+
+
+class VolumeBucket(BaseModel):
+    """One UTC calendar day of settled USD volume.
+
+    `date` is a bare UTC calendar date with no time and no offset, so the
+    client never has to guess a timezone to place the point; it decides only
+    how to LABEL it. A quiet day is a bucket with `volume_usd == 0.0`, never an
+    omitted entry — a gap in this array is how a chart draws a misleading line.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    date: date_
+    volume_usd: float
+
+
+class VolumeSeriesResponse(BaseModel):
+    """`GET /api/v1/user/org/stats/volume-series` — the /app volume-trend card.
+
+    `days` is echoed back so the client never infers the series length from
+    `len(buckets)`; the two are always equal, and a mismatch is a bug worth
+    seeing rather than silently rendering a short chart.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    days: int
+    buckets: List[VolumeBucket]

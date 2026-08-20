@@ -1410,7 +1410,9 @@
       },
       "volumeTrend": {
         "title": "Andamento volume (7g)",
-        "comingSoon": "Grafico in arrivo"
+        "empty": "Nessun volume negli ultimi 7 giorni",
+        "emptyHint": "I pagamenti compariranno qui man mano che vengono regolati.",
+        "axisLabel": "Volume giornaliero (USD)"
       },
       "recentTransactions": {
         "title": "Transazioni recenti",

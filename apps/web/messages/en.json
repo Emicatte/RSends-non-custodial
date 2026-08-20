@@ -1410,7 +1410,9 @@
       },
       "volumeTrend": {
         "title": "Volume trend (7d)",
-        "comingSoon": "Chart coming soon"
+        "empty": "No volume in the last 7 days",
+        "emptyHint": "Payments will appear here as they settle.",
+        "axisLabel": "Daily volume (USD)"
       },
       "recentTransactions": {
         "title": "Recent transactions",

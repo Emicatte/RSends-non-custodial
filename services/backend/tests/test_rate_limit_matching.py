@@ -29,3 +29,16 @@ def test_get_intent_by_id_uses_get_subpath_limit():
 
 def test_org_patch_has_explicit_ip_limit():
     assert _match_endpoint("PATCH", "/api/v1/organizations/00000000-0000-0000-0000-000000000000") == (30, 60, "ip")
+
+
+def test_volume_series_subpath_not_shadowed_by_bare_stats_prefix():
+    """`/user/org/stats` is a prefix of `/user/org/stats/volume-series`, so the
+    bare entry MUST sit BELOW the subpath one or the subpath becomes dead code
+    — the exact bug this module guards for payment-intent."""
+    assert _match_endpoint(
+        "GET", "/api/v1/user/org/stats/volume-series"
+    ) == (60, 60, "ip")
+
+
+def test_bare_org_stats_still_matches_its_own_limit():
+    assert _match_endpoint("GET", "/api/v1/user/org/stats") == (120, 60, "ip")
