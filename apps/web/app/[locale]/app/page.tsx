@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl'
 import { GetStartedChecklist } from '@/components/app/GetStartedChecklist'
 import { appPage, card } from '@/components/app/pageStyles'
+import { useClientNow } from '@/hooks/useClientNow'
 import { useOrgStats } from '@/hooks/useOrgStats'
 
 const COLORS = {
@@ -63,9 +64,28 @@ type TxRow = {
 
 const RTF = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
 
-function relTime(iso: string, nowMs: number): string {
+// Deterministic fallback for the render passes that have no clock (see
+// useClientNow). Locale and zone are pinned rather than resolved from the
+// ambient environment, so the server and the browser always agree.
+const ABS_TIME_FMT = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  timeZone: 'UTC',
+  timeZoneName: 'short',
+})
+
+/**
+ * Relative label once the clock is available, absolute UTC before that.
+ * `nowMs === null` on the server and the first client render, so both emit the
+ * same absolute string; the relative form is a post-mount upgrade, never a
+ * blank.
+ */
+function relTime(iso: string, nowMs: number | null): string {
   const ts = new Date(iso).getTime()
   if (!Number.isFinite(ts)) return ''
+  if (nowMs === null) return ABS_TIME_FMT.format(ts)
   const diffSec = Math.round((ts - nowMs) / 1000)
   const abs = Math.abs(diffSec)
   if (abs < 60) return RTF.format(diffSec, 'second')
@@ -99,7 +119,8 @@ export default function AppDashboardPage() {
         { key: 'activeClients', value: String(stats.active_clients), delta: t('metrics.thisWeek', { count: stats.active_clients_this_week }), deltaPositive: true, deltaIsCount: true },
       ]
 
-  const nowMs = Date.now()
+  // Never `Date.now()` in the render body — see useClientNow.
+  const nowMs = useClientNow()
   const txs: ReadonlyArray<TxRow> = (stats?.recent_transactions ?? []).map((r, idx) => ({
     id: r.id || idx + 1,
     time: relTime(r.timestamp_iso, nowMs),
