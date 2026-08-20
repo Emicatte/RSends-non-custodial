@@ -93,6 +93,18 @@ The one friction point is infra/setup, not a relaxation: Redis must be a TLS
 
 ### Prerequisites **[AZIONE UTENTE]**
 - **Foundry** installed (`foundryup`).
+- **Build inputs are PINNED — do not override them.** `packages/contracts/foundry.toml` sets
+  `solc_version = "0.8.36"` and `evm_version = "cancun"`, and the three production sources pin
+  `pragma solidity 0.8.36;`. Run every build and deploy from `packages/contracts/` so that file
+  applies, and do **not** pass `--use` / `--evm-version` or rely on a global Foundry profile.
+  *Why:* these contracts are immutable, and solc's **default** EVM target moved twice in 2025
+  (0.8.30 `cancun`→`prague`, 0.8.31 →`osaka`). Unpinned, two builds of the same commit can
+  produce different bytecode and nobody can verify a deployed contract against this source.
+  0.8.36 is the earliest release with no outstanding entry in the official Solidity bug list —
+  0.8.28–0.8.33 carry a High-severity via-IR bug (SOL-2026-1) and this repo builds `via_ir`.
+  `cancun` is the lowest target the whole build compiles on; `src/` alone would compile at
+  `paris`, but the OZ `ERC20Permit` test mocks reach `mcopy`. Base has supported `cancun` since
+  Ecotone (March 2024). The full reasoning is commented in `foundry.toml` itself.
 - **Deployer wallet** funded with Base Sepolia ETH — faucet:
   https://www.alchemy.com/faucets/base-sepolia (or Coinbase CDP faucet).
 - **RPC URL** for Base Sepolia (public `https://sepolia.base.org`, or an Alchemy
@@ -415,7 +427,21 @@ after further backend changes.
   payer-side — `src/RSendsRouter.sol:72-73`).
 
 ### 6a. Deploy `RSendsRouterV2` on mainnet **[AZIONE UTENTE]**
-No constructor args, no owner, nothing to configure after deploy:
+No constructor args, no owner, nothing to configure after deploy.
+
+**Before broadcasting — confirm the build is the pinned, reproducible one.** This is the last
+moment it can be checked; after the deploy the bytecode is immutable forever.
+```bash
+cd packages/contracts
+forge clean && forge build          # run twice; the hash below must not change
+python3 -c "import json;from eth_utils import keccak;d=json.load(open('out/RSendsRouterV2.sol/RSendsRouterV2.json'));print(d['metadata']['compiler']['version'], d['metadata']['settings']['evmVersion']);print('0x'+keccak(bytes.fromhex(d['deployedBytecode']['object'][2:])).hex())"
+```
+Expected, as of the pin (`chore/pin-solc-evm-target`):
+`0.8.36+commit.8a079791`, `cancun`, runtime keccak
+`0xc9f741a0bcce7e051a91d66a09c3b42edfd4b7efa346e200267c40af0ac8dd5b`.
+A different hash means the source, the compiler or the EVM target changed — find out which
+**before** deploying, do not proceed and reconcile afterwards.
+
 ```bash
 cd packages/contracts
 forge script script/DeployRouterV2.s.sol:DeployRouterV2 \

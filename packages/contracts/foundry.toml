@@ -2,10 +2,41 @@
 src = "src"
 out = "out"
 libs = ["lib"]
-# Aggiungi queste tre righe sotto:
+
 optimizer = true
 optimizer_runs = 200
 via_ir = true
+
+# ── PINNED build inputs — do not remove, do not bump casually ──
+# These contracts deploy IMMUTABLY, so the compiler and the EVM target must be a
+# recorded decision rather than whatever the toolchain defaults to on the day
+# someone builds. solc's default target moved TWICE in 2025 (0.8.30 cancun→prague,
+# 0.8.31 →osaka); unpinned, two builds of the same commit can differ and nobody can
+# verify the deployed bytecode against this source.
+#
+# 0.8.36 is the earliest release with no outstanding entry in the official bug list:
+# 0.8.28–0.8.33 carry the High-severity via-IR transient-storage clearing bug
+# (SOL-2026-1, fixed 0.8.34) and ≤0.8.35 carry SOL-2026-2/-3 (fixed 0.8.36). With
+# via_ir = true those ranges are not hypothetical.
+solc_version = "0.8.36"
+#
+# cancun is the lowest target the WHOLE build compiles on, and the reason is worth
+# knowing before anyone tries to lower it. src/ alone compiles at `paris` — the three
+# routers use no post-Merge opcode (plain ReentrancyGuard, no transient storage, no
+# mcopy), and that was verified with `forge build --skip 'test/**' --skip 'script/**'`.
+# The test fixtures are what need cancun: test/RSendsRouter.t.sol and test/mocks/
+# E2EMocks.sol instantiate OpenZeppelin's ERC20Permit *implementation* (src/ imports
+# only the IERC20Permit *interface*), which reaches ECDSA → Bytes.sol and its `mcopy`.
+#
+# So the choice is cancun everywhere, or paris for src/ plus a second profile for
+# tests. The second option means the suite would exercise bytecode that is not the
+# bytecode being shipped, which is a worse trade than targeting an EVM Base has
+# supported since the Ecotone upgrade in March 2024 — 2+ years before this pin, and
+# far below Base's current Osaka ceiling (Azul, mainnet 2026-05-28).
+#
+# Lowering this to paris requires removing the ERC20Permit mocks from the build, not
+# just editing this line.
+evm_version = "cancun"
 
 # Read-only access to the shared token policy/registry (single source of truth,
 # also consumed by the backend). SetFeeConfig.s.sol reads it via vm.readFile.
