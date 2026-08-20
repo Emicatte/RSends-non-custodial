@@ -43,6 +43,7 @@ import {
   tickLabel,
   tooltipLeft,
   type VolumeBucket,
+  type VolumeTrendChartProps,
 } from '@/components/app/VolumeTrendChart'
 
 const DAYS = [
@@ -183,6 +184,11 @@ describe('axis ticks', () => {
     for (const v of [
       0, 1, 61.2, 999, 999.5, 1000, 1234.56, 9999, 10_000, 125_400, 999_400,
       999_600, 1_500_000, 12_345_678,
+      // Every band hand-off, including the ones a merchant dashboard will not
+      // see for a long time: the ceiling is a rule about the code, not about
+      // the traffic, so it gets checked where it is actually load-bearing.
+      999_400_000, 999_500_000, 1_500_000_000, 12_345_678_000,
+      999_500_000_000, 1_500_000_000_000, 999_400_000_000_000,
     ]) {
       expect(tickLabel(v).length).toBeLessThanOrEqual(5)
     }
@@ -195,6 +201,9 @@ describe('axis ticks', () => {
     expect(tickLabel(125_400)).toBe('$125K')
     expect(tickLabel(999_600)).toBe('$1.0M') // NOT "$1000K", same reason
     expect(tickLabel(12_345_678)).toBe('$12M')
+    expect(tickLabel(999_500_000)).toBe('$1.0B') // NOT "$1000M", same reason
+    expect(tickLabel(12_345_678_000)).toBe('$12B')
+    expect(tickLabel(999_500_000_000)).toBe('$1.0T') // NOT "$1000B", same reason
   })
 
   it('abbreviates with arithmetic, so no ICU version can disagree about it', () => {
@@ -535,8 +544,33 @@ describe('hydration determinism', () => {
    * Model the two environments a server pass and a browser pass actually differ
    * in: ambient locale and ambient timezone. Explicit `Intl` arguments win, so a
    * PINNED call site is immune — which is the point being proven.
+   *
+   * The component is re-imported INSIDE the mocked scope, and that is the whole
+   * mechanism. Its formatters are module-level constants built eagerly at import,
+   * so a helper that swapped the globals only around `renderToString` would hand
+   * both passes the SAME cached formatter and compare it against itself — green
+   * no matter what the call sites say, including with the locale pin deleted,
+   * which is the one regression this test exists to catch. `react` and
+   * `react-dom/server` are taken from the same isolated registry as the component
+   * so its hooks and the renderer share one React instance.
    */
-  function rendersIdenticallyUnder(ui: React.ReactElement): [string, string] {
+  /**
+   * The baseline first, then every environment it must agree with. Between them
+   * these disagree with `en-US` about EVERY formatter in the component, and
+   * neither alone does: French disagrees about currency (`70 $US`) and month
+   * names but renders a bare day number the same way, so an unpinned `USD_FMT`
+   * is caught and an unpinned `DAY_NUM_FMT` is not; Japanese is the exact
+   * mirror — `14日` for the day number, but `$70` for USD, identical to
+   * American English. Both were verified by unpinning each formatter in turn
+   * and confirming this test goes red.
+   */
+  const AMBIENTS: ReadonlyArray<readonly [string, string]> = [
+    ['en-US', 'UTC'],
+    ['fr-FR', 'Europe/Paris'],
+    ['ja-JP', 'Asia/Tokyo'],
+  ]
+
+  function rendersIdenticallyUnder(props: VolumeTrendChartProps): string[] {
     const RealDTF = Intl.DateTimeFormat
     const RealNF = Intl.NumberFormat
     const withAmbient = (locale: string, timeZone: string) => {
@@ -547,37 +581,46 @@ describe('hydration determinism', () => {
         return new RealNF(l ?? locale, o)
       }
       try {
-        return renderToString(ui)
+        let html = ''
+        jest.isolateModules(() => {
+          /* eslint-disable @typescript-eslint/no-require-imports */
+          const React = require('react')
+          const { renderToString: renderFresh } = require('react-dom/server')
+          const fresh = require('@/components/app/VolumeTrendChart')
+          /* eslint-enable @typescript-eslint/no-require-imports */
+          html = renderFresh(React.createElement(fresh.VolumeTrendChart, props))
+        })
+        return html
       } finally {
         ;(Intl as any).DateTimeFormat = RealDTF
         ;(Intl as any).NumberFormat = RealNF
       }
     }
-    return [
-      withAmbient('en-US', 'UTC'),
-      withAmbient('ja-JP', 'Asia/Tokyo'),
-    ]
+    return AMBIENTS.map(([locale, timeZone]) => withAmbient(locale, timeZone))
   }
 
   it('produces identical markup under any ambient locale/timezone', () => {
-    const [server, client] = rendersIdenticallyUnder(
-      <VolumeTrendChart buckets={populated()} loading={false} />,
-    )
+    const [server, ...clients] = rendersIdenticallyUnder({
+      buckets: populated(),
+      loading: false,
+    })
 
     expect(server).toMatch(/Aug/) // fixture guard: labels really rendered
-    expect(client).toBe(server)
+    expect(clients).toHaveLength(AMBIENTS.length - 1)
+    for (const client of clients) expect(client).toBe(server)
   })
 
   it('pins the value axis too, not just the day labels', () => {
     // The axis ticks are numbers, so the risk here is the LOCALE (grouping and
     // currency placement), not the timezone: `¥70` or `70 $US` would be a text
     // mismatch on hydration exactly like a mis-timezoned day label.
-    const [server, client] = rendersIdenticallyUnder(
-      <VolumeTrendChart buckets={populated()} loading={false} />,
-    )
+    const [server, ...clients] = rendersIdenticallyUnder({
+      buckets: populated(),
+      loading: false,
+    })
 
     expect(server).toContain('$70')
     expect(server).toContain('$35')
-    expect(client).toBe(server)
+    for (const client of clients) expect(client).toBe(server)
   })
 })
