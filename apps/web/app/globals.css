@@ -683,6 +683,45 @@ body {
 }
 
 /* ============================================================
+   VOLUME TREND CHART — /app home
+   ============================================================ */
+
+/* Grow-in for the volume bars. PROGRESSIVE ENHANCEMENT BY CONSTRUCTION: the
+   bar's height is declared inline in the server markup, and this only scales
+   what is already there — with NO animation-fill-mode, so before the animation
+   starts and after it ends the element is at its final, declared size. A reader
+   with JS disabled or still loading sees the finished chart, never an empty one.
+   Do not reach for an opacity start-state here; it would need JS to clear. */
+@keyframes rsendsBarGrow {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+
+.rsends-bar {
+  transform-origin: bottom;
+  animation: rsendsBarGrow 420ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+/* Keyboard reachability: each day is a focusable slot. Focus-visible only, so
+   a mouse user never sees a ring, and inset so the ring cannot spill past the
+   plot at the first and last day. */
+.rsends-chart-slot:focus {
+  outline: none;
+}
+
+.rsends-chart-slot:focus-visible {
+  outline: 1px solid var(--rs-terracotta);
+  outline-offset: -1px;
+  border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rsends-bar {
+    animation: none;
+  }
+}
+
+/* ============================================================
    UTILITY — Performance helpers
    ============================================================ */
 
