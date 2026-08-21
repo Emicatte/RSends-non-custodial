@@ -87,8 +87,21 @@ export function CreatePaymentModal({
   const [expiry, setExpiry] = useState<number>(30)
   const [recipient, setRecipient] = useState('')
   const [splitOn, setSplitOn] = useState(false)
-  const [legs, setLegs] = useState<SplitLegDraft[]>([
-    { address: '', amount: '' },
+  // In single mode the recipient is IMPLICIT — the org settlement wallet,
+  // resolved server-side, never typed. A split sets `recipient` to NULL and the
+  // legs become the COMPLETE recipient set, so the settlement wallet receives
+  // nothing unless it is explicitly one of them. Seed row one with it so the
+  // common case is right by default; it stays removable like any other row,
+  // because a pass-through platform taking nothing is legitimate and silently
+  // inserting the merchant would be the opposite error. Only the ADDRESS is
+  // seeded — prefilling never rewrites a share the merchant already entered.
+  //
+  // A lazy initializer, not an effect: /app/payments gates the "New payment"
+  // button on a role that comes from the same `activeOrg`, so the modal cannot
+  // mount before the org resolves — there is nothing to wait for, and nothing
+  // that could re-add a row the merchant removed.
+  const [legs, setLegs] = useState<SplitLegDraft[]>(() => [
+    { address: settlementWallet ?? '', amount: '' },
     { address: '', amount: '' },
   ])
   const [submitting, setSubmitting] = useState(false)
@@ -114,6 +127,15 @@ export function CreatePaymentModal({
   const manualBase = legs.slice(0, -1).map((leg) => amountToBase(leg.amount, decimals))
   const balanceBase = totalBase != null ? remainderBase(totalBase, manualBase) : null
   const legAddrs = legs.map((leg) => leg.address.trim())
+  // Which legs are the merchant's own wallet. DERIVED, never a "this row was
+  // prefilled" flag: it survives add/remove/overwrite and also marks the wallet
+  // when the merchant types it in by hand. Case-insensitive — the wallet is
+  // stored lowercase but merchants paste the checksummed form out of a wallet
+  // UI, and a raw compare would accuse someone who DID include themselves.
+  const ownWallet = settlementWallet ? settlementWallet.toLowerCase() : null
+  const legIsOwn = legAddrs.map(
+    (a) => ownWallet !== null && a.toLowerCase() === ownWallet,
+  )
   const addrsValid = legAddrs.every((a) => isAddress(a))
   const addrsUnique =
     new Set(legAddrs.map((a) => a.toLowerCase())).size === legAddrs.length
@@ -174,6 +196,18 @@ export function CreatePaymentModal({
     amountValid &&
     !submitting &&
     (splitOn ? splitValid : overrideValid && hasRecipient)
+
+  // About to pay everyone but yourself. This WARNS and never blocks — it is not
+  // a mistake, only usually one. Gated on an otherwise-submittable split so it
+  // lands at the moment of confirmation instead of shouting through every
+  // keystroke. A null wallet (unknown, or none set) makes NO claim: absence of
+  // data is not evidence of exclusion.
+  const selfExcluded =
+    splitOn &&
+    amountValid &&
+    splitValid &&
+    ownWallet !== null &&
+    !legIsOwn.some(Boolean)
 
   function setLeg(index: number, patch: Partial<SplitLegDraft>) {
     setLegs((prev) => prev.map((leg, i) => (i === index ? { ...leg, ...patch } : leg)))
@@ -325,22 +359,28 @@ export function CreatePaymentModal({
           </div>
         ) : (
           <div>
-            {/* Org-default (recipient gate) banner — a split defines its own
-                recipient set, so the banner only applies to single mode. */}
-            {splitOn ? null : settlementWallet ? (
-              <div
-                style={{
-                  fontSize: 12,
-                  color: COLORS.muted,
-                  background: COLORS.paper,
-                  borderRadius: 8,
-                  padding: '8px 10px',
-                  marginBottom: 16,
-                }}
-              >
-                {t('create.settlesTo')}{' '}
-                <code style={{ color: COLORS.ink }}>{truncAddr(settlementWallet)}</code>
-              </div>
+            {/* Where the money lands. "Settles to" is SINGLE-mode only — under
+                a split the legs are the recipient set and the claim would be
+                false. The set-a-wallet prompt survives BOTH modes: a merchant
+                with no settlement wallet is the likeliest accidental
+                self-excluder, and hiding it under the split toggle left them
+                with no recipient information at all. */}
+            {settlementWallet ? (
+              splitOn ? null : (
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: COLORS.muted,
+                    background: COLORS.paper,
+                    borderRadius: 8,
+                    padding: '8px 10px',
+                    marginBottom: 16,
+                  }}
+                >
+                  {t('create.settlesTo')}{' '}
+                  <code style={{ color: COLORS.ink }}>{truncAddr(settlementWallet)}</code>
+                </div>
+              )
             ) : (
               <div
                 role="alert"
@@ -460,14 +500,34 @@ export function CreatePaymentModal({
                     key={i}
                     style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}
                   >
-                    <input
-                      type="text"
-                      placeholder="0x…"
-                      aria-label={t('create.recipient')}
-                      value={leg.address}
-                      onChange={(e) => setLeg(i, { address: e.target.value })}
-                      style={{ ...field, flex: '3 1 140px' }}
-                    />
+                    {/* Address + its marker share one flex slot so the marker
+                        is unambiguously attached to THIS address, including
+                        when the row wraps on a narrow screen. An address alone
+                        is not recognisable — merchants do not read hex. */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 2,
+                        flex: '3 1 140px',
+                      }}
+                    >
+                      <input
+                        type="text"
+                        placeholder="0x…"
+                        aria-label={t('create.recipient')}
+                        value={leg.address}
+                        onChange={(e) => setLeg(i, { address: e.target.value })}
+                        style={field}
+                      />
+                      {legIsOwn[i] && (
+                        <span
+                          style={{ fontSize: 11, fontWeight: 600, color: COLORS.accent }}
+                        >
+                          {t('create.splitOwnWallet')}
+                        </span>
+                      )}
+                    </div>
                     {i < legs.length - 1 ? (
                       <input
                         type="text"
@@ -613,6 +673,25 @@ export function CreatePaymentModal({
 
             {err && (
               <p role="alert" style={{ fontSize: 12, color: COLORS.red, margin: '8px 0 0' }}>{err}</p>
+            )}
+
+            {/* Immediately above the confirm buttons — where the eye already is
+                when confirming. Never a tooltip, never below the fold: this
+                screen writes instructions for an irreversible transfer. */}
+            {selfExcluded && (
+              <div
+                role="alert"
+                style={{
+                  fontSize: 12,
+                  color: COLORS.red,
+                  background: COLORS.redLight,
+                  borderRadius: 8,
+                  padding: '8px 10px',
+                  marginTop: 12,
+                }}
+              >
+                {t('create.splitSelfExcluded')}
+              </div>
             )}
 
             <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>

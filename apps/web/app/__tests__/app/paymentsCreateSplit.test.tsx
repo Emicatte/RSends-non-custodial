@@ -58,6 +58,16 @@ const ALICE = '0x1111111111111111111111111111111111111111'
 const BOB = '0x3333333333333333333333333333333333333333'
 const CAROL = '0x5555555555555555555555555555555555555555'
 
+// The org's own settlement wallet. The backend stores it LOWERCASE
+// (org_schemas._validate_settlement_wallet), so the realistic casing mismatch
+// is the merchant pasting the checksummed form out of a wallet UI.
+const OWN = '0xabc0000000000000000000000000000000000001'
+const OWN_CHECKSUMMED = '0xABC0000000000000000000000000000000000001'
+
+const OWN_MARKER = 'Your settlement wallet'
+const SELF_EXCLUDED =
+  'None of these recipients is your settlement wallet. You will receive nothing from this payment.'
+
 afterEach(() => {
   jest.resetAllMocks()
 })
@@ -361,4 +371,177 @@ it('createIntent POSTs the split legs verbatim and no recipient', async () => {
   ])
   expect(body).not.toHaveProperty('recipient')
   expect(body).not.toHaveProperty('environment')
+})
+
+// ── Self-exclusion: the split legs ARE the recipient set ─────────
+//
+// In single mode the recipient is implicit — the org settlement wallet,
+// resolved server-side, never typed. A split sets `recipient` to NULL and the
+// legs become the COMPLETE recipient set, so the settlement wallet receives
+// nothing unless it is explicitly one of them. The router is immutable and
+// non-custodial: once the payer signs there is no reversal. So row one is
+// PREFILLED with the settlement wallet and marked as the merchant's own, and
+// leaving it out is warned about at the point of confirmation — a warning,
+// never a block: a pass-through platform taking nothing is legitimate.
+
+function addressInputs() {
+  return screen.getAllByPlaceholderText('0x…') as HTMLInputElement[]
+}
+
+it('prefills row one with the org settlement wallet, marked as the merchant own', () => {
+  render(
+    <CreatePaymentModal settlementWallet={OWN} onCreate={jest.fn()} onClose={jest.fn()} />,
+  )
+  setTotal('30')
+  openSplit()
+
+  const rows = addressInputs()
+  expect(rows).toHaveLength(2)
+  expect(rows[0].value).toBe(OWN)
+  // Prefilling an address must not invent a share.
+  expect(rows[1].value).toBe('')
+  expect(screen.getAllByLabelText('Recipient amount')[0]).toHaveValue('')
+
+  // An address alone is not recognisable — merchants do not read hex.
+  expect(screen.getAllByText(OWN_MARKER)).toHaveLength(1)
+})
+
+it('the prefilled row is removable, and removing it does not re-add it', () => {
+  render(
+    <CreatePaymentModal settlementWallet={OWN} onCreate={jest.fn()} onClose={jest.fn()} />,
+  )
+  setTotal('30')
+  openSplit()
+
+  expect(addressInputs()[0].value).toBe(OWN)
+
+  // Remove is disabled at the 2-leg floor, so the prefilled row is removable
+  // under exactly the same rule as every other row — never special-cased.
+  fireEvent.click(screen.getByRole('button', { name: 'Add recipient' }))
+  expect(addressInputs()).toHaveLength(3)
+  fireEvent.click(screen.getAllByRole('button', { name: 'Remove' })[0])
+
+  expect(addressInputs()).toHaveLength(2)
+  expect(addressInputs().map((r) => r.value)).not.toContain(OWN)
+  expect(screen.queryByText(OWN_MARKER)).not.toBeInTheDocument()
+
+  // Any later re-render must not resurrect it.
+  setTotal('40')
+  expect(addressInputs().map((r) => r.value)).not.toContain(OWN)
+  expect(screen.queryByText(OWN_MARKER)).not.toBeInTheDocument()
+})
+
+it('does not warn when the settlement wallet is among the legs', () => {
+  render(
+    <CreatePaymentModal settlementWallet={OWN} onCreate={jest.fn()} onClose={jest.fn()} />,
+  )
+  setTotal('30')
+  openSplit()
+  setAddress(1, BOB)
+  setAmount(0, '10')
+
+  expect(submitButton()).toBeEnabled()
+  expect(screen.queryByText(SELF_EXCLUDED)).not.toBeInTheDocument()
+})
+
+it('warns at confirmation when no leg is the settlement wallet', () => {
+  render(
+    <CreatePaymentModal settlementWallet={OWN} onCreate={jest.fn()} onClose={jest.fn()} />,
+  )
+  setTotal('30')
+  openSplit()
+  setAddress(0, ALICE) // overwrite the prefill with a third party
+  setAddress(1, BOB)
+  setAmount(0, '10')
+
+  expect(screen.getByRole('alert')).toHaveTextContent(SELF_EXCLUDED)
+  expect(screen.queryByText(OWN_MARKER)).not.toBeInTheDocument()
+})
+
+it('matches the settlement wallet regardless of checksum casing', () => {
+  render(
+    <CreatePaymentModal settlementWallet={OWN} onCreate={jest.fn()} onClose={jest.fn()} />,
+  )
+  setTotal('30')
+  openSplit()
+  // As pasted out of a wallet UI: same address, different casing. A raw string
+  // compare would accuse a merchant who DID include themselves.
+  setAddress(0, OWN_CHECKSUMMED)
+  setAddress(1, BOB)
+  setAmount(0, '10')
+
+  expect(screen.queryByText(SELF_EXCLUDED)).not.toBeInTheDocument()
+  expect(screen.getAllByText(OWN_MARKER)).toHaveLength(1)
+})
+
+it('warns but never blocks — the split still submits', async () => {
+  const onCreate = jest.fn().mockResolvedValue({
+    intent_id: 'pi_excluded',
+    recipient: null,
+    amount: 30,
+    currency: 'USDC',
+    chain: 'base_sepolia',
+    status: 'pending',
+  })
+  render(
+    <CreatePaymentModal settlementWallet={OWN} onCreate={onCreate} onClose={jest.fn()} />,
+  )
+  setTotal('30')
+  openSplit()
+  setAddress(0, ALICE)
+  setAddress(1, BOB)
+  setAmount(0, '10')
+
+  expect(screen.getByRole('alert')).toHaveTextContent(SELF_EXCLUDED)
+  expect(submitButton()).toBeEnabled()
+  fireEvent.click(submitButton())
+
+  await waitFor(() =>
+    expect(onCreate).toHaveBeenCalledWith({
+      amount: 30,
+      currency: 'USDC',
+      chain: 'base_sepolia',
+      expires_in_minutes: 30,
+      split: [
+        { address: ALICE, share_bps: 3333 },
+        { address: BOB, share_bps: 6667 },
+      ],
+    }),
+  )
+})
+
+it('claims no exclusion while the settlement wallet is unknown', () => {
+  // Absence of data is not evidence of exclusion.
+  render(
+    <CreatePaymentModal settlementWallet={null} onCreate={jest.fn()} onClose={jest.fn()} />,
+  )
+  setTotal('30')
+  openSplit()
+  setAddress(0, ALICE)
+  setAddress(1, BOB)
+  setAmount(0, '10')
+
+  expect(submitButton()).toBeEnabled()
+  expect(screen.queryByText(SELF_EXCLUDED)).not.toBeInTheDocument()
+  expect(screen.queryByText(OWN_MARKER)).not.toBeInTheDocument()
+})
+
+it('drops the "settles to" claim in split mode but keeps the set-a-wallet prompt', () => {
+  const { unmount } = render(
+    <CreatePaymentModal settlementWallet={OWN} onCreate={jest.fn()} onClose={jest.fn()} />,
+  )
+  // Single mode says where the money lands; under a split that would be untrue.
+  expect(screen.getByText(/Payments settle to/)).toBeInTheDocument()
+  openSplit()
+  expect(screen.queryByText(/Payments settle to/)).not.toBeInTheDocument()
+  unmount()
+
+  // A merchant who never set a wallet is the likeliest accidental
+  // self-excluder — the prompt must survive the split toggle.
+  render(
+    <CreatePaymentModal settlementWallet={null} onCreate={jest.fn()} onClose={jest.fn()} />,
+  )
+  expect(screen.getByText(/Set your organization/)).toBeInTheDocument()
+  openSplit()
+  expect(screen.getByText(/Set your organization/)).toBeInTheDocument()
 })
