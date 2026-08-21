@@ -1515,6 +1515,8 @@
         "splitErrorExceeds": "Les montants des destinataires dépassent le total.",
         "splitErrorTiny": "Un montant est trop petit par rapport au total pour être réparti on-chain.",
         "splitErrorTotal": "Le total comporte trop de décimales pour ce token.",
+        "splitOwnWallet": "Your settlement wallet",
+        "splitSelfExcluded": "None of these recipients is your settlement wallet. You will receive nothing from this payment.",
         "splitHelp": "Le dernier destinataire reçoit automatiquement le montant restant."
       }
     }
