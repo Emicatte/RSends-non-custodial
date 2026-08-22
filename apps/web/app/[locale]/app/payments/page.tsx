@@ -72,16 +72,29 @@ function truncAddr(addr: string): string {
   return addr.length > 12 ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : addr
 }
 
-const DATE_FMT = new Intl.DateTimeFormat(undefined, {
-  dateStyle: 'medium',
-  timeStyle: 'short',
+// Locale and timezone are PINNED, never resolved from the ambient environment.
+// `Intl.*Format(undefined, …)` asks the runtime to decide, which means Node's
+// ICU default in the server process and the visitor's browser settings on the
+// client — the same row then renders as two different strings (observed:
+// "Jul 8, 2026, 11:30 PM" vs "2026/07/09 8:30", a different calendar day), and
+// React tears the whole root down on the mismatch. `timeZoneName: 'short'` makes
+// the pinned zone visible so a UTC stamp is never mistaken for local time.
+// Pinned to en-US to match the rest of the dashboard (app/[locale]/app/page.tsx).
+const DATE_FMT = new Intl.DateTimeFormat('en-US', {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  timeZone: 'UTC',
+  timeZoneName: 'short',
 })
 function fmtDate(iso: string): string {
   const ts = new Date(iso).getTime()
   return Number.isFinite(ts) ? DATE_FMT.format(ts) : iso
 }
 
-const AMOUNT_FMT = new Intl.NumberFormat(undefined, { maximumFractionDigits: 6 })
+const AMOUNT_FMT = new Intl.NumberFormat('en-US', { maximumFractionDigits: 6 })
 
 // Spacing lives in the className (default `px-3.5 py-2 rounded-lg`, small
 // inline variant `px-2 py-1 rounded-lg`); this const keeps only the shared

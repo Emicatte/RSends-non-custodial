@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { appPage, card } from '@/components/app/pageStyles'
+import { useClientNow } from '@/hooks/useClientNow'
 import {
   useOrgWebhooks,
   type OrgWebhook,
@@ -51,7 +52,12 @@ const badge = (bg: string, text: string): React.CSSProperties => ({
   letterSpacing: '0.02em',
 })
 
-function withinDay(iso: string, nowMs: number): boolean {
+// `nowMs === null` before mount (see useClientNow): with no clock there is no
+// 24h window to test, so nothing counts. `deliveries` is null on those passes
+// anyway, so the counters read 0 either way — this just keeps the server and
+// the first client render agreeing by construction rather than by luck.
+function withinDay(iso: string, nowMs: number | null): boolean {
+  if (nowMs === null) return false
   const t = new Date(iso).getTime()
   return Number.isFinite(t) && nowMs - t <= 86_400_000
 }
@@ -81,7 +87,8 @@ function WebhookCard({
     void loadDeliveries()
   }, [loadDeliveries])
 
-  const nowMs = Date.now()
+  // Never `Date.now()` in the render body — see useClientNow.
+  const nowMs = useClientNow()
   const delivered24h = (deliveries ?? []).filter(
     (d) => d.status === 'delivered' && withinDay(d.created_at, nowMs),
   ).length
