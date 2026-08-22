@@ -3,6 +3,7 @@
 import { ReactNode, useRef, useLayoutEffect, useEffect } from 'react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
+import { MOTION_QUERY } from '@/lib/motion'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -31,9 +32,13 @@ type Props = {
  * its OWN ScrollTrigger keyed to that element's position, so each one finishes
  * as soon as it's comfortably in view (top 88% -> top 68%) while progress still
  * tracks the wheel/trackpad (stop -> hold, scroll up -> reverse). The cascade
- * comes naturally from elements entering at different scroll points. Respects
- * prefers-reduced-motion; the base CSS `.rs-reveal { opacity: 1 }` keeps content
- * visible when the animation never runs.
+ * comes naturally from elements entering at different scroll points.
+ *
+ * Gated on `MOTION_QUERY`: below 768px, and under prefers-reduced-motion, the
+ * triggers are never created (gsap.matchMedia scopes them and reverts them
+ * itself if the viewport crosses the breakpoint). The base CSS
+ * `.rs-reveal { opacity: 1 }` keeps content visible whenever the animation does
+ * not run — nothing here is responsible for making content appear.
  */
 export default function ScrubReveal({
   children,
@@ -49,7 +54,7 @@ export default function ScrubReveal({
 
   useIsoLayoutEffect(() => {
     const mm = gsap.matchMedia()
-    mm.add('(prefers-reduced-motion: no-preference)', () => {
+    mm.add(MOTION_QUERY, () => {
       const ctx = gsap.context(() => {
         // Scope to THIS section's own .rs-reveal so multiple ScrubReveals don't cross-target.
         const q = gsap.utils.selector(ref)

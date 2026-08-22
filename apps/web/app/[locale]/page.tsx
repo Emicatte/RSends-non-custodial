@@ -540,7 +540,8 @@ function EngineStatus() {
 
 function HeroTitle({ isMobile }: { isMobile?: boolean }) {
   const t = useTranslations('hero')
-  const HERO_EASE = [0.22, 1, 0.36, 1] as [number, number, number, number]
+  // The hero entrance easing is now cubic-bezier(0.22, 1, 0.36, 1) in globals.css
+  // (.rs-hero-rise / .rs-hero-line / .rs-hero-word) — same curve, applied by CSS.
 
   return (
     <div style={{
@@ -552,12 +553,12 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
       position: 'relative',
       zIndex: 2,
     }}>
-      {/* Eyebrow — 0.0s (hidden when empty) */}
+      {/* Eyebrow — 0.0s (hidden when empty).
+          The entrance is CSS (.rs-hero-rise, gated by MOTION_QUERY in globals.css)
+          so the copy is in the served HTML at full opacity and never waits on JS. */}
       {t('eyebrow') && (
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: HERO_EASE }}
+        <div
+          className="rs-hero-rise"
           style={{
             fontFamily: C.M,
             fontSize: 16,
@@ -566,10 +567,12 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
             letterSpacing: '0.18em',
             marginBottom: 8,
             textTransform: 'uppercase' as const,
-          }}
+            '--rs-hero-dur': '0.6s',
+            '--rs-hero-y': '12px',
+          } as React.CSSProperties}
         >
           {t('eyebrow')}
-        </motion.div>
+        </div>
       )}
 
       {/* Title — split reveal 0.15s / 0.45s / 0.75s */}
@@ -593,10 +596,8 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
       </h1>
 
       {/* Subtitle — 0.95s */}
-      <motion.p
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.8, delay: 0.95, ease: HERO_EASE }}
+      <p
+        className="rs-hero-rise"
         style={{
           fontFamily: C.D,
           fontSize: isMobile ? 17 : 19,
@@ -604,16 +605,19 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
           lineHeight: 1.6,
           margin: '0 0 22px',
           maxWidth: 560,
-        }}
+          '--rs-hero-dur': '0.8s',
+          '--rs-hero-delay': '0.95s',
+          '--rs-hero-y': '16px',
+        } as React.CSSProperties}
       >
         {t('subtitle')}
-      </motion.p>
+      </p>
 
-      {/* CTAs — 1.15s, hover lift */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.7, delay: 1.15, ease: HERO_EASE }}
+      {/* CTAs — 1.15s, hover lift.
+          Only the entrance moves to CSS; the buttons keep their framer-motion
+          hover/tap, which needs JS anyway and cannot hide anything. */}
+      <div
+        className="rs-hero-rise"
         style={{
           display: 'flex',
           gap: 16,
@@ -621,7 +625,10 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
           marginBottom: 24,
           flexWrap: 'wrap',
           justifyContent: isMobile ? 'center' : 'flex-start',
-        }}
+          '--rs-hero-dur': '0.7s',
+          '--rs-hero-delay': '1.15s',
+          '--rs-hero-y': '12px',
+        } as React.CSSProperties}
       >
         <Link href="/login" style={{ textDecoration: 'none', width: isMobile ? '100%' : 'auto' }}>
           <motion.button
@@ -646,13 +653,11 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
             {t('ctaPrimary')}
           </motion.button>
         </Link>
-      </motion.div>
+      </div>
 
       {/* Divider — scaleX reveal 1.35s */}
-      <motion.div
-        initial={{ scaleX: 0 }}
-        animate={{ scaleX: 1 }}
-        transition={{ duration: 1.2, delay: 1.35, ease: HERO_EASE }}
+      <div
+        className="rs-hero-line"
         style={{
           transformOrigin: 'left',
           height: '0.5px',
@@ -660,18 +665,23 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
           maxWidth: 1600,
           marginTop: 20,
           marginBottom: 8,
-        }}
+          '--rs-hero-delay': '1.35s',
+        } as React.CSSProperties}
       />
 
       {/* Supported Networks carousel — replaces old metrics row */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.8, delay: 1.5, ease: HERO_EASE }}
-        style={{ marginLeft: isMobile ? -20 : -96, marginRight: isMobile ? -20 : -96 }}
+      <div
+        className="rs-hero-rise"
+        style={{
+          marginLeft: isMobile ? -20 : -96,
+          marginRight: isMobile ? -20 : -96,
+          '--rs-hero-dur': '0.8s',
+          '--rs-hero-delay': '1.5s',
+          '--rs-hero-y': '12px',
+        } as React.CSSProperties}
       >
         <SupportedNetworksCarousel />
-      </motion.div>
+      </div>
     </div>
   )
 }
@@ -709,7 +719,6 @@ export default function Home() {
     }
   })()
   const [showIntro, setShowIntro] = useState(false)
-  const [ready, setReady] = useState(false)
   const [showAntiPhishing, setShowAntiPhishing] = useState(false)
   const [isMobileHome, setIsMobileHome] = useState(false)
   // Globe panel only renders when the split hero has room for it beside the text.
@@ -755,8 +764,6 @@ export default function Home() {
     }
   }, [sweepEvents.length])
 
-  useEffect(() => { setReady(true) }, [])
-
   // Parallax — orbs layer drifts at 15% of scroll velocity for depth.
   // .rp-bg is position:fixed, so the container's translate is all the movement.
   const orbLayerRef = useRef<HTMLDivElement>(null)
@@ -801,27 +808,35 @@ export default function Home() {
         <div className="rp-bg__noise" />
       </div>
 
-      {/* Main content — padded below the navbar (mounted globally via HeaderMount) */}
+      {/* Main content — padded below the navbar (mounted globally via HeaderMount).
+          The page-in fade lives in globals.css under MOTION_QUERY; it used to be
+          `opacity: ready ? 1 : 0` flipped by an effect, which shipped the whole
+          page at opacity 0 and left it blank until hydration. */}
       <main className="main-content" style={{
         minHeight: '100dvh',
         paddingTop: isMobileHome ? '72px' : 'clamp(64px, 5vh, 76px)',
         paddingBottom: isMobileHome ? '40px' : '80px',
         display: 'flex', flexDirection: 'column', alignItems: 'stretch',
-        opacity: ready ? 1 : 0, transition: 'opacity 0.9s ease',
       }}>
 
         {/* Hero */}
         <div style={{ width: '100%', position: 'relative' }}>
           <HeroTitle isMobile={isMobileHome} />
+          {/* Only rendered at >=1024px, so it never reaches a phone — but framer-motion
+              defaults to reducedMotion:'never' and there is no MotionConfig in this app,
+              so as a `motion.div` its entrance still ran for users who asked for reduced
+              motion. On CSS it goes through the same gate as everything else.
+              The -50% is the resting vertical centring against `top: 46%`; framer-motion
+              used to supply it via `animate`, so it now lives in the inline style and both
+              keyframes preserve it. */}
           {globeFits && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: '-50%' }}
-              animate={{ opacity: 1, scale: 1, y: '-50%' }}
-              transition={{ duration: 1.2, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
+            <div
+              className="rs-hero-globe"
               style={{
                 position: 'absolute',
                 right: '0%',
                 top: '46%',
+                transform: 'translateY(-50%)',
                 width: 'clamp(360px, calc(120vw - 820px), 920px)',
                 height: 'clamp(300px, 42vw, 520px)',
                 zIndex: 1,
@@ -829,7 +844,7 @@ export default function Home() {
               }}
             >
               <HeroGlobe />
-            </motion.div>
+            </div>
           )}
         </div>
 
