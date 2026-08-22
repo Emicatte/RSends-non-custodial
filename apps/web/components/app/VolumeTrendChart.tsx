@@ -154,14 +154,23 @@ function dayNumber(isoDate: string): string {
 export function tickLabel(value: number): string {
   if (value < 999.5) return USD_FMT.format(value) // "$0" … "$999"
   if (value < 999_500) return `$${abbreviate(value / 1000)}K`
-  return `$${abbreviate(value / 1_000_000)}M`
+  if (value < 999_500_000) return `$${abbreviate(value / 1_000_000)}M`
+  if (value < 999_500_000_000) return `$${abbreviate(value / 1_000_000_000)}B`
+  return `$${abbreviate(value / 1_000_000_000_000)}T`
 }
 
 /**
  * One decimal below ten, none above — so the tick is never wider than five
  * characters. The `9.95` threshold rather than `10` is what stops `$9,999`
- * rounding into a six-character `$10.0K`; the band boundaries in `tickLabel`
- * stop `$999,600` becoming `$1000K` for the same reason.
+ * rounding into a six-character `$10.0K`; every band boundary in `tickLabel`
+ * sits at `999_500 × 10ⁿ` rather than `1000 × 10ⁿ` for the same reason, so a
+ * value that would ROUND UP into four digits hands off to the next band
+ * instead — `$999,600` becomes `$1.0M`, not `$1000K`.
+ *
+ * The ceiling therefore holds for every value the axis can be given up to
+ * `$999.5T`, above which `$1000T` would breach it again. Stated rather than
+ * guarded: the band list has to stop somewhere, and a settled-volume axis that
+ * reaches a quadrillion dollars has a larger problem than its tick width.
  */
 function abbreviate(n: number): string {
   return n < 9.95 ? n.toFixed(1) : String(Math.round(n))
