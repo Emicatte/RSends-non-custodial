@@ -67,6 +67,10 @@ class RPCProvider:
     healthy: bool = True
     last_block: int = 0
     last_check: float = 0.0
+    # Consecutive call failures seen by RPCManager.call, and a one-shot latch
+    # so losing a provider is announced exactly once instead of once per call.
+    consecutive_failures: int = 0
+    lost: bool = False
     cb: CircuitBreaker = field(default=None, repr=False)
 
     def __post_init__(self):
@@ -139,18 +143,39 @@ _PERMANENT_ERROR_PATTERNS = (
     "exceed",
     "invalid param",
 )
+# Rate limiting / quota exhaustion codes. These are AVAILABILITY faults, not
+# properties of the request: the same call succeeds on another provider right
+# now, and on this one once the window resets. Classifying them permanent is
+# what turned Alchemy's monthly-quota 429 into a silent outage (2026-08-22) —
+# permanent errors are excluded from the circuit breaker, so the quota-dead
+# provider was never marked down, never alerted, and kept costing a wasted
+# round-trip on every single call for days.
+_TRANSIENT_ERROR_CODES = {429, -32005, -32029}
+
 # Overrides checked FIRST: error shapes that carry a permanent code/pattern but
 # are actually transient. A getLogs toBlock briefly beyond the serving
 # backend's head (tip race / cross-provider head divergence) arrives as -32602
 # "block range extends beyond current head block" (observed Base Sepolia
-# 2026-07) yet self-heals as soon as the lagging node catches up.
+# 2026-07) yet self-heals as soon as the lagging node catches up. The
+# quota/throttle wordings are here because they all contain "exceed", which the
+# permanent patterns below match for a completely different reason (the
+# getLogs range limit).
 _TRANSIENT_OVERRIDE_PATTERNS = (
     "beyond current head",
+    "rate limit",          # "rate limit exceeded", "request rate limited"
+    "capacity",            # "Monthly capacity limit exceeded" (Alchemy)
+    "compute unit",        # "exceeded its compute units per second capacity"
+    "quota",
+    "request count",       # "daily request count exceeded"
+    "too many requests",
+    "throttl",             # throttled / throttling
 )
 
 
 def _is_permanent_rpc_error(error: dict) -> bool:
     message = str(error.get("message", "")).lower()
+    if error.get("code") in _TRANSIENT_ERROR_CODES:
+        return False
     if any(p in message for p in _TRANSIENT_OVERRIDE_PATTERNS):
         return False
     if error.get("code") in _PERMANENT_ERROR_CODES:
@@ -171,12 +196,35 @@ async def _raw_rpc_call(
             json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params},
             timeout=timeout,
         )
-        data = resp.json()
+        try:
+            data = resp.json()
+        except ValueError:  # includes json.JSONDecodeError
+            data = None
+
+    if not isinstance(data, dict):
+        # A vendor edge (429 page, 5xx, maintenance HTML) answered instead of
+        # the node. Availability fault — and the status has to be in the
+        # message, or the log line is a bare JSONDecodeError naming nothing.
+        raise RuntimeError(
+            f"RPC {method} got a non-JSON response (HTTP {resp.status_code}): "
+            f"{resp.text[:200]!r}"
+        )
 
     if "error" in data:
+        if resp.status_code == 429 or resp.status_code >= 500:
+            # The transport already said "throttled" / "broken": that verdict
+            # outranks any wording heuristic on the error body.
+            raise RuntimeError(
+                f"RPC {method} HTTP {resp.status_code}: {data['error']}"
+            )
         if _is_permanent_rpc_error(data["error"]):
             raise PermanentRPCError(f"RPC {method} rejected: {data['error']}")
         raise RuntimeError(f"RPC {method} error: {data['error']}")
+
+    if resp.status_code >= 400:
+        raise RuntimeError(
+            f"RPC {method} HTTP {resp.status_code} with no JSON-RPC error object"
+        )
 
     return data.get("result")
 
@@ -306,8 +354,12 @@ class RPCManager:
             *(self._check_provider(p) for p in self._providers),
             return_exceptions=True,
         )
+        # Positionally aligned with self._providers — load-bearing below: a
+        # provider that did NOT answer this cycle must never be re-marked
+        # healthy off the stale last_block its failed probe left behind.
+        probe_ok = [r is True for r in results]
 
-        if not any(r is True for r in results):
+        if not any(probe_ok):
             # Every probe failed this cycle (network/vendor outage). Mark all
             # providers unhealthy (truthful gauges) and fail LOUD — but do NOT
             # touch the circuit breakers: call() already tries every provider
@@ -338,8 +390,15 @@ class RPCManager:
         max_block = max(blocks)
 
         # Mark providers behind by >MAX_BLOCK_LAG as unhealthy
-        for p in self._providers:
-            if p.last_block > 0 and (max_block - p.last_block) <= MAX_BLOCK_LAG:
+        for p, answered in zip(self._providers, probe_ok):
+            if not answered:
+                # _check_provider already set healthy=False; keep it that way.
+                # Its last_block is stale, so the lag arm below would happily
+                # resurrect a provider that is down right now (it only takes
+                # the tip having advanced by <= MAX_BLOCK_LAG since its last
+                # good probe) and call() would route to it.
+                p.healthy = False
+            elif p.last_block > 0 and (max_block - p.last_block) <= MAX_BLOCK_LAG:
                 p.healthy = True
             elif p.last_block > 0:
                 p.healthy = False
@@ -392,6 +451,70 @@ class RPCManager:
         except Exception:
             pass
 
+    # ── Provider loss (fail loud) ─────────────────────────
+
+    def _mark_provider_lost(self, provider: RPCProvider, reason: str) -> None:
+        """Announce, ONCE, that a provider is no longer serving.
+
+        The 2026-08-22 outage was not caused by a single endpoint failing — it
+        was caused by nobody knowing that the other provider had been
+        quota-dead for days. A provider dropping out has to be as loud as an
+        outage, or the failover silently degrades to no failover at all.
+        Latched, so a dead provider produces one ERROR + one alert, not one
+        per call.
+        """
+        if provider.lost:
+            return
+        provider.lost = True
+        remaining = [p.name for p in self._providers if not p.lost]
+        logger.error(
+            "RPC provider %s LOST on chain %d (%s) — %d of %d providers still "
+            "serving (%s)",
+            provider.name, self.chain_id, reason,
+            len(remaining), len(self._providers),
+            ", ".join(remaining) or "NONE",
+        )
+        self._fire_provider_lost_alert(provider, reason, remaining)
+
+    def _fire_provider_lost_alert(
+        self, provider: RPCProvider, reason: str, remaining: list[str]
+    ) -> None:
+        """Best-effort RPC_DOWN alert. Never raises — alerting must not break
+        the call path (mirrors _fire_all_down_alert)."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        try:
+            from app.services.alert_service import AlertType, fire_alert
+
+            loop.create_task(fire_alert(
+                AlertType.RPC_DOWN,
+                f"RPC provider '{provider.name}' lost on chain "
+                f"{self.chain_id} ({reason}) — {len(remaining)} of "
+                f"{len(self._providers)} providers still serving",
+                {"chain_id": self.chain_id,
+                 "provider": provider.name,
+                 "reason": reason[:200],
+                 "remaining": remaining},
+            ))
+        except Exception:
+            pass
+
+    def _note_provider_success(self, provider: RPCProvider) -> None:
+        if provider.lost:
+            provider.lost = False
+            logger.warning(
+                "RPC provider %s RECOVERED on chain %d",
+                provider.name, self.chain_id,
+            )
+        provider.consecutive_failures = 0
+
+    def _note_provider_failure(self, provider: RPCProvider, reason: str) -> None:
+        provider.consecutive_failures += 1
+        if provider.consecutive_failures >= provider.cb.failure_threshold:
+            self._mark_provider_lost(provider, reason)
+
     # ── Healthy providers ─────────────────────────────────
 
     def _healthy_providers(self) -> list[RPCProvider]:
@@ -434,11 +557,15 @@ class RPCManager:
                     method=method,
                     status="ok",
                 ).inc()
+                self._note_provider_success(provider)
                 return result
             except CircuitOpenError:
                 logger.debug(
                     "Provider %s circuit open — skipping", provider.name
                 )
+                # The breaker opened (possibly on another code path): the
+                # provider is out of rotation — say so once.
+                self._mark_provider_lost(provider, "circuit breaker OPEN")
                 continue
             except Exception as exc:
                 elapsed = time.monotonic() - t0
@@ -463,6 +590,7 @@ class RPCManager:
                     logger.warning(
                         "Provider %s failed for %s: %s", provider.name, method, exc
                     )
+                    self._note_provider_failure(provider, str(exc)[:200])
                 last_exc = exc
                 continue
 
@@ -631,6 +759,32 @@ def get_rpc_manager(chain_id: int = 8453) -> RPCManager:
     if chain_id not in _managers:
         _managers[chain_id] = RPCManager(chain_id=chain_id)
     return _managers[chain_id]
+
+
+def log_provider_inventory(chain_ids: list[int]) -> None:
+    """State the RPC failover list per chain at boot, and WARN when a chain has
+    no redundancy.
+
+    Redundancy that exists only in a config comment is indistinguishable from
+    redundancy that does not exist. Print the list on every boot so a
+    single-provider chain is a fact in the log, not something to be inferred
+    after an outage.
+    """
+    for chain_id in chain_ids:
+        mgr = get_rpc_manager(chain_id)
+        names = [p.name for p in mgr._providers]
+        logger.info(
+            "RPC providers chain=%d (%d): %s",
+            chain_id, len(names), ", ".join(names) or "NONE",
+        )
+        if len(names) < 2:
+            logger.warning(
+                "RPC chain %d has NO REDUNDANCY: %d provider(s) configured "
+                "(%s) — a single vendor outage stops payment detection on this "
+                "chain. Add a second vendor via RPC_PROVIDERS_JSON "
+                "(see DEPLOY_RUNBOOK).",
+                chain_id, len(names), ", ".join(names) or "none",
+            )
 
 
 async def start_all_managers() -> None:
