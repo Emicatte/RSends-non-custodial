@@ -1646,7 +1646,8 @@
       "approve": "Approuver {token}",
       "pay": "Payer {amount} {token}",
       "viewTx": "Voir la transaction",
-      "retry": "Réessayer"
+      "retry": "Réessayer",
+      "otherWallet": "Utiliser un autre portefeuille"
     },
     "steps": {
       "approve": "Étape 1 sur 2 : Approuver {token}",
@@ -1673,6 +1674,10 @@
     "networkDown": "Le réseau ne répond pas pour le moment. Votre paiement n'a pas démarré.",
     "backendDown": "Nous ne parvenons pas à joindre le service de paiement pour le moment. Rien n'a été débité.",
     "confirmationUnknown": "Votre transaction a été envoyée. Nous ne pouvons pas la confirmer pour le moment. Consultez-la sur l'explorateur.",
-    "errorDetails": "Détails techniques"
+    "errorDetails": "Détails techniques",
+    "walletSilent": "Votre portefeuille n'a pas encore répondu. Vérifiez s'il a ouvert une fenêtre ou une fenêtre contextuelle. S'il indique que ce réseau n'est pas pris en charge, vous pouvez payer avec un autre portefeuille.",
+    "walletChainUnsupported": "Ce portefeuille ne prend pas en charge {network}. Rien n'a été envoyé et rien n'a été débité. Vous pouvez payer avec un autre portefeuille.",
+    "payingFrom": "Paiement depuis",
+    "paidFrom": "Payé depuis"
   }
 }

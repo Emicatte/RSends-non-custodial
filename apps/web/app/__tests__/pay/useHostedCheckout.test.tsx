@@ -620,3 +620,268 @@ describe('confirmation unknown by stall (no receipt error is ever raised)', () =
     expect(result.current.step).toBe('syncing')
   })
 })
+
+// ── The wallet refuses the chain ─────────────────────────────────
+//
+// The bug of record: `useSwitchChain`'s error was destructured away, so a
+// wallet that refuses Base Sepolia (Coinbase Smart Wallet does, in its own
+// window) left the page silently repeating "switch your wallet to continue" —
+// advice the wallet had already refused to take.
+
+const CHAIN_REFUSED = new Error(
+  'ChainNotConfiguredError: Chain "84532" not configured for connector "coinbaseWalletSDK".',
+)
+
+describe('wallet refuses this chain', () => {
+  it('surfaces a refused switchChain instead of discarding it', () => {
+    fresh({ chainId: 1 })
+    const { result, rerender } = render(intent())
+    expect(result.current.step).toBe('wrong_network')
+
+    act(() => result.current.switchNetwork())
+    expect(mockWagmi.switchChain).toHaveBeenCalledWith({ chainId: 84532 })
+
+    mockWagmi.switchError = CHAIN_REFUSED
+    rerender({ backendPaid: false })
+    expect(result.current.step).toBe('wallet_chain_unsupported')
+  })
+
+  it('a refusal on the write path is never reported as failed', () => {
+    fresh()
+    const { result, rerender } = render(intent())
+
+    mockWagmi.payWrite.error = CHAIN_REFUSED
+    rerender({ backendPaid: false })
+    expect(result.current.step).toBe('wallet_chain_unsupported')
+    expect(result.current.step).not.toBe('failed')
+    expect(result.current.payHash).toBeNull()
+  })
+
+  it('a STALE switch error never pins the page once the chain is right', () => {
+    fresh({ chainId: 1 })
+    const { result, rerender } = render(intent())
+
+    mockWagmi.switchError = CHAIN_REFUSED
+    rerender({ backendPaid: false })
+    expect(result.current.step).toBe('wallet_chain_unsupported')
+
+    // The payer switched in the wallet itself; the old error is meaningless.
+    mockWagmi.chainId = 84532
+    rerender({ backendPaid: false })
+    expect(result.current.step).toBe('ready')
+  })
+
+  it('retry() clears the refusal (the switch mutation is reset too)', () => {
+    fresh({ chainId: 1 })
+    const { result, rerender } = render(intent())
+
+    mockWagmi.switchError = CHAIN_REFUSED
+    rerender({ backendPaid: false })
+    expect(result.current.step).toBe('wallet_chain_unsupported')
+
+    act(() => result.current.retry())
+    expect(mockWagmi.switchReset).toHaveBeenCalled()
+    rerender({ backendPaid: false })
+    expect(result.current.step).toBe('wrong_network')
+  })
+
+  it('a user rejection of the switch stays a rejection, not a wallet limitation', () => {
+    fresh({ chainId: 1 })
+    const { result, rerender } = render(intent())
+
+    mockWagmi.switchError = new Error('User rejected the request.')
+    rerender({ backendPaid: false })
+    expect(result.current.step).not.toBe('wallet_chain_unsupported')
+  })
+})
+
+// ── A wallet that has not answered yet ───────────────────────────
+//
+// Per production observation the prompt DOES resolve when the wallet window
+// closes, so this is deliberately not a timeout: the state never changes and
+// the live prompt is never reset. All that changes is what the page says
+// while the payer waits, plus a non-destructive way out that is only offered
+// while nothing has been broadcast.
+
+describe('a wallet prompt that goes unanswered', () => {
+  beforeEach(() => jest.useFakeTimers())
+  afterEach(() => jest.useRealTimers())
+
+  it('waitingLong flips only after the silence window, and the step never moves', () => {
+    fresh()
+    const { result, rerender } = render(intent())
+
+    mockWagmi.payWrite.isPending = true
+    rerender({ backendPaid: false })
+    expect(result.current.step).toBe('paying')
+    expect(result.current.waitingLong).toBe(false)
+
+    act(() => {
+      jest.advanceTimersByTime(19_000)
+    })
+    rerender({ backendPaid: false })
+    expect(result.current.waitingLong).toBe(false)
+
+    act(() => {
+      jest.advanceTimersByTime(2_000)
+    })
+    rerender({ backendPaid: false })
+    expect(result.current.waitingLong).toBe(true)
+    // NOT a timeout: the prompt is still live and the step is unchanged.
+    expect(result.current.step).toBe('paying')
+    expect(mockWagmi.payWrite.reset).not.toHaveBeenCalled()
+  })
+
+  it('covers the permit signature and the approve prompt too', () => {
+    fresh()
+    const { result, rerender } = render(intent())
+
+    mockWagmi.signPending = true
+    rerender({ backendPaid: false })
+    expect(result.current.step).toBe('paying')
+    act(() => {
+      jest.advanceTimersByTime(21_000)
+    })
+    rerender({ backendPaid: false })
+    expect(result.current.waitingLong).toBe(true)
+  })
+
+  it('resets the moment the wallet answers', () => {
+    fresh()
+    const { result, rerender } = render(intent())
+
+    mockWagmi.payWrite.isPending = true
+    rerender({ backendPaid: false })
+    act(() => {
+      jest.advanceTimersByTime(21_000)
+    })
+    rerender({ backendPaid: false })
+    expect(result.current.waitingLong).toBe(true)
+
+    mockWagmi.payWrite.isPending = false
+    rerender({ backendPaid: false })
+    expect(result.current.waitingLong).toBe(false)
+  })
+
+  it('never fires when the wallet answers promptly', () => {
+    fresh()
+    const { result, rerender } = render(intent())
+
+    mockWagmi.payWrite.isPending = true
+    rerender({ backendPaid: false })
+    act(() => {
+      jest.advanceTimersByTime(3_000)
+    })
+    mockWagmi.payWrite.isPending = false
+    mockWagmi.payWrite.data = '0xdead'
+    rerender({ backendPaid: false })
+    expect(result.current.step).toBe('tx_pending')
+    expect(result.current.waitingLong).toBe(false)
+  })
+})
+
+// ── Changing wallet ──────────────────────────────────────────────
+
+describe('switching or dropping the wallet', () => {
+  it('useDifferentWallet disconnects and clears the prompt state', () => {
+    fresh()
+    const { result, rerender } = render(intent())
+
+    mockWagmi.payWrite.isPending = true
+    rerender({ backendPaid: false })
+    expect(result.current.step).toBe('paying')
+
+    act(() => result.current.useDifferentWallet())
+    expect(mockWagmi.disconnect).toHaveBeenCalled()
+    expect(mockWagmi.payWrite.reset).toHaveBeenCalled()
+    expect(mockWagmi.signReset).toHaveBeenCalled()
+
+    Object.assign(mockWagmi, { isConnected: false, address: undefined })
+    mockWagmi.payWrite.isPending = false
+    rerender({ backendPaid: false })
+    expect(result.current.step).toBe('connect')
+  })
+
+  it('canSwitchWallet is false the moment ANY transaction exists', () => {
+    fresh()
+    const { result, rerender } = render(intent())
+    expect(result.current.canSwitchWallet).toBe(true)
+
+    mockWagmi.payWrite.data = '0xdead'
+    rerender({ backendPaid: false })
+    expect(result.current.canSwitchWallet).toBe(false)
+  })
+
+  it('canSwitchWallet is false once an approve tx has been broadcast', () => {
+    fresh({ reads: { balanceOf: 100_000_000n, allowance: 0n } })
+    const { result, rerender } = render(intent({ permitType: 'none' }))
+    expect(result.current.canSwitchWallet).toBe(true)
+
+    mockWagmi.approveWrite.data = '0xaaa1'
+    rerender({ backendPaid: false })
+    expect(result.current.canSwitchWallet).toBe(false)
+  })
+
+  it('an IN-FLIGHT transaction survives a disconnect, hash and all', () => {
+    // The money has already moved. Losing the hash would strand the payer with
+    // no proof and no explorer link, which is the one thing this page must
+    // never do.
+    fresh()
+    const { result, rerender } = render(intent())
+
+    mockWagmi.payWrite.data = '0xdead'
+    rerender({ backendPaid: false })
+    expect(result.current.step).toBe('tx_pending')
+
+    Object.assign(mockWagmi, { isConnected: false, address: undefined })
+    rerender({ backendPaid: false })
+    expect(result.current.step).toBe('tx_pending')
+    expect(result.current.payHash).toBe('0xdead')
+
+    mockWagmi.receipts['0xdead'] = { status: 'success' }
+    rerender({ backendPaid: true })
+    expect(result.current.step).toBe('success')
+    expect(result.current.payHash).toBe('0xdead')
+  })
+
+  it('re-derives balance and allowance FOR the new address, keeping the intent', () => {
+    // The intent is keyed by the URL, not the wallet: changing account must
+    // re-read the new payer's position rather than reset the page.
+    const OTHER = '0x2222222222222222222222222222222222222222' as const
+    fresh({ reads: { balanceOf: 100_000_000n, allowance: 0n } })
+    const { result, rerender } = render(intent({ permitType: 'none' }))
+    expect(result.current.step).toBe('needs_approve')
+    expect(mockWagmi.readArgs.balanceOf).toEqual([PAYER])
+    expect(mockWagmi.readArgs.allowance).toEqual([PAYER, ROUTER])
+
+    mockWagmi.address = OTHER
+    mockWagmi.reads.balanceOf = 10_000_000n
+    rerender({ backendPaid: false })
+    // Every address-scoped read is re-issued for the new payer...
+    expect(mockWagmi.readArgs.balanceOf).toEqual([OTHER])
+    expect(mockWagmi.readArgs.allowance).toEqual([OTHER, ROUTER])
+    // ...the intent and its total are untouched, and the new balance decides.
+    expect(result.current.step).toBe('insufficient_balance')
+    expect(result.current.total).toBe(50_600_000n)
+
+    mockWagmi.reads.balanceOf = 100_000_000n
+    mockWagmi.reads.allowance = 50_600_000n
+    rerender({ backendPaid: false })
+    expect(result.current.step).toBe('ready')
+  })
+
+  it('re-derives the permit nonce for the new address (permit path)', () => {
+    const OTHER = '0x2222222222222222222222222222222222222222' as const
+    fresh()
+    const { result, rerender } = render(intent())
+    expect(mockWagmi.readArgs.nonces).toEqual([PAYER])
+
+    mockWagmi.address = OTHER
+    rerender({ backendPaid: false })
+    expect(mockWagmi.readArgs.nonces).toEqual([OTHER])
+    expect(result.current.step).toBe('ready')
+    // The fee is address-independent by construction (quoteFee takes token +
+    // amount), so it is re-derived by NOT changing — asserted, not faked.
+    expect(result.current.fee).toBe(600_000n)
+  })
+})

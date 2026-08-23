@@ -1,6 +1,7 @@
 import {
   humanizeTxError,
   isTransientNetworkError,
+  isUnsupportedChainError,
   isUserRejection,
 } from '@/lib/web3/humanizeTxError'
 
@@ -103,5 +104,94 @@ describe('isTransientNetworkError', () => {
     expect(isTransientNetworkError(null)).toBe(false)
     expect(isTransientNetworkError(undefined)).toBe(false)
     expect(isTransientNetworkError('Failed to fetch')).toBe(true)
+  })
+})
+
+// ── The wallet itself refuses the chain ──────────────────────────
+//
+// Observed on production with Coinbase Smart Wallet, which answers
+// "Base Sepolia is not supported. Try another blockchain." in its own window.
+// This is a limitation OF THE WALLET: nothing was sent, nothing was charged,
+// and no amount of retrying the same wallet can change it. It must never be
+// classified as a failed payment, and never as a network outage either — the
+// chain is fine, the wallet just will not go there.
+
+describe('isUnsupportedChainError', () => {
+  it('recognizes the viem switch-chain family', () => {
+    for (const message of [
+      'ChainNotConfiguredError: Chain "84532" not configured for connector "coinbaseWalletSDK".',
+      'SwitchChainError: An error occurred when attempting to switch chain.',
+      'Unrecognized chain ID "0x14a34". Try adding the chain using wallet_addEthereumChain first.',
+      'Unsupported chain id: 84532',
+      'Unsupported network',
+      'This wallet does not support the requested network',
+    ]) {
+      expect({ message, unsupported: isUnsupportedChainError(new Error(message)) }).toEqual({
+        message,
+        unsupported: true,
+      })
+    }
+  })
+
+  it('recognizes the EIP-1193 4902 code and the wallet-facing wording', () => {
+    expect(isUnsupportedChainError({ code: 4902, message: 'Unrecognized chain ID' })).toBe(true)
+    expect(
+      isUnsupportedChainError(
+        new Error('Base Sepolia is not supported. Try another blockchain.'),
+      ),
+    ).toBe(true)
+  })
+
+  it('sees through viem wrapping a 4902 as a USER REJECTION', () => {
+    // Measured shape (viem@2.47.4, injected connector refusing Base Sepolia).
+    // The headline says the payer rejected it; the payer did no such thing,
+    // and the truth is in Details. Classifying this as a rejection would tell
+    // them they cancelled a prompt their wallet never showed them.
+    const wrapped = new Error(
+      'User rejected the request.\n\nDetails: Unrecognized chain ID "0x14a34". ' +
+        'Base Sepolia is not supported. Try another blockchain.\nVersion: viem@2.47.4',
+    )
+    expect(isUnsupportedChainError(wrapped)).toBe(true)
+    // ...and the nested provider code is honoured even under a 4001 wrapper.
+    const nested = Object.assign(new Error('User rejected the request.'), {
+      code: 4001,
+      cause: { code: 4902, message: 'Unrecognized chain ID' },
+    })
+    expect(isUnsupportedChainError(nested)).toBe(true)
+  })
+
+  it('does NOT swallow the UnsupportedToken contract error', () => {
+    // Same prefix, entirely different meaning: that one IS an answer from the
+    // chain about the token, and it must keep reaching the `failed` branch.
+    expect(isUnsupportedChainError(new Error('UnsupportedToken()'))).toBe(false)
+    expect(
+      isUnsupportedChainError(
+        new Error('reverted with custom error UnsupportedToken(address)'),
+      ),
+    ).toBe(false)
+    expect(
+      isUnsupportedChainError(new Error('execution reverted: UnsupportedToken()')),
+    ).toBe(false)
+  })
+
+  it('does NOT classify rejections or transport faults as unsupported', () => {
+    for (const message of [
+      'User rejected the request.',
+      'User denied transaction signature.',
+      'HTTP request failed. Status: 503. Details: no backend is currently healthy',
+      'Failed to fetch',
+      'insufficient funds for gas',
+    ]) {
+      expect({ message, unsupported: isUnsupportedChainError(new Error(message)) }).toEqual({
+        message,
+        unsupported: false,
+      })
+    }
+  })
+
+  it('is safe on null and non-Error values', () => {
+    expect(isUnsupportedChainError(null)).toBe(false)
+    expect(isUnsupportedChainError(undefined)).toBe(false)
+    expect(isUnsupportedChainError('Unsupported chain id: 84532')).toBe(true)
   })
 })

@@ -33,10 +33,15 @@ export interface ActionAreaProps {
   connectSlot: ReactNode
   approveHash: string | null
   payHash: string | null
+  /** the wallet prompt has been open long enough to deserve an explanation */
+  waitingLong: boolean
+  /** nothing has been broadcast, so offering to change wallet is safe */
+  canSwitchWallet: boolean
   onSwitch: () => void
   onApprove: () => void
   onPay: () => void
   onRetry: () => void
+  onUseOtherWallet: () => void
 }
 
 function Note({ children, tone = 'sub' }: { children: ReactNode; tone?: 'sub' | 'error' }) {
@@ -177,7 +182,24 @@ export function ActionArea(props: ActionAreaProps) {
 
     case 'approving':
     case 'paying':
-      return <WaitingRow>{t('waitingWallet')}</WaitingRow>
+      // The spinner and the waiting copy STAY: the wallet prompt is still
+      // live and may still be confirmed. Only the explanation is added, and
+      // the escape hatch only while nothing has been broadcast.
+      return (
+        <>
+          <WaitingRow>{t('waitingWallet')}</WaitingRow>
+          {props.waitingLong && (
+            <>
+              <Note>{t('walletSilent')}</Note>
+              {props.canSwitchWallet && (
+                <GhostButton onClick={props.onUseOtherWallet}>
+                  {t('button.otherWallet')}
+                </GhostButton>
+              )}
+            </>
+          )}
+        </>
+      )
 
     case 'approve_pending':
       return (
@@ -270,6 +292,22 @@ export function ActionArea(props: ActionAreaProps) {
         <>
           <Note>{t('networkDown')}</Note>
           <GhostButton onClick={props.onRetry}>{t('button.retry')}</GhostButton>
+        </>
+      )
+
+    case 'wallet_chain_unsupported':
+      // The wallet's limitation, not a payment failure and not an outage.
+      // Nothing was broadcast, so as with chain_unreachable nothing may be
+      // claimed or linked about a transaction. Retrying THIS wallet cannot
+      // help, so the only control offered is a different one.
+      return (
+        <>
+          <Note>{t('walletChainUnsupported', { network: props.networkLabel })}</Note>
+          {props.canSwitchWallet && (
+            <GhostButton onClick={props.onUseOtherWallet}>
+              {t('button.otherWallet')}
+            </GhostButton>
+          )}
         </>
       )
 

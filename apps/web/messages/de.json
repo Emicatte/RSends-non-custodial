@@ -1646,7 +1646,8 @@
       "approve": "{token} freigeben",
       "pay": "{amount} {token} zahlen",
       "viewTx": "Transaktion ansehen",
-      "retry": "Erneut versuchen"
+      "retry": "Erneut versuchen",
+      "otherWallet": "Andere Wallet verwenden"
     },
     "steps": {
       "approve": "Schritt 1 von 2: {token} freigeben",
@@ -1673,6 +1674,10 @@
     "networkDown": "Das Netzwerk antwortet gerade nicht. Ihre Zahlung wurde nicht gestartet.",
     "backendDown": "Wir erreichen den Zahlungsdienst gerade nicht. Es wurde nichts abgebucht.",
     "confirmationUnknown": "Ihre Transaktion wurde gesendet. Wir können sie gerade nicht bestätigen. Prüfen Sie die Transaktion im Explorer.",
-    "errorDetails": "Technische Details"
+    "errorDetails": "Technische Details",
+    "walletSilent": "Ihre Wallet hat noch nicht geantwortet. Prüfen Sie, ob sie ein Fenster oder ein Pop-up geöffnet hat. Wenn dort steht, dass dieses Netzwerk nicht unterstützt wird, können Sie mit einer anderen Wallet zahlen.",
+    "walletChainUnsupported": "Diese Wallet unterstützt {network} nicht. Es wurde nichts gesendet und nichts abgebucht. Sie können mit einer anderen Wallet zahlen.",
+    "payingFrom": "Zahlung von",
+    "paidFrom": "Bezahlt von"
   }
 }

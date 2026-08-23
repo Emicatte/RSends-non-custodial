@@ -1646,7 +1646,8 @@
       "approve": "Aprobar {token}",
       "pay": "Pagar {amount} {token}",
       "viewTx": "Ver transacción",
-      "retry": "Reintentar"
+      "retry": "Reintentar",
+      "otherWallet": "Usar otra cartera"
     },
     "steps": {
       "approve": "Paso 1 de 2: Aprobar {token}",
@@ -1673,6 +1674,10 @@
     "networkDown": "La red no responde en este momento. Tu pago no ha comenzado.",
     "backendDown": "No podemos conectar con el servicio de pago en este momento. No se ha cobrado nada.",
     "confirmationUnknown": "Tu transacción se envió. No podemos confirmarla en este momento. Revísala en el explorador.",
-    "errorDetails": "Detalles técnicos"
+    "errorDetails": "Detalles técnicos",
+    "walletSilent": "Tu cartera aún no ha respondido. Comprueba si ha abierto una ventana o una ventana emergente. Si dice que esta red no es compatible, puedes pagar con otra cartera.",
+    "walletChainUnsupported": "Esta cartera no es compatible con {network}. No se envió nada y no se cobró nada. Puedes pagar con otra cartera.",
+    "payingFrom": "Pagas desde",
+    "paidFrom": "Pagado desde"
   }
 }

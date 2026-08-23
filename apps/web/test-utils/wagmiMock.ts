@@ -36,10 +36,17 @@ export interface WagmiState {
   chainId: number
   switchChain: jest.Mock
   switchPending: boolean
+  /** useSwitchChain ERROR — a wallet that refuses to go to this chain */
+  switchError: unknown
+  switchReset: jest.Mock
+  disconnect: jest.Mock
   /** useReadContract results keyed by functionName */
   reads: Record<string, unknown>
   /** useReadContract ERRORS keyed by functionName (chain unreachable) */
   readErrors: Record<string, unknown>
+  /** last args each read was issued with, keyed by functionName — proves a
+   *  read was re-issued FOR a new address, not merely re-rendered */
+  readArgs: Record<string, readonly unknown[] | undefined>
   /** refetch spies keyed by functionName */
   refetch: Record<string, jest.Mock>
   approveWrite: WriteController
@@ -81,8 +88,18 @@ export function createWagmiState(
     chainId: 84532,
     switchChain: jest.fn(),
     switchPending: false,
+    switchError: undefined,
+    // Mirrors the real mutation reset (and makeWrite's below): calling it
+    // clears the error. It targets the singleton on purpose — resetWagmiState
+    // Object.assigns a fresh object ONTO it, so a closure over the fresh
+    // object would clear a copy nobody reads.
+    switchReset: jest.fn(() => {
+      wagmiState.switchError = undefined
+    }),
+    disconnect: jest.fn(),
     reads: {},
     readErrors: {},
+    readArgs: {},
     refetch: {},
     approveWrite: makeWrite(),
     payWrite: makeWrite(),
@@ -117,11 +134,19 @@ export function wagmiModuleMock(state: WagmiState) {
     useSwitchChain: () => ({
       switchChain: state.switchChain,
       isPending: state.switchPending,
+      error: state.switchError,
+      reset: state.switchReset,
     }),
-    useReadContract: (config: { functionName: string; query?: { enabled?: boolean } }) => {
+    useDisconnect: () => ({ disconnect: state.disconnect }),
+    useReadContract: (config: {
+      functionName: string
+      args?: readonly unknown[]
+      query?: { enabled?: boolean }
+    }) => {
       const enabled = config.query?.enabled !== false
       const key = config.functionName
       if (!state.refetch[key]) state.refetch[key] = jest.fn()
+      if (enabled) state.readArgs[key] = config.args
       const error = enabled ? state.readErrors[key] : undefined
       return {
         data: enabled && !error ? state.reads[key] : undefined,

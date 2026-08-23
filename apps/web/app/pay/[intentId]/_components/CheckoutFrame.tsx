@@ -15,6 +15,10 @@ import { Card, Shell } from '@/app/pay/_components/payUi'
 
 export interface CheckoutFrameProps {
   header: ReactNode
+  /** which account is paying: RainbowKit's account control, or a plain
+   *  address once a transaction is in flight. Reserved whether filled or
+   *  not, so connecting a wallet cannot shift the card. */
+  wallet?: ReactNode
   amount: ReactNode
   summary: ReactNode
   action: ReactNode
@@ -24,6 +28,7 @@ export interface CheckoutFrameProps {
 
 export function CheckoutFrame({
   header,
+  wallet = null,
   amount,
   summary,
   action,
@@ -36,6 +41,12 @@ export function CheckoutFrame({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           <div data-testid="frame-header" style={{ minHeight: 38 }}>
             {header}
+          </div>
+          <div
+            data-testid="frame-wallet"
+            style={{ minHeight: 34, display: 'flex', alignItems: 'center' }}
+          >
+            {wallet}
           </div>
           <div data-testid="frame-amount" style={{ minHeight: 44 }}>
             {amount}
