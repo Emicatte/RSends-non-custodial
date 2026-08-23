@@ -1645,7 +1645,8 @@
       "approve": "Approve {token}",
       "pay": "Pay {amount} {token}",
       "viewTx": "View transaction",
-      "retry": "Try again"
+      "retry": "Try again",
+      "otherWallet": "Use a different wallet"
     },
     "steps": {
       "approve": "Step 1 of 2: Approve {token}",
@@ -1672,6 +1673,10 @@
     "networkDown": "The network is not responding right now. Your payment has not started.",
     "backendDown": "We cannot reach the payment service right now. Nothing has been charged.",
     "confirmationUnknown": "Your transaction was sent. We cannot confirm it right now. Check it on the explorer.",
-    "errorDetails": "Technical details"
+    "errorDetails": "Technical details",
+    "walletSilent": "Your wallet has not answered yet. Check for a wallet window or popup. If it says this network is not supported, you can pay with a different wallet.",
+    "walletChainUnsupported": "This wallet does not support {network}. Nothing was sent and nothing was charged. You can pay with a different wallet.",
+    "payingFrom": "Paying from",
+    "paidFrom": "Paid from"
   }
 }

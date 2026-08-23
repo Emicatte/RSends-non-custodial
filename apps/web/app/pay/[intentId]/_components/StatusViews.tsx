@@ -18,6 +18,7 @@ import { C } from '@/app/designTokens'
 import { Card, GhostButton, Mono, Shell, truncate } from '@/app/pay/_components/payUi'
 import { explorerTxUrl } from '@/lib/web3/explorer'
 import { CheckoutFrame } from './CheckoutFrame'
+import { PayerAddress } from './SummarySection'
 
 function StatusCard({
   mark,
@@ -123,17 +124,21 @@ export function SuccessView({
   merchant,
   chainId,
   txHash,
+  payer = null,
 }: {
   amount: string
   currency: string
   merchant: string
   chainId: number
   txHash: string | null
+  /** the account the payment came from — read-only, terminal card */
+  payer?: string | null
 }) {
   const t = useTranslations('pay')
   return (
     <StatusCard mark="✓" title={t('success.title')}>
       <Body>{t('success.body', { amount, token: currency, merchant })}</Body>
+      <PayerAddress address={payer} label={t('paidFrom')} />
       {txHash && <ViewTxLink chainId={chainId} hash={txHash} />}
     </StatusCard>
   )

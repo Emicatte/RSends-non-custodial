@@ -15,6 +15,40 @@ import { Mono, truncate } from '@/app/pay/_components/payUi'
 import { formatTokenAmount } from '@/lib/web3/feeMath'
 import type { OnChainIntent } from '@/lib/web3/paymentIntent'
 
+/**
+ * PayerAddress — which account is about to pay (or just paid).
+ *
+ * Deliberately inert: no button, no link, no menu. It is mounted in exactly
+ * the places where an interactive wallet control would be dangerous, namely
+ * once a transaction is in flight, so it must not be able to drop a wallet
+ * mid-payment. The interactive control is RainbowKit's own, mounted upstream
+ * only while nothing has been broadcast.
+ */
+export function PayerAddress({
+  address,
+  label,
+}: {
+  address: string | null
+  label: string
+}) {
+  if (!address) return null
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'baseline',
+        gap: 8,
+        fontFamily: C.D,
+        fontSize: 12,
+        color: C.sub,
+      }}
+    >
+      <span>{label}</span>
+      <Mono style={{ fontSize: 12, color: C.text }}>{truncate(address, 6, 4)}</Mono>
+    </div>
+  )
+}
+
 export function TotalHeadline({
   total,
   currency,

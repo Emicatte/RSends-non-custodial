@@ -28,7 +28,12 @@ import {
 import { ActionArea } from './ActionArea'
 import { CheckoutFrame } from './CheckoutFrame'
 import { CheckoutSkeleton } from './CheckoutSkeleton'
-import { GasNote, SplitBreakdown, TotalHeadline } from './SummarySection'
+import {
+  GasNote,
+  PayerAddress,
+  SplitBreakdown,
+  TotalHeadline,
+} from './SummarySection'
 import { TrustFooter } from './TrustFooter'
 import {
   AlreadyPaidView,
@@ -129,6 +134,7 @@ function CheckoutActive({
         merchant={merchantName(intent)}
         chainId={onchain.chainId}
         txHash={checkout.payHash ?? intent.txHash}
+        payer={checkout.address}
       />
     )
   }
@@ -171,6 +177,22 @@ function CheckoutActive({
           </span>
         </div>
       }
+      wallet={
+        // Which account is about to pay, always visible once connected. The
+        // control is RainbowKit's own (its modal carries copy-address and
+        // disconnect) and is mounted ONLY while nothing of ours has been
+        // broadcast; from the first hash onward the same line degrades to an
+        // inert address, so no affordance can drop a wallet mid-payment.
+        checkout.address == null ? null : checkout.canSwitchWallet ? (
+          <ConnectButton
+            chainStatus="none"
+            showBalance={false}
+            accountStatus="address"
+          />
+        ) : (
+          <PayerAddress address={checkout.address} label={t('payingFrom')} />
+        )
+      }
       amount={
         <TotalHeadline
           total={checkout.total}
@@ -208,9 +230,12 @@ function CheckoutActive({
           }
           approveHash={checkout.approveHash}
           payHash={checkout.payHash}
+          waitingLong={checkout.waitingLong}
+          canSwitchWallet={checkout.canSwitchWallet}
           onSwitch={checkout.switchNetwork}
           onApprove={checkout.approve}
           onPay={() => void checkout.pay()}
+          onUseOtherWallet={checkout.useDifferentWallet}
           onRetry={
             checkout.step === 'chain_unreachable'
               ? checkout.retryReads

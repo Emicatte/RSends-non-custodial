@@ -1645,7 +1645,8 @@
       "approve": "Approva {token}",
       "pay": "Paga {amount} {token}",
       "viewTx": "Vedi la transazione",
-      "retry": "Riprova"
+      "retry": "Riprova",
+      "otherWallet": "Usa un altro wallet"
     },
     "steps": {
       "approve": "Passo 1 di 2: Approva {token}",
@@ -1672,6 +1673,10 @@
     "networkDown": "La rete non risponde in questo momento. Il tuo pagamento non è partito.",
     "backendDown": "Non riusciamo a raggiungere il servizio di pagamento in questo momento. Non è stato addebitato nulla.",
     "confirmationUnknown": "La tua transazione è stata inviata. Non riusciamo a confermarla in questo momento. Controllala sull'explorer.",
-    "errorDetails": "Dettagli tecnici"
+    "errorDetails": "Dettagli tecnici",
+    "walletSilent": "Il tuo wallet non ha ancora risposto. Controlla se ha aperto una finestra o un popup. Se dice che questa rete non è supportata, puoi pagare con un altro wallet.",
+    "walletChainUnsupported": "Questo wallet non supporta {network}. Non è stato inviato nulla e non è stato addebitato nulla. Puoi pagare con un altro wallet.",
+    "payingFrom": "Paghi da",
+    "paidFrom": "Pagato da"
   }
 }
