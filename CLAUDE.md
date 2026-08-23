@@ -337,6 +337,28 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
   surface, needs its own decision; (c) **backend janitor leftovers** now caller-less from the
   web app — `EXEMPT_PATHS` entries `api/internal/signing` / `api/internal/oracle`,
   `/api/v1/forwarding` (sweeper), `/api/v1/distributions` (`app/security/api_keys.py`).
+- **`feeUnavailable` is sent by the backend and dropped by the frontend.**
+  `build_onchain_payment` (`router_registry.py`) sets it when the live `quoteFee` fails, and
+  `RawPaymentIntent` declares it (`apps/web/lib/web3/paymentIntent.ts`), but `normalizeIntent`
+  never copies it into `OnChainIntent` — it has always been discarded. Nothing needs it today:
+  the checkout infers the degraded case from `fee == null` and the *unavailable* case is now a
+  separate state (`chain_unreachable`), so wiring it would add an unread field. It is listed
+  here because it is a wire field the backend maintains and the client throws away, and the
+  next person to look for it will assume it works. Either carry it into `OnChainIntent` with a
+  consumer, or stop sending it.
+- **The post-payment sync poll fails silently forever.** `usePaymentIntent` in `sync` mode
+  (started when the payer's tx mines) keeps its cadence through every error and never
+  surfaces one. The copy stays true — the payment IS confirmed on-chain and the explorer link
+  is on screen — but this is the last place in `/pay` where a backend outage is not announced:
+  the payer sees "Updating the merchant's records" for as long as it lasts. The `initial`
+  phase got a give-up window + `unreachable` card (2026-08-23); `sync` deliberately did not,
+  because there the money has already moved and stopping the poll helps nobody. Decide what a
+  stalled sync should SAY, then implement it — it is a copy/threshold decision, not a bug.
+- **`/pay` is not runnable locally without `NEXT_PUBLIC_WC_PROJECT_ID`.** The var is in
+  `apps/web/.env.example` (empty) but is not optional: RainbowKit throws
+  `No projectId found` at module load, so `/pay` renders the error boundary instead of the
+  checkout and no amount of stubbing gets past it. Any non-empty string works for local work
+  (WalletConnect itself stays unusable). See the note added to `.env.example`.
 
 Closed (2026-07-05): **CI backend job now has a Redis service** (`redis:7`, health-checked,
 `REDIS_URL=redis://localhost:6379/0` — plain scheme is CI/test-scoped, the `rediss://` guard
