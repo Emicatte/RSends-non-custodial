@@ -38,12 +38,17 @@ export interface WagmiState {
   switchPending: boolean
   /** useReadContract results keyed by functionName */
   reads: Record<string, unknown>
+  /** useReadContract ERRORS keyed by functionName (chain unreachable) */
+  readErrors: Record<string, unknown>
   /** refetch spies keyed by functionName */
   refetch: Record<string, jest.Mock>
   approveWrite: WriteController
   payWrite: WriteController
   /** receipt per tx hash: status drives mined/reverted */
   receipts: Record<string, { status: 'success' | 'reverted' } | undefined>
+  /** receipt LOOKUP errors per tx hash: the chain cannot be read, so whether
+   *  the tx succeeded is unknown — never the same thing as a revert */
+  receiptErrors: Record<string, unknown>
   signTypedDataAsync: jest.Mock
   signPending: boolean
   signError: unknown
@@ -77,10 +82,12 @@ export function createWagmiState(
     switchChain: jest.fn(),
     switchPending: false,
     reads: {},
+    readErrors: {},
     refetch: {},
     approveWrite: makeWrite(),
     payWrite: makeWrite(),
     receipts: {},
+    receiptErrors: {},
     signTypedDataAsync: jest.fn(),
     signPending: false,
     signError: undefined,
@@ -115,8 +122,10 @@ export function wagmiModuleMock(state: WagmiState) {
       const enabled = config.query?.enabled !== false
       const key = config.functionName
       if (!state.refetch[key]) state.refetch[key] = jest.fn()
+      const error = enabled ? state.readErrors[key] : undefined
       return {
-        data: enabled ? state.reads[key] : undefined,
+        data: enabled && !error ? state.reads[key] : undefined,
+        error,
         refetch: state.refetch[key],
         isLoading: false,
       }
@@ -134,9 +143,11 @@ export function wagmiModuleMock(state: WagmiState) {
     },
     useWaitForTransactionReceipt: ({ hash }: { hash?: `0x${string}` }) => {
       const receipt = hash ? state.receipts[hash] : undefined
+      const error = hash ? state.receiptErrors[hash] : undefined
       return {
         data: receipt,
-        isLoading: !!hash && !receipt,
+        error,
+        isLoading: !!hash && !receipt && !error,
         isSuccess: !!receipt,
       }
     },
@@ -146,8 +157,13 @@ export function wagmiModuleMock(state: WagmiState) {
       error: state.signError,
       reset: state.signReset,
     }),
-    useBalance: ({ query }: { query?: { enabled?: boolean } } = {}) => ({
-      data: query?.enabled === false ? undefined : state.nativeBalance,
-    }),
+    useBalance: ({ query }: { query?: { enabled?: boolean } } = {}) => {
+      const enabled = query?.enabled !== false
+      const error = enabled ? state.readErrors.nativeBalance : undefined
+      return {
+        data: enabled && !error ? state.nativeBalance : undefined,
+        error,
+      }
+    },
   }
 }

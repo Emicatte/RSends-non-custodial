@@ -61,6 +61,18 @@ const EN_VERBATIM: Record<string, string> = {
   alreadyPaid: 'This payment was already completed.',
   notFound: 'We could not find this payment. Check the link and try again.',
   loadingRetry: 'Taking longer than usual. Retrying.',
+  // Network-failure copy. The cause is the network, never the payer or the
+  // merchant, and the wording never overstates certainty in either direction:
+  // "has not started" only where no transaction exists, "cannot confirm"
+  // where one does. No jargon (no RPC, no provider, no error code) in the
+  // headline — the raw code lives in the collapsed detail.
+  networkDown:
+    'The network is not responding right now. Your payment has not started.',
+  backendDown:
+    'We cannot reach the payment service right now. Nothing has been charged.',
+  confirmationUnknown:
+    'Your transaction was sent. We cannot confirm it right now. Check it on the explorer.',
+  errorDetails: 'Technical details',
 }
 
 function resolve(obj: unknown, path: string): unknown {

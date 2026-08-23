@@ -1668,6 +1668,10 @@
     "notFound": "We could not find this payment. Check the link and try again.",
     "loadingRetry": "Taking longer than usual. Retrying.",
     "payTo": "Pay to",
-    "expiresIn": "Expires in"
+    "expiresIn": "Expires in",
+    "networkDown": "The network is not responding right now. Your payment has not started.",
+    "backendDown": "We cannot reach the payment service right now. Nothing has been charged.",
+    "confirmationUnknown": "Your transaction was sent. We cannot confirm it right now. Check it on the explorer.",
+    "errorDetails": "Technical details"
   }
 }

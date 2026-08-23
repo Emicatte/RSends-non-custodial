@@ -32,7 +32,9 @@ import { GasNote, SplitBreakdown, TotalHeadline } from './SummarySection'
 import { TrustFooter } from './TrustFooter'
 import {
   AlreadyPaidView,
+  ErrorDetail,
   ExpiredView,
+  NetworkErrorView,
   NotFoundView,
   SuccessView,
 } from './StatusViews'
@@ -44,6 +46,9 @@ export default function HostedCheckout() {
 
   if (phase.kind === 'loading') return <CheckoutSkeleton slow={phase.slow} />
   if (phase.kind === 'not_found') return <NotFoundView />
+  if (phase.kind === 'unreachable') {
+    return <NetworkErrorView onRetry={refresh} detail={phase.detail} />
+  }
 
   const intent = phase.intent
 
@@ -206,10 +211,20 @@ function CheckoutActive({
           onSwitch={checkout.switchNetwork}
           onApprove={checkout.approve}
           onPay={() => void checkout.pay()}
-          onRetry={checkout.retry}
+          onRetry={
+            checkout.step === 'chain_unreachable'
+              ? checkout.retryReads
+              : checkout.retry
+          }
         />
       }
-      notice={null}
+      notice={
+        // The frame reserves this line whether or not it is filled, so
+        // showing a code during an outage cannot shift the card.
+        checkout.step === 'chain_unreachable' && checkout.errorDetail ? (
+          <ErrorDetail detail={checkout.errorDetail} />
+        ) : null
+      }
       footer={<TrustFooter chainId={onchain.chainId} router={onchain.router} />}
     />
   )

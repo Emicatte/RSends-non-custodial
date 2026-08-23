@@ -198,7 +198,10 @@ describe('ActionArea per step', () => {
     expect(props.onRetry).toHaveBeenCalled()
   })
 
-  it('failed shows the copy, the explorer link and try again', () => {
+  it('failed shows the copy and the explorer link, and offers NO retry', () => {
+    // `failed` is now reverted/terminal only: retrying the same call cannot
+    // change the outcome, so offering it would be a false affordance. A
+    // NETWORK failure lands on chain_unreachable instead, which does retry.
     render(<ActionArea {...actionProps('failed', { payHash: HASH })} />)
     expect(
       screen.getByText(
@@ -206,7 +209,37 @@ describe('ActionArea per step', () => {
       ),
     ).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /View transaction/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
+  })
+
+  it('chain_unreachable is transient: network copy plus a retry, no tx claim', () => {
+    const props = actionProps('chain_unreachable')
+    render(<ActionArea {...props} />)
+    expect(
+      screen.getByText(
+        'The network is not responding right now. Your payment has not started.',
+      ),
+    ).toBeInTheDocument()
+    screen.getByRole('button', { name: 'Try again' }).click()
+    expect(props.onRetry).toHaveBeenCalled()
+    // No transaction exists, so nothing may be linked or claimed about one.
+    expect(screen.queryByRole('link', { name: /View transaction/ })).toBeNull()
+  })
+
+  it('confirmation_unknown never says failed and always keeps the hash', () => {
+    render(<ActionArea {...actionProps('confirmation_unknown', { payHash: HASH })} />)
+    expect(
+      screen.getByText(
+        'Your transaction was sent. We cannot confirm it right now. Check it on the explorer.',
+      ),
+    ).toBeInTheDocument()
+    // The explorer link is the payer's independent proof when we cannot help.
+    expect(screen.getByRole('link', { name: /View transaction/ })).toHaveAttribute(
+      'href',
+      `https://sepolia.basescan.org/tx/${HASH}`,
+    )
+    expect(screen.queryByText(/did not complete/)).toBeNull()
+    expect(screen.queryByText(/No payment left your wallet/)).toBeNull()
   })
 
   it('buttons are at least 44px touch targets', () => {

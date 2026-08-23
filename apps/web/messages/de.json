@@ -1669,6 +1669,10 @@
     "notFound": "Wir konnten diese Zahlung nicht finden. Prüfen Sie den Link und versuchen Sie es erneut.",
     "loadingRetry": "Es dauert länger als üblich. Neuer Versuch läuft.",
     "payTo": "Zahlen an",
-    "expiresIn": "Läuft ab in"
+    "expiresIn": "Läuft ab in",
+    "networkDown": "Das Netzwerk antwortet gerade nicht. Ihre Zahlung wurde nicht gestartet.",
+    "backendDown": "Wir erreichen den Zahlungsdienst gerade nicht. Es wurde nichts abgebucht.",
+    "confirmationUnknown": "Ihre Transaktion wurde gesendet. Wir können sie gerade nicht bestätigen. Prüfen Sie die Transaktion im Explorer.",
+    "errorDetails": "Technische Details"
   }
 }

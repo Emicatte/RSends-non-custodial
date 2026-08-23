@@ -17,7 +17,7 @@
  * source both the summary rows and every transaction argument consume.
  */
 
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   useAccount,
   useBalance,
@@ -37,7 +37,10 @@ import {
   deriveCheckoutStep,
   type CheckoutStep,
 } from '@/lib/web3/checkoutState'
-import { isUserRejection } from '@/lib/web3/humanizeTxError'
+import {
+  isTransientNetworkError,
+  isUserRejection,
+} from '@/lib/web3/humanizeTxError'
 import type { OnChainIntent } from '@/lib/web3/paymentIntent'
 import {
   EIP2612_ABI,
@@ -47,6 +50,23 @@ import {
 } from '@/lib/web3/permit'
 
 const BALANCE_REFETCH_MS = 15_000
+
+/**
+ * How long a sent transaction may sit without a receipt before the checkout
+ * stops claiming it is merely "waiting for the network" and says the outcome
+ * cannot be confirmed.
+ *
+ * This exists because `useWaitForTransactionReceipt` does NOT report an error
+ * when the chain stops answering: viem's waitForTransactionReceipt retries
+ * transport failures indefinitely (measured against a blocked RPC: ~450
+ * retries over three minutes, `error` never set). Without a clock of our own
+ * the payer would sit on "Waiting for the network" for the whole outage.
+ *
+ * 45s is far outside normal on Base (2s blocks), so on a healthy chain the
+ * message is never reached; and it is self-correcting either way, since a
+ * receipt that does land outranks it in the deriver.
+ */
+const CONFIRMATION_UNKNOWN_AFTER = 45_000
 
 export interface HostedCheckoutDeps {
   /** backend reflects the payment (from usePaymentIntent) */
@@ -69,6 +89,10 @@ export interface HostedCheckout {
   approve: () => void
   pay: () => Promise<void>
   retry: () => void
+  /** re-run the chain reads (manual control for chain_unreachable) */
+  retryReads: () => void
+  /** raw error text for the collapsed support detail; never a headline */
+  errorDetail: string | null
 }
 
 export function useHostedCheckout(
@@ -95,7 +119,11 @@ export function useHostedCheckout(
   // ── Fee: prefer the backend's live quoteFee; else read it on-chain.
   //    (Split and v2 intents never reach this read: neither contract has a
   //    quoteFee — split fee is "0" by design, v2 fee is structurally 0.) ──
-  const { data: quotedFee } = useReadContract({
+  const {
+    data: quotedFee,
+    error: quoteFeeError,
+    refetch: refetchQuoteFee,
+  } = useReadContract({
     address: onchain.router,
     abi: RSENDS_ROUTER_ABI,
     functionName: 'quoteFee',
@@ -111,7 +139,11 @@ export function useHostedCheckout(
   const maxFee = breakdown?.maxFee ?? null
 
   // ── Allowance — approve+pay fallback path only ──
-  const { data: allowance, refetch: refetchAllowance } = useReadContract({
+  const {
+    data: allowance,
+    error: allowanceError,
+    refetch: refetchAllowance,
+  } = useReadContract({
     address: onchain.token,
     abi: erc20Abi,
     functionName: 'allowance',
@@ -146,7 +178,11 @@ export function useHostedCheckout(
     : ((tokenBalance as bigint | undefined) ?? null)
 
   // ── Permit prerequisites (nonce + EIP-712 domain name) ──
-  const { data: permitNonce } = useReadContract({
+  const {
+    data: permitNonce,
+    error: permitNonceError,
+    refetch: refetchPermitNonce,
+  } = useReadContract({
     address: onchain.token,
     abi: EIP2612_ABI,
     functionName: 'nonces',
@@ -154,7 +190,11 @@ export function useHostedCheckout(
     chainId: onchain.chainId,
     query: { enabled: usesPermit && !!address && onCorrectChain },
   })
-  const { data: tokenName } = useReadContract({
+  const {
+    data: tokenName,
+    error: tokenNameError,
+    refetch: refetchTokenName,
+  } = useReadContract({
     address: onchain.token,
     abi: EIP2612_ABI,
     functionName: 'name',
@@ -163,6 +203,18 @@ export function useHostedCheckout(
   })
   const permitReady =
     !usesPermit || (permitNonce != null && typeof tokenName === 'string')
+
+  // ── Chain reachability ──────────────────────────────────────────
+  // Only the reads REQUIRED to build a valid transaction count. A failing
+  // balance read stays non-blocking, exactly as an unknown balance always
+  // has: it can only produce a false negative, never an invalid tx.
+  //
+  // Before this existed, every read discarded its `error`, so an unreadable
+  // chain looked identical to a slow one and the deriver reported `quoting`
+  // forever — the payer saw a spinner on a disabled Pay button, with no
+  // explanation, for as long as the outage lasted (2026-08-22).
+  const readError = quoteFeeError ?? allowanceError ?? permitNonceError ?? tokenNameError ?? null
+  const chainUnreachable = readError != null
 
   // ── Approve tx ──
   const {
@@ -190,10 +242,11 @@ export function useHostedCheckout(
     error: payError,
     reset: resetPay,
   } = useWriteContract()
-  const { data: payReceipt } = useWaitForTransactionReceipt({
-    hash: payHash,
-    chainId: onchain.chainId,
-  })
+  const { data: payReceipt, error: payReceiptError } =
+    useWaitForTransactionReceipt({
+      hash: payHash,
+      chainId: onchain.chainId,
+    })
   const {
     signTypedDataAsync,
     isPending: signing,
@@ -204,10 +257,28 @@ export function useHostedCheckout(
   const payMined = payReceipt != null
   const payReverted = payReceipt?.status === 'reverted'
 
-  // ── Error classification: payer-cancel is recoverable, the rest failed ──
+  // ── Error classification ────────────────────────────────────────
+  // payer-cancel is recoverable; a transport fault is transient (nothing was
+  // broadcast, so retrying is honest); anything else the chain actually said
+  // is terminal.
   const txError = approveError ?? payError ?? signError ?? null
   const userRejected = isUserRejection(txError)
   const sendFailed = txError != null && !userRejected
+  const sendFailedTransient = sendFailed && isTransientNetworkError(txError)
+  // A sent transaction we cannot resolve: either the receipt lookup errored,
+  // or it has simply been unanswered for too long (see the constant — viem
+  // retries a dead RPC forever rather than erroring, so the timer is the only
+  // signal that actually fires during an outage). Either way the transaction
+  // is out there and its outcome is unknown to us — never failed.
+  const [payStalled, setPayStalled] = useState(false)
+  useEffect(() => {
+    setPayStalled(false)
+    if (!payHash || payMined) return
+    const id = setTimeout(() => setPayStalled(true), CONFIRMATION_UNKNOWN_AFTER)
+    return () => clearTimeout(id)
+  }, [payHash, payMined])
+  const receiptUnreadable =
+    (payReceiptError != null || payStalled) && payReceipt == null
 
   // Mined → hand off to the backend sync polling, exactly once.
   const minedNotifiedRef = useRef(false)
@@ -236,6 +307,9 @@ export function useHostedCheckout(
     payMined,
     payReverted,
     sendFailed,
+    sendFailedTransient,
+    chainUnreachable,
+    receiptUnreadable,
     userRejected,
     backendPaid: deps.backendPaid,
   })
@@ -430,6 +504,17 @@ export function useHostedCheckout(
     resetSign()
   }, [resetApprove, resetPay, resetSign])
 
+  // Manual retry for the READ side. React Query already retries each read
+  // twice on its own (see app/providers.tsx) and then gives up; this is the
+  // control that gives the payer something to press instead of a spinner.
+  // Disabled queries no-op, so calling them all is safe on every path.
+  const retryReads = useCallback(() => {
+    void refetchQuoteFee()
+    void refetchAllowance()
+    void refetchPermitNonce()
+    void refetchTokenName()
+  }, [refetchQuoteFee, refetchAllowance, refetchPermitNonce, refetchTokenName])
+
   return {
     step,
     isNative,
@@ -444,5 +529,14 @@ export function useHostedCheckout(
     approve,
     pay,
     retry,
+    retryReads,
+    errorDetail: errorDetailOf(readError ?? payReceiptError ?? txError),
   }
+}
+
+/** First line of the raw error, bounded. Support-facing only. */
+function errorDetailOf(err: unknown): string | null {
+  if (err == null) return null
+  const raw = err instanceof Error ? err.message : String(err)
+  return raw.split('\n')[0].slice(0, 160) || null
 }

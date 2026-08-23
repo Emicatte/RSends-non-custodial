@@ -1669,6 +1669,10 @@
     "notFound": "No encontramos este pago. Revisa el enlace e inténtalo de nuevo.",
     "loadingRetry": "Está tardando más de lo habitual. Reintentando.",
     "payTo": "Pagar a",
-    "expiresIn": "Caduca en"
+    "expiresIn": "Caduca en",
+    "networkDown": "La red no responde en este momento. Tu pago no ha comenzado.",
+    "backendDown": "No podemos conectar con el servicio de pago en este momento. No se ha cobrado nada.",
+    "confirmationUnknown": "Tu transacción se envió. No podemos confirmarla en este momento. Revísala en el explorador.",
+    "errorDetails": "Detalles técnicos"
   }
 }
