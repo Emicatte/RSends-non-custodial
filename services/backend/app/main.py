@@ -119,6 +119,16 @@ async def lifespan(app: FastAPI):
     # RSENDS_ROUTER addresses are configured (e.g. dev/test).
     watchers = await start_indexer_if_needed()
 
+    # ── RPC failover inventory (every boot, ungated) ──
+    # Say out loud which providers each chain will fail over to, and WARN when
+    # a chain has only one. Deliberately NOT gated on the health-check flag: a
+    # chain with no redundancy must be visible even when probing is off.
+    from app.services.rpc_manager import log_provider_inventory
+    from app.services.router_registry import primary_chain_id
+
+    _inventory_chains = [w.chain_id for w in watchers] or [primary_chain_id()]
+    log_provider_inventory(_inventory_chains)
+
     # ── Proactive RPC health checks (per indexer chain) ──
     # One eth_blockNumber per provider per 30s; feeds health-based failover
     # routing, the rpc_provider_healthy/rpc_block_height gauges and the

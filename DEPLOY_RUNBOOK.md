@@ -229,7 +229,7 @@ In the `rsends-shared` env group (Render dashboard):
 | `AUTH_JWT_SECRET` | **manual** — `python -c 'import secrets;print(secrets.token_hex(32))'` (≥64 chars; Render's generated value may be too short) |
 | `ADMIN_API_TOKEN` | **manual** — `openssl rand -hex 32` (≥32 chars, **must differ from `HMAC_SECRET`**; startup fails on empty/short/equal) |
 | `ALCHEMY_API_KEY` | your Alchemy key (always required) |
-| `RPC_PROVIDERS_JSON` | optional — extra RPC providers merged into failover (unset = Alchemy + public fallbacks) |
+| `RPC_PROVIDERS_JSON` | second RPC vendor — see **2b-ter** (unset = Alchemy + public fallbacks only, i.e. no paid redundancy) |
 | `RSENDS_ROUTER_ADDRESSES_JSON` | `{"84532":"<ROUTER_ADDRESS>"}` (from Part 1) |
 | `CORS_ORIGINS` / `APP_URL` | your Vercel URL, e.g. `https://<app>.vercel.app` |
 
@@ -253,6 +253,74 @@ Value's **external** connection — so `REDIS_URL`/`CELERY_BROKER_URL`/
 4. Copy the **external `rediss://` URL** and set `REDIS_URL` (`…/0`),
    `CELERY_BROKER_URL` (`…/1`), `CELERY_RESULT_BACKEND` (`…/2`). Downgrading to
    `redis://` is rejected at startup by design.
+
+### 2b-ter. RPC failover — the second provider (QuickNode) **[AZIONE UTENTE]**
+
+**Why this exists.** On 2026-08-22 the public `sepolia.base.org` returned
+`-32011 no backend is currently healthy to serve traffic` for several minutes:
+the indexer stopped detecting payments (122 failed ticks) and the hosted
+checkout could not compute a fee, because `quoteFee` is a live `eth_call`.
+Alchemy — the other provider — had been quota-exhausted for *days* and nobody
+knew. One vendor down should be a non-event; it was an outage because there was
+effectively only one vendor.
+
+**`RPC_PROVIDERS_JSON` is NOT declared in `render.yaml`** (same treatment as
+`RSENDS_ROUTER_V2_ADDRESSES_JSON`): add it by hand in the Render dashboard →
+service → *Environment* → *Add Environment Variable*. Mark it **secret** — the
+QuickNode URL contains the token.
+
+Value (**one line**, placeholders only — never commit the real endpoint):
+
+```json
+{"84532":[{"name":"quicknode","url":"https://<YOUR-QUICKNODE-SUBDOMAIN>.base-sepolia.quiknode.pro/<YOUR-QUICKNODE-TOKEN>/"}],"8453":[{"name":"quicknode","url":"https://<YOUR-QUICKNODE-SUBDOMAIN>.base-mainnet.quiknode.pro/<YOUR-QUICKNODE-TOKEN>/"}]}
+```
+
+Schema: `{ "<chain_id>": [ {"name": …, "url": …, "priority"?: int} ] }`.
+`priority` is optional and defaults to `0`, which is what you want: the vendor
+lands **after Alchemy (-1) and before the public fallbacks**. Set the mainnet
+(`8453`) entry now even though mainnet is not live — it costs nothing and
+removes a step from the Part 6 cutover. Malformed input is ignored with a
+startup warning and never blocks boot, so a typo degrades you back to one
+vendor *silently as far as traffic is concerned* — which is exactly why the
+verification below is not optional.
+
+> **The two providers must be different vendors — not two keys from one.**
+> Everything that killed Alchemy here is per-*account* or per-*vendor*: a
+> monthly compute quota, a lapsed card, a rotated key, a fleet-wide incident. A
+> second Alchemy key shares the quota, the billing relationship and the
+> infrastructure, so it fails at the same instant as the first and buys nothing.
+> The public `sepolia.base.org` / `mainnet.base.org` endpoints stay in the list
+> as a best-effort third leg — they are **not** redundancy: the public endpoint
+> is the one that went down on 2026-08-22.
+
+**Verify after the deploy — do not assume.** Two independent checks:
+
+1. The provider list actually contains both vendors:
+   ```bash
+   curl -s https://rsends-non-custodial.onrender.com/health/rpc \
+     | jq '.base_sepolia.providers'
+   ```
+   `/health/rpc` is unauthenticated and returns names/health/block/circuit
+   state — never URLs, so no token leaks. Expect, **in this order**:
+   ```json
+   [{"name":"alchemy","healthy":true,"last_block":12345678,"circuit_state":"closed"},
+    {"name":"quicknode","healthy":true,"last_block":12345678,"circuit_state":"closed"},
+    {"name":"base_sepolia","healthy":true,"last_block":12345678,"circuit_state":"closed"}]
+   ```
+   `quicknode` **present** proves it is in the failover list;
+   `last_block > 0` proves the health loop got a real answer out of it — a
+   wrong URL or a bad token shows up as `last_block: 0` with `healthy: false`.
+   Only two entries → the variable was not picked up (check for a stray
+   newline; Render keeps multi-line values verbatim).
+2. The boot log (Render → *Logs*) states the inventory on every start:
+   ```
+   RPC providers chain=84532 (3): alchemy, quicknode, base_sepolia
+   ```
+   There must be **no** `RPC chain 84532 has NO REDUNDANCY` warning. If a
+   provider later dies, the log carries a matching
+   `RPC provider <name> LOST on chain 84532 (…) — N of M providers still
+   serving` at ERROR, and an `RPC_DOWN` alert goes to Telegram once
+   `TELEGRAM_CHAT_ID` is set.
 
 ### 2c. Deploy **[AUTO]**
 Render runs `preDeployCommand: alembic upgrade head` then starts the services.
@@ -362,7 +430,7 @@ re-deploy re-runs `upgrade head`, which is a no-op once at `0007`.
 | `ALCHEMY_API_KEY` | RPC (always required) | SECRET | dashboard.alchemy.com | `<alchemy_key>` |
 | `RSENDS_ROUTER_ADDRESSES_JSON` | chain→router map (v1) | PUBLIC | Part 1 deploy output | `{"84532":"<FILL_AFTER_CONTRACT_DEPLOY>"}` |
 | `RSENDS_ROUTER_V2_ADDRESSES_JSON` | chain→RouterV2 map — **the mainnet cutover** (Part 6) | PUBLIC | Part 6 deploy output; **manual on Render: NOT in `render.yaml`**, the blueprint will never carry it | unset until cutover |
-| `RPC_PROVIDERS_JSON` | optional extra RPC providers (chain→list) | SECRET (may hold a key) | second vendor, mainnet task | unset |
+| `RPC_PROVIDERS_JSON` | second RPC vendor, chain→list (**§2b-ter**) | SECRET (holds the endpoint token) | QuickNode dashboard; **manual on Render: NOT in `render.yaml`** | `{"84532":[{"name":"quicknode","url":"https://<SUB>.base-sepolia.quiknode.pro/<TOKEN>/"}]}` |
 | `CORS_ORIGINS` / `APP_URL` | allowed origins / public URL | PUBLIC | your Vercel URL | `https://<app>.vercel.app` |
 | `ENVIRONMENT` / `DEBUG` | guard posture | PUBLIC | `production` / `false` (in blueprint) | — |
 | `WALLET_AUTH_ALLOW_LEGACY` | anti-replay guard | PUBLIC | `false` (in blueprint) | `false` |

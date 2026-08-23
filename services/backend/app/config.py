@@ -201,6 +201,14 @@ class Settings(BaseSettings):
         RPC_PROVIDERS_JSON. Entries without a usable name/url and keys that
         are not chain ids are dropped (with a warning) — never raises."""
         raw = _parse_json_map(self.rpc_providers_json)
+        if self.rpc_providers_json.strip() not in ("", "{}") and not raw:
+            # _parse_json_map swallows a parse failure into {}. Silently
+            # running with zero extra providers is exactly the "configured but
+            # not actually there" failure mode this var exists to avoid.
+            logger.warning(
+                "RPC_PROVIDERS_JSON is set but is not a JSON object — ignored "
+                "entirely; NO extra RPC providers are configured"
+            )
         out: dict = {}
         for chain_key, entries in raw.items():
             try:
