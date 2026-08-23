@@ -32,6 +32,9 @@ function inputs(overrides: Partial<CheckoutInputs> = {}): CheckoutInputs {
     payMined: false,
     payReverted: false,
     sendFailed: false,
+    sendFailedTransient: false,
+    chainUnreachable: false,
+    receiptUnreadable: false,
     userRejected: false,
     backendPaid: false,
     ...overrides,
@@ -232,5 +235,114 @@ describe('precedence', () => {
     expect(
       deriveCheckoutStep(inputs({ onCorrectChain: false, balance: 0n })),
     ).toBe('wrong_network')
+  })
+})
+
+// ── Network failure: transient vs terminal ───────────────────────
+//
+// The 2026-08-22 outage: the chain could not be read at all. Every read
+// returned undefined, which the deriver could not tell apart from "still
+// loading", so the page sat on `quoting` forever with nothing to pay.
+//
+// The two rules that matter to a payer:
+//   - a payment that was SENT but cannot be read is UNKNOWN, never failed;
+//   - a network fault invites a retry, a revert does not.
+
+describe('chain unreachable (no transaction exists)', () => {
+  it('chain_unreachable when the reads that build the tx cannot be made', () => {
+    expect(
+      deriveCheckoutStep(inputs({ chainUnreachable: true, fee: null, total: null })),
+    ).toBe('chain_unreachable')
+  })
+
+  it('chain_unreachable when the send itself failed for a network reason', () => {
+    expect(deriveCheckoutStep(inputs({ sendFailedTransient: true }))).toBe(
+      'chain_unreachable',
+    )
+  })
+
+  it('never reports quoting while the chain is unreadable', () => {
+    // The bug of record: a failing quoteFee read is indistinguishable from a
+    // pending one, so the payer waited on a spinner that would never resolve.
+    expect(
+      deriveCheckoutStep(inputs({ chainUnreachable: true, fee: null, total: null })),
+    ).not.toBe('quoting')
+  })
+
+  it('connect and wrong_network still outrank it (fix the session first)', () => {
+    expect(
+      deriveCheckoutStep(inputs({ chainUnreachable: true, isConnected: false })),
+    ).toBe('connect')
+    expect(
+      deriveCheckoutStep(inputs({ chainUnreachable: true, onCorrectChain: false })),
+    ).toBe('wrong_network')
+  })
+
+  it('a payer rejection stays distinct from a network failure', () => {
+    expect(deriveCheckoutStep(inputs({ userRejected: true }))).toBe('rejected')
+    expect(
+      deriveCheckoutStep(inputs({ userRejected: true, chainUnreachable: true })),
+    ).toBe('rejected')
+  })
+})
+
+describe('confirmation unknown (a transaction was sent)', () => {
+  it('confirmation_unknown when the receipt cannot be read', () => {
+    expect(
+      deriveCheckoutStep(inputs({ payHash: '0xdead', receiptUnreadable: true })),
+    ).toBe('confirmation_unknown')
+  })
+
+  it('NEVER reports failed when the tx was sent and the chain is unreadable', () => {
+    // Telling a payer their money is gone when it is not is the worst
+    // possible error in this product.
+    const step = deriveCheckoutStep(
+      inputs({
+        payHash: '0xdead',
+        receiptUnreadable: true,
+        chainUnreachable: true,
+        sendFailedTransient: true,
+      }),
+    )
+    expect(step).not.toBe('failed')
+    expect(step).toBe('confirmation_unknown')
+  })
+
+  it('an unreadable receipt outranks tx_pending (a spinner is not an answer)', () => {
+    expect(deriveCheckoutStep(inputs({ payHash: '0xdead' }))).toBe('tx_pending')
+    expect(
+      deriveCheckoutStep(inputs({ payHash: '0xdead', receiptUnreadable: true })),
+    ).toBe('confirmation_unknown')
+  })
+
+  it('a real outcome still wins: mined and reverted are never "unknown"', () => {
+    expect(
+      deriveCheckoutStep(
+        inputs({ payHash: '0xdead', payMined: true, receiptUnreadable: true, backendPaid: true }),
+      ),
+    ).toBe('success')
+    expect(
+      deriveCheckoutStep(
+        inputs({ payHash: '0xdead', payReverted: true, receiptUnreadable: true }),
+      ),
+    ).toBe('failed')
+  })
+})
+
+describe('terminal failure stays terminal', () => {
+  it('a reverted transaction is failed, not transient', () => {
+    expect(deriveCheckoutStep(inputs({ payReverted: true }))).toBe('failed')
+  })
+
+  it('a non-network send error is failed', () => {
+    expect(deriveCheckoutStep(inputs({ sendFailed: true }))).toBe('failed')
+  })
+
+  it('a transient send error outranks the terminal classification', () => {
+    // Both flags set = classified transient; the transient branch must win,
+    // or a network blip reads as "your transaction did not complete".
+    expect(
+      deriveCheckoutStep(inputs({ sendFailed: true, sendFailedTransient: true })),
+    ).toBe('chain_unreachable')
   })
 })

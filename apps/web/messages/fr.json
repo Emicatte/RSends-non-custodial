@@ -1669,6 +1669,10 @@
     "notFound": "Nous ne trouvons pas ce paiement. Vérifiez le lien et réessayez.",
     "loadingRetry": "C'est plus long que d'habitude. Nouvelle tentative en cours.",
     "payTo": "Payer à",
-    "expiresIn": "Expire dans"
+    "expiresIn": "Expire dans",
+    "networkDown": "Le réseau ne répond pas pour le moment. Votre paiement n'a pas démarré.",
+    "backendDown": "Nous ne parvenons pas à joindre le service de paiement pour le moment. Rien n'a été débité.",
+    "confirmationUnknown": "Votre transaction a été envoyée. Nous ne pouvons pas la confirmer pour le moment. Consultez-la sur l'explorateur.",
+    "errorDetails": "Détails techniques"
   }
 }

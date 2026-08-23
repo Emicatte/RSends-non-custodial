@@ -248,6 +248,9 @@ export function ActionArea(props: ActionAreaProps) {
       )
 
     case 'failed':
+      // Terminal: the chain answered, and the answer was no. Retrying the
+      // same call cannot change that, so no retry is offered here — a
+      // NETWORK failure lands on chain_unreachable below, which does.
       return (
         <>
           <Note tone="error">{t('failed')}</Note>
@@ -258,7 +261,32 @@ export function ActionArea(props: ActionAreaProps) {
               label={t('button.viewTx')}
             />
           )}
+        </>
+      )
+
+    case 'chain_unreachable':
+      // No transaction exists, so nothing may be claimed or linked about one.
+      return (
+        <>
+          <Note>{t('networkDown')}</Note>
           <GhostButton onClick={props.onRetry}>{t('button.retry')}</GhostButton>
+        </>
+      )
+
+    case 'confirmation_unknown':
+      // A transaction IS out there and we cannot read its outcome. The
+      // explorer link is the payer's independent proof, and it works when
+      // this product does not.
+      return (
+        <>
+          <Note>{t('confirmationUnknown')}</Note>
+          {props.payHash && (
+            <TxLink
+              chainId={onchain.chainId}
+              hash={props.payHash}
+              label={t('button.viewTx')}
+            />
+          )}
         </>
       )
 

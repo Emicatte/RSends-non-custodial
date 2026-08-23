@@ -4,13 +4,20 @@
  * StatusViews — terminal cards, rendered INSTEAD of any wallet UI:
  * success (this session's payment), expired, already paid, not found.
  * Success and already-paid link the settlement tx on the explorer.
+ *
+ * NetworkErrorView is the one card here that is NOT terminal: the payment
+ * service could not be reached, which is a state the payer can leave. It
+ * renders through CheckoutFrame rather than the bare Shell/Card the terminal
+ * cards use, so an outage keeps the checkout's exact dimensions instead of
+ * collapsing the page to a different shape.
  */
 
 import type { ReactNode } from 'react'
 import { useTranslations } from 'next-intl'
 import { C } from '@/app/designTokens'
-import { Card, Mono, Shell, truncate } from '@/app/pay/_components/payUi'
+import { Card, GhostButton, Mono, Shell, truncate } from '@/app/pay/_components/payUi'
 import { explorerTxUrl } from '@/lib/web3/explorer'
+import { CheckoutFrame } from './CheckoutFrame'
 
 function StatusCard({
   mark,
@@ -163,5 +170,101 @@ export function NotFoundView() {
     <StatusCard mark="?">
       <Body>{t('notFound')}</Body>
     </StatusCard>
+  )
+}
+
+/**
+ * The payment service could not be reached. Not terminal and not the payer's
+ * fault: state the cause plainly, hand them a retry, and keep the card at its
+ * normal size so nothing shifts or blanks. The raw error is available for
+ * support but never leads — a payer should not have to read `-32011`.
+ */
+export function NetworkErrorView({
+  onRetry,
+  detail,
+}: {
+  onRetry: () => void
+  detail: string | null
+}) {
+  const t = useTranslations('pay')
+  return (
+    <CheckoutFrame
+      header={null}
+      amount={
+        // The frame reserves the header/amount/summary heights whether or not
+        // they are filled. Leaving them empty keeps the dimensions but reads
+        // as content that failed to load, so carry the same circular mark the
+        // terminal cards use — the card looks deliberate, not broken.
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <div
+            aria-hidden
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: '50%',
+              border: `1px solid ${C.border}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 18,
+              color: C.purple,
+            }}
+          >
+            ↻
+          </div>
+        </div>
+      }
+      summary={null}
+      action={
+        <>
+          <p
+            style={{
+              margin: 0,
+              fontFamily: C.D,
+              fontSize: 13.5,
+              lineHeight: 1.6,
+              color: C.sub,
+              textAlign: 'center',
+            }}
+          >
+            {t('backendDown')}
+          </p>
+          <GhostButton onClick={onRetry}>{t('button.retry')}</GhostButton>
+        </>
+      }
+      notice={detail ? <ErrorDetail detail={detail} /> : null}
+      footer={null}
+    />
+  )
+}
+
+/** Collapsed by default: plain language for the payer, a code for support. */
+export function ErrorDetail({ detail }: { detail: string }) {
+  const t = useTranslations('pay')
+  return (
+    <details style={{ textAlign: 'center' }}>
+      <summary
+        style={{
+          cursor: 'pointer',
+          fontFamily: C.D,
+          fontSize: 12,
+          color: C.sub,
+          listStyle: 'none',
+        }}
+      >
+        {t('errorDetails')}
+      </summary>
+      <Mono
+        style={{
+          display: 'block',
+          marginTop: 6,
+          fontSize: 11,
+          color: C.sub,
+          wordBreak: 'break-word',
+        }}
+      >
+        {detail}
+      </Mono>
+    </details>
   )
 }

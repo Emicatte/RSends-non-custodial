@@ -7,8 +7,13 @@
  *
  * Phases:
  * - loading (with a `slow` notice flag) while the initial fetch retries with
- *   backoff — a blank or frozen screen is never acceptable, so failures
- *   retry forever; only a definitive 404 short-circuits to not_found.
+ *   backoff; a definitive 404 short-circuits to not_found.
+ * - unreachable once the initial fetch has been failing for
+ *   INITIAL_RETRY_GIVE_UP_AFTER. A blank or frozen screen is still never
+ *   acceptable — this phase is the opposite of frozen: it states that the
+ *   payment service cannot be reached and hands the payer a retry. The
+ *   automatic timer stops there, and `online`/tab-refocus resumes it, so a
+ *   recovered network needs no reload.
  * - ready(intent): while `status === 'pending'` a steady watch poll catches
  *   paid-elsewhere / expiry flips (the backend's _effective_status reports
  *   pending-past-expiry as expired).
@@ -23,11 +28,17 @@ import {
   type PaymentIntent,
   type RawPaymentIntent,
 } from '@/lib/web3/paymentIntent'
-import { SLOW_NOTICE_AFTER, pollDelay, type PollKind } from '@/lib/web3/intentPoll'
+import {
+  INITIAL_RETRY_GIVE_UP_AFTER,
+  SLOW_NOTICE_AFTER,
+  pollDelay,
+  type PollKind,
+} from '@/lib/web3/intentPoll'
 
 export type IntentPhase =
   | { kind: 'loading'; slow: boolean }
   | { kind: 'not_found' }
+  | { kind: 'unreachable'; detail: string | null }
   | { kind: 'ready'; intent: PaymentIntent }
 
 export interface UsePaymentIntentResult {
@@ -109,12 +120,28 @@ export function usePaymentIntent(intentId: string): UsePaymentIntentResult {
         attemptRef.current += 1
       }
       schedule(() => void tick())
-    } catch {
+    } catch (err) {
       if (!mountedRef.current || modeRef.current === 'stopped') return
-      // Initial failures retry forever with backoff; watch/sync just keep
-      // their cadence (a transient error must not kill the poll). Schedule
-      // with the CURRENT attempt (first retry uses the first delay), then
-      // advance the counter for the next round.
+      // The INITIAL fetch gives up after the window: the payer has seen
+      // nothing at all so far, so an honest "cannot reach the service" with a
+      // retry beats a shimmer that never resolves. watch/sync keep their
+      // cadence instead — there the intent is already on screen and a
+      // transient error must not kill the poll.
+      if (
+        modeRef.current === 'initial' &&
+        Date.now() - startedAtRef.current >= INITIAL_RETRY_GIVE_UP_AFTER
+      ) {
+        modeRef.current = 'stopped'
+        clearTimer()
+        if (slowTimerRef.current) {
+          clearTimeout(slowTimerRef.current)
+          slowTimerRef.current = null
+        }
+        setPhase({ kind: 'unreachable', detail: errorDetail(err) })
+        return
+      }
+      // Schedule with the CURRENT attempt (first retry uses the first delay),
+      // then advance the counter for the next round.
       schedule(() => void tick())
       attemptRef.current += 1
     }
@@ -132,6 +159,26 @@ export function usePaymentIntent(intentId: string): UsePaymentIntentResult {
     startedAtRef.current = Date.now()
     schedule(() => void tick())
   }, [schedule, tick])
+
+  // Coming back from an outage must not require a reload. Once we have given
+  // up, the browser telling us connectivity returned (or the payer returning
+  // to the tab) is the cheapest possible signal to try again.
+  const unreachableRef = useRef(false)
+  unreachableRef.current = phase.kind === 'unreachable'
+
+  useEffect(() => {
+    const resume = () => {
+      if (!mountedRef.current || !unreachableRef.current) return
+      if (typeof document !== 'undefined' && document.hidden) return
+      refresh()
+    }
+    window.addEventListener('online', resume)
+    document.addEventListener('visibilitychange', resume)
+    return () => {
+      window.removeEventListener('online', resume)
+      document.removeEventListener('visibilitychange', resume)
+    }
+  }, [refresh])
 
   useEffect(() => {
     mountedRef.current = true
@@ -157,4 +204,11 @@ export function usePaymentIntent(intentId: string): UsePaymentIntentResult {
   }, [intentId, tick])
 
   return { phase, backendPaid, refresh, startSyncPolling }
+}
+
+/** First line of the raw error, bounded. Support-facing only, never a headline. */
+function errorDetail(err: unknown): string | null {
+  if (err == null) return null
+  const raw = err instanceof Error ? err.message : String(err)
+  return raw.split('\n')[0].slice(0, 160) || null
 }

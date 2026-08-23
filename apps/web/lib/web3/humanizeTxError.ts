@@ -15,6 +15,33 @@ export function isUserRejection(err: unknown): boolean {
   return USER_REJECT_RE.test(raw)
 }
 
+/**
+ * True when the error means "we could not reach the chain", as opposed to
+ * "the chain answered and the answer was no".
+ *
+ * The distinction drives what the payer is told: a transport fault is
+ * transient and invites a retry, while a revert is terminal and must not.
+ * Getting it wrong in the terminal direction is the serious one — it tells a
+ * payer their transaction did not complete when nobody actually knows.
+ *
+ * The shapes below are the ones seen in the wild, including the Base Sepolia
+ * fleet outage of 2026-08-22 (`-32011 no backend is currently healthy to
+ * serve traffic`, surfaced by viem as `HTTP request failed. Status: 503`).
+ * A revert is never in this set: `execution reverted` is an answer.
+ */
+const TRANSIENT_NETWORK_RE =
+  /timeout|timed out|network error|fetch failed|failed to fetch|load failed|request failed|no backend|-32011|status:\s*(408|425|429|50\d)|econnrefused|econnreset|enotfound|socket hang up|connection (refused|reset|closed)|service unavailable|bad gateway|gateway timeout/i
+
+export function isTransientNetworkError(err: unknown): boolean {
+  if (err == null) return false
+  const raw = err instanceof Error ? err.message : String(err)
+  // An answer from the chain is never a transport fault, however it is
+  // phrased — some nodes wrap a revert in an HTTP envelope.
+  if (/execution reverted|reverted with|custom error/i.test(raw)) return false
+  if (isUserRejection(err)) return false
+  return TRANSIENT_NETWORK_RE.test(raw)
+}
+
 export function humanizeTxError(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err)
 

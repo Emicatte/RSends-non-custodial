@@ -1668,6 +1668,10 @@
     "notFound": "Non troviamo questo pagamento. Controlla il link e riprova.",
     "loadingRetry": "Ci sta mettendo più del solito. Nuovo tentativo in corso.",
     "payTo": "Paga a",
-    "expiresIn": "Scade tra"
+    "expiresIn": "Scade tra",
+    "networkDown": "La rete non risponde in questo momento. Il tuo pagamento non è partito.",
+    "backendDown": "Non riusciamo a raggiungere il servizio di pagamento in questo momento. Non è stato addebitato nulla.",
+    "confirmationUnknown": "La tua transazione è stata inviata. Non riusciamo a confermarla in questo momento. Controllala sull'explorer.",
+    "errorDetails": "Dettagli tecnici"
   }
 }

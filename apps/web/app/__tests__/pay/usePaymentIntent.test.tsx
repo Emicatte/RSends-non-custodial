@@ -8,7 +8,9 @@
 import { act, renderHook } from '@testing-library/react'
 import { usePaymentIntent } from '@/lib/web3/usePaymentIntent'
 import {
+  INITIAL_RETRY_CAP,
   INITIAL_RETRY_DELAYS,
+  INITIAL_RETRY_GIVE_UP_AFTER,
   SLOW_NOTICE_AFTER,
   SYNC_DELAYS,
   WATCH_INTERVAL,
@@ -183,5 +185,129 @@ describe('usePaymentIntent', () => {
       jest.advanceTimersByTime(120_000)
     })
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+// ── Giving up honestly, and coming back ──────────────────────────
+//
+// The initial fetch used to retry forever behind a shimmer: the payer never
+// learned that anything was wrong and had nothing to press. It now gives up
+// into an explicit `unreachable` phase with a manual retry, and resumes by
+// itself when connectivity returns.
+
+describe('usePaymentIntent when the payment service cannot be reached', () => {
+  async function failUntilGiveUp(fetchMock: jest.Mock) {
+    const { result, unmount } = renderHook(() => usePaymentIntent('pi_down'))
+    await flush()
+    // Walk past the whole backoff ladder and then past the give-up window.
+    for (const delay of INITIAL_RETRY_DELAYS) {
+      await act(async () => {
+        jest.advanceTimersByTime(delay)
+      })
+    }
+    for (let i = 0; i < 10; i += 1) {
+      await act(async () => {
+        jest.advanceTimersByTime(INITIAL_RETRY_CAP)
+      })
+    }
+    return { result, unmount, fetchMock }
+  }
+
+  it('stops retrying after the give-up window and says so', async () => {
+    const fetchMock = jest.fn().mockRejectedValue(new Error('Failed to fetch'))
+    global.fetch = fetchMock as never
+    jest.useFakeTimers()
+
+    const { result, unmount } = await failUntilGiveUp(fetchMock)
+    expect(result.current.phase.kind).toBe('unreachable')
+
+    const callsAtGiveUp = fetchMock.mock.calls.length
+    await act(async () => {
+      jest.advanceTimersByTime(10 * 60_000)
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(callsAtGiveUp)
+    unmount()
+  })
+
+  it('keeps the slow notice and never gives up before the window', async () => {
+    const fetchMock = jest.fn().mockRejectedValue(new Error('Failed to fetch'))
+    global.fetch = fetchMock as never
+    jest.useFakeTimers()
+    const { result, unmount } = renderHook(() => usePaymentIntent('pi_slow2'))
+    await flush()
+
+    await act(async () => {
+      jest.advanceTimersByTime(SLOW_NOTICE_AFTER + INITIAL_RETRY_DELAYS[0])
+    })
+    expect(result.current.phase).toEqual({ kind: 'loading', slow: true })
+    expect(INITIAL_RETRY_GIVE_UP_AFTER).toBeGreaterThan(SLOW_NOTICE_AFTER)
+    unmount()
+  })
+
+  it('the manual retry still works after it has given up', async () => {
+    const fetchMock = jest.fn().mockRejectedValue(new Error('Failed to fetch'))
+    global.fetch = fetchMock as never
+    jest.useFakeTimers()
+
+    const { result, unmount } = await failUntilGiveUp(fetchMock)
+    expect(result.current.phase.kind).toBe('unreachable')
+
+    fetchMock.mockResolvedValue(okResponse(RAW))
+    await act(async () => {
+      result.current.refresh()
+    })
+    await flush()
+    expect(result.current.phase.kind).toBe('ready')
+    unmount()
+  })
+
+  it('resumes on its own when connectivity returns, with no reload', async () => {
+    const fetchMock = jest.fn().mockRejectedValue(new Error('Failed to fetch'))
+    global.fetch = fetchMock as never
+    jest.useFakeTimers()
+
+    const { result, unmount } = await failUntilGiveUp(fetchMock)
+    expect(result.current.phase.kind).toBe('unreachable')
+
+    fetchMock.mockResolvedValue(okResponse(RAW))
+    await act(async () => {
+      window.dispatchEvent(new Event('online'))
+    })
+    await flush()
+    expect(result.current.phase.kind).toBe('ready')
+    unmount()
+  })
+
+  it('recovers before the window without ever showing unreachable', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('Failed to fetch'))
+      .mockResolvedValue(okResponse(RAW))
+    global.fetch = fetchMock as never
+    jest.useFakeTimers()
+    const { result, unmount } = renderHook(() => usePaymentIntent('pi_blip'))
+    await flush()
+    expect(result.current.phase.kind).toBe('loading')
+
+    await act(async () => {
+      jest.advanceTimersByTime(INITIAL_RETRY_DELAYS[0])
+    })
+    await flush()
+    expect(result.current.phase.kind).toBe('ready')
+    unmount()
+  })
+
+  it('stops listening for connectivity after unmount', async () => {
+    const fetchMock = jest.fn().mockRejectedValue(new Error('Failed to fetch'))
+    global.fetch = fetchMock as never
+    jest.useFakeTimers()
+    const { unmount } = await failUntilGiveUp(fetchMock)
+    const callsAtGiveUp = fetchMock.mock.calls.length
+
+    unmount()
+    await act(async () => {
+      window.dispatchEvent(new Event('online'))
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(callsAtGiveUp)
   })
 })

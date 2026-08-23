@@ -424,3 +424,199 @@ describe('outcomes and recovery', () => {
     expect(result.current.step).toBe('ready')
   })
 })
+
+// ── The chain cannot be read (outage of 2026-08-22) ──────────────
+//
+// Every wagmi read used to discard its `error`, so a failing read looked
+// exactly like a pending one and the hook reported `quoting` forever: the
+// payer got a spinner on a disabled Pay button and no explanation.
+
+const RPC_DOWN = new Error(
+  'HTTP request failed. Status: 503. Details: no backend is currently healthy to serve traffic',
+)
+
+describe('chain unreachable', () => {
+  it('a failing quoteFee read reports chain_unreachable, not quoting', () => {
+    fresh()
+    mockWagmi.readErrors.quoteFee = RPC_DOWN
+    const { result } = render(intent({ fee: null }))
+    expect(result.current.step).toBe('chain_unreachable')
+    expect(result.current.fee).toBeNull()
+  })
+
+  it('a failing permit prerequisite read reports chain_unreachable', () => {
+    fresh()
+    mockWagmi.readErrors.nonces = RPC_DOWN
+    const { result } = render(intent())
+    expect(result.current.step).toBe('chain_unreachable')
+  })
+
+  it('a failing allowance read reports chain_unreachable on the approve path', () => {
+    fresh()
+    mockWagmi.readErrors.allowance = RPC_DOWN
+    const { result } = render(
+      intent({ permitType: 'none', fee: 600_000n }),
+    )
+    expect(result.current.step).toBe('chain_unreachable')
+  })
+
+  it('a balance-only read failure does NOT block (balance never blocked)', () => {
+    fresh()
+    mockWagmi.readErrors.balanceOf = RPC_DOWN
+    const { result } = render(intent())
+    expect(result.current.step).toBe('ready')
+    expect(result.current.balance).toBeNull()
+  })
+
+  it('recovers to ready when the reads start answering again', () => {
+    fresh()
+    mockWagmi.readErrors.quoteFee = RPC_DOWN
+    const { result, rerender } = render(intent({ fee: null }))
+    expect(result.current.step).toBe('chain_unreachable')
+
+    delete mockWagmi.readErrors.quoteFee
+    mockWagmi.reads.quoteFee = 600_000n
+    rerender({ backendPaid: false })
+    expect(result.current.step).toBe('ready')
+  })
+
+  it('retryReads() refetches the chain reads (the manual control)', () => {
+    fresh()
+    mockWagmi.readErrors.quoteFee = RPC_DOWN
+    const { result } = render(intent({ fee: null }))
+
+    act(() => result.current.retryReads())
+    expect(mockWagmi.refetch.quoteFee).toHaveBeenCalled()
+  })
+
+  it('a network send error is transient, NOT failed', () => {
+    fresh()
+    const { result, rerender } = render(intent())
+
+    mockWagmi.payWrite.error = RPC_DOWN
+    rerender({ backendPaid: false })
+    expect(result.current.step).toBe('chain_unreachable')
+    expect(result.current.step).not.toBe('failed')
+  })
+
+  it('the backend degraded path is untouched: fee null + a live chain still pays', () => {
+    // feeUnavailable from the backend is NOT an outage — the client quotes
+    // the fee on-chain itself and the payer proceeds.
+    fresh()
+    mockWagmi.reads.quoteFee = 600_000n
+    const { result } = render(intent({ fee: null }))
+    expect(result.current.step).toBe('ready')
+    expect(result.current.fee).toBe(600_000n)
+    expect(result.current.total).toBe(50_600_000n)
+  })
+})
+
+describe('confirmation unknown', () => {
+  it('an unreadable receipt after a sent tx is UNKNOWN, never failed', () => {
+    fresh()
+    const { result, rerender } = render(intent())
+
+    mockWagmi.payWrite.data = '0xdead'
+    mockWagmi.receiptErrors['0xdead'] = RPC_DOWN
+    rerender({ backendPaid: false })
+
+    expect(result.current.step).toBe('confirmation_unknown')
+    expect(result.current.step).not.toBe('failed')
+    expect(result.current.payHash).toBe('0xdead')
+  })
+
+  it('resolves to success when the chain answers again', () => {
+    fresh()
+    const { result, rerender } = render(intent())
+
+    mockWagmi.payWrite.data = '0xdead'
+    mockWagmi.receiptErrors['0xdead'] = RPC_DOWN
+    rerender({ backendPaid: false })
+    expect(result.current.step).toBe('confirmation_unknown')
+
+    delete mockWagmi.receiptErrors['0xdead']
+    mockWagmi.receipts['0xdead'] = { status: 'success' }
+    rerender({ backendPaid: true })
+    expect(result.current.step).toBe('success')
+  })
+
+  it('a readable revert is still failed (unknown is not a euphemism)', () => {
+    fresh()
+    const { result, rerender } = render(intent())
+
+    mockWagmi.payWrite.data = '0xdead'
+    mockWagmi.receipts['0xdead'] = { status: 'reverted' }
+    rerender({ backendPaid: false })
+    expect(result.current.step).toBe('failed')
+  })
+})
+
+describe('confirmation unknown by stall (no receipt error is ever raised)', () => {
+  // viem's waitForTransactionReceipt retries a dead RPC indefinitely and never
+  // sets `error` — measured against a blocked endpoint in a real browser,
+  // ~450 retries over three minutes with the hook's error still undefined.
+  // Without a clock of our own the payer would sit on "Transaction sent.
+  // Waiting for the network." for the entire outage, so the elapsed time since
+  // the hash appeared is the signal that actually fires.
+  beforeEach(() => jest.useFakeTimers())
+  afterEach(() => jest.useRealTimers())
+
+  it('flips to confirmation_unknown once the receipt stays unresolved', () => {
+    fresh()
+    const { result, rerender } = render(intent())
+
+    mockWagmi.payWrite.data = '0xdead'
+    rerender({ backendPaid: false })
+    expect(result.current.step).toBe('tx_pending')
+
+    act(() => {
+      jest.advanceTimersByTime(44_000)
+    })
+    rerender({ backendPaid: false })
+    expect(result.current.step).toBe('tx_pending')
+
+    act(() => {
+      jest.advanceTimersByTime(2_000)
+    })
+    rerender({ backendPaid: false })
+    expect(result.current.step).toBe('confirmation_unknown')
+    expect(result.current.payHash).toBe('0xdead')
+  })
+
+  it('a receipt that lands afterwards still wins (self-correcting)', () => {
+    fresh()
+    const { result, rerender } = render(intent())
+
+    mockWagmi.payWrite.data = '0xdead'
+    rerender({ backendPaid: false })
+    act(() => {
+      jest.advanceTimersByTime(46_000)
+    })
+    rerender({ backendPaid: false })
+    expect(result.current.step).toBe('confirmation_unknown')
+
+    mockWagmi.receipts['0xdead'] = { status: 'success' }
+    rerender({ backendPaid: true })
+    expect(result.current.step).toBe('success')
+  })
+
+  it('never fires on a healthy chain that answers in time', () => {
+    fresh()
+    const { result, rerender } = render(intent())
+
+    mockWagmi.payWrite.data = '0xdead'
+    rerender({ backendPaid: false })
+    act(() => {
+      jest.advanceTimersByTime(5_000)
+    })
+    mockWagmi.receipts['0xdead'] = { status: 'success' }
+    rerender({ backendPaid: false })
+    expect(result.current.step).toBe('syncing')
+
+    act(() => {
+      jest.advanceTimersByTime(120_000)
+    })
+    rerender({ backendPaid: false })
+    expect(result.current.step).toBe('syncing')
+  })
+})
