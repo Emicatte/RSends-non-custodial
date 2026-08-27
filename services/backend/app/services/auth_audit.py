@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from app.db.session import async_session
+from app.middleware.correlation import get_correlation_id
 from app.models.auth_models import AuthAuditLog
 
 logger = logging.getLogger(__name__)
@@ -41,7 +42,15 @@ async def record_auth_event(
       login_success, login_failure, logout, refresh, token_rotation,
       session_revoked, rate_limit_exceeded, id_token_invalid,
       refresh_reuse_detected, account_suspended.
+
+    `correlation_id` falls back to the request's correlation id (set by
+    CorrelationMiddleware) when the caller does not pass one. Most callers
+    never did — the email-auth service passes it at none of its five call
+    sites — so every login, signup and verification event was written with an
+    empty correlation_id and could not be joined to anything. Defaulting here
+    fixes all call sites at once; an explicit argument still wins.
     """
+    cid = correlation_id or get_correlation_id() or None
     try:
         entry = AuthAuditLog(
             created_at=datetime.now(timezone.utc),
@@ -51,7 +60,7 @@ async def record_auth_event(
             ip_address=ip_address,
             user_agent=(user_agent[:500] if user_agent else None),
             google_sub=google_sub,
-            correlation_id=correlation_id,
+            correlation_id=cid,
             details=details or {},
         )
 
@@ -66,7 +75,7 @@ async def record_auth_event(
                     "service": "auth_audit",
                     "event_type": event_type,
                     "user_id": user_id,
-                    "correlation_id": correlation_id,
+                    "correlation_id": cid,
                 },
             )
             return entry.id
