@@ -704,27 +704,148 @@ def _decode_abi_string(result_hex: str) -> Optional[str]:
     return data.rstrip(b"\x00").decode("utf-8", "replace") or None
 
 
-async def _eth_call(chain_id: int, to: str, data: str) -> Optional[str]:
-    """Raw eth_call returning the hex result, or None on empty result."""
+class _EmptyResult:
+    """Sentinel: the node ANSWERED, and the answer carried no data (`"0x"`).
+
+    This is structurally distinct from a transport failure, which RAISES. The
+    two must never collapse into a shared `None` again — that collapse is what
+    let a token address with no code on the chain (the cross-chain-address
+    failure this guard exists to catch) be logged as `verified`: `_eth_call`
+    returned `None`, and both mismatch branches in `_verify_one_token` were
+    guarded by `is not None`.
+
+    No `__bool__`, on purpose: callers must test `is EMPTY_RESULT`. A falsy
+    sentinel would be re-absorbed by the next `if not result` someone writes.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:  # pragma: no cover - diagnostics only
+        return "<eth_call: empty>"
+
+
+EMPTY_RESULT = _EmptyResult()
+
+
+async def _eth_call_outcome(chain_id: int, to: str, data: str):
+    """One `eth_call`, with the two outcomes kept apart at the transport layer.
+
+    Returns the hex payload, or `EMPTY_RESULT` when the node answered with no
+    data. **Raises** on transport failure. Never returns `None`.
+    """
     from app.services.rpc_manager import get_rpc_manager
 
     rpc = get_rpc_manager(chain_id)
     result = await rpc.call("eth_call", [{"to": to, "data": data}, "latest"])
     if not result or result == "0x":
-        return None
+        return EMPTY_RESULT
     return result
+
+
+async def _eth_call(chain_id: int, to: str, data: str) -> Optional[str]:
+    """Back-compat shim over `_eth_call_outcome`: empty → `None`.
+
+    Kept because `token_decimals_onchain`/`token_symbol_onchain` are part of
+    `scripts/verify_onchain_registry.py`'s interface. New callers that need to
+    tell empty from unreachable must use `_eth_call_outcome`.
+    """
+    res = await _eth_call_outcome(chain_id, to, data)
+    return None if res is EMPTY_RESULT else res
+
+
+async def token_decimals_outcome(chain_id: int, token: str):
+    """ERC20 `decimals()`. Returns an int, or `EMPTY_RESULT`. Raises on RPC error."""
+    res = await _eth_call_outcome(chain_id, token, "0x" + _selector("decimals()").hex())
+    return EMPTY_RESULT if res is EMPTY_RESULT else int(res, 16)
+
+
+async def token_symbol_outcome(chain_id: int, token: str):
+    """ERC20 `symbol()`. Returns a str (or None if undecodable), or `EMPTY_RESULT`."""
+    res = await _eth_call_outcome(chain_id, token, "0x" + _selector("symbol()").hex())
+    return EMPTY_RESULT if res is EMPTY_RESULT else _decode_abi_string(res)
 
 
 async def token_decimals_onchain(chain_id: int, token: str) -> Optional[int]:
     """ERC20 decimals() via eth_call. Raises on RPC error (transient); None if empty."""
-    res = await _eth_call(chain_id, token, "0x" + _selector("decimals()").hex())
-    return int(res, 16) if res else None
+    res = await token_decimals_outcome(chain_id, token)
+    return None if res is EMPTY_RESULT else res
 
 
 async def token_symbol_onchain(chain_id: int, token: str) -> Optional[str]:
     """ERC20 symbol() via eth_call. Raises on RPC error (transient)."""
-    res = await _eth_call(chain_id, token, "0x" + _selector("symbol()").hex())
-    return _decode_abi_string(res) if res else None
+    res = await token_symbol_outcome(chain_id, token)
+    return None if res is EMPTY_RESULT else res
+
+
+# Gap between the two rounds of the empty-answer confirmation when only one
+# provider could be reached. A module constant on purpose: it is a physical
+# property of "wait for a rate-limit window to move", not a deployment choice,
+# and the confirmation must have no configuration surface at all.
+_EMPTY_RECHECK_DELAY = 3.0
+
+
+async def _poll_empty_once(chain_id: int, token: str) -> tuple[Optional[bool], int]:
+    """One confirmation round. Returns `(verdict, providers_that_answered)`.
+
+    Verdict is True when every provider that ANSWERED said empty, False when at
+    least one returned data, None when nobody answered. A provider that errored
+    is not a vote — it neither confirms nor refutes.
+    """
+    from app.services.rpc_manager import get_rpc_manager
+
+    data = "0x" + _selector("decimals()").hex()
+    answers = await get_rpc_manager(chain_id).poll_providers(
+        "eth_call", [{"to": token, "data": data}, "latest"]
+    )
+    replied = [(name, res) for name, res in answers if not isinstance(res, Exception)]
+    if not replied:
+        return None, 0
+    return all((not res or res == "0x") for _, res in replied), len(replied)
+
+
+async def _empty_is_unanimous(chain_id: int, token: str) -> Optional[bool]:
+    """Ask EVERY configured provider for `decimals()` and report agreement.
+
+    A degraded or rate-limited provider can answer `{"result": "0x"}` instead of
+    an error. One such provider must not be able to panic the process into a
+    boot loop, so an empty answer is confirmed across the whole provider set
+    before it is believed.
+
+    **When fewer than two providers answered, provider separation is not
+    available** — Base Sepolia ships a single default provider, so "unanimous"
+    would mean one vendor and the confirmation would buy nothing. In that case
+    substitute *time* separation: wait, ask again, and believe empty only if
+    both rounds agree. A degraded provider is transient; an address with no
+    contract code is permanent. That difference is the only signal left when
+    there is nobody to cross-check against.
+
+    Only a True verdict is re-checked, because only True can end in SystemExit.
+    False and None already continue, so a second round could not change what
+    happens and would just delay a boot that is already degrading.
+
+    Returns:
+        True  — empty, confirmed across providers or across time → registry mismatch.
+        False — at least one answer carried data → provider fault.
+        None  — nobody answered → transport, handled as unreachable.
+    """
+    verdict, answered = await _poll_empty_once(chain_id, token)
+    if verdict is not True or answered >= 2:
+        return verdict
+
+    logger.warning(
+        "[registry-guard] chain %d: decimals() for %s came back EMPTY and only "
+        "%d provider(s) answered — too few to cross-check. Re-asking in %.0fs "
+        "before treating it as a registry error.",
+        chain_id, token, answered, _EMPTY_RECHECK_DELAY,
+    )
+    await asyncio.sleep(_EMPTY_RECHECK_DELAY)
+
+    second, _ = await _poll_empty_once(chain_id, token)
+    if second is True:
+        return True
+    # The two rounds disagree (or the second could not be taken): a permanent
+    # absence of code does not answer differently three seconds later.
+    return second
 
 
 async def verify_enabled_tokens_onchain(*, retries: int = 3, backoff: float = 2.0) -> None:
@@ -760,18 +881,47 @@ async def _verify_one_token(chain_id: int, sym: str, pol: dict, retries: int, ba
     last_exc: Optional[Exception] = None
     for attempt in range(retries):
         try:
-            onchain_decimals = await token_decimals_onchain(chain_id, addr)
-            onchain_symbol = await token_symbol_onchain(chain_id, addr)
+            onchain_decimals = await token_decimals_outcome(chain_id, addr)
+            onchain_symbol = await token_symbol_outcome(chain_id, addr)
         except Exception as exc:  # transient RPC/network error
             last_exc = exc
             if attempt < retries - 1:
                 await asyncio.sleep(backoff * (2 ** attempt))
             continue
 
+        # The call SUCCEEDED and came back empty: there is no code at this
+        # address on this chain. For an ENABLED token that has exactly one
+        # reading — the registry has it filed under the wrong chain. Confirm
+        # across every provider first: one degraded vendor answering "0x"
+        # instead of an error must not boot-loop the service.
+        if onchain_decimals is EMPTY_RESULT:
+            unanimous = await _empty_is_unanimous(chain_id, addr)
+            if unanimous is True:
+                raise SystemExit(
+                    f"[registry-guard] FATAL no contract code for enabled token "
+                    f"{sym} ({addr}) on chain {chain_id}: every provider answered "
+                    f"decimals() with empty data. The registry has this address "
+                    f"filed under the wrong chain — refusing to start"
+                )
+            logger.warning(
+                "[registry-guard] PROVIDER FAULT on chain %d: decimals() for %s "
+                "(%s) came back EMPTY from one provider but not from the others "
+                "(%s) — this is a degraded/rate-limited endpoint, not a registry "
+                "error. Continuing; re-check the provider list.",
+                chain_id, sym, addr,
+                "no provider answered" if unanimous is None else "providers disagree",
+            )
+            return
+
+        # `symbol()` answering nothing while `decimals()` answered proves there
+        # IS code at the address — a legacy bytes32 symbol that decodes to
+        # empty. That keeps today's tolerance; the wrong-chain signal is
+        # `decimals()` coming back empty, handled above.
         mismatches = []
-        if onchain_decimals is not None and onchain_decimals != pol["decimals"]:
+        if onchain_decimals != pol["decimals"]:
             mismatches.append(f"decimals on-chain={onchain_decimals} registry={pol['decimals']}")
-        if onchain_symbol is not None and onchain_symbol != sym:
+        if onchain_symbol is not EMPTY_RESULT and onchain_symbol is not None \
+                and onchain_symbol != sym:
             mismatches.append(f"symbol on-chain={onchain_symbol!r} registry={sym!r}")
         if mismatches:
             raise SystemExit(

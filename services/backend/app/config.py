@@ -183,17 +183,17 @@ class Settings(BaseSettings):
     @property
     def rsends_router_addresses(self) -> dict:
         """{chain_id(str) -> RSendsRouter address} parsed from the JSON env."""
-        return _parse_json_map(self.rsends_router_addresses_json)
+        return _parse_json_map(self.rsends_router_addresses_json, "RSENDS_ROUTER_ADDRESSES_JSON")
 
     @property
     def rsends_router_v2_addresses(self) -> dict:
         """{chain_id(str) -> RSendsRouterV2 address} parsed from the JSON env."""
-        return _parse_json_map(self.rsends_router_v2_addresses_json)
+        return _parse_json_map(self.rsends_router_v2_addresses_json, "RSENDS_ROUTER_V2_ADDRESSES_JSON")
 
     @property
     def split_router_addresses(self) -> dict:
         """{chain_id(str) -> RSendsSplitRouter address} parsed from the JSON env."""
-        return _parse_json_map(self.split_router_addresses_json)
+        return _parse_json_map(self.split_router_addresses_json, "SPLIT_ROUTER_ADDRESSES_JSON")
 
     @property
     def rpc_extra_providers(self) -> dict:
@@ -248,22 +248,40 @@ class Settings(BaseSettings):
 
     @property
     def indexer_start_blocks(self) -> dict:
-        return _parse_json_map(self.indexer_start_blocks_json)
+        return _parse_json_map(self.indexer_start_blocks_json, "INDEXER_START_BLOCKS_JSON")
 
 
 _HEX_KEY_RE = re.compile(r"^0x[0-9a-fA-F]{64}$")
 
 
-def _parse_json_map(raw: str) -> dict:
-    """Parse a JSON object env string into a dict; {} on empty/invalid."""
+def _parse_json_map(raw: str, name: str = "JSON map") -> dict:
+    """Parse a JSON object env string into a dict; {} on empty/invalid.
+
+    Malformed input WARNS, matching what RPC_PROVIDERS_JSON already does. It
+    used to return `{}` in silence, which for the router maps means the indexer
+    is disabled and payment detection stops with no log line naming the cause.
+    Empty stays quiet: unset is a legitimate state and the callers that care
+    already say so at startup.
+    """
     if not raw:
         return {}
     import json
     try:
         val = json.loads(raw)
-        return val if isinstance(val, dict) else {}
     except (ValueError, TypeError):
+        logger.warning(
+            "%s: malformed JSON — ignoring the value, the map is EMPTY. "
+            "Anything that reads it is now disabled.", name,
+        )
         return {}
+    if not isinstance(val, dict):
+        logger.warning(
+            "%s: JSON parsed as %s, expected an object — ignoring the value, "
+            "the map is EMPTY. Anything that reads it is now disabled.",
+            name, type(val).__name__,
+        )
+        return {}
+    return val
 
 
 class StartupValidationError(SystemExit):
@@ -380,6 +398,26 @@ def validate_settings(settings: Settings) -> None:
             "RSENDS_ROUTER_ADDRESSES_JSON is empty. The on-chain PaymentMade "
             "indexer will be disabled until per-chain RSendsRouter addresses are set."
         )
+
+    # A router map that is PRESENT but does not parse is a typo in one of the
+    # env vars the money path depends on. The parsed map is {} and, before the
+    # parser learned to warn, nothing said so — the indexer just never started.
+    # Empty is still only a warning (a not-yet-configured deployment is a real
+    # state); *malformed* is an error in prod, because it is never intentional.
+    for _env, _json_attr, _map_attr in (
+        ("RSENDS_ROUTER_ADDRESSES_JSON", "rsends_router_addresses_json", "rsends_router_addresses"),
+        ("RSENDS_ROUTER_V2_ADDRESSES_JSON", "rsends_router_v2_addresses_json", "rsends_router_v2_addresses"),
+        ("SPLIT_ROUTER_ADDRESSES_JSON", "split_router_addresses_json", "split_router_addresses"),
+    ):
+        _raw = (getattr(settings, _json_attr, "") or "").strip()
+        if _raw and not (getattr(settings, _map_attr, {}) or {}):
+            _msg = (
+                f"{_env} is set but does not parse to a JSON object. The map is "
+                f"EMPTY, so everything reading it (indexer chains, router lookups, "
+                f"split availability) is silently disabled. Fix the value, or unset "
+                f"it deliberately."
+            )
+            (errors if is_prod else warnings).append(_msg)
 
     # ── Telegram (informational) ──────────────────────────
     if not settings.telegram_bot_token:

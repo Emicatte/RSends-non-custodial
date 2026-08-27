@@ -339,6 +339,15 @@ class TestStartIndexerUnion:
         import app.services.payment_indexer as idx
 
         monkeypatch.setattr(idx, "_watchers", [])
+        # F1: start() proves the chain via eth_chainId first. This test is about
+        # the watcher-chains UNION, not the network — stub the proof at the test
+        # boundary (the guard has no config off switch, by design).
+        async def _proven(chain_id, timeout=None):
+            return None
+
+        monkeypatch.setattr(
+            "app.services.rpc_manager.assert_chain_identity", _proven
+        )
         monkeypatch.setattr(idx, "get_settings", lambda: SimpleNamespace(
             rsends_router_addresses={},
             rsends_router_v2_addresses={"8453": ROUTER_V2},

@@ -138,6 +138,15 @@ async def lifespan(app: FastAPI):
 
         await start_health_checks([w.chain_id for w in watchers])
 
+    # ── Chain identity boot guard (F1) ──────────────────
+    # Prove via eth_chainId that every configured provider actually serves the
+    # chain it is filed under. Deliberately NOT wrapped in a broad `except
+    # Exception` like the registry guard below: there is no failure of this
+    # check that is safe to continue past, so SystemExit is the only outcome.
+    from app.services.rpc_manager import verify_chain_identity_for_boot
+
+    await verify_chain_identity_for_boot([w.chain_id for w in watchers])
+
     # ── Token registry boot guard (defense-in-depth) ──
     # Re-check enabled tokens' on-chain symbol()/decimals() against the registry.
     # Mismatch → panic (real danger); RPC unreachable → retry/backoff then continue.

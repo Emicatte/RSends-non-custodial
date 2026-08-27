@@ -1248,6 +1248,17 @@ class PaymentWatcher:
     async def start(self) -> None:
         if self._running:
             return
+        # Prove the chain BEFORE anything else (F1). Ordering is load-bearing:
+        # the cursor is keyed by this chain_id alone, so a cursor written while
+        # pointed at the wrong network is indistinguishable from a real one
+        # afterwards. Nothing is scheduled and nothing is marked running until
+        # every configured provider has answered eth_chainId with this id;
+        # ChainIdentityError propagates out of start_indexer_if_needed and out
+        # of the lifespan, which is the intended "refuse to start".
+        from app.services.rpc_manager import assert_chain_identity
+
+        await assert_chain_identity(self.chain_id)
+
         self._running = True
         self._task = asyncio.create_task(self._loop())
         if self.router_address:
