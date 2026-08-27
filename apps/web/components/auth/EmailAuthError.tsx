@@ -6,10 +6,13 @@ export function EmailAuthError({
   code,
   message,
   retryAfter,
+  correlationId,
 }: {
   code: string
   message?: string
   retryAfter?: string | null
+  /** Shown so a user can quote it; joins to the backend request/audit log. */
+  correlationId?: string
 }) {
   const t = useTranslations('auth.errors')
 
@@ -34,10 +37,19 @@ export function EmailAuthError({
         color: '#C0392B',
       }}
     >
-      {text}
+      <span data-testid="auth-error-message">{text}</span>
       {retryAfter ? (
         <span className="ml-1" style={{ color: '#888780' }}>
           ({t('retryIn', { seconds: retryAfter })})
+        </span>
+      ) : null}
+      {correlationId ? (
+        <span
+          data-testid="auth-error-reference"
+          className="mt-1 block text-xs"
+          style={{ color: '#888780' }}
+        >
+          {t('errorReference')} {correlationId}
         </span>
       ) : null}
     </div>
