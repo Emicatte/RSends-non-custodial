@@ -22,6 +22,7 @@ import {
   useAccount,
   useBalance,
   useChainId,
+  useDisconnect,
   useReadContract,
   useSignTypedData,
   useSwitchChain,
@@ -39,6 +40,7 @@ import {
 } from '@/lib/web3/checkoutState'
 import {
   isTransientNetworkError,
+  isUnsupportedChainError,
   isUserRejection,
 } from '@/lib/web3/humanizeTxError'
 import type { OnChainIntent } from '@/lib/web3/paymentIntent'
@@ -68,6 +70,20 @@ const BALANCE_REFETCH_MS = 15_000
  */
 const CONFIRMATION_UNKNOWN_AFTER = 45_000
 
+/**
+ * How long a wallet prompt may sit unanswered before the checkout stops
+ * saying only "waiting" and explains what a silent wallet usually means.
+ *
+ * This is deliberately NOT a timeout. The prompt resolves on its own when the
+ * wallet window closes, so the step never moves and no mutation is ever reset
+ * here: a reset would leave a live prompt the payer could still confirm while
+ * the page had stopped tracking it. All that changes is what the page SAYS.
+ *
+ * 20s is well past a normal confirm and well short of a deliberate read of a
+ * wallet screen.
+ */
+const WALLET_SILENT_AFTER = 20_000
+
 export interface HostedCheckoutDeps {
   /** backend reflects the payment (from usePaymentIntent) */
   backendPaid: boolean
@@ -85,10 +101,18 @@ export interface HostedCheckout {
   balance: bigint | null
   approveHash: `0x${string}` | null
   payHash: `0x${string}` | null
+  /** the payer's connected address, for display before they sign */
+  address: `0x${string}` | null
+  /** the wallet prompt has been open long enough to deserve an explanation */
+  waitingLong: boolean
+  /** no transaction of ours exists yet, so dropping the wallet is harmless */
+  canSwitchWallet: boolean
   switchNetwork: () => void
   approve: () => void
   pay: () => Promise<void>
   retry: () => void
+  /** disconnect and start over on the connect step — guard with canSwitchWallet */
+  useDifferentWallet: () => void
   /** re-run the chain reads (manual control for chain_unreachable) */
   retryReads: () => void
   /** raw error text for the collapsed support detail; never a headline */
@@ -101,7 +125,12 @@ export function useHostedCheckout(
 ): HostedCheckout {
   const { address, isConnected } = useAccount()
   const chainId = useChainId()
-  const { switchChain } = useSwitchChain()
+  // The switch ERROR is the signal behind wallet_chain_unsupported: a wallet
+  // that will not go to this chain (Coinbase Smart Wallet on Base Sepolia)
+  // reports it here, and discarding it left the page repeating "switch your
+  // wallet" — advice the wallet had already refused to take.
+  const { switchChain, error: switchError, reset: resetSwitch } = useSwitchChain()
+  const { disconnect } = useDisconnect()
 
   const isNative = onchain.token === zeroAddress
   const onCorrectChain = chainId === onchain.chainId
@@ -280,6 +309,27 @@ export function useHostedCheckout(
   const receiptUnreadable =
     (payReceiptError != null || payStalled) && payReceipt == null
 
+  // ── The wallet refuses this chain ───────────────────────────────
+  // Two arrival paths: the payer pressed "Switch network" and the wallet said
+  // no, or the write itself was refused. The `!onCorrectChain` guard keeps a
+  // STALE switch error from pinning the page after a later successful switch
+  // (the mutation error survives until reset, the condition does not).
+  const walletChainUnsupported =
+    (isUnsupportedChainError(switchError) && !onCorrectChain) ||
+    isUnsupportedChainError(txError)
+
+  // ── A wallet prompt nobody has answered ─────────────────────────
+  // Same shape as the receipt stall above, opposite policy: this one only
+  // adds copy. See WALLET_SILENT_AFTER for why it must never reset anything.
+  const promptOpen = payPending || signing || approvePending
+  const [waitingLong, setWaitingLong] = useState(false)
+  useEffect(() => {
+    setWaitingLong(false)
+    if (!promptOpen) return
+    const id = setTimeout(() => setWaitingLong(true), WALLET_SILENT_AFTER)
+    return () => clearTimeout(id)
+  }, [promptOpen])
+
   // Mined → hand off to the backend sync polling, exactly once.
   const minedNotifiedRef = useRef(false)
   useEffect(() => {
@@ -310,6 +360,7 @@ export function useHostedCheckout(
     sendFailedTransient,
     chainUnreachable,
     receiptUnreadable,
+    walletChainUnsupported,
     userRejected,
     backendPaid: deps.backendPaid,
   })
@@ -502,7 +553,18 @@ export function useHostedCheckout(
     resetApprove()
     resetPay()
     resetSign()
-  }, [resetApprove, resetPay, resetSign])
+    resetSwitch()
+  }, [resetApprove, resetPay, resetSign, resetSwitch])
+
+  // Nothing of ours is on-chain yet, so dropping the wallet costs nothing.
+  // Once EITHER hash exists this is false and the control is not offered:
+  // a transaction in flight must never be abandoned by a UI affordance.
+  const canSwitchWallet = approveHash == null && payHash == null
+
+  const useDifferentWallet = useCallback(() => {
+    disconnect()
+    retry()
+  }, [disconnect, retry])
 
   // Manual retry for the READ side. React Query already retries each read
   // twice on its own (see app/providers.tsx) and then gives up; this is the
@@ -525,12 +587,18 @@ export function useHostedCheckout(
     balance,
     approveHash: approveHash ?? null,
     payHash: payHash ?? null,
+    address: address ?? null,
+    waitingLong,
+    canSwitchWallet,
     switchNetwork,
     approve,
     pay,
     retry,
+    useDifferentWallet,
     retryReads,
-    errorDetail: errorDetailOf(readError ?? payReceiptError ?? txError),
+    errorDetail: errorDetailOf(
+      readError ?? payReceiptError ?? txError ?? switchError,
+    ),
   }
 }
 

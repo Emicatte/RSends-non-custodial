@@ -42,6 +42,56 @@ export function isTransientNetworkError(err: unknown): boolean {
   return TRANSIENT_NETWORK_RE.test(raw)
 }
 
+/**
+ * True when the WALLET refuses to operate on this chain, as opposed to the
+ * chain being unreachable or the payer declining.
+ *
+ * Observed with Coinbase Smart Wallet on Base Sepolia, which answers "Base
+ * Sepolia is not supported. Try another blockchain." in its own window. The
+ * distinction matters because all three of the other classifications lie
+ * about it: it is not a failed payment (nothing was sent), not a transport
+ * fault (the chain is fine), and not a cancellation (the payer did not
+ * choose this). It is also the one case where retrying THIS wallet cannot
+ * work, so the only honest remedy is a different wallet.
+ *
+ * `UnsupportedToken()` shares the prefix and means something else entirely —
+ * an answer from the contract — so the revert guard below runs first.
+ */
+const UNSUPPORTED_CHAIN_RE =
+  /unsupported chain|unsupported network|unrecognized chain|chainnotconfigured|switchchainerror|chain\s+"?[^"\s]+"?\s+not (configured|supported)|not configured for connector|does not support .{0,40}(chain|network)|(chain|network|blockchain)[^.]{0,40}\bis not supported|try another blockchain/i
+
+/** EIP-1193: the wallet does not recognize the requested chain. */
+const UNRECOGNIZED_CHAIN_CODE = 4902
+
+/** Every `code` down the cause chain — viem nests the provider's error. */
+function errorCodes(err: unknown): unknown[] {
+  const codes: unknown[] = []
+  let node: unknown = err
+  for (let depth = 0; node != null && depth < 5; depth++) {
+    const e = node as { code?: unknown; cause?: unknown }
+    if (typeof e !== 'object') break
+    if (e.code !== undefined) codes.push(e.code)
+    node = e.cause
+  }
+  return codes
+}
+
+export function isUnsupportedChainError(err: unknown): boolean {
+  if (err == null) return false
+  const raw = err instanceof Error ? err.message : String(err)
+  // An answer from the contract is never a wallet limitation.
+  if (/execution reverted|reverted with|custom error/i.test(raw)) return false
+  // Deliberately NOT gated on isUserRejection, unlike the transient check
+  // above. Measured against a wallet that refuses Base Sepolia: viem wraps a
+  // 4902 as UserRejectedRequestError, so `.message` READS "User rejected the
+  // request." and the real cause survives only in the `Details:` line and the
+  // nested code. Deferring to the rejection check there would tell the payer
+  // they cancelled something they never saw — so the specific markers win,
+  // and a plain rejection (which carries none of them) still falls through.
+  if (errorCodes(err).includes(UNRECOGNIZED_CHAIN_CODE)) return true
+  return UNSUPPORTED_CHAIN_RE.test(raw)
+}
+
 export function humanizeTxError(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err)
 

@@ -20,6 +20,11 @@
  *     worst error this product can make;
  *   - a transport fault is transient and invites a retry; a revert is
  *     terminal and must not.
+ *
+ * A third exists because the WALLET can refuse the chain (Coinbase Smart
+ * Wallet on Base Sepolia). It sits above both failure branches — nothing was
+ * sent, and the chain is fine — and above `wrong_network`, because telling a
+ * payer to switch is useless once their wallet has refused to.
  */
 
 import type { Hex } from 'viem'
@@ -44,6 +49,8 @@ export type CheckoutStep =
   | 'chain_unreachable'
   /** a transaction was sent and its receipt cannot be read — outcome unknown */
   | 'confirmation_unknown'
+  /** the WALLET refuses this chain — not a failure, not an outage */
+  | 'wallet_chain_unsupported'
 
 export interface CheckoutInputs {
   isConnected: boolean
@@ -75,6 +82,8 @@ export interface CheckoutInputs {
   chainUnreachable: boolean
   /** the receipt of an already-sent tx could not be read */
   receiptUnreadable: boolean
+  /** the connected wallet refuses to operate on this chain at all */
+  walletChainUnsupported: boolean
   userRejected: boolean
   /** backend reflects the payment (indexer caught up) */
   backendPaid: boolean
@@ -91,6 +100,12 @@ export function deriveCheckoutStep(i: CheckoutInputs): CheckoutStep {
   // above tx_pending, because an endless spinner is not an answer either.
   if (i.payHash && i.receiptUnreadable) return 'confirmation_unknown'
   if (i.payHash) return 'tx_pending'
+  // The wallet itself refuses this chain. Above both failure branches because
+  // neither is true of it: nothing was sent (so never `failed`) and the chain
+  // is answering fine (so never `chain_unreachable`). Requires a connected
+  // wallet — with none there is no wallet to blame and `connect` is the
+  // actionable state.
+  if (i.isConnected && i.walletChainUnsupported) return 'wallet_chain_unsupported'
   // No hash exists, so nothing was broadcast: a transport fault here is
   // retryable, and only a real rejection from the chain is terminal.
   if (i.sendFailedTransient) return 'chain_unreachable'

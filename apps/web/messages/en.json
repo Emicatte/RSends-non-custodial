@@ -123,6 +123,9 @@
       "auth_unavailable": "Authentication service temporarily unavailable.",
       "session_expired": "Your session has expired. Please log in again.",
       "network_error": "Could not reach the server. Check your connection and try again.",
+      "request_timeout": "The request timed out. Please try again.",
+      "session_bridge_failed": "Your credentials were accepted, but we couldn't finish signing you in. Please try again.",
+      "errorReference": "Reference:",
       "approval_pending": "Your account is awaiting approval.",
       "approval_declined": "Your account application was declined.",
       "unknown": "Something went wrong. Please try again.",
@@ -1653,7 +1656,8 @@
       "approve": "Approve {token}",
       "pay": "Pay {amount} {token}",
       "viewTx": "View transaction",
-      "retry": "Try again"
+      "retry": "Try again",
+      "otherWallet": "Use a different wallet"
     },
     "steps": {
       "approve": "Step 1 of 2: Approve {token}",
@@ -1680,6 +1684,10 @@
     "networkDown": "The network is not responding right now. Your payment has not started.",
     "backendDown": "We cannot reach the payment service right now. Nothing has been charged.",
     "confirmationUnknown": "Your transaction was sent. We cannot confirm it right now. Check it on the explorer.",
-    "errorDetails": "Technical details"
+    "errorDetails": "Technical details",
+    "walletSilent": "Your wallet has not answered yet. Check for a wallet window or popup. If it says this network is not supported, you can pay with a different wallet.",
+    "walletChainUnsupported": "This wallet does not support {network}. Nothing was sent and nothing was charged. You can pay with a different wallet.",
+    "payingFrom": "Paying from",
+    "paidFrom": "Paid from"
   }
 }

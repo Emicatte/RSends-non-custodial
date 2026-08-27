@@ -35,6 +35,7 @@ function inputs(overrides: Partial<CheckoutInputs> = {}): CheckoutInputs {
     sendFailedTransient: false,
     chainUnreachable: false,
     receiptUnreadable: false,
+    walletChainUnsupported: false,
     userRejected: false,
     backendPaid: false,
     ...overrides,
@@ -326,6 +327,71 @@ describe('confirmation unknown (a transaction was sent)', () => {
         inputs({ payHash: '0xdead', payReverted: true, receiptUnreadable: true }),
       ),
     ).toBe('failed')
+  })
+})
+
+// ── The wallet refuses the chain ─────────────────────────────────
+//
+// Coinbase Smart Wallet answers "Base Sepolia is not supported" in its own
+// window. Before this state existed the refusal arrived either as a discarded
+// switchChain error (page silently repeats "switch your wallet", advice the
+// wallet has already refused) or as a send error rendered as `failed` — "the
+// transaction did not complete" — for something that never started.
+
+describe('wallet refuses this chain', () => {
+  it('wallet_chain_unsupported when the wallet will not go to this chain', () => {
+    expect(
+      deriveCheckoutStep(inputs({ walletChainUnsupported: true, onCorrectChain: false })),
+    ).toBe('wallet_chain_unsupported')
+  })
+
+  it('outranks wrong_network: telling them to switch is useless now', () => {
+    expect(deriveCheckoutStep(inputs({ onCorrectChain: false }))).toBe('wrong_network')
+    expect(
+      deriveCheckoutStep(inputs({ onCorrectChain: false, walletChainUnsupported: true })),
+    ).toBe('wallet_chain_unsupported')
+  })
+
+  it('NEVER reports failed: nothing was sent and nothing was charged', () => {
+    const step = deriveCheckoutStep(
+      inputs({ walletChainUnsupported: true, sendFailed: true }),
+    )
+    expect(step).not.toBe('failed')
+    expect(step).toBe('wallet_chain_unsupported')
+  })
+
+  it('is not a network outage either (the chain is fine, the wallet is not)', () => {
+    expect(
+      deriveCheckoutStep(
+        inputs({ walletChainUnsupported: true, sendFailedTransient: true }),
+      ),
+    ).toBe('wallet_chain_unsupported')
+  })
+
+  it('a real transaction always outranks it (a sent tx is never re-explained)', () => {
+    expect(
+      deriveCheckoutStep(inputs({ walletChainUnsupported: true, payHash: '0xdead' })),
+    ).toBe('tx_pending')
+    expect(
+      deriveCheckoutStep(
+        inputs({
+          walletChainUnsupported: true,
+          payHash: '0xdead',
+          payMined: true,
+          backendPaid: true,
+        }),
+      ),
+    ).toBe('success')
+  })
+
+  it('clears once the wallet is on the right chain after all', () => {
+    expect(deriveCheckoutStep(inputs({ walletChainUnsupported: false }))).toBe('ready')
+  })
+
+  it('connect still outranks it (there is no wallet to blame yet)', () => {
+    expect(
+      deriveCheckoutStep(inputs({ walletChainUnsupported: true, isConnected: false })),
+    ).toBe('connect')
   })
 })
 

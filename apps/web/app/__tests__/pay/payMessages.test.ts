@@ -42,6 +42,7 @@ const EN_VERBATIM: Record<string, string> = {
   'button.pay': 'Pay {amount} {token}',
   'button.viewTx': 'View transaction',
   'button.retry': 'Try again',
+  'button.otherWallet': 'Use a different wallet',
   'steps.approve': 'Step 1 of 2: Approve {token}',
   'steps.confirm': 'Step 2 of 2: Confirm payment',
   approveExplainer:
@@ -73,6 +74,16 @@ const EN_VERBATIM: Record<string, string> = {
   confirmationUnknown:
     'Your transaction was sent. We cannot confirm it right now. Check it on the explorer.',
   errorDetails: 'Technical details',
+  // Wallet-side copy. The subject is the WALLET, never RSends and never the
+  // payer: a wallet that refuses a chain has not failed a payment, it has
+  // declined to start one. Both lines say plainly that nothing moved, and
+  // both point at the same remedy the page now offers.
+  walletSilent:
+    'Your wallet has not answered yet. Check for a wallet window or popup. If it says this network is not supported, you can pay with a different wallet.',
+  walletChainUnsupported:
+    'This wallet does not support {network}. Nothing was sent and nothing was charged. You can pay with a different wallet.',
+  payingFrom: 'Paying from',
+  paidFrom: 'Paid from',
 }
 
 function resolve(obj: unknown, path: string): unknown {

@@ -9,9 +9,14 @@ import { render, screen } from '@testing-library/react'
 
 jest.mock('next-intl', () => require('@/test-utils/intlMock').intlModuleMock())
 
-import { GasNote, TotalHeadline } from '@/app/pay/[intentId]/_components/SummarySection'
+import {
+  GasNote,
+  PayerAddress,
+  TotalHeadline,
+} from '@/app/pay/[intentId]/_components/SummarySection'
 import { TrustFooter } from '@/app/pay/[intentId]/_components/TrustFooter'
 import { ActionArea } from '@/app/pay/[intentId]/_components/ActionArea'
+import { CheckoutFrame } from '@/app/pay/[intentId]/_components/CheckoutFrame'
 import {
   AlreadyPaidView,
   ExpiredView,
@@ -49,10 +54,13 @@ function actionProps(step: string, overrides: Record<string, unknown> = {}) {
     connectSlot: <div data-testid="connect-slot" />,
     approveHash: null,
     payHash: null,
+    waitingLong: false,
+    canSwitchWallet: true,
     onSwitch: jest.fn(),
     onApprove: jest.fn(),
     onPay: jest.fn(),
     onRetry: jest.fn(),
+    onUseOtherWallet: jest.fn(),
     ...overrides,
   }
 }
@@ -87,6 +95,51 @@ describe('GasNote', () => {
     expect(
       screen.getByText('Your wallet adds a small network gas fee on top.'),
     ).toBeInTheDocument()
+  })
+})
+
+// ── Which account is about to pay ────────────────────────────────
+//
+// A payer about to send an irreversible transfer must be able to see which
+// address is sending it. Before this the ConnectButton was unmounted the
+// moment the payer connected, and the card showed an amount and nothing else.
+
+describe('CheckoutFrame wallet slot', () => {
+  const slots = {
+    header: <div />, amount: <div />, summary: <div />,
+    action: <div />, notice: null, footer: <div />,
+  }
+
+  it('reserves the wallet line whether or not it is filled (zero CLS)', () => {
+    // Connecting a wallet must not push the amount down the card. The frame
+    // reserves every slot for exactly this reason; the skeleton renders the
+    // same frame, so loading -> live -> connected never shifts.
+    const { rerender } = render(<CheckoutFrame {...slots} />)
+    const empty = screen.getByTestId('frame-wallet')
+    expect(empty).toBeEmptyDOMElement()
+    expect(empty).toHaveStyle({ minHeight: '34px' })
+
+    rerender(<CheckoutFrame {...slots} wallet={<span>0x1111…1111</span>} />)
+    expect(screen.getByTestId('frame-wallet')).toHaveStyle({ minHeight: '34px' })
+  })
+})
+
+describe('PayerAddress', () => {
+  const PAYER = '0x1111111111111111111111111111111111111111'
+
+  it('renders the truncated address in DM Mono, no click target', () => {
+    render(<PayerAddress address={PAYER} label="Paying from" />)
+    expect(screen.getByText('Paying from')).toBeInTheDocument()
+    const value = screen.getByText('0x1111…1111')
+    expect(value).toHaveStyle({ fontFamily: MONO })
+    // Read-only by construction: nothing here can drop a wallet mid-payment.
+    expect(screen.queryByRole('button')).toBeNull()
+    expect(screen.queryByRole('link')).toBeNull()
+  })
+
+  it('renders nothing without an address', () => {
+    const { container } = render(<PayerAddress address={null} label="Paying from" />)
+    expect(container).toBeEmptyDOMElement()
   })
 })
 
@@ -242,6 +295,65 @@ describe('ActionArea per step', () => {
     expect(screen.queryByText(/No payment left your wallet/)).toBeNull()
   })
 
+  it('a silent wallet gets an explanation and a way out, spinner intact', () => {
+    const props = actionProps('paying', { waitingLong: true })
+    render(<ActionArea {...props} />)
+    // The original waiting copy STAYS: the prompt is still live.
+    expect(
+      screen.getByText('Waiting for confirmation in your wallet.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Your wallet has not answered yet. Check for a wallet window or popup. If it says this network is not supported, you can pay with a different wallet.',
+      ),
+    ).toBeInTheDocument()
+    screen.getByRole('button', { name: 'Use a different wallet' }).click()
+    expect(props.onUseOtherWallet).toHaveBeenCalled()
+  })
+
+  it('says nothing extra before the silence window elapses', () => {
+    render(<ActionArea {...actionProps('paying')} />)
+    expect(screen.queryByText(/has not answered yet/)).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Use a different wallet' })).toBeNull()
+  })
+
+  it('NEVER offers to change wallet once a transaction exists', () => {
+    // canSwitchWallet is false the moment anything has been broadcast; a
+    // control that could drop the wallet mid-transaction is the wrong change.
+    render(
+      <ActionArea
+        {...actionProps('paying', {
+          waitingLong: true,
+          canSwitchWallet: false,
+          payHash: HASH,
+        })}
+      />,
+    )
+    expect(screen.getByText(/has not answered yet/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Use a different wallet' })).toBeNull()
+  })
+
+  it('the approve prompt gets the same treatment', () => {
+    render(<ActionArea {...actionProps('approving', { waitingLong: true })} />)
+    expect(screen.getByText(/has not answered yet/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Use a different wallet' })).toBeInTheDocument()
+  })
+
+  it('wallet_chain_unsupported blames the wallet, offers another, and claims no tx', () => {
+    const props = actionProps('wallet_chain_unsupported')
+    render(<ActionArea {...props} />)
+    expect(
+      screen.getByText(
+        'This wallet does not support Base Sepolia. Nothing was sent and nothing was charged. You can pay with a different wallet.',
+      ),
+    ).toBeInTheDocument()
+    // Never an RSends failure, and never a transaction that does not exist.
+    expect(screen.queryByText(/did not complete/)).toBeNull()
+    expect(screen.queryByRole('link', { name: /View transaction/ })).toBeNull()
+    screen.getByRole('button', { name: 'Use a different wallet' }).click()
+    expect(props.onUseOtherWallet).toHaveBeenCalled()
+  })
+
   it('buttons are at least 44px touch targets', () => {
     render(<ActionArea {...actionProps('ready')} />)
     const button = screen.getByRole('button', { name: 'Pay 50.6 USDC' })
@@ -268,6 +380,23 @@ describe('terminal views (no wallet UI)', () => {
       `https://sepolia.basescan.org/tx/${HASH}`,
     )
     expect(screen.queryByTestId('connect-slot')).toBeNull()
+  })
+
+  it('success keeps the paying address on screen, read-only', () => {
+    render(
+      <SuccessView
+        amount="50.6"
+        currency="USDC"
+        merchant="Caffe Roma"
+        chainId={84532}
+        txHash={HASH}
+        payer="0x1111111111111111111111111111111111111111"
+      />,
+    )
+    expect(screen.getByText('Paid from')).toBeInTheDocument()
+    expect(screen.getByText('0x1111…1111')).toBeInTheDocument()
+    // Terminal card: still no wallet control of any kind.
+    expect(screen.queryByRole('button')).toBeNull()
   })
 
   it('expired, already paid and not found render their copy', () => {

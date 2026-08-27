@@ -124,6 +124,9 @@
       "auth_unavailable": "Authentifizierungsdienst vorübergehend nicht verfügbar.",
       "session_expired": "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.",
       "network_error": "Der Server konnte nicht erreicht werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+      "request_timeout": "Die Anfrage hat zu lange gedauert. Bitte erneut versuchen.",
+      "session_bridge_failed": "Ihre Anmeldedaten wurden akzeptiert, aber die Anmeldung konnte nicht abgeschlossen werden. Bitte erneut versuchen.",
+      "errorReference": "Referenz:",
       "approval_pending": "Ihr Konto wartet auf die Freigabe.",
       "approval_declined": "Ihr Kontoantrag wurde abgelehnt.",
       "unknown": "Etwas ist schiefgelaufen. Bitte erneut versuchen.",
@@ -1654,7 +1657,8 @@
       "approve": "{token} freigeben",
       "pay": "{amount} {token} zahlen",
       "viewTx": "Transaktion ansehen",
-      "retry": "Erneut versuchen"
+      "retry": "Erneut versuchen",
+      "otherWallet": "Andere Wallet verwenden"
     },
     "steps": {
       "approve": "Schritt 1 von 2: {token} freigeben",
@@ -1681,6 +1685,10 @@
     "networkDown": "Das Netzwerk antwortet gerade nicht. Ihre Zahlung wurde nicht gestartet.",
     "backendDown": "Wir erreichen den Zahlungsdienst gerade nicht. Es wurde nichts abgebucht.",
     "confirmationUnknown": "Ihre Transaktion wurde gesendet. Wir können sie gerade nicht bestätigen. Prüfen Sie die Transaktion im Explorer.",
-    "errorDetails": "Technische Details"
+    "errorDetails": "Technische Details",
+    "walletSilent": "Ihre Wallet hat noch nicht geantwortet. Prüfen Sie, ob sie ein Fenster oder ein Pop-up geöffnet hat. Wenn dort steht, dass dieses Netzwerk nicht unterstützt wird, können Sie mit einer anderen Wallet zahlen.",
+    "walletChainUnsupported": "Diese Wallet unterstützt {network} nicht. Es wurde nichts gesendet und nichts abgebucht. Sie können mit einer anderen Wallet zahlen.",
+    "payingFrom": "Zahlung von",
+    "paidFrom": "Bezahlt von"
   }
 }

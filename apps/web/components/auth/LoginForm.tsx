@@ -5,8 +5,23 @@ import { useLocale, useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useState } from 'react'
+import {
+  classifyLoginFailure,
+  logLoginFailure,
+  newCorrelationId,
+  type LoginFailure,
+} from '@/lib/auth/loginFailure'
 import { useEmailAuth, type EmailAuthErrorShape } from '@/hooks/useEmailAuth'
 import { EmailAuthError } from './EmailAuthError'
+
+/**
+ * Client-side backstop only. The rp-auth proxy already aborts upstream at 25s
+ * and its route caps at maxDuration=30, so in every normal outage the proxy's
+ * own 502 arrives first and is reported as an upstream failure. This timer
+ * exists for the case where the proxy itself never answers — without it the
+ * browser waits indefinitely and the user is told nothing.
+ */
+const LOGIN_TIMEOUT_MS = 35_000
 
 const INPUT_STYLE: React.CSSProperties = {
   border: '1px solid rgba(200,81,44,0.25)',
@@ -30,13 +45,33 @@ interface LoginSuccessBody {
 async function backendLogin(
   email: string,
   password: string,
+  correlationId: string,
 ): Promise<LoginSuccessBody> {
-  const res = await fetch('/api/rp-auth/api/v1/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ email, password }),
-  })
+  const controller = new AbortController()
+  const timer = setTimeout(
+    () => controller.abort(new DOMException('login timed out', 'TimeoutError')),
+    LOGIN_TIMEOUT_MS,
+  )
+
+  let res: Response
+  try {
+    res = await fetch('/api/rp-auth/api/v1/auth/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        // Joins this attempt to the backend request log and, on a successful
+        // login, to auth_audit_log.correlation_id.
+        'X-Request-ID': correlationId,
+        'X-Correlation-ID': correlationId,
+      },
+      credentials: 'include',
+      body: JSON.stringify({ email, password }),
+      signal: controller.signal,
+    })
+  } finally {
+    clearTimeout(timer)
+  }
+
   if (!res.ok) {
     let code = 'unknown'
     let message: string | undefined
@@ -49,7 +84,7 @@ async function backendLogin(
         message = body.detail.message
       }
     } catch {
-      // ignore
+      // Unparseable error body — the status alone classifies it.
     }
     const err: EmailAuthErrorShape = {
       code,
@@ -59,7 +94,14 @@ async function backendLogin(
     }
     throw err
   }
-  return res.json() as Promise<LoginSuccessBody>
+
+  try {
+    return (await res.json()) as LoginSuccessBody
+  } catch {
+    // The server answered, but not with the login payload. That is an upstream
+    // malfunction — the one case besides a 5xx that honestly is "unavailable".
+    throw { code: 'auth_unavailable', status: res.status } as EmailAuthErrorShape
+  }
 }
 
 export function LoginForm() {
@@ -76,18 +118,31 @@ export function LoginForm() {
   // Forced-logout bounces (dead session detected post-login) land here with
   // ?error=session_expired. Whitelisted: the param feeds a translation key,
   // so an arbitrary value must never reach EmailAuthError.
-  const [error, setError] = useState<EmailAuthErrorShape | null>(() =>
+  const [error, setError] = useState<
+    (EmailAuthErrorShape & { correlationId?: string }) | null
+  >(() =>
     params.get('error') === 'session_expired' ? { code: 'session_expired' } : null,
   )
   const [resendState, setResendState] = useState<'idle' | 'sending' | 'sent'>('idle')
+
+  /** Single exit for every failure: log it, then show it. Never retries. */
+  const fail = (failure: LoginFailure) => {
+    logLoginFailure(failure)
+    setError(failure)
+  }
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
     setResendState('idle')
     setLoading(true)
+    const correlationId = newCorrelationId()
     try {
-      const login = await backendLogin(email.trim().toLowerCase(), password)
+      const login = await backendLogin(
+        email.trim().toLowerCase(),
+        password,
+        correlationId,
+      )
       const res = await signIn('credentials', {
         redirect: false,
         access_token: login.access_token,
@@ -95,23 +150,17 @@ export function LoginForm() {
         email: login.email,
       })
       if (!res || res.error) {
-        // backendLogin already succeeded, so this is a session-bridge failure
-        // (NextAuth /auth/me verification), not bad credentials.
-        setError({ code: 'auth_unavailable' })
+        // The backend accepted the credentials and issued a session; only the
+        // NextAuth bridge (which re-verifies the token against /auth/me)
+        // failed. Calling this "service unavailable" would be false — the
+        // service answered, and it said yes.
+        fail({ code: 'session_bridge_failed', correlationId })
         return
       }
       const redirect = params.get('redirect') ?? `/${locale}/app`
       router.push(redirect)
     } catch (err) {
-      // backendLogin throws a shaped error (always carries .status); anything
-      // else is a fetch-level failure (TypeError) whose raw message would
-      // render unlocalized ("Failed to fetch").
-      const shaped = err as Partial<EmailAuthErrorShape> | null
-      setError(
-        typeof shaped?.status === 'number'
-          ? (shaped as EmailAuthErrorShape)
-          : { code: 'network_error' },
-      )
+      fail(classifyLoginFailure(err, correlationId))
     } finally {
       setLoading(false)
     }
@@ -181,6 +230,7 @@ export function LoginForm() {
               code={error.code}
               message={error.message}
               retryAfter={error.retry_after}
+              correlationId={error.correlationId}
             />
             {error.code === 'email_not_verified' ? (
               <button

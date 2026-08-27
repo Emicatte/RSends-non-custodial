@@ -124,6 +124,9 @@
       "auth_unavailable": "Service d'authentification temporairement indisponible.",
       "session_expired": "Votre session a expiré. Reconnectez-vous.",
       "network_error": "Impossible de joindre le serveur. Vérifiez votre connexion et réessayez.",
+      "request_timeout": "La requête a expiré. Réessayez.",
+      "session_bridge_failed": "Vos identifiants ont été acceptés, mais nous n'avons pas pu finaliser la connexion. Réessayez.",
+      "errorReference": "Référence :",
       "approval_pending": "Votre compte est en attente d'approbation.",
       "approval_declined": "Votre demande de compte a été refusée.",
       "unknown": "Une erreur est survenue. Réessayez.",
@@ -1654,7 +1657,8 @@
       "approve": "Approuver {token}",
       "pay": "Payer {amount} {token}",
       "viewTx": "Voir la transaction",
-      "retry": "Réessayer"
+      "retry": "Réessayer",
+      "otherWallet": "Utiliser un autre portefeuille"
     },
     "steps": {
       "approve": "Étape 1 sur 2 : Approuver {token}",
@@ -1681,6 +1685,10 @@
     "networkDown": "Le réseau ne répond pas pour le moment. Votre paiement n'a pas démarré.",
     "backendDown": "Nous ne parvenons pas à joindre le service de paiement pour le moment. Rien n'a été débité.",
     "confirmationUnknown": "Votre transaction a été envoyée. Nous ne pouvons pas la confirmer pour le moment. Consultez-la sur l'explorateur.",
-    "errorDetails": "Détails techniques"
+    "errorDetails": "Détails techniques",
+    "walletSilent": "Votre portefeuille n'a pas encore répondu. Vérifiez s'il a ouvert une fenêtre ou une fenêtre contextuelle. S'il indique que ce réseau n'est pas pris en charge, vous pouvez payer avec un autre portefeuille.",
+    "walletChainUnsupported": "Ce portefeuille ne prend pas en charge {network}. Rien n'a été envoyé et rien n'a été débité. Vous pouvez payer avec un autre portefeuille.",
+    "payingFrom": "Paiement depuis",
+    "paidFrom": "Payé depuis"
   }
 }
