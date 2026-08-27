@@ -11,6 +11,12 @@ import {
   onchainAmounts,
   remainderBase,
 } from '@/lib/splitShares'
+import {
+  CREATE_CHAIN,
+  CREATE_TOKENS,
+  CREATE_TOKEN_DECIMALS,
+  type CreatePrefill,
+} from '@/lib/repeatPrefill'
 import type { CreateInvoiceInput, CreatedInvoice } from '@/hooks/useOrgPayments'
 
 // Phase D — create-payment-request (invoice) modal for /app/payments. Lives in a
@@ -29,14 +35,10 @@ const COLORS = {
   redLight: 'rgba(192, 58, 58, 0.08)',
 }
 
-// The create flow is hard-locked to test: Base Sepolia is the only settleable
-// testnet (USDC + ETH are the enabled tokens there). No chain picker, no live.
-const CREATE_CHAIN = 'base_sepolia'
-const CREATE_TOKENS = ['USDC', 'ETH'] as const
-// Base-unit decimals for the create tokens. The backend chain registry
-// (SUPPORTED_CHAINS → router_registry) is the SSOT; payTokens.ts covers
-// only the /pay-side ERC-20s and deliberately has no native ETH entry.
-const CREATE_TOKEN_DECIMALS: Record<string, number> = { USDC: 6, ETH: 18 }
+// CREATE_CHAIN / CREATE_TOKENS / CREATE_TOKEN_DECIMALS now live in
+// lib/repeatPrefill.ts (imported above) so the repeat-prefill gate and this form
+// read ONE registry: a row is offered for repeat on exactly the terms this form
+// can honour.
 const EXPIRY_OPTIONS = [
   { minutes: 30, key: 'expiry30m' },
   { minutes: 60, key: 'expiry1h' },
@@ -74,19 +76,25 @@ interface SplitLegDraft {
 
 export function CreatePaymentModal({
   settlementWallet,
+  initialValues,
   onCreate,
   onClose,
 }: {
   settlementWallet: string | null
+  /** Seed values for a "repeat" of an existing request. Already validated
+   * fail-closed by `resolveRepeatPrefill` — the modal simply starts from them,
+   * re-derives everything as usual, and leaves every field editable. Expiry is
+   * deliberately NOT seedable: a repeat always gets a fresh default window. */
+  initialValues?: CreatePrefill
   onCreate: (input: CreateInvoiceInput) => Promise<CreatedInvoice>
   onClose: () => void
 }) {
   const t = useTranslations('app.payments')
-  const [amount, setAmount] = useState('')
-  const [token, setToken] = useState<string>('USDC')
+  const [amount, setAmount] = useState(initialValues?.amount ?? '')
+  const [token, setToken] = useState<string>(initialValues?.token ?? 'USDC')
   const [expiry, setExpiry] = useState<number>(30)
-  const [recipient, setRecipient] = useState('')
-  const [splitOn, setSplitOn] = useState(false)
+  const [recipient, setRecipient] = useState(initialValues?.recipient ?? '')
+  const [splitOn, setSplitOn] = useState(Boolean(initialValues?.splitLegs))
   // In single mode the recipient is IMPLICIT — the org settlement wallet,
   // resolved server-side, never typed. A split sets `recipient` to NULL and the
   // legs become the COMPLETE recipient set, so the settlement wallet receives
@@ -100,10 +108,21 @@ export function CreatePaymentModal({
   // button on a role that comes from the same `activeOrg`, so the modal cannot
   // mount before the org resolves — there is nothing to wait for, and nothing
   // that could re-add a row the merchant removed.
-  const [legs, setLegs] = useState<SplitLegDraft[]>(() => [
-    { address: settlementWallet ?? '', amount: '' },
-    { address: '', amount: '' },
-  ])
+  //
+  // A repeat seeds the legs from the source intent instead. Its amounts are the
+  // contract-mirror figures for the stored shares, so the last row's balance
+  // lands back on the source's last leg and the derived bps below come out
+  // bit-identical to what was stored.
+  const [legs, setLegs] = useState<SplitLegDraft[]>(
+    () =>
+      initialValues?.splitLegs?.map((leg) => ({
+        address: leg.address,
+        amount: leg.amount,
+      })) ?? [
+        { address: settlementWallet ?? '', amount: '' },
+        { address: '', amount: '' },
+      ],
+  )
   const [submitting, setSubmitting] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [payLink, setPayLink] = useState<string | null>(null)
