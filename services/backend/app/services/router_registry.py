@@ -784,7 +784,7 @@ async def token_symbol_onchain(chain_id: int, token: str) -> Optional[str]:
 _EMPTY_RECHECK_DELAY = 3.0
 
 
-async def _poll_empty_once(chain_id: int, token: str) -> tuple[Optional[bool], int]:
+async def _poll_empty_once(chain_id: int, probe_token: str) -> tuple[Optional[bool], int]:
     """One confirmation round. Returns `(verdict, providers_that_answered)`.
 
     Verdict is True when every provider that ANSWERED said empty, False when at
@@ -795,7 +795,7 @@ async def _poll_empty_once(chain_id: int, token: str) -> tuple[Optional[bool], i
 
     data = "0x" + _selector("decimals()").hex()
     answers = await get_rpc_manager(chain_id).poll_providers(
-        "eth_call", [{"to": token, "data": data}, "latest"]
+        "eth_call", [{"to": probe_token, "data": data}, "latest"]
     )
     replied = [(name, res) for name, res in answers if not isinstance(res, Exception)]
     if not replied:
@@ -803,8 +803,16 @@ async def _poll_empty_once(chain_id: int, token: str) -> tuple[Optional[bool], i
     return all((not res or res == "0x") for _, res in replied), len(replied)
 
 
-async def _empty_is_unanimous(chain_id: int, token: str) -> Optional[bool]:
-    """Ask EVERY configured provider for `decimals()` and report agreement.
+async def _chain_answers_empty_unanimously(
+    chain_id: int, *, probe_token: str
+) -> Optional[bool]:
+    """Does THIS CHAIN's whole provider set answer `decimals()` with no data?
+
+    The subject is the chain. `probe_token` is only the address the question is
+    asked with — the caller picks it (the first token that came back empty), and
+    the answer is about the providers, not about that token.
+
+    Ask EVERY configured provider for `decimals()` and report agreement.
 
     A degraded or rate-limited provider can answer `{"result": "0x"}` instead of
     an error. One such provider must not be able to panic the process into a
@@ -828,7 +836,7 @@ async def _empty_is_unanimous(chain_id: int, token: str) -> Optional[bool]:
         False — at least one answer carried data → provider fault.
         None  — nobody answered → transport, handled as unreachable.
     """
-    verdict, answered = await _poll_empty_once(chain_id, token)
+    verdict, answered = await _poll_empty_once(chain_id, probe_token)
     if verdict is not True or answered >= 2:
         return verdict
 
@@ -836,11 +844,11 @@ async def _empty_is_unanimous(chain_id: int, token: str) -> Optional[bool]:
         "[registry-guard] chain %d: decimals() for %s came back EMPTY and only "
         "%d provider(s) answered — too few to cross-check. Re-asking in %.0fs "
         "before treating it as a registry error.",
-        chain_id, token, answered, _EMPTY_RECHECK_DELAY,
+        chain_id, probe_token, answered, _EMPTY_RECHECK_DELAY,
     )
     await asyncio.sleep(_EMPTY_RECHECK_DELAY)
 
-    second, _ = await _poll_empty_once(chain_id, token)
+    second, _ = await _poll_empty_once(chain_id, probe_token)
     if second is True:
         return True
     # The two rounds disagree (or the second could not be taken): a permanent
@@ -870,13 +878,75 @@ async def verify_enabled_tokens_onchain(*, retries: int = 3, backoff: float = 2.
         cid = CHAIN_IDS.get(name)
         if cid is None or str(cid) not in all_router_chains:
             continue  # no router deployed for this chain → nothing to verify
-        for sym, pol in syms.items():
-            if pol["native"] or not pol["enabled"]:
-                continue
-            await _verify_one_token(cid, sym, pol, retries, backoff)
+        await _verify_chain_tokens(cid, syms, retries, backoff)
 
 
-async def _verify_one_token(chain_id: int, sym: str, pol: dict, retries: int, backoff: float) -> None:
+async def _verify_chain_tokens(
+    chain_id: int, syms: dict, retries: int, backoff: float
+) -> None:
+    """Verify one chain's enabled tokens, and resolve an empty answer ONCE.
+
+    Whether the provider set is answering coherently is a property of the
+    CHAIN, not of a token: a degraded provider returns empty for every token in
+    the registry, so asking per token multiplied one 3s wait by the registry
+    size (measured: 5 tokens = 15.05s of pure sleep, 45.04s with the
+    unreachable backoff on top).
+
+    The cross-check therefore has exactly ONE call site, and that call site is
+    immediately followed by `return` — the loop cannot reach it a second time
+    for the same chain. The guarantee is the control flow, not a counter or a
+    per-chain memo: deleting the `return` is a visible structural change, where
+    dropping a memo lookup is a silently missing condition.
+    """
+    for sym, pol in syms.items():
+        if pol["native"] or not pol["enabled"]:
+            continue
+        if await _verify_one_token(chain_id, sym, pol, retries, backoff):
+            # This token's decimals() came back empty. That is a question about
+            # the chain's providers — decide it here, once, and stop verifying
+            # this chain either way: a provider set that just answered
+            # incoherently cannot verify the rest of the registry, and in the
+            # unanimous case the process is exiting anyway.
+            await _resolve_empty_chain(chain_id, sym, pol["address"])
+            return
+
+
+async def _resolve_empty_chain(chain_id: int, sym: str, addr: str) -> None:
+    """Decide what an empty `decimals()` means for this chain. Called once.
+
+    Unanimous empty → the registry has the address filed under the wrong chain,
+    and there is no reading of that which is safe to boot past. Anything else is
+    a degraded or rate-limited endpoint: say so loudly and let the boot proceed.
+    """
+    unanimous = await _chain_answers_empty_unanimously(chain_id, probe_token=addr)
+    if unanimous is True:
+        raise SystemExit(
+            f"[registry-guard] FATAL no contract code for enabled token "
+            f"{sym} ({addr}) on chain {chain_id}: every provider answered "
+            f"decimals() with empty data. The registry has this address "
+            f"filed under the wrong chain — refusing to start"
+        )
+    logger.warning(
+        "[registry-guard] PROVIDER FAULT on chain %d: decimals() for %s "
+        "(%s) came back EMPTY from one provider but not from the others "
+        "(%s) — this is a degraded/rate-limited endpoint, not a registry "
+        "error. Continuing; the rest of this chain's tokens are not verified "
+        "against it — re-check the provider list.",
+        chain_id, sym, addr,
+        "no provider answered" if unanimous is None else "providers disagree",
+    )
+
+
+async def _verify_one_token(
+    chain_id: int, sym: str, pol: dict, retries: int, backoff: float
+) -> bool:
+    """Verify one token. Returns True iff its `decimals()` came back EMPTY.
+
+    It reports that fact; it does not act on it. Acting on it requires asking a
+    question about the whole provider set, which belongs to the chain level —
+    see `_verify_chain_tokens`. A real metadata mismatch and an unreachable RPC
+    are genuinely per-token facts and are still resolved here.
+    """
     addr = pol["address"]
     last_exc: Optional[Exception] = None
     for attempt in range(retries):
@@ -890,28 +960,10 @@ async def _verify_one_token(chain_id: int, sym: str, pol: dict, retries: int, ba
             continue
 
         # The call SUCCEEDED and came back empty: there is no code at this
-        # address on this chain. For an ENABLED token that has exactly one
-        # reading — the registry has it filed under the wrong chain. Confirm
-        # across every provider first: one degraded vendor answering "0x"
-        # instead of an error must not boot-loop the service.
+        # address on this chain. Report it and stop — what it MEANS depends on
+        # whether the other providers agree, which is a chain-level question.
         if onchain_decimals is EMPTY_RESULT:
-            unanimous = await _empty_is_unanimous(chain_id, addr)
-            if unanimous is True:
-                raise SystemExit(
-                    f"[registry-guard] FATAL no contract code for enabled token "
-                    f"{sym} ({addr}) on chain {chain_id}: every provider answered "
-                    f"decimals() with empty data. The registry has this address "
-                    f"filed under the wrong chain — refusing to start"
-                )
-            logger.warning(
-                "[registry-guard] PROVIDER FAULT on chain %d: decimals() for %s "
-                "(%s) came back EMPTY from one provider but not from the others "
-                "(%s) — this is a degraded/rate-limited endpoint, not a registry "
-                "error. Continuing; re-check the provider list.",
-                chain_id, sym, addr,
-                "no provider answered" if unanimous is None else "providers disagree",
-            )
-            return
+            return True
 
         # `symbol()` answering nothing while `decimals()` answered proves there
         # IS code at the address — a legacy bytes32 symbol that decodes to
@@ -929,7 +981,7 @@ async def _verify_one_token(chain_id: int, sym: str, pol: dict, retries: int, ba
                 f"({addr}) on chain {chain_id}: {'; '.join(mismatches)} — refusing to start"
             )
         logger.info("[registry-guard] verified %s (%s) on chain %d", sym, addr, chain_id)
-        return
+        return False
 
     # Exhausted retries due to transient errors → degrade, do not crash.
     logger.warning(

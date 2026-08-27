@@ -34,6 +34,7 @@ Run:
 """
 
 import logging
+from types import SimpleNamespace
 
 import pytest
 
@@ -81,7 +82,7 @@ def _no_recheck_delay(monkeypatch):
 
 
 def _patch_providers(monkeypatch, answers):
-    """Make `_empty_is_unanimous` see `answers` — a list of (name, result).
+    """Make `_chain_answers_empty_unanimously` see `answers` — a list of (name, result).
 
     Pass a list of rounds (a list of lists) to answer differently on the second
     poll; a single round is repeated for every call.
@@ -107,6 +108,18 @@ def _patch_providers(monkeypatch, answers):
 
 def _unanimously_empty(monkeypatch):
     _patch_providers(monkeypatch, [("a", "0x"), ("b", "0x")])
+
+
+async def _verify(chain_id, sym, pol, *, retries=1, backoff=0):
+    """Run ONE token through the level that now owns the empty verdict.
+
+    `_verify_one_token` reports "came back empty"; `_verify_chain_tokens`
+    decides what that means, once per chain. Tests asserting on the DECISION
+    therefore drive the chain level with a one-token registry — same scenario,
+    same assertion, one level up. Tests asserting on per-token facts (a real
+    mismatch, an unreachable RPC, a match) still call `_verify_one_token`.
+    """
+    return await rr._verify_chain_tokens(chain_id, {sym: pol}, retries, backoff)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -189,7 +202,7 @@ async def test_unanimous_empty_for_an_enabled_token_is_a_mismatch(monkeypatch):
     _unanimously_empty(monkeypatch)
 
     with pytest.raises(SystemExit) as exc:
-        await rr._verify_one_token(CHAIN, SYM, POL, retries=1, backoff=0)
+        await _verify(CHAIN, SYM, POL)
 
     assert ADDR in str(exc.value)
 
@@ -202,7 +215,7 @@ async def test_empty_data_is_not_logged_as_verified(monkeypatch, caplog):
 
     with caplog.at_level(logging.INFO, logger="app.services.router_registry"):
         with pytest.raises(SystemExit):
-            await rr._verify_one_token(CHAIN, SYM, POL, retries=1, backoff=0)
+            await _verify(CHAIN, SYM, POL)
 
     assert not any("verified" in r.message for r in caplog.records), \
         [r.message for r in caplog.records]
@@ -223,7 +236,7 @@ async def test_provider_disagreement_warns_and_does_NOT_exit(monkeypatch, caplog
     _patch_providers(monkeypatch, [("degraded", "0x"), ("healthy", DECIMALS_6)])
 
     with caplog.at_level(logging.WARNING, logger="app.services.router_registry"):
-        await rr._verify_one_token(CHAIN, SYM, POL, retries=1, backoff=0)
+        await _verify(CHAIN, SYM, POL)
 
     assert any("PROVIDER FAULT" in r.message for r in caplog.records), \
         [r.message for r in caplog.records]
@@ -237,7 +250,7 @@ async def test_no_provider_answers_the_confirmation_does_not_exit(monkeypatch, c
     _patch_providers(monkeypatch, [("a", RuntimeError("down")), ("b", RuntimeError("down"))])
 
     with caplog.at_level(logging.WARNING, logger="app.services.router_registry"):
-        await rr._verify_one_token(CHAIN, SYM, POL, retries=1, backoff=0)
+        await _verify(CHAIN, SYM, POL)
 
     assert any("PROVIDER FAULT" in r.message for r in caplog.records)
 
@@ -256,11 +269,11 @@ async def test_no_provider_answers_the_confirmation_does_not_exit(monkeypatch, c
     ids=["all-empty", "empty-and-null", "one-has-data", "single-has-data",
          "all-errored", "one-errored-rest-empty"],
 )
-async def test_empty_is_unanimous_verdicts(monkeypatch, answers, expected):
-    """`_empty_is_unanimous` in isolation. Providers that error are not votes —
+async def test_chain_answers_empty_unanimously_verdicts(monkeypatch, answers, expected):
+    """`_chain_answers_empty_unanimously` in isolation. Providers that error are not votes —
     they neither confirm nor refute; only answers count."""
     _patch_providers(monkeypatch, answers)
-    assert await rr._empty_is_unanimous(CHAIN, ADDR) is expected
+    assert await rr._chain_answers_empty_unanimously(CHAIN, probe_token=ADDR) is expected
 
 
 # ── Single-provider chains: time separation replaces provider separation ──
@@ -277,7 +290,7 @@ async def test_single_provider_empty_on_both_attempts_exits(monkeypatch):
     calls = _patch_providers(monkeypatch, [[("solo", "0x")], [("solo", "0x")]])
 
     with pytest.raises(SystemExit) as exc:
-        await rr._verify_one_token(CHAIN, SYM, POL, retries=1, backoff=0)
+        await _verify(CHAIN, SYM, POL)
 
     assert ADDR in str(exc.value)
     assert calls["n"] == 2, "the second round must actually be taken"
@@ -297,7 +310,7 @@ async def test_single_provider_empty_then_data_warns_and_continues(monkeypatch, 
     )
 
     with caplog.at_level(logging.WARNING, logger="app.services.router_registry"):
-        await rr._verify_one_token(CHAIN, SYM, POL, retries=1, backoff=0)
+        await _verify(CHAIN, SYM, POL)
 
     assert calls["n"] == 2
     assert any("PROVIDER FAULT" in r.message for r in caplog.records), \
@@ -311,7 +324,7 @@ async def test_two_answers_do_not_trigger_a_second_round(monkeypatch):
     calls = _patch_providers(monkeypatch, [("a", "0x"), ("b", "0x")])
 
     with pytest.raises(SystemExit):
-        await rr._verify_one_token(CHAIN, SYM, POL, retries=1, backoff=0)
+        await _verify(CHAIN, SYM, POL)
 
     assert calls["n"] == 1
 
@@ -323,7 +336,7 @@ async def test_non_empty_first_round_is_never_re_polled(monkeypatch):
     _patch_reads(monkeypatch, decimals=EMPTY_RESULT, symbol=EMPTY_RESULT)
     calls = _patch_providers(monkeypatch, [("solo", DECIMALS_6)])
 
-    await rr._verify_one_token(CHAIN, SYM, POL, retries=1, backoff=0)
+    await _verify(CHAIN, SYM, POL)
 
     assert calls["n"] == 1
 
@@ -336,16 +349,75 @@ def test_recheck_delay_is_a_real_wait_and_has_no_config_surface():
 
     assert REAL_RECHECK_DELAY > 0, "the second round must be separated in TIME"
 
-    src = inspect.getsource(rr._empty_is_unanimous) + inspect.getsource(rr._poll_empty_once)
+    src = (
+        inspect.getsource(rr._chain_answers_empty_unanimously)
+        + inspect.getsource(rr._poll_empty_once)
+        + inspect.getsource(rr._resolve_empty_chain)
+        + inspect.getsource(rr._verify_chain_tokens)
+    )
     for forbidden in ("get_settings", "os.environ", "getenv", "settings."):
         assert forbidden not in src, f"confirmation reads configuration: {forbidden!r}"
 
-    params = inspect.signature(rr._empty_is_unanimous).parameters
-    assert list(params) == ["chain_id", "token"], list(params)
+    params = inspect.signature(rr._chain_answers_empty_unanimously).parameters
+    assert list(params) == ["chain_id", "probe_token"], list(params)
+    # The chain is the subject; the token is a keyword-only instrument.
+    assert params["probe_token"].kind is inspect.Parameter.KEYWORD_ONLY
 
     config_src = inspect.getsource(config_mod).lower()
     for token in ("recheck_delay", "empty_recheck", "registry_guard"):
         assert token not in config_src, f"config.py grew a {token!r} surface"
+
+
+def _five_empty_tokens(monkeypatch):
+    """A chain whose whole enabled registry comes back empty."""
+    syms = {
+        s: {"address": "0x" + f"{i:02x}" * 20, "decimals": 6,
+            "native": False, "enabled": True}
+        for i, s in enumerate(["USDC", "USDT", "DAI", "EURC", "WBTC"], start=1)
+    }
+    monkeypatch.setattr(rr, "FEE_POLICY", {"base": syms})
+    monkeypatch.setattr(
+        rr, "get_settings",
+        lambda: SimpleNamespace(
+            rsends_router_addresses={"8453": "0x" + "ab" * 20},
+            rsends_router_v2_addresses={},
+        ),
+    )
+    _patch_reads(monkeypatch, decimals=EMPTY_RESULT, symbol=EMPTY_RESULT)
+
+
+@pytest.mark.asyncio
+async def test_cross_check_runs_once_per_chain_not_once_per_token(monkeypatch):
+    """THE HOIST. Whether the provider set is answering coherently is a property
+    of the CHAIN, not of a token — a degraded provider returns empty for every
+    token in the registry, so asking per token multiplied one 3s wait by the
+    registry size (measured: 5 tokens = 15.05s of pure sleep).
+
+    Two providers that disagree → PROVIDER FAULT, no exit, loop completes. The
+    counter is on the poll itself, so this measures invocations, not timing.
+    """
+    _five_empty_tokens(monkeypatch)
+    calls = _patch_providers(monkeypatch, [("a", "0x"), ("b", DECIMALS_6)])
+
+    await rr.verify_enabled_tokens_onchain(retries=1, backoff=0)
+
+    assert calls["n"] == 1, (
+        f"cross-check ran {calls['n']} times for one chain — it must run once"
+    )
+
+
+@pytest.mark.asyncio
+async def test_unanimous_empty_still_exits_on_the_first_empty_token(monkeypatch):
+    """The hoist must not soften the verdict: one cross-check, still SystemExit,
+    still naming the first token that came back empty."""
+    _five_empty_tokens(monkeypatch)
+    calls = _patch_providers(monkeypatch, [("a", "0x"), ("b", "0x")])
+
+    with pytest.raises(SystemExit) as exc:
+        await rr.verify_enabled_tokens_onchain(retries=1, backoff=0)
+
+    assert calls["n"] == 1
+    assert "0x" + "01" * 20 in str(exc.value), str(exc.value)
 
 
 @pytest.mark.asyncio
@@ -362,7 +434,7 @@ async def test_confirmation_polls_every_provider_not_the_healthy_subset(monkeypa
     monkeypatch.setattr(
         "app.services.rpc_manager.get_rpc_manager", lambda cid: _FakeManager()
     )
-    await rr._empty_is_unanimous(CHAIN, ADDR)
+    await rr._chain_answers_empty_unanimously(CHAIN, probe_token=ADDR)
 
     assert "providers" not in seen, "must not restrict the poll to a subset"
 
@@ -400,7 +472,7 @@ async def test_unreachable_and_empty_are_distinguishable(monkeypatch):
     _patch_reads(monkeypatch, decimals=EMPTY_RESULT, symbol=EMPTY_RESULT)
     _unanimously_empty(monkeypatch)
     with pytest.raises(SystemExit):
-        await rr._verify_one_token(CHAIN, SYM, POL, retries=1, backoff=0)
+        await _verify(CHAIN, SYM, POL)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -448,5 +520,5 @@ async def test_empty_symbol_with_live_decimals_does_not_trigger_consensus(monkey
     def _boom(*a, **k):
         raise AssertionError("consensus confirmation must not run here")
 
-    monkeypatch.setattr(rr, "_empty_is_unanimous", _boom)
-    await rr._verify_one_token(CHAIN, SYM, POL, retries=1, backoff=0)
+    monkeypatch.setattr(rr, "_chain_answers_empty_unanimously", _boom)
+    await _verify(CHAIN, SYM, POL)
