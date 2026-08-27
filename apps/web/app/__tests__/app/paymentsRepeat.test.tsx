@@ -168,6 +168,54 @@ it('treats a pending row past its expiry as expired, because the list ships the 
   expect(screen.queryByRole('button', { name: 'Copy link' })).not.toBeInTheDocument()
 })
 
+it('labels that same row Expired, so the chip cannot contradict the action', async () => {
+  mockFetch([row({ status: 'pending', expires_at: PAST })])
+
+  render(<AppPaymentsPage />)
+  await screen.findByRole('button', { name: 'Repeat' })
+
+  // One derivation feeds both. A "Pending" chip next to a "Repeat" button is
+  // the incoherence this asserts against.
+  // Scoped to the row — the filter dropdown carries <option>Expired</option>
+  // and <option>Pending</option>, which are not this row's status chip.
+  const dataRow = screen.getAllByRole('row')[1] // [0] is the header row
+  const cells = within(dataRow).getAllByRole('cell')
+  expect(within(cells[3]).getByText('Expired')).toBeInTheDocument()
+  expect(within(cells[3]).queryByText('Pending')).not.toBeInTheDocument()
+})
+
+it('still offers Cancel on a derived-expired row, because the backend record is open', async () => {
+  mockFetch([row({ status: 'pending', expires_at: PAST })])
+
+  render(<AppPaymentsPage />)
+
+  // Two different questions, both answerable on one row: the link is dead
+  // (regenerate it) but the stored status is still `pending`, so the
+  // pending-only cancel route will accept the call. Cancel must key off the
+  // STORED status — hiding a working action on a display-side computation
+  // would be the UI overruling the backend.
+  expect(await screen.findByRole('button', { name: 'Repeat' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
+})
+
+it('offers no Cancel on a paid row, whose stored status the backend would reject', async () => {
+  mockFetch([row({ status: 'paid' })])
+
+  render(<AppPaymentsPage />)
+
+  expect(await screen.findByRole('button', { name: 'Repeat' })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument()
+})
+
+it('offers Copy link and Cancel together on a live pending row', async () => {
+  mockFetch([row({ status: 'pending', expires_at: FUTURE })])
+
+  render(<AppPaymentsPage />)
+
+  expect(await screen.findByRole('button', { name: 'Copy link' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
+})
+
 it('opens the creation modal prefilled with the source amount, token and recipient', async () => {
   mockFetch([row({ amount: 42.5 })])
 

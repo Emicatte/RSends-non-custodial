@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl'
 import { useCurrentOrg } from '@/hooks/useCurrentOrg'
 import { CreatePaymentModal } from '@/components/app/CreatePaymentModal'
 import { appPage } from '@/components/app/pageStyles'
+import { effectiveStatus } from '@/lib/intentStatus'
 import {
   resolveRepeatPrefill,
   type CreatePrefill,
@@ -49,6 +50,13 @@ const KNOWN_STATUS = new Set([
   'review', 'refunded', 'partial', 'overpaid',
 ])
 // The status values offered in the filter dropdown (the operational set).
+//
+// KNOWN MISMATCH: this filter is applied SERVER-side against the stored column,
+// while the chip and row action derive expiry client-side (lib/intentStatus.ts).
+// So filtering "Expired" will not return an intent the Celery task has not
+// flipped yet, and filtering "Pending" can return rows whose chip reads Expired.
+// The fix is deriving expiry in the backend serializer — issue #80; do not paper
+// over it here with a client-side re-filter, which would break pagination counts.
 const FILTER_STATUSES = ['pending', 'paid', 'expired', 'cancelled'] as const
 
 const CHAIN_LABEL: Record<string, string> = {
@@ -75,26 +83,6 @@ function explorerTxUrl(chain: string, hash: string): string | null {
 
 function truncAddr(addr: string): string {
   return addr.length > 12 ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : addr
-}
-
-// Is this intent's pay link still worth handing to someone?
-//
-// Only a pending intent can still be paid; every other status means the link is
-// spent, void or under reconciliation. Expiry has to be DERIVED: the session
-// list serializes the stored status raw and `expired` is written by a 60s Celery
-// task, so a past-expiry intent still arrives here reading `pending`. That is
-// why `expires_at` is on the wire — the public /pay route derives exactly this
-// in `_effective_status`. Without it, an expired row would offer its dead URL
-// for copy.
-//
-// `nowMs` is null until after hydration (see the clock in the component): the
-// server has no trustworthy clock for this and a render-time Date.now() would
-// tear the root, so pre-hydration we assume live and let the effect correct it.
-function isLinkLive(r: OrgPaymentRecord, nowMs: number | null): boolean {
-  if (r.status !== 'pending') return false
-  if (nowMs === null || !r.expires_at) return true
-  const expiresAt = new Date(r.expires_at).getTime()
-  return !Number.isFinite(expiresAt) || expiresAt > nowMs
 }
 
 // Locale and timezone are PINNED, never resolved from the ambient environment.
@@ -326,13 +314,16 @@ export default function AppPaymentsPage() {
             </thead>
             <tbody>
               {records.map((r: OrgPaymentRecord) => {
-                const tone = STATUS_TONE[r.status] ?? {
+                // ONE derivation, feeding both the chip and the row action, so
+                // they cannot disagree about the same row.
+                const shown = effectiveStatus(r, nowMs)
+                const tone = STATUS_TONE[shown] ?? {
                   bg: 'rgba(26,26,26,0.06)',
                   text: COLORS.muted,
                 }
-                const statusLabel = KNOWN_STATUS.has(r.status)
-                  ? t(`status.${r.status}`)
-                  : r.status
+                const statusLabel = KNOWN_STATUS.has(shown)
+                  ? t(`status.${shown}`)
+                  : shown
                 const txHash = r.matched_tx_hash || r.tx_hash
                 const txUrl = txHash ? explorerTxUrl(r.chain, txHash) : null
                 return (
@@ -408,24 +399,27 @@ export default function AppPaymentsPage() {
                       )}
                     </td>
                     <td className="px-4 py-3" style={cellStyle}>
-                      {/* A live link is copyable; a dead one is repeatable.
-                          Repeat needs the create capability, so a viewer gets
-                          neither action rather than a dead URL. */}
+                      {/* Two independent questions, deliberately keyed to
+                          different values.
+
+                          "Is this link still worth sharing?" is a DERIVED
+                          question — a live link is copyable, a dead one is
+                          repeatable. Repeat needs the create capability, so a
+                          viewer gets neither rather than a dead URL.
+
+                          "Will the backend accept a cancel?" is a STORED
+                          question — the cancel route is pending-only, and it
+                          reads the column, not our clock. Hiding a working
+                          action on a display-side computation would be the UI
+                          overruling backend truth, which is never what you want
+                          on the money path.
+
+                          So a past-expiry intent that the Celery task has not
+                          reached yet shows Repeat AND Cancel: the link is dead,
+                          regenerate one, and close the original record. */}
                       <div className="flex items-center gap-1.5">
-                        {isLinkLive(r, nowMs) ? (
-                          <>
-                            <CopyLinkButton intentId={r.intent_id} />
-                            {canManage && (
-                              <button
-                                type="button"
-                                onClick={() => onCancel(r.intent_id)}
-                                className="px-2 py-1 rounded-lg"
-                                style={{ ...btnStyle, background: 'transparent', color: COLORS.red, fontSize: 12 }}
-                              >
-                                {t('row.cancel')}
-                              </button>
-                            )}
-                          </>
+                        {shown === 'pending' ? (
+                          <CopyLinkButton intentId={r.intent_id} />
                         ) : (
                           canManage && (
                             <button
@@ -437,6 +431,16 @@ export default function AppPaymentsPage() {
                               {t('row.repeat')}
                             </button>
                           )
+                        )}
+                        {canManage && r.status === 'pending' && (
+                          <button
+                            type="button"
+                            onClick={() => onCancel(r.intent_id)}
+                            className="px-2 py-1 rounded-lg"
+                            style={{ ...btnStyle, background: 'transparent', color: COLORS.red, fontSize: 12 }}
+                          >
+                            {t('row.cancel')}
+                          </button>
                         )}
                       </div>
                     </td>
