@@ -1473,7 +1473,15 @@
         "copied": "Kopiert",
         "cancel": "Stornieren",
         "cancelConfirm": "Diese Zahlungsanforderung stornieren?",
-        "split": "Aufgeteilt"
+        "split": "Aufgeteilt",
+        "repeat": "Repeat",
+        "repeatError": {
+          "chain": "This request's network is no longer available. Create the request manually.",
+          "token": "This request's token is no longer available. Create the request manually.",
+          "amount": "This request's amount can't be reused. Create the request manually.",
+          "recipient": "This request's recipient can't be resolved. Create the request manually.",
+          "split": "This request's split can't be reused. Create the request manually."
+        }
       },
       "create": {
         "title": "Neue Zahlungsanforderung",

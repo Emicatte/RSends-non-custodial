@@ -1472,7 +1472,15 @@
         "copied": "Copiato",
         "cancel": "Annulla",
         "cancelConfirm": "Annullare questa richiesta di pagamento?",
-        "split": "Suddiviso"
+        "split": "Suddiviso",
+        "repeat": "Ripeti",
+        "repeatError": {
+          "chain": "La rete di questa richiesta non è più disponibile. Crea la richiesta manualmente.",
+          "token": "Il token di questa richiesta non è più disponibile. Crea la richiesta manualmente.",
+          "amount": "L'importo di questa richiesta non può essere riutilizzato. Crea la richiesta manualmente.",
+          "recipient": "Il destinatario di questa richiesta non può essere risolto. Crea la richiesta manualmente.",
+          "split": "La suddivisione di questa richiesta non può essere riutilizzata. Crea la richiesta manualmente."
+        }
       },
       "create": {
         "title": "Nuova richiesta di pagamento",

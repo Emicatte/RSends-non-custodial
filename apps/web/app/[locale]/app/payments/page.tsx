@@ -1,10 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { useCurrentOrg } from '@/hooks/useCurrentOrg'
 import { CreatePaymentModal } from '@/components/app/CreatePaymentModal'
 import { appPage } from '@/components/app/pageStyles'
+import {
+  resolveRepeatPrefill,
+  type CreatePrefill,
+  type PrefillFailure,
+} from '@/lib/repeatPrefill'
 import { useOrgPayments, type OrgPaymentRecord } from '@/hooks/useOrgPayments'
 
 // Visual language mirrors the /app home (app/[locale]/app/page.tsx) so the
@@ -70,6 +75,26 @@ function explorerTxUrl(chain: string, hash: string): string | null {
 
 function truncAddr(addr: string): string {
   return addr.length > 12 ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : addr
+}
+
+// Is this intent's pay link still worth handing to someone?
+//
+// Only a pending intent can still be paid; every other status means the link is
+// spent, void or under reconciliation. Expiry has to be DERIVED: the session
+// list serializes the stored status raw and `expired` is written by a 60s Celery
+// task, so a past-expiry intent still arrives here reading `pending`. That is
+// why `expires_at` is on the wire — the public /pay route derives exactly this
+// in `_effective_status`. Without it, an expired row would offer its dead URL
+// for copy.
+//
+// `nowMs` is null until after hydration (see the clock in the component): the
+// server has no trustworthy clock for this and a render-time Date.now() would
+// tear the root, so pre-hydration we assume live and let the effect correct it.
+function isLinkLive(r: OrgPaymentRecord, nowMs: number | null): boolean {
+  if (r.status !== 'pending') return false
+  if (nowMs === null || !r.expires_at) return true
+  const expiresAt = new Date(r.expires_at).getTime()
+  return !Number.isFinite(expiresAt) || expiresAt > nowMs
 }
 
 // Locale and timezone are PINNED, never resolved from the ambient environment.
@@ -151,8 +176,46 @@ export default function AppPaymentsPage() {
   } = useOrgPayments()
 
   const [modalOpen, setModalOpen] = useState(false)
+  // Seed values for a repeat, plus a counter that remounts the modal so a second
+  // repeat re-seeds instead of reusing the first one's state.
+  const [prefill, setPrefill] = useState<CreatePrefill | null>(null)
+  const [modalSeq, setModalSeq] = useState(0)
+  const [prefillError, setPrefillError] = useState<PrefillFailure | null>(null)
   const canManage = role === 'operator' || role === 'admin'
   const settlementWallet = activeOrg?.settlement_wallet ?? null
+
+  // Expiry clock. Deliberately NOT read during render: this file already pins
+  // its Intl formats because an SSR/client divergence tears the React root, and
+  // a render-time Date.now() is the same hazard. First client render matches the
+  // server (null), then this effect drives a second render — an update, not a
+  // mismatch.
+  const [nowMs, setNowMs] = useState<number | null>(null)
+  useEffect(() => {
+    setNowMs(Date.now())
+  }, [records])
+
+  function openCreate() {
+    setPrefill(null)
+    setPrefillError(null)
+    setModalSeq((n) => n + 1)
+    setModalOpen(true)
+  }
+
+  // Repeat: resolve the source row into create-form values, or refuse and say
+  // which field failed. NEVER creates an intent — it only opens the same modal a
+  // manual create opens, prefilled; the merchant still confirms.
+  function onRepeat(r: OrgPaymentRecord) {
+    const result = resolveRepeatPrefill(r, settlementWallet)
+    if (!result.ok) {
+      setPrefillError(result.field)
+      setModalOpen(false)
+      return
+    }
+    setPrefillError(null)
+    setPrefill(result.values)
+    setModalSeq((n) => n + 1)
+    setModalOpen(true)
+  }
 
   async function onCancel(intentId: string) {
     if (typeof window !== 'undefined' && !window.confirm(t('row.cancelConfirm'))) return
@@ -212,7 +275,7 @@ export default function AppPaymentsPage() {
         {canManage && (
           <button
             type="button"
-            onClick={() => setModalOpen(true)}
+            onClick={openCreate}
             className="px-3.5 py-2 rounded-lg"
             style={{ ...btnStyle, background: COLORS.accent, color: COLORS.white }}
           >
@@ -220,6 +283,24 @@ export default function AppPaymentsPage() {
           </button>
         )}
       </div>
+
+      {/* A repeat that cannot be resolved into a valid current configuration
+          names the field that failed. It never opens the modal half-filled: a
+          silent default here would issue a request the merchant never chose. */}
+      {prefillError && (
+        <div
+          role="alert"
+          className="mb-4 px-4 py-3 rounded-xl border"
+          style={{
+            fontSize: 13,
+            color: COLORS.red,
+            background: COLORS.redLight,
+            borderColor: COLORS.border,
+          }}
+        >
+          {t(`row.repeatError.${prefillError}`)}
+        </div>
+      )}
 
       {/* Full-bleed card variant: border/radius/bg without the p-5 (the table
           supplies its own px-4 py-3 cell padding). */}
@@ -327,17 +408,35 @@ export default function AppPaymentsPage() {
                       )}
                     </td>
                     <td className="px-4 py-3" style={cellStyle}>
+                      {/* A live link is copyable; a dead one is repeatable.
+                          Repeat needs the create capability, so a viewer gets
+                          neither action rather than a dead URL. */}
                       <div className="flex items-center gap-1.5">
-                        <CopyLinkButton intentId={r.intent_id} />
-                        {canManage && r.status === 'pending' && (
-                          <button
-                            type="button"
-                            onClick={() => onCancel(r.intent_id)}
-                            className="px-2 py-1 rounded-lg"
-                            style={{ ...btnStyle, background: 'transparent', color: COLORS.red, fontSize: 12 }}
-                          >
-                            {t('row.cancel')}
-                          </button>
+                        {isLinkLive(r, nowMs) ? (
+                          <>
+                            <CopyLinkButton intentId={r.intent_id} />
+                            {canManage && (
+                              <button
+                                type="button"
+                                onClick={() => onCancel(r.intent_id)}
+                                className="px-2 py-1 rounded-lg"
+                                style={{ ...btnStyle, background: 'transparent', color: COLORS.red, fontSize: 12 }}
+                              >
+                                {t('row.cancel')}
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          canManage && (
+                            <button
+                              type="button"
+                              onClick={() => onRepeat(r)}
+                              className="px-2 py-1 rounded-lg"
+                              style={{ ...btnStyle, background: 'transparent', color: COLORS.accent, fontSize: 12 }}
+                            >
+                              {t('row.repeat')}
+                            </button>
+                          )
                         )}
                       </div>
                     </td>
@@ -413,9 +512,14 @@ export default function AppPaymentsPage() {
 
       {modalOpen && (
         <CreatePaymentModal
+          key={modalSeq}
           settlementWallet={settlementWallet}
+          initialValues={prefill ?? undefined}
           onCreate={createIntent}
-          onClose={() => setModalOpen(false)}
+          onClose={() => {
+            setModalOpen(false)
+            setPrefill(null)
+          }}
         />
       )}
     </main>
