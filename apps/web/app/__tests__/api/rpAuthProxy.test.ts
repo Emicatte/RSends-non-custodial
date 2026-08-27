@@ -120,3 +120,84 @@ describe('rp-auth proxy Set-Cookie replay', () => {
     )
   })
 })
+
+/**
+ * Correlation id passthrough.
+ *
+ * The login form generates a UUID, sends it as X-Request-ID/X-Correlation-ID
+ * and shows it to the user on failure so they can quote it. That is worth
+ * nothing unless the id survives this proxy in both directions: upstream so
+ * the backend logs and auth_audit_log record the SAME id, downstream so a
+ * backend-generated id is readable when the client sent none. The allowlist
+ * originally carried neither, and the response rebuild dropped the backend's
+ * echo — the id joined to nothing on either side.
+ */
+describe('rp-auth proxy correlation id', () => {
+  function callWithHeaders(headers: Record<string, string>) {
+    const req = new NextRequest(
+      'http://localhost/api/rp-auth/api/v1/auth/login',
+      { method: 'POST', headers },
+    )
+    return POST(req, {
+      params: Promise.resolve({ path: ['api', 'v1', 'auth', 'login'] }),
+    })
+  }
+
+  function backendResponseWith(headers: Record<string, string>): Response {
+    return new Response('{"ok":true}', {
+      status: 200,
+      headers: { 'content-type': 'application/json', ...headers },
+    })
+  }
+
+  it('forwards both correlation headers to the backend', async () => {
+    fetchMock.mockResolvedValue(backendResponse([]))
+    const cid = '3f2b9c40-5d61-4a7e-9f0c-2b1d8e6a4c33'
+
+    await callWithHeaders({
+      'content-type': 'application/json',
+      'x-request-id': cid,
+      'x-correlation-id': cid,
+    })
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const sent = init.headers as Record<string, string>
+    expect(sent['x-request-id']).toBe(cid)
+    expect(sent['x-correlation-id']).toBe(cid)
+  })
+
+  it("replays the backend's correlation id back to the browser", async () => {
+    const backendCid = 'aa11bb22-cc33-4d44-8e55-ff6677889900'
+    fetchMock.mockResolvedValue(
+      backendResponseWith({
+        'x-correlation-id': backendCid,
+        'x-request-id': backendCid,
+      }),
+    )
+
+    const res = await callWithHeaders({ 'content-type': 'application/json' })
+
+    expect(res.headers.get('x-correlation-id')).toBe(backendCid)
+    expect(res.headers.get('x-request-id')).toBe(backendCid)
+  })
+
+  it('does not invent empty correlation headers when the backend sends none', async () => {
+    fetchMock.mockResolvedValue(backendResponse([]))
+
+    const res = await callWithHeaders({ 'content-type': 'application/json' })
+
+    expect(res.headers.get('x-correlation-id')).toBeNull()
+    expect(res.headers.get('x-request-id')).toBeNull()
+  })
+
+  it('omits the correlation headers upstream when the client sent none', async () => {
+    fetchMock.mockResolvedValue(backendResponse([]))
+
+    await callWithHeaders({ 'content-type': 'application/json' })
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const sent = init.headers as Record<string, string>
+    expect(sent).not.toHaveProperty('x-request-id')
+    expect(sent).not.toHaveProperty('x-correlation-id')
+  })
+})

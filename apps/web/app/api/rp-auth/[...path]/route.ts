@@ -29,7 +29,25 @@ const FORWARD_HEADERS = [
   'authorization',
   'cookie',
   'x-idempotency-key',
+  // The client's correlation id (LoginForm sends both). Without these two the
+  // id shown to a user on a failed login joins to nothing: the backend
+  // generates its own, and auth_audit_log.correlation_id never sees the
+  // browser's. PR #79 added the sender and not the allowlist.
+  'x-request-id',
+  'x-correlation-id',
 ] as const
+
+/**
+ * Backend response headers replayed to the browser.
+ *
+ * Explicit, like the Set-Cookie replay below: the body has already been read
+ * and re-encoded by this route, so copying the backend's headers wholesale
+ * would carry a content-length/content-encoding that no longer describes what
+ * we send. These two are the correlation pair — the backend echoes
+ * X-Correlation-ID (generating one when the client sent none), so replaying
+ * them is what lets a user read back an id that exists on both sides.
+ */
+const REPLAY_HEADERS = ['x-correlation-id', 'x-request-id'] as const
 
 /** Where this proxy is mounted on the web origin. */
 const PROXY_PREFIX = '/api/rp-auth'
@@ -105,6 +123,11 @@ async function proxyRequest(
           : []
     for (const c of setCookies) {
       response.headers.append('set-cookie', rewriteCookiePath(c))
+    }
+
+    for (const h of REPLAY_HEADERS) {
+      const v = backendRes.headers.get(h)
+      if (v) response.headers.set(h, v)
     }
 
     return response

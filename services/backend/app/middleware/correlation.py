@@ -46,6 +46,12 @@ class CorrelationMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
         cid = request.headers.get("X-Correlation-ID") or str(uuid.uuid4())
         tok = correlation_id.set(cid)
+        # Also on request.state: route handlers read it from there
+        # (auth_routes._correlation_id), and until this line existed that read
+        # always missed and fell back to the raw header — which the web proxy
+        # stripped, so every audit row it fed came out with an empty
+        # correlation_id.
+        request.state.correlation_id = cid
 
         try:
             response = await call_next(request)

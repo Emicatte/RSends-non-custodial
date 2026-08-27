@@ -13,8 +13,8 @@ Three tables:
 
 from datetime import datetime, timezone
 from sqlalchemy import (
-    Column, String, Text, Boolean, BigInteger, Date, DateTime, TIMESTAMP, ForeignKey, Index,
-    text,
+    Column, String, Text, Boolean, BigInteger, Integer, Date, DateTime, TIMESTAMP,
+    ForeignKey, Index, text,
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB, INET
 from sqlalchemy.types import TypeDecorator, CHAR, JSON
@@ -203,7 +203,18 @@ class AuthAuditLog(Base):
 
     __tablename__ = "auth_audit_log"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    # BIGSERIAL on Postgres, INTEGER on SQLite. The variant is load-bearing on
+    # SQLite only: there, a generated key comes from the ROWID alias, and only
+    # a column declared exactly INTEGER PRIMARY KEY is that alias. Declared
+    # BIGINT, SQLite assigns nothing and the INSERT dies on the NOT NULL —
+    # which record_auth_event swallows, so under SQLite every audit write had
+    # always failed in silence. Postgres DDL is byte-identical either way
+    # (BIGSERIAL), so there is nothing to migrate.
+    id = Column(
+        BigInteger().with_variant(Integer, "sqlite"),
+        primary_key=True,
+        autoincrement=True,
+    )
     event_type = Column(Text, nullable=False)
     user_id = Column(_UUID(), nullable=True)
     session_id = Column(Text, nullable=True)
