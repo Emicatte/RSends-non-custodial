@@ -99,6 +99,37 @@ def validate_eth_address(address: str, field: str = "address") -> str:
     return to_checksum_address(address)
 
 
+def _tron_decode(address: object) -> Optional[bytes]:
+    """Decode a TRON **mainnet** base58check address to its 21-byte payload.
+
+    Returns `0x41` + the 20 address bytes, or None if `address` is not a valid
+    mainnet T-address.
+
+    This is THE base58check decoder in this codebase. `is_tron_address` and
+    `tron_address_to_evm_hex` both route through it deliberately: a second
+    decoder is a second checksum implementation, and the failure mode of a
+    subtly-wrong one is a payment credited to an address nobody controls.
+
+    Stdlib only (hashlib); deliberately no base58/tron dependency.
+    """
+    if not isinstance(address, str) or not _TRON_ADDR_RE.match(address):
+        return None
+
+    n = 0
+    for ch in address:
+        n = n * 58 + _B58_INDEX[ch]  # regex already fenced the alphabet
+    if n.bit_length() > 200:  # would not fit the 25-byte base58check envelope
+        return None
+    raw = n.to_bytes(25, "big")
+
+    if raw[0] != _TRON_MAINNET_PREFIX:
+        return None
+    payload, checksum = raw[:21], raw[21:]
+    if hashlib.sha256(hashlib.sha256(payload).digest()).digest()[:4] != checksum:
+        return None
+    return payload
+
+
 def is_tron_address(address: object) -> bool:
     """True iff `address` is a valid TRON **mainnet** base58check address.
 
@@ -106,23 +137,24 @@ def is_tron_address(address: object) -> bool:
     changes the payload and fails the double-SHA256 tail. That matters because
     this is a payment recipient — a bad checksum means funds sent nowhere, and
     there is no contract in the watch-only path to reject it for us.
-
-    Stdlib only (hashlib); deliberately no base58/tron dependency.
     """
-    if not isinstance(address, str) or not _TRON_ADDR_RE.match(address):
-        return False
+    return _tron_decode(address) is not None
 
-    n = 0
-    for ch in address:
-        n = n * 58 + _B58_INDEX[ch]  # regex already fenced the alphabet
-    if n.bit_length() > 200:  # would not fit the 25-byte base58check envelope
-        return False
-    raw = n.to_bytes(25, "big")
 
-    if raw[0] != _TRON_MAINNET_PREFIX:
-        return False
-    payload, checksum = raw[:21], raw[21:]
-    return hashlib.sha256(hashlib.sha256(payload).digest()).digest()[:4] == checksum
+def tron_address_to_evm_hex(address: object) -> Optional[str]:
+    """A TRON address in the 20-byte hex form TronGrid's event API returns.
+
+    The trc20 transfer API answers in base58check (`T…`); the event API answers
+    in hex (`0x…`, no `0x41` prefix byte). Pairing a transfer to its event —
+    which is where the watch-only poller gets its real `event_index` — means
+    crossing between the two, so the conversion lives here beside the decoder
+    rather than in the caller.
+
+    Returns None for anything that is not a valid mainnet T-address; callers
+    must treat that as a failure to pair, never as a match.
+    """
+    payload = _tron_decode(address)
+    return None if payload is None else "0x" + payload[1:].hex()
 
 
 def normalize_payment_address(address: object) -> Optional[str]:

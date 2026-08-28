@@ -159,6 +159,17 @@ async def lifespan(app: FastAPI):
     except Exception as e:  # never let a guard bug break startup
         logger.warning("[registry-guard] skipped due to unexpected error: %s", e)
 
+    # ── TRON watch-only poller (non-EVM sibling of the indexer) ──
+    # Records incoming USDT TRC-20 transfers to pending TRON intents'
+    # recipients as settlements; it matches nothing. No-op when
+    # TRON_NODE_URLS_JSON is unset. Started AFTER the EVM boot guards so a TRON
+    # misconfiguration can never mask an EVM one, and deliberately not wrapped:
+    # every configured node must prove it serves TRON mainnet or the boot dies,
+    # exactly like verify_chain_identity_for_boot above.
+    from app.services.tron_poller import start_tron_poller_if_needed
+
+    await start_tron_poller_if_needed()
+
     # `_aio` is used by the webhook/expiration block below and by the shutdown
     # cancellation loop; it lived here when the price refresh task owned it.
     import asyncio as _aio
@@ -221,6 +232,12 @@ async def lifespan(app: FastAPI):
     # 2) Stop indexer / RPC health loops / WS managers (these may use the
     #    DB/Redis or have HTTP probes in flight).
     await stop_indexer()
+    from app.services.tron_poller import stop_tron_poller
+
+    try:
+        await stop_tron_poller()
+    except Exception as _e:  # never let cleanup raise
+        logger.warning("Error stopping the TRON poller during shutdown: %s", _e)
     from app.services.rpc_manager import stop_all_managers
 
     try:
