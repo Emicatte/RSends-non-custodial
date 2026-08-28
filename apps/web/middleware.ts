@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import createIntlMiddleware from 'next-intl/middleware'
 import { getToken } from 'next-auth/jwt'
 import { routing } from './i18n/routing'
+import { SIGN_IN_REQUIRED } from './lib/auth/loginBounce'
 
 const COOKIE_NAME = 'admin_session'
 
@@ -50,11 +51,16 @@ export async function middleware(req: NextRequest) {
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
 
     if (isDashboard) {
-      // (a) Not logged in → /login with ?redirect=<full path> to return after login.
+      // (a) Not logged in → /login with ?redirect=<full path> to return after
+      //     login, and ?error= saying WHY. Without the reason the user lands on
+      //     a pristine form having just been thrown off a page they asked for
+      //     — and a browser that silently drops the session cookie loops here
+      //     forever with nothing to go on (incident 2026-08-26).
       if (!token) {
         const url = req.nextUrl.clone()
         url.pathname = `/${locale}/login`
         url.search = ''
+        url.searchParams.set('error', SIGN_IN_REQUIRED)
         url.searchParams.set('redirect', pathname)          // encoded automatically
         return NextResponse.redirect(url)
       }

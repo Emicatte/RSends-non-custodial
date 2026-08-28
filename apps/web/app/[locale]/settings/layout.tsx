@@ -1,5 +1,6 @@
 import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
+import { loginBounceUrl } from '@/lib/auth/loginBounce'
 import { getTranslations } from 'next-intl/server'
 import { authOptions } from '@/lib/auth-options'
 import { enforceOnboarding } from '@/lib/onboarding-guard'
@@ -18,7 +19,9 @@ export default async function SettingsLayout({
   const { locale } = await params
   const session = await getServerSession(authOptions)
   if (!session) {
-    redirect(`/${locale}`)
+    // Was the marketing home page: a session-required area dumping the user
+    // on a landing page gave them no reason and nothing to act on.
+    redirect(loginBounceUrl(locale, `/${locale}/settings`))
   }
   // Staged onboarding, enforced server-side (same guard as /app): settings
   // hosts the settlement-wallet write and org management surfaces. An

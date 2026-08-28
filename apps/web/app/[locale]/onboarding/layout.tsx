@@ -1,5 +1,6 @@
 import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
+import { loginBounceUrl } from '@/lib/auth/loginBounce'
 import { authOptions } from '@/lib/auth-options'
 
 /**
@@ -18,7 +19,7 @@ export default async function OnboardingLayout({
   const { locale } = await params
   const session = await getServerSession(authOptions)
   if (!session) {
-    redirect(`/${locale}/login`)
+    redirect(loginBounceUrl(locale, `/${locale}/onboarding`))
   }
   return (
     <div className="min-h-screen px-4 py-10 md:py-16" style={{ background: '#FAFAFA' }}>

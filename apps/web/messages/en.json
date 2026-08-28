@@ -122,6 +122,8 @@
       "no_token": "You're not signed in.",
       "auth_unavailable": "Authentication service temporarily unavailable.",
       "session_expired": "Your session has expired. Please log in again.",
+      "sign_in_required": "Please sign in to continue.",
+      "session_not_persisted": "You signed in, but this browser didn't keep the session. Check that cookies are allowed for this site, then try again.",
       "network_error": "Could not reach the server. Check your connection and try again.",
       "request_timeout": "The request timed out. Please try again.",
       "session_bridge_failed": "Your credentials were accepted, but we couldn't finish signing you in. Please try again.",
