@@ -211,8 +211,13 @@ export function CreatePaymentModal({
               ? 'splitErrorTiny'
               : null
 
+  // `totalBase` is what enforces the token's decimal scale (amountToBase rejects
+  // excess digits rather than rounding). Split mode already required it via
+  // splitValid; single mode did not, so the backend's AMOUNT_PRECISION_EXCEEDED
+  // was the first thing that noticed. Both modes now block on the same value.
   const canSubmit =
     amountValid &&
+    totalBase != null &&
     !submitting &&
     (splitOn ? splitValid : overrideValid && hasRecipient)
 
@@ -430,6 +435,14 @@ export function CreatePaymentModal({
                 onChange={(e) => setAmount(e.target.value)}
                 style={field}
               />
+              {/* Split mode says this under its own recipient list; single mode
+                  had nowhere to say it, so an over-precision amount reached the
+                  server and came back a bare 400. Same message, same treatment. */}
+              {!splitOn && amountValid && totalBase == null && (
+                <p style={{ fontSize: 11, color: COLORS.red, margin: '6px 0 0' }}>
+                  {t('create.splitErrorTotal')}
+                </p>
+              )}
             </div>
 
             <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>

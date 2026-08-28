@@ -545,3 +545,48 @@ it('drops the "settles to" claim in split mode but keeps the set-a-wallet prompt
   openSplit()
   expect(screen.getByText(/Set your organization/)).toBeInTheDocument()
 })
+
+// ── Single-recipient mode enforces the same decimal scale ────────
+//
+// The scale rule lived only in split mode, via amountToBase inside splitValid.
+// Single mode checked `Number.isFinite && > 0`, so an over-precision amount
+// submitted cleanly and the backend answered 400 AMOUNT_PRECISION_EXCEEDED with
+// nothing pointing at the field. Both modes now block on the same value and say
+// the same thing.
+
+it('single recipient: more decimals than the token supports blocks submit', () => {
+  render(
+    <CreatePaymentModal settlementWallet={OWN} onCreate={jest.fn()} onClose={jest.fn()} />,
+  )
+  setTotal('10.0000001') // 7 decimals; USDC has 6 — split mode already refused this
+
+  expect(submitButton()).toBeDisabled()
+  expect(
+    screen.getByText('The total has too many decimal places for this token.'),
+  ).toBeInTheDocument()
+})
+
+it('single recipient: an amount within the token decimals still submits', () => {
+  render(
+    <CreatePaymentModal settlementWallet={OWN} onCreate={jest.fn()} onClose={jest.fn()} />,
+  )
+  setTotal('10.000001') // exactly USDC's 6 decimals
+
+  expect(submitButton()).toBeEnabled()
+  expect(
+    screen.queryByText('The total has too many decimal places for this token.'),
+  ).not.toBeInTheDocument()
+})
+
+it('single recipient: the scale message is not shown for an empty amount', () => {
+  render(
+    <CreatePaymentModal settlementWallet={OWN} onCreate={jest.fn()} onClose={jest.fn()} />,
+  )
+
+  // amountValid is false here, so the field is merely incomplete, not wrong —
+  // it must not accuse the merchant of a precision error before they type.
+  expect(submitButton()).toBeDisabled()
+  expect(
+    screen.queryByText('The total has too many decimal places for this token.'),
+  ).not.toBeInTheDocument()
+})

@@ -359,6 +359,22 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
   `No projectId found` at module load, so `/pay` renders the error boundary instead of the
   checkout and no amount of stubbing gets past it. Any non-empty string works for local work
   (WalletConnect itself stays unusable). See the note added to `.env.example`.
+- **The amount-scale gate cannot protect 18-decimal tokens — only `Numeric` can.**
+  `create_intent` rejects `400 AMOUNT_PRECISION_EXCEEDED` when an amount's decimal scale exceeds
+  the token's `decimals`, so `to_base_units` never silently rounds a stored amount. That gate is
+  exact for 6-decimal tokens (USDC/USDT/EURC): `amount * 10^6` stays inside float64's exact
+  integer range up to ~9.0e9 tokens, far beyond any invoice. It is **structurally unable** to do
+  the same for the 18-decimal ones (ETH/DAI, enabled on base/base_sepolia/ethereum today).
+  `PaymentIntent.amount` is a `Float`, and FastAPI parses the body with `json.loads`, so a JSON
+  number is already a rounded float64 **before any validator runs** — `mode="before"` included.
+  A client sending `10.000000000000000001` ETH has had the excess destroyed upstream; the gate
+  sees scale 1 and correctly accepts what is now `10.0`. Sending the amount as a JSON string does
+  not help: Pydantic coerces it to the same float. float64 holds `amount * 10^18` exactly only up
+  to ~0.009 tokens, so above that the scale is unknowable in principle, not merely unchecked.
+  **The fix is the `Float` → `Numeric(78, 0)` (or scaled-decimal) migration on `payment_intents`,
+  not a better validator** — `settlement_models.py:72-73` already uses `Numeric`, commented
+  "never float", so the settlement side is right and the intent side is the outlier. Until then,
+  treat the amount gate as airtight for stablecoins and best-effort for native/18-decimal assets.
 
 Closed (2026-07-05): **CI backend job now has a Redis service** (`redis:7`, health-checked,
 `REDIS_URL=redis://localhost:6379/0` — plain scheme is CI/test-scoped, the `rediss://` guard
