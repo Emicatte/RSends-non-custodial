@@ -16,6 +16,7 @@ from decimal import Decimal
 
 from fastapi import HTTPException
 from sqlalchemy import and_, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.merchant_models import (
@@ -310,6 +311,74 @@ _TESTNET_CHAINS = {"base_sepolia", "sepolia"}
 _MAINNET_CHAINS = {"base", "ethereum", "eth", "tron"}
 
 
+# ── Duplicate pending intent (uq_intent_pending_amount, migration 0019) ──
+
+_PENDING_INDEX = "uq_intent_pending_amount"
+# The index's full column list. Used ONLY by the SQLite arm below, which has no
+# other way to identify which index was hit.
+_PENDING_INDEX_COLUMNS = ("merchant_id", "environment", "chain", "currency", "amount")
+
+_DUPLICATE_PENDING = {
+    "error": "DUPLICATE_PENDING_INTENT",
+    "message": (
+        "A pending payment intent already exists for this environment, chain, "
+        "currency and amount. Reuse it, cancel it, or let it expire before "
+        "creating an identical one: a payment arriving for one of two identical "
+        "pending intents cannot be attributed to either."
+    ),
+}
+
+
+def _is_pending_amount_conflict(exc: IntegrityError) -> bool:
+    """True only for a unique violation of `uq_intent_pending_amount`.
+
+    Matched by CONSTRAINT, never by catching IntegrityError broadly. Every other
+    integrity failure — a duplicate reference_id, a NOT NULL breach, a constraint
+    nobody has written yet — must keep propagating instead of being reported to
+    the merchant as a duplicate-amount 409.
+
+    The two backends report different things, so each is matched on what it
+    actually says. Postgres names the constraint structurally on the
+    asyncpg/psycopg error, and again in its message text. SQLite never names an
+    index here — it lists the columns — so that arm demands the index's FULL
+    column set; no other unique index on `payment_intents` spans those five, and
+    a partial match is not accepted.
+
+    Anything unrecognised returns False and the error propagates: this fails
+    closed in the direction of NOT swallowing.
+    """
+    orig = getattr(exc, "orig", None)
+    for candidate in (orig, getattr(orig, "__cause__", None)):
+        if candidate is None:
+            continue
+        name = getattr(candidate, "constraint_name", None)
+        if name is None:
+            name = getattr(getattr(candidate, "diag", None), "constraint_name", None)
+        if name == _PENDING_INDEX:
+            return True
+
+    text = str(orig) if orig is not None else str(exc)
+    if _PENDING_INDEX in text:
+        return True
+    return "UNIQUE constraint failed" in text and all(
+        f"payment_intents.{column}" in text for column in _PENDING_INDEX_COLUMNS
+    )
+
+
+async def _translate_pending_conflict(db: AsyncSession, exc: IntegrityError) -> None:
+    """Re-raise `exc` as a 409 when it is the duplicate-pending violation.
+
+    Returns normally for nothing — it either raises the 409 or re-raises the
+    original untouched. The rollback is not optional: an IntegrityError leaves
+    the transaction unusable, and the caller (a request handler) still has to be
+    able to answer.
+    """
+    if not _is_pending_amount_conflict(exc):
+        raise exc
+    await db.rollback()
+    raise HTTPException(409, _DUPLICATE_PENDING) from exc
+
+
 async def create_intent(
     db: AsyncSession,
     merchant_id: str,
@@ -576,7 +645,13 @@ async def create_intent(
                 share_bps=leg.share_bps,
                 label=leg.label,
             ))
-    await db.flush()
+    # The INSERT goes out here, so this is where uq_intent_pending_amount bites.
+    # Without this the index reached the merchant as an unhandled exception — a
+    # 500 on a condition the server understands exactly.
+    try:
+        await db.flush()
+    except IntegrityError as exc:
+        await _translate_pending_conflict(db, exc)
     # Populate the (selectin) relationship on the freshly built instance — an
     # async lazy-load on attribute access would raise MissingGreenlet when the
     # caller serializes the response. Split: read the flushed legs back; single:
@@ -622,7 +697,12 @@ async def create_intent(
     if key_id:
         await increment_intent_count(db, key_id)
 
-    await db.commit()
+    # Belt-and-braces: the flush above is where this index fires today, but a
+    # commit that re-issues the INSERT must not degrade to a 500 either.
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await _translate_pending_conflict(db, exc)
 
     logger.info(
         "PaymentIntent created: %s ref=%s invoiceId=%s (merchant=%s, %.6f %s, chain=%s, sender=%s, expires=%s)",
