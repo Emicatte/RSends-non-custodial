@@ -40,6 +40,7 @@ import pytest_asyncio
 from sqlalchemy import func, select
 
 from app.services import tron_poller as tp
+from tests._source_helpers import code_without_prose
 from app.services.tron_poller import TRON_CHAIN_ID, TronPoller
 
 # ═══════════════════════════════════════════════════════════════
@@ -638,45 +639,9 @@ async def test_one_bad_transaction_does_not_advance_past_a_later_good_one(
     )
 
 
-def _code_without_prose(module) -> str:
-    """Module source with docstrings and `#` comments removed.
-
-    These guards are about what the CODE does. `tron_poller`'s docstring
-    discusses the positional index at length precisely so nobody reintroduces
-    it, and a naive substring scan would flag that warning as the violation.
-    Ordinary string literals are KEPT, so an RPC method name passed as a string
-    is still caught.
-    """
-    import ast
-
-    src = inspect.getsource(module)
-    lines = src.splitlines()
-
-    drop: set = set()
-    for node in ast.walk(ast.parse(src)):
-        if not isinstance(node, (ast.Module, ast.ClassDef,
-                                 ast.FunctionDef, ast.AsyncFunctionDef)):
-            continue
-        body = getattr(node, "body", None)
-        if not body:
-            continue
-        first = body[0]
-        if (isinstance(first, ast.Expr)
-                and isinstance(first.value, ast.Constant)
-                and isinstance(first.value.value, str)):
-            for ln in range(first.lineno, (first.end_lineno or first.lineno) + 1):
-                drop.add(ln)
-
-    return "\n".join(
-        line.split("#", 1)[0]
-        for i, line in enumerate(lines, start=1)
-        if i not in drop
-    )
-
-
 def test_there_is_no_positional_fallback_anywhere_in_the_source():
     """No degraded mode. A positional index must be unreachable, not just unused."""
-    code = _code_without_prose(tp).lower()
+    code = code_without_prose(tp).lower()
     for forbidden in ("enumerate(transfers", "positional", "fallback_index",
                       "log_index=idx", "log_index=i,", "log_index=position"):
         assert forbidden not in code, f"a positional index crept in: {forbidden!r}"
@@ -846,7 +811,7 @@ def test_the_poller_is_not_a_payment_watcher():
     name reaches the wire as a string, so stripping strings would hide exactly
     the violation this looks for.
     """
-    code = _code_without_prose(tp)
+    code = code_without_prose(tp)
     for forbidden in ("PaymentWatcher", "eth_getLogs", "eth_chainId",
                       "eth_blockNumber", "get_rpc_manager", "_finalize_and_reconcile"):
         assert forbidden not in code, \
