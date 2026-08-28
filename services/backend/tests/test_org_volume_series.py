@@ -22,6 +22,7 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 
+import app.api.user_org_stats_routes as stats_mod
 import app.api.user_org_volume_series_routes as series_mod
 from app.api.user_org_volume_series_routes import get_org_volume_series
 from app.db.session import async_session, engine
@@ -37,6 +38,18 @@ OWNER_B = "0x" + "b" * 40
 SETTLE_WALLET_A = "0x" + "d" * 40  # org A's settlement_wallet ≠ its primary wallet
 USDC_SEPOLIA = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"  # 6 decimals, usd-coin
 ONE_USDC = 1_000_000  # base units → $1.00 at the patched price
+
+# The suite runs at this instant, always. 00:04 UTC is deliberate: it is the
+# condition under which this file used to fail in CI, once a day, for a one-hour
+# window. Seeding further from midnight would only narrow that window — the fix
+# is to stop reading the wall clock, so the same code takes the same path at
+# every hour of every day.
+FROZEN_NOW = datetime(2026, 3, 15, 0, 4, 0, tzinfo=timezone.utc)
+
+
+def _at(day, hour=12, minute=0):
+    """An instant inside `day`'s UTC bucket, named by the bucket it targets."""
+    return datetime(day.year, day.month, day.day, hour, minute, tzinfo=timezone.utc)
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -62,6 +75,32 @@ def _patch_price(monkeypatch):
         return {"usd-coin": 1.0, "ethereum": 2000.0}.get(coingecko_id)
 
     monkeypatch.setattr(series_mod, "get_price", _fake_price)
+    # The cross-check test calls the stats route, which binds its OWN get_price
+    # (user_org_stats_routes imports it directly). Left unpatched it falls
+    # through price_service's Redis/memory cache to a live CoinGecko fetch, so
+    # the tile priced at whatever the network returned — or 0.0 when it
+    # returned nothing. Same reason as above: patch the name bound in EACH
+    # route module.
+    monkeypatch.setattr(stats_mod, "get_price", _fake_price)
+
+
+@pytest.fixture(autouse=True)
+def _freeze_clock(monkeypatch):
+    """Pin the clock BOTH route modules read.
+
+    Patched on the names bound in the route modules, same idiom as
+    `_patch_price` above. `user_org_stats_routes` is included because the
+    cross-check test compares this card against that route's rolling 24h
+    window — freezing only one would make them disagree by construction.
+    """
+
+    class _FrozenDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return FROZEN_NOW if tz is not None else FROZEN_NOW.replace(tzinfo=None)
+
+    monkeypatch.setattr(series_mod, "datetime", _FrozenDatetime)
+    monkeypatch.setattr(stats_mod, "datetime", _FrozenDatetime)
 
 
 async def _make_org(session, *, owner_address):
@@ -126,7 +165,7 @@ async def _seed(
             chain="base_sepolia",
             status=IntentStatus.completed,
             recipient=recipient,
-            expires_at=datetime.now(timezone.utc) + timedelta(minutes=30),
+            expires_at=FROZEN_NOW + timedelta(minutes=30),
         )
     )
     session.add(
@@ -154,7 +193,7 @@ def _ctx(org, role="viewer"):
 
 
 def _today():
-    return datetime.now(timezone.utc).date()
+    return FROZEN_NOW.date()
 
 
 # ── 1. shape: N requested → N returned, quiet days are zeros ────────────────
@@ -163,10 +202,12 @@ def _today():
 @pytest.mark.asyncio
 async def test_seven_buckets_with_zero_filled_quiet_days(session):
     org = await _make_org(session, owner_address=OWNER_A)
-    now = datetime.now(timezone.utc)
     # Volume on today and on D-3 only; the other five days stay quiet.
-    await _seed(session, owner=OWNER_A, created_at=now - timedelta(hours=1))
-    await _seed(session, owner=OWNER_A, created_at=now - timedelta(days=3))
+    # Named by the bucket each one targets, not offset from a moving "now":
+    # `now - 1h` is only "today" when the suite runs after 01:00 UTC, which is
+    # what used to fail here.
+    await _seed(session, owner=OWNER_A, created_at=_at(_today()))
+    await _seed(session, owner=OWNER_A, created_at=_at(_today() - timedelta(days=3)))
 
     res = await get_org_volume_series(
         ctx=_ctx(org), days=7, environment="test", db=session
@@ -246,7 +287,7 @@ async def test_utc_boundary_midnight_splits_buckets(session):
 @pytest.mark.asyncio
 async def test_test_environment_never_shows_live_volume(session):
     org = await _make_org(session, owner_address=OWNER_A)
-    now = datetime.now(timezone.utc)
+    now = FROZEN_NOW
     await _seed(session, owner=OWNER_A, created_at=now, environment="live")
 
     res = await get_org_volume_series(
@@ -259,7 +300,7 @@ async def test_test_environment_never_shows_live_volume(session):
 @pytest.mark.asyncio
 async def test_live_environment_never_shows_test_volume(session):
     org = await _make_org(session, owner_address=OWNER_A)
-    now = datetime.now(timezone.utc)
+    now = FROZEN_NOW
     await _seed(session, owner=OWNER_A, created_at=now, environment="test")
 
     res = await get_org_volume_series(
@@ -276,7 +317,7 @@ async def test_live_environment_never_shows_test_volume(session):
 async def test_org_isolation_no_leak(session):
     org_a = await _make_org(session, owner_address=OWNER_A)
     org_b = await _make_org(session, owner_address=OWNER_B)
-    now = datetime.now(timezone.utc)
+    now = FROZEN_NOW
     await _seed(session, owner=OWNER_A, created_at=now)
     await _seed(session, owner=OWNER_B, created_at=now, recipient="0x" + "f" * 40)
     await _seed(session, owner=OWNER_B, created_at=now, recipient="0x" + "f" * 40)
@@ -303,7 +344,7 @@ async def test_scoped_via_intent_join_not_settlement_merchant(session):
     await _seed(
         session,
         owner=OWNER_A,
-        created_at=datetime.now(timezone.utc),
+        created_at=FROZEN_NOW,
         recipient=SETTLE_WALLET_A,
     )
 
@@ -322,7 +363,7 @@ async def test_only_final_settlements_count(session):
     """`pending` / `reorged` / `rejected` are money that did not (or no longer)
     settled. Same rule as the volume_24h tile: only `final`."""
     org = await _make_org(session, owner_address=OWNER_A)
-    now = datetime.now(timezone.utc)
+    now = FROZEN_NOW
     for st in (
         SettlementStatus.pending,
         SettlementStatus.reorged,
@@ -350,7 +391,7 @@ async def test_unpriced_token_contributes_zero_but_does_not_break(session):
     await _seed(
         session,
         owner=OWNER_A,
-        created_at=datetime.now(timezone.utc),
+        created_at=FROZEN_NOW,
         token="0x" + "9" * 40,  # not in the token registry
     )
 
@@ -383,7 +424,7 @@ async def test_days_parameter_controls_bucket_count(session):
 async def test_volume_outside_the_window_is_excluded(session):
     org = await _make_org(session, owner_address=OWNER_A)
     await _seed(
-        session, owner=OWNER_A, created_at=datetime.now(timezone.utc) - timedelta(days=10)
+        session, owner=OWNER_A, created_at=FROZEN_NOW - timedelta(days=10)
     )
 
     res = await get_org_volume_series(
@@ -409,7 +450,7 @@ async def test_series_agrees_with_the_stats_tile(session):
     from app.api.user_org_stats_routes import get_org_stats
 
     org = await _make_org(session, owner_address=OWNER_A)
-    await _seed(session, owner=OWNER_A, created_at=datetime.now(timezone.utc))
+    await _seed(session, owner=OWNER_A, created_at=FROZEN_NOW)
 
     stats = await get_org_stats(ctx=_ctx(org), environment="test", db=session)
     series = await get_org_volume_series(
