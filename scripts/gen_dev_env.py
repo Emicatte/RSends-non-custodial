@@ -10,8 +10,9 @@ Design notes
 - Dev convenience comes from *development mode* (DEBUG=true, ENVIRONMENT=development),
   which makes app/config.py's `is_prod` False and skips every production-only guard.
   The production validation in config.py is NOT weakened — we only supply a local .env.
-- The always-on `ALCHEMY_API_KEY` non-empty check is satisfied with a placeholder
-  (RPC calls aren't exercised by a plain boot / UI viewing).
+- No ALCHEMY_API_KEY is written. RPC provider coverage is required per *indexed
+  chain*, and dev sets no RSENDS_ROUTER_ADDRESSES_JSON, so no chain is indexed
+  and nothing needs a provider (RPC calls aren't exercised by a plain boot).
 - INTERNAL_PROXY_SECRET and HMAC_SECRET must be identical on both sides; this script
   is the single source that keeps them matched.
 - Idempotent: an existing file is never overwritten (so secrets are stable across runs).
@@ -72,9 +73,6 @@ EMAIL_DEV_MODE=true
 
 # Anti-replay: keep legacy wallet sigs OFF even in dev (prod-forbidden anyway)
 WALLET_AUTH_ALLOW_LEGACY=false
-
-# Placeholder so the always-on ALCHEMY_API_KEY check passes (no real RPC in dev)
-ALCHEMY_API_KEY=dev-placeholder-not-a-real-key
 
 # Dev secrets (generated). HMAC + INTERNAL_PROXY are mirrored on the Next.js side.
 # ADMIN_API_TOKEN is backend-only (X-Admin-Token bearer) and deliberately

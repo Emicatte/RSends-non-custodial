@@ -119,6 +119,9 @@ def _prod_settings(**over):
         rsends_router_addresses={"8453": "0xRouter"},
         rsends_router_v2_addresses={},
         split_router_addresses={},
+        # Per-chain RPC provider coverage: 8453 is served by alchemy_api_key
+        # above, so no extra provider is needed for the baseline to validate.
+        rpc_extra_providers={},
         rsends_router_addresses_json=ROUTER_MAP,
         rsends_router_v2_addresses_json="",
         split_router_addresses_json="",
