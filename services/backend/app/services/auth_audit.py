@@ -10,6 +10,10 @@ Pattern cloned from `app.services.signing_audit`:
   of the caller's DB transaction. Audit durability is preserved even
   if the parent route later fails or rolls back.
 - Exceptions are logged but never raised — the audit must not block auth.
+  But never-raise is not never-notice: the failure path also carries a
+  traceback and increments AUTH_AUDIT_WRITE_FAILURES, because a swallowed
+  exception with no counter is how a schema defect ate EVERY audit write
+  under SQLite for months while the suite stayed green.
 - On PostgreSQL the table has BEFORE UPDATE/DELETE triggers; do not
   attempt to mutate rows after insert.
 """
@@ -18,11 +22,20 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
+from prometheus_client import Counter as PromCounter
+
 from app.db.session import async_session
 from app.middleware.correlation import get_correlation_id
 from app.models.auth_models import AuthAuditLog
 
 logger = logging.getLogger(__name__)
+
+# ── Metrics (registry pattern of payment_indexer) ────────────
+AUTH_AUDIT_WRITE_FAILURES = PromCounter(
+    "rsend_auth_audit_write_failures_total",
+    "Auth audit rows that failed to reach the database",
+    ["event_type"],
+)
 
 
 async def record_auth_event(
@@ -68,21 +81,33 @@ async def record_auth_event(
             db.add(entry)
             await db.commit()
             await db.refresh(entry)
-            logger.info(
-                "Auth audit recorded: id=%d event=%s user=%s",
-                entry.id, event_type, (user_id or "-")[:16],
-                extra={
-                    "service": "auth_audit",
-                    "event_type": event_type,
-                    "user_id": user_id,
-                    "correlation_id": cid,
-                },
-            )
-            return entry.id
+            entry_id = entry.id
 
     except Exception as e:
+        AUTH_AUDIT_WRITE_FAILURES.labels(event_type=event_type).inc()
         logger.error(
             "Failed to record auth audit: %s", e,
+            exc_info=True,
             extra={"service": "auth_audit", "event_type": event_type},
         )
         return None
+
+    # Logging the success sits OUTSIDE the try that guards the write, and under
+    # its own guard: inside it, a raising formatter or filter returned None
+    # after a COMMITTED row — a logging fault reported as a lost audit row, the
+    # two failure modes that must never be confused. Its except cannot log.
+    try:
+        logger.info(
+            "Auth audit recorded: id=%d event=%s user=%s",
+            entry_id, event_type, (user_id or "-")[:16],
+            extra={
+                "service": "auth_audit",
+                "event_type": event_type,
+                "user_id": user_id,
+                "correlation_id": cid,
+            },
+        )
+    except Exception:  # noqa: BLE001 — the return must reflect the write, nothing else
+        pass
+
+    return entry_id
