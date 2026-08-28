@@ -25,6 +25,12 @@ export interface RecentTransactionDTO {
   status: string
   recipient: string
   timestamp_iso: string
+  /**
+   * False ⇒ `amount_usd` carries no information: the token has no USD peg, so
+   * rendering it as "$0.00" next to a real payment would be a lie. Show the
+   * token symbol instead.
+   */
+  amount_usd_known: boolean
 }
 
 export interface OrgStats {
@@ -37,6 +43,15 @@ export interface OrgStats {
   active_clients: number
   active_clients_this_week: number
   recent_transactions: RecentTransactionDTO[]
+  // Settlements in the 24h window that `volume_24h` could NOT value and left
+  // out. Without these two, `volume_24h === 0` is ambiguous: it means both
+  // "nobody paid" and "paid in something we cannot value". `transactions_24h`
+  // plus this count is what tells them apart, so the UI must never render the
+  // volume tile without consulting it.
+  volume_24h_unpriced_count: number
+  /** Distinct symbols behind that count, e.g. `['ETH']`. May be empty when the
+   *  token is unknown to the registry — the count still stands. */
+  volume_24h_unpriced_symbols: string[]
   // Get-started checklist facts (drive the /app home card). The backend
   // returns 200 with zeroed KPIs + these booleans even for an org with no
   // owner identity yet (fresh merchant) — no 409 on this route anymore.

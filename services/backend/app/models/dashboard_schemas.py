@@ -19,6 +19,17 @@ class RecentTransaction(BaseModel):
     recipient: str
     timestamp_iso: str
 
+    # False ⇒ `amount_usd` carries no information and must NOT be rendered as a
+    # dollar figure: the token has no USD peg, so "$0.00" next to a real payment
+    # would be a lie. Clients show the token symbol instead.
+    #
+    # Defaulted, unlike the OrgDashboardStats fields below, precisely because
+    # this model is SHARED with the frozen legacy `dashboard_routes.py`, which
+    # hardcodes `amount_usd=0.0` and must keep constructing without edits. That
+    # route therefore reports `True` over a hardcoded zero — which is exactly
+    # what it already implied; it stays frozen and is tracked separately.
+    amount_usd_known: bool = True
+
 
 class DashboardStats(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -36,14 +47,29 @@ class DashboardStats(BaseModel):
 
 class OrgDashboardStats(DashboardStats):
     """Session org-stats response: the KPI snapshot plus the get-started
-    checklist facts for the /app home card. ONLY `GET /api/v1/user/org/stats`
-    uses this — the frozen legacy dashboard_routes.py keeps plain
-    DashboardStats. All three required: a construction that forgets one must
-    fail loudly, not default."""
+    checklist facts for the /app home card, plus what `volume_24h` had to leave
+    out. ONLY `GET /api/v1/user/org/stats` uses this — the frozen legacy
+    dashboard_routes.py keeps plain DashboardStats. All required: a
+    construction that forgets one must fail loudly, not default."""
 
     settlement_wallet_set: bool
     has_api_key: bool
     has_paid_payment: bool
+
+    # Settlements inside the 24h window that `volume_24h` could NOT value and
+    # therefore did not sum — they are excluded, not counted as zero.
+    #
+    # Without this the response cannot tell two very different situations
+    # apart, because both report `volume_24h == 0.0`:
+    #   transactions_24h=0, unpriced=0 → nobody paid
+    #   transactions_24h=N, unpriced=N → paid, in something we cannot value
+    # The second reads as the first, which is the defect these fields close.
+    volume_24h_unpriced_count: int
+    # Distinct symbols behind that count, so the UI can name them ("ETH")
+    # instead of saying "some payments". A token the registry does not know at
+    # all has no symbol to report and contributes to the count only — never an
+    # invented label.
+    volume_24h_unpriced_symbols: List[str]
 
 
 class VolumeBucket(BaseModel):
@@ -53,12 +79,17 @@ class VolumeBucket(BaseModel):
     client never has to guess a timezone to place the point; it decides only
     how to LABEL it. A quiet day is a bucket with `volume_usd == 0.0`, never an
     omitted entry — a gap in this array is how a chart draws a misleading line.
+
+    `unpriced_count` is per-bucket rather than window-level only because a
+    single flat-looking day is exactly where a dropped payment hides: a bucket
+    reading 0.0 with `unpriced_count > 0` was NOT a quiet day.
     """
 
     model_config = ConfigDict(from_attributes=True)
 
     date: date_
     volume_usd: float
+    unpriced_count: int
 
 
 class VolumeSeriesResponse(BaseModel):
@@ -67,9 +98,15 @@ class VolumeSeriesResponse(BaseModel):
     `days` is echoed back so the client never infers the series length from
     `len(buckets)`; the two are always equal, and a mismatch is a bug worth
     seeing rather than silently rendering a short chart.
+
+    `unpriced_count` is the window total — always equal to the sum of the
+    buckets' counts — so the card can state its exclusion once without walking
+    the array. A whole series of zeros with a non-zero count is a chart that
+    must say why it is flat.
     """
 
     model_config = ConfigDict(from_attributes=True)
 
     days: int
     buckets: List[VolumeBucket]
+    unpriced_count: int

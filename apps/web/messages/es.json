@@ -1430,7 +1430,13 @@
         "status": "Status",
         "statusConfirmed": "Confirmed",
         "statusPending": "Pending",
-        "statusFailed": "Failed"
+        "statusFailed": "Failed",
+        "amountUnpriced": "{symbol} — sin valorar"
+      },
+      "unpriced": {
+        "volume": "Excluye {count, plural, =1 {# pago} other {# pagos}} que no podemos valorar en USD.",
+        "volumeTokens": "Excluye {count, plural, =1 {# pago} other {# pagos}} en {symbols} — no tenemos tipo de cambio en USD.",
+        "series": "Este gráfico excluye {count, plural, =1 {# pago} other {# pagos}} que no podemos valorar en USD."
       }
     },
     "payments": {

@@ -57,6 +57,8 @@ function statsPayload(overrides: Record<string, unknown> = {}) {
     active_clients: 0,
     active_clients_this_week: 0,
     recent_transactions: [],
+    volume_24h_unpriced_count: 0,
+    volume_24h_unpriced_symbols: [],
     settlement_wallet_set: false,
     has_api_key: false,
     has_paid_payment: false,

@@ -1,8 +1,8 @@
 /**
  * lib/prices/publicSource.ts — keyless ECB EUR/USD from frankfurter.app.
  *
- * Used when PRICE_SOURCE !== 'backend' (the default). No API key, short upstream
- * timeout; failures surface as PriceSourceError so the route returns a clean 502.
+ * The only source behind /api/prices. No API key, short upstream timeout;
+ * failures surface as PriceSourceError so the route returns a clean 502.
  */
 import { PriceSourceError, type PriceSource, type PricesResult } from './types'
 

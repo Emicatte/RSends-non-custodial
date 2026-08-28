@@ -1,20 +1,20 @@
 /**
  * lib/prices/types.ts — price-source abstraction.
  *
- * The client always calls the internal `/api/prices` route; the route picks a
- * source by `PRICE_SOURCE` env. Rates are EUR-based ({ EUR: 1, USD: <rate> }) and
- * used ONLY for display (EUR-equivalent of token amounts) — never to compute the
- * charged on-chain fee.
+ * The client always calls the internal `/api/prices` route, which has exactly
+ * one upstream (frankfurter.app). Rates are EUR-based ({ EUR: 1, USD: <rate> })
+ * and used ONLY for display (EUR-equivalent of token amounts) — never to compute
+ * the charged on-chain fee.
  */
 export interface PricesResult {
   base: 'EUR'
   rates: Record<string, number>
-  source: 'public' | 'backend'
+  source: 'public'
   ts: number
 }
 
 export interface PriceSource {
-  name: 'public' | 'backend'
+  name: 'public'
   fetchRates(): Promise<PricesResult>
 }
 

@@ -1429,7 +1429,13 @@
         "status": "Status",
         "statusConfirmed": "Confirmed",
         "statusPending": "Pending",
-        "statusFailed": "Failed"
+        "statusFailed": "Failed",
+        "amountUnpriced": "{symbol} — not valued"
+      },
+      "unpriced": {
+        "volume": "Excludes {count, plural, =1 {# payment} other {# payments}} we can't value in USD.",
+        "volumeTokens": "Excludes {count, plural, =1 {# payment} other {# payments}} in {symbols} — we have no USD rate for {count, plural, =1 {it} other {them}}.",
+        "series": "This chart excludes {count, plural, =1 {# payment} other {# payments}} we can't value in USD."
       }
     },
     "payments": {

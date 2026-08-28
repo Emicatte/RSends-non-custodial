@@ -1429,7 +1429,13 @@
         "status": "Stato",
         "statusConfirmed": "Confermata",
         "statusPending": "In attesa",
-        "statusFailed": "Fallita"
+        "statusFailed": "Fallita",
+        "amountUnpriced": "{symbol} — non valorizzato"
+      },
+      "unpriced": {
+        "volume": "Esclude {count, plural, =1 {# pagamento} other {# pagamenti}} che non sappiamo valorizzare in USD.",
+        "volumeTokens": "Esclude {count, plural, =1 {# pagamento} other {# pagamenti}} in {symbols} — non abbiamo un cambio in USD.",
+        "series": "Il grafico esclude {count, plural, =1 {# pagamento} other {# pagamenti}} che non sappiamo valorizzare in USD."
       }
     },
     "payments": {

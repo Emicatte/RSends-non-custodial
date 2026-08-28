@@ -1,15 +1,18 @@
 /**
  * app/api/prices/route.ts — decoupled EUR/USD price feed.
  *
- * One internal endpoint the client always calls. `PRICE_SOURCE` selects the
- * upstream: `public` (default) → keyless frankfurter.app ECB rate; `backend` →
- * proxy the existing FastAPI /api/v1/prices. Short server-side cache; stale cache
- * is served if the upstream blips, otherwise a clean 502 PRICE_SOURCE_UNREACHABLE
+ * One internal endpoint the client always calls, one upstream behind it: the
+ * keyless frankfurter.app ECB rate. Short server-side cache; stale cache is
+ * served if the upstream blips, otherwise a clean 502 PRICE_SOURCE_UNREACHABLE
  * — never an unhandled throw. (Mirrors app/api/backend/[...path] + tokens-market.)
+ *
+ * There used to be a `PRICE_SOURCE=backend` branch proxying the FastAPI
+ * /api/v1/prices feed. That feed is gone (the dashboard now values stablecoins
+ * from a static peg), and the branch had never worked anyway: its extractor
+ * accepted four response shapes and the feed returned none of them.
  */
 import { NextResponse } from 'next/server'
 import { publicSource } from '@/lib/prices/publicSource'
-import { backendSource } from '@/lib/prices/backendSource'
 import type { PricesResult } from '@/lib/prices/types'
 
 const TTL = 5 * 60 * 1000
@@ -20,9 +23,8 @@ export async function GET() {
     return NextResponse.json(cache, { headers: { 'Cache-Control': 'public, max-age=300' } })
   }
 
-  const source = process.env.PRICE_SOURCE === 'backend' ? backendSource : publicSource
   try {
-    cache = await source.fetchRates()
+    cache = await publicSource.fetchRates()
     return NextResponse.json(cache, { headers: { 'Cache-Control': 'public, max-age=300' } })
   } catch (err) {
     if (cache) {
