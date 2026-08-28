@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     api_get_deny_by_default: bool = True
 
     # ── Alchemy ───────────────────────────────────────────
+    # Optional. A key yields an RPC endpoint only for the chains in
+    # ALCHEMY_RPC_URL_TEMPLATES (below); coverage for anything else comes from
+    # RPC_PROVIDERS_JSON. See the provider-coverage block in validate_settings.
     alchemy_api_key: str = ""
 
     # ══════════════════════════════════════════════════════
@@ -251,6 +254,18 @@ class Settings(BaseSettings):
         return _parse_json_map(self.indexer_start_blocks_json, "INDEXER_START_BLOCKS_JSON")
 
 
+# Chains for which an ALCHEMY_API_KEY yields a usable RPC endpoint, and the URL
+# it produces. Single source of truth: rpc_manager builds its Alchemy provider
+# from this table and validate_settings decides provider coverage from the same
+# keys. Two gates over one concept that drift apart is issue #87 — do not
+# re-declare this set anywhere else.
+ALCHEMY_RPC_URL_TEMPLATES: dict[int, str] = {
+    8453: "https://base-mainnet.g.alchemy.com/v2/{key}",
+    84532: "https://base-sepolia.g.alchemy.com/v2/{key}",
+    1: "https://eth-mainnet.g.alchemy.com/v2/{key}",
+    42161: "https://arb-mainnet.g.alchemy.com/v2/{key}",
+}
+
 _HEX_KEY_RE = re.compile(r"^0x[0-9a-fA-F]{64}$")
 
 
@@ -343,12 +358,39 @@ def validate_settings(settings: Settings) -> None:
     # NON-CUSTODIAL: no SWEEP_PRIVATE_KEY / SIGNER_MODE / KMS / Vault validation.
     # The platform holds no keys and signs nothing.
 
-    # ── ALCHEMY_API_KEY ───────────────────────────────────
-    if not settings.alchemy_api_key:
+    # ── RPC provider coverage (per chain, vendor-neutral) ──
+    # ALCHEMY_API_KEY used to be an unconditional error. That made a
+    # dual-provider deployment behave as a single-provider one: a merchant with
+    # a healthy second vendor still could not remove a quota-exhausted Alchemy
+    # key, because startup refused without it (incident 2026-08-28).
+    #
+    # What actually matters is that every chain the indexer watches has at
+    # least one CONFIGURED provider — Alchemy, or an RPC_PROVIDERS_JSON entry.
+    # rpc_manager's built-in public fallbacks deliberately do NOT count: they
+    # are best-effort and rate-limited, and a chain keys the payment cursor,
+    # the test/live stamp and the on-chain invoice id. Name the chain, never a
+    # vendor — the old message sent operators to one signup page, which is why
+    # the reflex fix was "put the dead key back" instead of "configure a
+    # provider".
+    _uncovered: list[str] = []
+    _extra_providers = settings.rpc_extra_providers or {}
+    for _chain_key in (settings.rsends_router_addresses or {}):
+        try:
+            _cid = int(_chain_key)
+        except (TypeError, ValueError):
+            continue  # a non-numeric key is already reported by the map checks
+        _has_alchemy = bool(settings.alchemy_api_key) and _cid in ALCHEMY_RPC_URL_TEMPLATES
+        if not _has_alchemy and not _extra_providers.get(_cid):
+            _uncovered.append(str(_cid))
+    if _uncovered:
         errors.append(
-            "ALCHEMY_API_KEY is empty. "
-            "RPC calls (gas estimation, tx broadcast, receipt polling) will all fail. "
-            "Get a key at https://dashboard.alchemy.com/"
+            f"No RPC provider is configured for chain(s) {', '.join(_uncovered)}. "
+            "Only the built-in best-effort public endpoints remain, which are "
+            "rate-limited and unfit as the sole source for a chain that keys the "
+            "payment cursor, the test/live stamp and the invoice id. Set "
+            "ALCHEMY_API_KEY (it serves chains "
+            f"{', '.join(str(c) for c in sorted(ALCHEMY_RPC_URL_TEMPLATES))}), or add "
+            "an entry for each chain above to RPC_PROVIDERS_JSON."
         )
 
     # ── HMAC_SECRET (prod only) ───────────────────────────

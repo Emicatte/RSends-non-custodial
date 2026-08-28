@@ -41,6 +41,9 @@ def _prod_settings(**over):
         wallet_auth_allow_legacy=False,  # H4: legacy replayable bearer off in prod
         # NON-CUSTODIAL on-chain settlement config (non-empty → no warning).
         rsends_router_addresses={"8453": "0xRouter"},
+        # Per-chain RPC provider coverage: 8453 is served by alchemy_api_key
+        # above, so no extra provider is needed for the baseline to validate.
+        rpc_extra_providers={},
     )
     base.update(over)
     return SimpleNamespace(**base)
@@ -215,3 +218,132 @@ def test_email_dev_mode_true_still_allowed_outside_production_env():
     s = _prod_settings(email_dev_mode=True)
     with patch.dict(os.environ, {"ENVIRONMENT": "staging"}, clear=False):
         validate_settings(s)  # no raise
+
+
+# ═══════════════════════════════════════════════════════════════
+#  RPC provider coverage is per-chain and vendor-neutral
+#  (incident 2026-08-28: a mandatory ALCHEMY_API_KEY made a
+#   dual-provider deployment behave as single-provider)
+# ═══════════════════════════════════════════════════════════════
+
+def test_empty_alchemy_key_passes_when_json_covers_every_chain():
+    """No Alchemy at all is a legitimate deployment.
+
+    The key was an unconditional startup error, so a merchant could not remove
+    a quota-exhausted vendor even with another provider configured and healthy.
+    """
+    s = _prod_settings(
+        alchemy_api_key="",
+        rsends_router_addresses={"8453": "0xRouter"},
+        rpc_extra_providers={8453: [{"name": "ankr", "url": "https://x", "priority": 0}]},
+    )
+    validate_settings(s)  # no raise
+
+
+def _blocking_errors(caplog, settings) -> str:
+    """Run validate_settings expecting a block; return the logged error text."""
+    import logging
+
+    with caplog.at_level(logging.CRITICAL, logger="app.config"):
+        with pytest.raises(StartupValidationError):
+            validate_settings(settings)
+    return "\n".join(r.getMessage() for r in caplog.records)
+
+
+def test_chain_without_a_configured_provider_fails_naming_the_chain(caplog):
+    """Fail closed, and say WHICH CHAIN lacks a provider — not which vendor.
+
+    The old message named Alchemy and a signup URL, which is why the fix for it
+    was "put the dead key back" rather than "configure a provider".
+    """
+    s = _prod_settings(
+        alchemy_api_key="",
+        rsends_router_addresses={"8453": "0xRouter"},
+        rpc_extra_providers={},
+    )
+    text = _blocking_errors(caplog, s)
+
+    assert "8453" in text, f"the blocking error does not name the chain: {text}"
+    assert "dashboard.alchemy.com" not in text, (
+        "the error still sends the operator to one vendor's signup page"
+    )
+
+
+def test_public_defaults_do_not_satisfy_provider_coverage(caplog):
+    """`_DEFAULT_PROVIDERS` has three entries for 8453 — none of them counts.
+
+    They are best-effort, rate-limited public endpoints; sole reliance on them
+    for a chain that keys the cursor, the environment stamp and the invoice id
+    is not a configured deployment.
+    """
+    from app.services import rpc_manager as rm
+
+    assert len(rm._DEFAULT_PROVIDERS[8453]) >= 3
+    s = _prod_settings(
+        alchemy_api_key="",
+        rsends_router_addresses={"8453": "0xRouter"},
+        rpc_extra_providers={},
+    )
+    assert "8453" in _blocking_errors(caplog, s)
+
+
+def test_coverage_is_checked_per_chain_not_globally(caplog):
+    """One covered chain must not vouch for an uncovered sibling."""
+    s = _prod_settings(
+        alchemy_api_key="",
+        rsends_router_addresses={"8453": "0xRouter", "42161": "0xRouter2"},
+        rpc_extra_providers={8453: [{"name": "ankr", "url": "https://x", "priority": 0}]},
+    )
+    text = _blocking_errors(caplog, s)
+
+    # The uncovered-chains clause must name 42161 and ONLY 42161. (8453 still
+    # appears later in the message, as one of the chains an Alchemy key serves.)
+    assert "configured for chain(s) 42161." in text, (
+        f"expected exactly the uncovered chain to be listed; got: {text}"
+    )
+
+
+def test_alchemy_key_alone_still_covers_the_chains_it_serves():
+    """The supported path is unchanged: a key covers the chains it has URLs for."""
+    s = _prod_settings(
+        alchemy_api_key="alch-key",
+        rsends_router_addresses={"8453": "0xRouter"},
+        rpc_extra_providers={},
+    )
+    validate_settings(s)  # no raise
+
+
+def test_alchemy_key_does_not_cover_a_chain_it_has_no_url_for():
+    """A key is not blanket coverage — Alchemy serves only the chains in the
+    URL table, so a router on any other chain still needs a provider."""
+    from app import config as config_mod
+
+    unsupported = 137  # Polygon — deliberately absent from the URL table
+    assert unsupported not in config_mod.ALCHEMY_RPC_URL_TEMPLATES
+    s = _prod_settings(
+        alchemy_api_key="alch-key",
+        rsends_router_addresses={str(unsupported): "0xRouter"},
+        rpc_extra_providers={},
+    )
+    with pytest.raises(StartupValidationError):
+        validate_settings(s)
+
+
+def test_alchemy_chain_table_has_one_source_of_truth():
+    """The validator and the RPC manager must read the SAME table.
+
+    Two gates over one concept that drift apart is exactly issue #87. The
+    manager builds its Alchemy provider from the config constant; nothing may
+    re-declare the chain set locally.
+    """
+    import inspect
+
+    from app import config as config_mod
+    from app.services import rpc_manager as rm
+
+    assert set(config_mod.ALCHEMY_RPC_URL_TEMPLATES) == {8453, 84532, 1, 42161}
+    src = inspect.getsource(rm.RPCManager.__init__)
+    assert "ALCHEMY_RPC_URL_TEMPLATES" in src, (
+        "RPCManager re-declares the Alchemy chain set instead of reading the "
+        "shared constant — the two will drift"
+    )

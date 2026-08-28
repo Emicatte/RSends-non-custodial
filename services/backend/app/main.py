@@ -491,7 +491,9 @@ async def health_config(_admin: str = Depends(require_admin)):
         "vars": {
             "DATABASE_URL": _check(settings.database_url, required=True),
             "REDIS_URL": _check(settings.redis_url, required=True, prod_only=True),
-            "ALCHEMY_API_KEY": _check(settings.alchemy_api_key, required=True),
+            # Optional: one of several RPC vendors. Per-chain provider coverage
+            # is what startup enforces (validate_settings), not this key.
+            "ALCHEMY_API_KEY": _check(settings.alchemy_api_key),
             # NON-CUSTODIAL: no SWEEP_PRIVATE_KEY / SIGNER_MODE / KMS_KEY_ID.
             "RSENDS_ROUTER_ADDRESSES": _check(settings.rsends_router_addresses_json),
             "HMAC_SECRET": _check(settings.hmac_secret, required=True, prod_only=True),

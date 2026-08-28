@@ -11,12 +11,18 @@ provider set on the wrong network agrees with itself and is marked healthy.
 Contract pinned here:
 
   - `assert_chain_identity(chain_id)` asks EVERY configured provider for that
-    chain `eth_chainId` and raises `ChainIdentityError` unless every one of them
-    answers exactly `chain_id`. Not the first healthy one — failover would
-    otherwise silently adopt a wrong-chain node.
-  - Every failure mode is the same failure: mismatch, transport error, timeout,
-    malformed result, and "no providers configured" all raise. There is no
-    degrade, no disable-and-continue, no default chain.
+    chain `eth_chainId`. Not the first healthy one — failover would otherwise
+    silently adopt a wrong-chain node.
+  - The chain is PROVEN once at least one provider answers exactly `chain_id`.
+  - A provider that cannot be REACHED is logged at WARNING and skipped. Its
+    silence is a fact about that vendor, not about the network — one vendor's
+    HTTP 429 must not kill a boot a healthy second vendor can carry (incident
+    2026-08-28: a dual-provider deployment failed as though single-provider).
+  - A provider that ANSWERS must answer correctly. Mismatch, malformed and
+    unparseable results stay fatal even when a sibling provider proves the
+    chain: a wrong answer is worse than no answer. So do "nobody could be
+    reached" and "no providers configured". There is no degrade, no
+    disable-and-continue, no default chain.
   - A success is cached per `(provider_url, chain_id)` for the process lifetime
     (the genesis of a chain does not move). A failure is NEVER cached in a way
     that lets a later call through.
@@ -352,3 +358,179 @@ def test_main_boot_sequence_calls_the_chain_identity_guard():
         "main.py must invoke the chain-identity boot guard alongside "
         "verify_enabled_tokens_onchain"
     )
+
+
+# ═══════════════════════════════════════════════════════════════
+#  A provider is not the chain — one vendor's outage is not a
+#  failure to prove the network (incident 2026-08-28)
+# ═══════════════════════════════════════════════════════════════
+
+HTTP_429 = RuntimeError(
+    "RPC eth_chainId got a non-JSON response (HTTP 429): "
+    "'Monthly capacity limit exceeded'"
+)
+
+
+def _provider_names(chain_id: int) -> list[str]:
+    return [p.name for p in rm.get_rpc_manager(chain_id)._providers]
+
+
+@pytest.mark.asyncio
+async def test_a_429_provider_is_skipped_when_another_proves_the_chain(monkeypatch):
+    """Provider #1 is rate-limited, provider #2 answers correctly → PROCEED.
+
+    The incident: Alchemy (priority -1) returned "Monthly capacity limit
+    exceeded" and the guard raised before Ankr — configured, healthy, serving
+    the right chain — was ever asked. A provider that cannot answer proves
+    nothing either way; it must not veto a provider that can.
+    """
+    urls = _provider_urls(BASE_MAINNET)
+    assert len(urls) >= 2, f"need >=2 providers for this test, got {urls}"
+
+    fake = _answer({urls[0]: HTTP_429}, default=HEX_BASE_MAINNET)
+    monkeypatch.setattr(rm, "_raw_rpc_call", fake)
+
+    await rm.assert_chain_identity(BASE_MAINNET)  # must NOT raise
+
+    probed = [u for u, _ in fake.calls]
+    assert urls[1] in probed, "the guard gave up before reaching the second provider"
+
+
+@pytest.mark.asyncio
+async def test_a_wrong_chain_answer_is_fatal_even_when_another_provider_proves_it(
+    monkeypatch,
+):
+    """A WRONG answer is worse than no answer, and outranks any amount of proof.
+
+    Unreachable is now survivable; wrong-chain must not become survivable with
+    it. One provider serving another network still refuses the whole chain,
+    even when a sibling provider answers correctly.
+    """
+    urls = _provider_urls(BASE_MAINNET)
+    assert len(urls) >= 3, f"need >=3 providers for this test, got {urls}"
+
+    fake = _answer(
+        {
+            urls[0]: HTTP_429,             # unreachable  → skipped
+            urls[1]: HEX_BASE_SEPOLIA,     # WRONG chain  → fatal
+            urls[2]: HEX_BASE_MAINNET,     # correct      → does not rescue it
+        }
+    )
+    monkeypatch.setattr(rm, "_raw_rpc_call", fake)
+
+    with pytest.raises(rm.ChainIdentityError) as exc:
+        await rm.assert_chain_identity(BASE_MAINNET)
+
+    assert urls[1] in str(exc.value)
+    assert "84532" in str(exc.value)
+
+
+@pytest.mark.asyncio
+async def test_every_provider_unreachable_still_refuses(monkeypatch):
+    """Nobody answered → nothing was proven → refuse, and name every provider.
+
+    This is the case the original guard was right about. It stays fatal, and
+    the message has to list what was tried or the operator cannot tell a
+    total outage from a single vendor's quota.
+    """
+    urls = _provider_urls(BASE_MAINNET)
+    names = _provider_names(BASE_MAINNET)
+
+    fake = _answer(
+        {
+            urls[0]: HTTP_429,
+            urls[1]: httpx.ConnectError("refused"),
+            urls[2]: httpx.ReadTimeout("timed out"),
+        }
+    )
+    monkeypatch.setattr(rm, "_raw_rpc_call", fake)
+
+    with pytest.raises(rm.ChainIdentityError) as exc:
+        await rm.assert_chain_identity(BASE_MAINNET)
+
+    for name in names:
+        assert name in str(exc.value), f"provider {name} missing from {exc.value}"
+
+
+@pytest.mark.asyncio
+async def test_single_provider_chain_proceeds_when_it_answers(monkeypatch):
+    """One configured provider, correct chain id → proven. No quorum needed."""
+    assert len(_provider_urls(BASE_SEPOLIA)) == 1, _provider_urls(BASE_SEPOLIA)
+
+    monkeypatch.setattr(rm, "_raw_rpc_call", _answer({}, default=HEX_BASE_SEPOLIA))
+
+    await rm.assert_chain_identity(BASE_SEPOLIA)  # must NOT raise
+
+
+@pytest.mark.asyncio
+async def test_skipped_provider_is_logged_at_warning(monkeypatch, caplog):
+    """A silently skipped provider is an outage nobody sees.
+
+    The WARNING must name the provider and carry the reason, so the log says
+    "alchemy is 429ing, ankr carried the boot" rather than nothing at all.
+    """
+    import logging
+
+    urls = _provider_urls(BASE_MAINNET)
+    names = _provider_names(BASE_MAINNET)
+    monkeypatch.setattr(
+        rm, "_raw_rpc_call", _answer({urls[0]: HTTP_429}, default=HEX_BASE_MAINNET)
+    )
+
+    with caplog.at_level(logging.WARNING, logger=rm.logger.name):
+        await rm.assert_chain_identity(BASE_MAINNET)
+
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert any(names[0] in m and "429" in m for m in warnings), (
+        f"no WARNING named provider {names[0]!r} with its reason; got {warnings}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_skipped_provider_is_not_cached_as_proven(monkeypatch):
+    """Skipping is not proving. The unreachable provider must be re-probed
+    next time, and must never be readable as a pass."""
+    urls = _provider_urls(BASE_MAINNET)
+
+    fake = _answer({urls[0]: HTTP_429}, default=HEX_BASE_MAINNET)
+    monkeypatch.setattr(rm, "_raw_rpc_call", fake)
+    await rm.assert_chain_identity(BASE_MAINNET)
+
+    assert (urls[0], BASE_MAINNET) not in rm._CHAIN_ID_VERIFIED
+    assert (urls[1], BASE_MAINNET) in rm._CHAIN_ID_VERIFIED
+
+    # Second call re-probes the skipped one (and only it).
+    before = len(fake.calls)
+    await rm.assert_chain_identity(BASE_MAINNET)
+    assert [u for u, _ in fake.calls[before:]] == [urls[0]]
+
+
+@pytest.mark.asyncio
+async def test_boot_guard_proceeds_when_the_quota_capped_vendor_is_not_the_only_one(
+    monkeypatch,
+):
+    """End-to-end reproduction of the production crash loop.
+
+    ALCHEMY_API_KEY set but quota-exhausted, RPC_PROVIDERS_JSON supplying Ankr
+    for Base Sepolia: the boot guard must start the process, not kill it.
+    """
+    ankr = "https://rpc.ankr.com/base_sepolia"
+    monkeypatch.setattr(
+        rm, "get_settings",
+        lambda: Settings(
+            alchemy_api_key="quota-exhausted-key",
+            rpc_providers_json=(
+                '{"84532": [{"name": "ankr", "url": "%s", "priority": 0}]}' % ankr
+            ),
+        ),
+    )
+    urls = _provider_urls(BASE_SEPOLIA)
+    alchemy_url = next(u for u in urls if "alchemy" in u)
+    assert ankr in urls, urls
+
+    monkeypatch.setattr(
+        rm, "_raw_rpc_call",
+        _answer({alchemy_url: HTTP_429}, default=HEX_BASE_SEPOLIA),
+    )
+
+    await rm.verify_chain_identity_for_boot([BASE_SEPOLIA])  # must NOT raise
