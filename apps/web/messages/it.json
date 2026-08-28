@@ -122,6 +122,8 @@
       "no_token": "Non hai effettuato l'accesso.",
       "auth_unavailable": "Servizio di autenticazione temporaneamente non disponibile.",
       "session_expired": "La sessione è scaduta. Accedi di nuovo.",
+      "sign_in_required": "Accedi per continuare.",
+      "session_not_persisted": "L'accesso è riuscito, ma questo browser non ha conservato la sessione. Controlla che i cookie siano consentiti per questo sito, poi riprova.",
       "network_error": "Impossibile raggiungere il server. Controlla la connessione e riprova.",
       "request_timeout": "La richiesta ha impiegato troppo tempo. Riprova.",
       "session_bridge_failed": "Le tue credenziali sono corrette, ma non siamo riusciti a completare l'accesso. Riprova.",

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
+import { loginBounceUrl } from '@/lib/auth/loginBounce'
 import { authOptions } from '@/lib/auth-options'
 import { enforceOnboarding } from '@/lib/onboarding-guard'
 import { BackendUnreachableGate } from '@/components/app/BackendUnreachableGate'
@@ -25,7 +26,9 @@ export default async function AppLayout({
   const { locale } = await params
   const session = await getServerSession(authOptions)
   if (!session) {
-    redirect(`/${locale}/login`)
+    // Name the reason and keep the section, so the bounce is explicable and
+    // the user is not silently stripped of where they were going.
+    redirect(loginBounceUrl(locale, `/${locale}/app`))
   }
   // Staged onboarding, enforced server-side: sessions without current
   // consents/age attestation or an un-submitted company profile never render

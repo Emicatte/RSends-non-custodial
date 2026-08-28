@@ -123,6 +123,8 @@
       "no_token": "Vous n'êtes pas connecté.",
       "auth_unavailable": "Service d'authentification temporairement indisponible.",
       "session_expired": "Votre session a expiré. Reconnectez-vous.",
+      "sign_in_required": "Connectez-vous pour continuer.",
+      "session_not_persisted": "La connexion a réussi, mais ce navigateur n'a pas conservé la session. Vérifiez que les cookies sont autorisés pour ce site, puis réessayez.",
       "network_error": "Impossible de joindre le serveur. Vérifiez votre connexion et réessayez.",
       "request_timeout": "La requête a expiré. Réessayez.",
       "session_bridge_failed": "Vos identifiants ont été acceptés, mais nous n'avons pas pu finaliser la connexion. Réessayez.",

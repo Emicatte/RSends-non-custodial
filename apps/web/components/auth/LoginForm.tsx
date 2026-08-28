@@ -4,13 +4,20 @@ import { signIn } from 'next-auth/react'
 import { useLocale, useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   classifyLoginFailure,
   logLoginFailure,
   newCorrelationId,
   type LoginFailure,
 } from '@/lib/auth/loginFailure'
+import {
+  BOUNCE_CODES,
+  SESSION_NOT_PERSISTED,
+  SIGN_IN_REQUIRED,
+  consumeFreshSignInMarker,
+  markSignedIn,
+} from '@/lib/auth/loginBounce'
 import { useEmailAuth, type EmailAuthErrorShape } from '@/hooks/useEmailAuth'
 import { EmailAuthError } from './EmailAuthError'
 
@@ -115,15 +122,31 @@ export function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  // Forced-logout bounces (dead session detected post-login) land here with
-  // ?error=session_expired. Whitelisted: the param feeds a translation key,
-  // so an arbitrary value must never reach EmailAuthError.
+  // Server-side and forced-logout bounces land here with ?error=. Whitelisted:
+  // the param feeds a translation key, so an arbitrary value must never reach
+  // EmailAuthError.
   const [error, setError] = useState<
     (EmailAuthErrorShape & { correlationId?: string }) | null
-  >(() =>
-    params.get('error') === 'session_expired' ? { code: 'session_expired' } : null,
-  )
+  >(() => {
+    const code = params.get('error')
+    return code && BOUNCE_CODES.includes(code) ? { code } : null
+  })
   const [resendState, setResendState] = useState<'idle' | 'sending' | 'sent'>('idle')
+
+  // A `sign_in_required` bounce arriving moments after a SUCCESSFUL sign-in is
+  // not an ordinary logout: the credentials were accepted and the browser then
+  // failed to keep the session (cookie blocking, ITP, a locked-down profile).
+  // Say that instead, or the user loops through a form that keeps working and
+  // keeps rejecting them — the 2026-08-26 symptom.
+  //
+  // Deliberately an effect, not a useState initializer: sessionStorage does not
+  // exist during SSR, so deciding this at first render would be a hydration
+  // mismatch. First paint shows the generic copy; this upgrades it.
+  useEffect(() => {
+    if (error?.code !== SIGN_IN_REQUIRED) return
+    if (!consumeFreshSignInMarker()) return
+    setError({ code: SESSION_NOT_PERSISTED })
+  }, [error?.code])
 
   /** Single exit for every failure: log it, then show it. Never retries. */
   const fail = (failure: LoginFailure) => {
@@ -157,6 +180,10 @@ export function LoginForm() {
         fail({ code: 'session_bridge_failed', correlationId })
         return
       }
+      // Leave a trace that sign-in succeeded, so if a server-side guard bounces
+      // us straight back we can tell the user the session did not stick rather
+      // than asking them to sign in again with no explanation.
+      markSignedIn()
       const redirect = params.get('redirect') ?? `/${locale}/app`
       router.push(redirect)
     } catch (err) {
