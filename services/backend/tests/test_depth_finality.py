@@ -90,7 +90,7 @@ def webhook_calls(monkeypatch):
 
 
 # ── helpers (house pattern from test_payment_indexer_reorg) ──
-async def _make_intent(*, invoice_id):
+async def _make_intent(*, invoice_id, amount=100.0):
     from app.db.session import async_session
     from app.models.merchant_models import PaymentIntent, IntentStatus
 
@@ -100,7 +100,7 @@ async def _make_intent(*, invoice_id):
             intent_id=iid,
             reference_id=secrets.token_hex(8),
             merchant_id="m_depth_test",
-            amount=100.0,
+            amount=amount,
             currency="USDC",
             chain="base",
             recipient=MERCHANT,
@@ -120,8 +120,8 @@ def _word(n: int) -> str:
     return f"{n:064x}"
 
 
-def _make_log(*, invoice_id, tx_hash, block_number, block_hash):
-    data = "0x" + _addr_word(USDC_ADDR) + _word(AMT) + _word(600000) + _word(1_700_000_000)
+def _make_log(*, invoice_id, tx_hash, block_number, block_hash, amount=AMT):
+    data = "0x" + _addr_word(USDC_ADDR) + _word(amount) + _word(600000) + _word(1_700_000_000)
     return {
         "address": ROUTER,
         "topics": [PAYMENT_MADE_TOPIC, invoice_id,
@@ -300,8 +300,12 @@ async def test_tick_depth_mode_pays_once_n_deep_not_before(
     from app.models.merchant_models import IntentStatus
 
     inv_a, inv_b = "0x" + "71" * 32, "0x" + "72" * 32
-    iid_a = await _make_intent(invoice_id=inv_a)
-    iid_b = await _make_intent(invoice_id=inv_b)
+    # B differs in amount: both intents are one merchant on one chain in one
+    # environment, so uq_intent_pending_amount leaves the amount as the only
+    # free column. B's log carries the matching total so it is still paid
+    # EXACTLY, not overpaid.
+    iid_a = await _make_intent(invoice_id=inv_a, amount=100.0)
+    iid_b = await _make_intent(invoice_id=inv_b, amount=101.0)
 
     rpc = FakeChain()
     rpc.latest = 200
@@ -310,8 +314,10 @@ async def test_tick_depth_mode_pays_once_n_deep_not_before(
     rpc.block_hashes[185] = ha
     rpc.block_hashes[190] = hb
     rpc.logs = [
-        _make_log(invoice_id=inv_a, tx_hash="0x" + "71" * 32, block_number=185, block_hash=ha),
-        _make_log(invoice_id=inv_b, tx_hash="0x" + "72" * 32, block_number=190, block_hash=hb),
+        _make_log(invoice_id=inv_a, tx_hash="0x" + "71" * 32, block_number=185,
+                  block_hash=ha, amount=to_base_units(100.0, USDC_DEC)),
+        _make_log(invoice_id=inv_b, tx_hash="0x" + "72" * 32, block_number=190,
+                  block_hash=hb, amount=to_base_units(101.0, USDC_DEC)),
     ]
 
     cursor = {CHAIN: 180}

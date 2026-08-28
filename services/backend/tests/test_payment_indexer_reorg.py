@@ -505,8 +505,12 @@ async def test_getlogs_chunked_within_provider_limit(monkeypatch, webhook_calls)
     from app.models.merchant_models import IntentStatus
 
     inv_a, inv_b = "0x" + "21" * 32, "0x" + "22" * 32
-    iid_a = await _make_intent(invoice_id=inv_a)
-    iid_b = await _make_intent(invoice_id=inv_b)
+    # B differs in amount: both intents are one merchant on one chain in one
+    # environment, so uq_intent_pending_amount leaves the amount as the only
+    # free column. B's log carries the matching total so it is still paid
+    # EXACTLY, not overpaid.
+    iid_a = await _make_intent(invoice_id=inv_a, amount=100.0)
+    iid_b = await _make_intent(invoice_id=inv_b, amount=101.0)
 
     rpc = RangeLimitedChain(max_range=10)
     rpc.latest = 160 + idx.HEAD_SAFETY_MARGIN  # window still ends at 160
@@ -516,9 +520,11 @@ async def test_getlogs_chunked_within_provider_limit(monkeypatch, webhook_calls)
     rpc.block_hashes[155] = hb
     rpc.logs = [
         _make_log(invoice_id=inv_a, tx_hash="0x" + "21" * 32, block_number=105,
-                  block_hash=ha, address=ROUTER),
+                  block_hash=ha, address=ROUTER,
+                  amount=to_base_units(100.0, USDC_DEC)),
         _make_log(invoice_id=inv_b, tx_hash="0x" + "22" * 32, block_number=155,
-                  block_hash=hb, address=ROUTER),
+                  block_hash=hb, address=ROUTER,
+                  amount=to_base_units(101.0, USDC_DEC)),
     ]
 
     cursor = {CHAIN: 100}
