@@ -376,21 +376,32 @@ class CreatePaymentIntentRequest(BaseModel):
     @field_validator("recipient")
     @classmethod
     def validate_recipient(cls, v: Optional[str]) -> Optional[str]:
+        # EVM addresses fold to lowercase exactly as before. TRON addresses are
+        # base58check and case-SENSITIVE — lowercasing one destroys it (base58
+        # has no 0 O I l), so they are validated by checksum and stored verbatim.
         if v is not None:
-            import re
-            if not re.match(r"^0x[a-fA-F0-9]{40}$", v):
-                raise ValueError("recipient deve essere un indirizzo Ethereum valido")
-            return v.lower()
+            from app.security.input_validator import normalize_payment_address
+
+            normalized = normalize_payment_address(v)
+            if normalized is None:
+                raise ValueError(
+                    "recipient deve essere un indirizzo Ethereum (0x…) o TRON (T…) valido"
+                )
+            return normalized
         return v
 
     @field_validator("expected_sender")
     @classmethod
     def validate_expected_sender(cls, v: Optional[str]) -> Optional[str]:
         if v is not None:
-            import re
-            if not re.match(r"^0x[a-fA-F0-9]{40}$", v):
-                raise ValueError("expected_sender deve essere un indirizzo Ethereum valido")
-            return v.lower()
+            from app.security.input_validator import normalize_payment_address
+
+            normalized = normalize_payment_address(v)
+            if normalized is None:
+                raise ValueError(
+                    "expected_sender deve essere un indirizzo Ethereum (0x…) o TRON (T…) valido"
+                )
+            return normalized
         return v
 
 

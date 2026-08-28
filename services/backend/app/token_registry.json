@@ -29,5 +29,14 @@
       "ETH":  {"address": "0x0000000000000000000000000000000000000000", "decimals": 18, "native": true,  "permitType": "none",    "assetType": "native",  "flatFee": 0, "threshold": 0, "aboveFee": 0, "enabled": true, "verified": true},
       "USDC": {"address": "0x036CbD53842c5426634e7929541eC2318f3dCF7e", "decimals": 6,  "native": false, "permitType": "eip2612", "permitVersion": "2", "assetType": "native", "issuer": "Circle", "flatFee": 600000, "threshold": 1000000000, "aboveFee": 3000000, "enabled": true, "verified": true}
     }
+  },
+  "tron": {
+    "name": "tron",
+    "addressFormat": "base58check",
+    "settlement": "watch_only",
+    "symbols": ["USDT"],
+    "tokens": {
+      "USDT": {"address": "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t", "decimals": 6, "native": false, "permitType": "none", "assetType": "native", "issuer": "Tether", "flatFee": 0, "threshold": 0, "aboveFee": 0, "enabled": true, "verified": true}
+    }
   }
 }

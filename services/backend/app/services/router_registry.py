@@ -77,24 +77,45 @@ def _registry_path() -> Path:
     return Path(__file__).resolve().parents[1] / "token_registry.json"
 
 
-def _load_registry() -> tuple[dict, dict]:
-    """Load token_registry.json → (TOKEN_REGISTRY, FEE_POLICY).
+def _load_registry() -> tuple[dict, dict, dict]:
+    """Load token_registry.json → (TOKEN_REGISTRY, FEE_POLICY, CHAIN_META).
 
     TOKEN_REGISTRY: { chain_name → { SYMBOL → (address, decimals) } }
     FEE_POLICY:     { chain_name → { SYMBOL → {flatFee, threshold, aboveFee, enabled, verified, native, address, decimals} } }
+    CHAIN_META:     { chain_name → {addressFormat, settlement} }
     """
     raw = json.loads(_registry_path().read_text())
     tokens: dict = {}
     policy: dict = {}
+    meta: dict = {}
     for chain_id_str, chain_obj in raw.items():
-        if not chain_id_str.isdigit():
-            continue  # skip "_comment" etc.
-        name = (chain_obj.get("name") or _CHAIN_NAME_BY_ID.get(int(chain_id_str)) or chain_id_str).lower()
+        # Keys are chain identifiers; "_"-prefixed keys are file metadata
+        # ("_comment"). NOT an isdigit() test: a non-EVM chain has no EVM chain
+        # id, and keying it by a synthetic number is exactly how a reader comes
+        # to believe it is an EVM chain. Such a chain keys by its name instead.
+        if chain_id_str.startswith("_"):
+            continue
+        name = (
+            chain_obj.get("name")
+            or (_CHAIN_NAME_BY_ID.get(int(chain_id_str)) if chain_id_str.isdigit() else None)
+            or chain_id_str
+        ).lower()
         tokens[name] = {}
         policy[name] = {}
+        meta[name] = {
+            # EVM is the default; a non-EVM chain declares its address family so
+            # nothing downstream has to infer it from the string's shape.
+            "addressFormat": chain_obj.get("addressFormat", "evm"),
+            # "router" (payer pays a contract) vs "watch_only" (payer pays the
+            # merchant directly and the indexer observes it).
+            "settlement": chain_obj.get("settlement", "router"),
+        }
         for sym, t in chain_obj.get("tokens", {}).items():
             sym = sym.upper()
-            addr = (t["address"] or ZERO_ADDRESS).lower()
+            raw_addr = t["address"] or ZERO_ADDRESS
+            # EVM addresses are case-insensitive → fold. Base58check addresses
+            # are case-SENSITIVE → folding one destroys it.
+            addr = raw_addr.lower() if raw_addr.startswith("0x") else raw_addr
             tokens[name][sym] = (addr, int(t["decimals"]))
             policy[name][sym] = {
                 "address": addr,
@@ -114,12 +135,13 @@ def _load_registry() -> tuple[dict, dict]:
                 "enabled": bool(t["enabled"]),
                 "verified": bool(t.get("verified", False)),
             }
-    return tokens, policy
+    return tokens, policy, meta
 
 
 # chain name → { SYMBOL: (address, decimals) }. address == ZERO_ADDRESS → native.
 # chain name → { SYMBOL: {fee policy} }. Both built from app/token_registry.json.
-TOKEN_REGISTRY, FEE_POLICY = _load_registry()
+# chain name → { addressFormat, settlement }.
+TOKEN_REGISTRY, FEE_POLICY, CHAIN_META = _load_registry()
 
 
 def _keccak(data: bytes) -> bytes:
@@ -200,6 +222,30 @@ def chain_has_settlement_router(chain: str) -> bool:
         router_address_for(chain) is not None
         or router_v2_address_for(chain) is not None
     )
+
+
+def is_watch_only_chain(chain: str) -> bool:
+    """True iff the chain settles WITHOUT a router: the payer sends the token
+    straight to the merchant's own address and the indexer observes it.
+
+    Read from the registry's explicit `settlement` field, never inferred from a
+    missing chain id or a missing router address. Inference would fail OPEN — an
+    EVM chain accidentally absent from CHAIN_IDS would silently stop requiring a
+    router, which is exactly the silent-failure mode `chain_has_settlement_router`
+    exists to prevent.
+    """
+    name = _canonical_chain(chain)
+    if name is None:
+        return False
+    return CHAIN_META.get(name, {}).get("settlement") == "watch_only"
+
+
+def chain_address_format(chain: str) -> str:
+    """Address family for a chain: "evm" (default) or e.g. "base58check"."""
+    name = _canonical_chain(chain)
+    if name is None:
+        return "evm"
+    return CHAIN_META.get(name, {}).get("addressFormat", "evm")
 
 
 def split_router_address_for(chain: str) -> Optional[str]:

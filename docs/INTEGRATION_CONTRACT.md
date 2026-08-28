@@ -267,8 +267,8 @@ followed; the retry count and backoff values; the 10 s timeout; `Content-Type`;
 | `currency` | string | **yes** | — | case-sensitive member of `{ETH, USDC, USDT, DAI, cbBTC, DEGEN}` |
 | `chain` | string | no | **`"BASE"`** | — |
 | `expires_in_minutes` | integer | no | `30` | `5..1440` |
-| `recipient` | string \| null | no | `null` | `^0x[a-fA-F0-9]{40}$`, lowercased on ingest |
-| `expected_sender` | string \| null | no | `null` | same regex, lowercased |
+| `recipient` | string \| null | no | `null` | EVM `^0x[a-fA-F0-9]{40}$` (lowercased on ingest) **or**, on a watch-only chain, a base58check address (e.g. TRON `T…`) validated by checksum and stored **case-preserved** |
+| `expected_sender` | string \| null | no | `null` | same rule as `recipient` |
 | `metadata` | object \| null | no | `null` | free-form |
 | `split` | array \| null | no | `null` | 2..20 legs, no duplicate addresses, `share_bps` sums to exactly 10000, mutually exclusive with `recipient` |
 | `late_payment_policy` | string | no | `"auto"` | `{reject, auto, review}` |
@@ -278,6 +278,9 @@ followed; the retry count and backoff values; the 10 s timeout; `Content-Type`;
 
 > **`chain` defaults to `"BASE"`, which is mainnet.** Always send it explicitly. A
 > `rsend_test_` key that omits it gets `400 TESTNET_ONLY`.
+>
+> **`TRON` is mainnet-only** (watch-only settlement, TRON mainnet). A `rsend_test_` key
+> asking for it gets `400 TESTNET_ONLY`; `nile`/`shasta` are not supported at all.
 
 **Identifier formats.** `intent_id` is `pi_` + 32 lowercase hex — `secrets.token_hex(16)`,
 128 bits of CSPRNG (`app/services/intent_service.py:363`). This is load-bearing: the hosted
@@ -289,11 +292,18 @@ checkout's access model is id-as-secret. `reference_id` is exactly 16 lowercase 
 object: all 19 of its keys are always present, because it is validated through a Pydantic
 model with defaults (`merchant_models.py:411-445`).
 
-**`onchain` is `null`** when the intent cannot be paid on-chain. Four conditions
-(`router_registry.py:510-511`, `:530-532`): the chain has no known chain-id; **no router is
-configured for that chain** (the realistic production case); the token is not in that
-chain's registry; or the intent is a split and no split router is configured. **Treat
-`onchain: null` as a hard error — the intent exists but is unpayable.**
+**`onchain` is `null`** when there are no router instructions to give. Conditions
+(`router_registry.py:528-529` and `:549-550`): the chain has no known chain-id; **no router is
+configured for that chain**; the token is not in that chain's registry; or the intent is a
+split and no split router is configured.
+
+> **`onchain: null` is no longer always an error.** It has two meanings now, and `chain` tells
+> them apart. On a **router chain** it still means the intent is unpayable — treat it as a hard
+> error. On a **watch-only chain** it is the normal, expected shape: there is no contract to
+> call because the payer sends the token **directly to `recipient`**, and the indexer observes
+> the transfer. `TRON` is the first such chain. A watch-only intent also carries
+> `onchain_invoice_id: null` — no contract will ever emit one — so do not use that field's
+> presence as a payability signal either. **Branch on `chain`, not on `onchain == null`.**
 
 ### We do not promise
 
@@ -328,13 +338,16 @@ settlement-wallet resolution).
 `onchain` branches: `tests/test_fee_model.py::TestBuildOnchainPayment::test_includes_fee_total_maxfee_and_calldata`,
 `::test_degrades_when_quote_unavailable`, `tests/test_router_v2.py` (v2 branch, v2 wins over
 v1, v1 still reports `routerVersion 1`).
+Watch-only chains: `tests/test_tron_watchonly_intent.py` (base58 recipient round-trips
+byte-identical; `onchain` is null without a 422; `onchain_invoice_id` is null; the chain↔
+address-family gate; TRON classified live, not test).
 Environment binding: `tests/test_merchant_env_isolation.py::test_create_stamps_key_environment`,
 `::test_get_intent_blocked_across_environment`, `::test_list_transactions_scoped_to_environment`.
 
 ⚠ **NOT ENFORCED:** the complete key set of `PaymentIntentResponse` and of
 `MerchantTransactionItem` — there is no `set(keys()) ==` assertion for either, unlike the
 webhook payload; the `reference_id` format; the `intent_id` entropy; the split branch of
-`onchain`; the `onchain is None` conditions; the `currency` allowlist; the
+`onchain`; the `currency` allowlist; the
 `expires_in_minutes` bounds; extra-field tolerance.
 
 ---

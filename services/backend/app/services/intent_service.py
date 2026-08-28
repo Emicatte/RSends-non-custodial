@@ -42,10 +42,12 @@ from app.services.key_usage_service import (
     increment_intent_count,
 )
 from app.services.router_registry import (
+    chain_address_format,
     chain_has_settlement_router,
     chain_id_for,
     chain_is_supported,
     derive_invoice_id,
+    is_watch_only_chain,
     network_name_for_chain_id,
     split_router_address_for,
     token_is_enabled,
@@ -299,7 +301,11 @@ async def list_org_intents(
 # directly instead of the reverse wallet→org lookup.
 
 _TESTNET_CHAINS = {"base_sepolia", "sepolia"}
-_MAINNET_CHAINS = {"base", "ethereum", "eth"}
+# NOTE: the env check below is an allowlist-of-the-OPPOSITE — a chain in neither
+# set passes both branches silently. Every accepted chain name must therefore
+# appear in exactly one of these two sets. "tron" is mainnet-only (watch-only,
+# TRON mainnet); its testnets (nile/shasta) remain unsupported entirely.
+_MAINNET_CHAINS = {"base", "ethereum", "eth", "tron"}
 
 
 async def create_intent(
@@ -375,8 +381,15 @@ async def create_intent(
     # testnet `company_profile_required` rule, a session-onboarding concept the
     # API-key path has never had. Applying it to every chain here would change
     # testnet behaviour, so the session route keeps its own (broader) call.
+    #
+    # Gated on testnet-ness, NOT on chain-id presence. A watch-only chain is
+    # mainnet but has no EVM chain id, so `chain_id is not None` would skip the
+    # gate for it — and behind that gate is the only KYB control standing
+    # between an unverified org and a live payable page. `is_testnet_chain`
+    # already classifies an absent or unknown id as mainnet ("deny by default"),
+    # which is exactly the fail-closed answer for a chain we cannot number.
     chain_id = chain_id_for(requested_chain)
-    if chain_id is not None and not is_testnet_chain(chain_id):
+    if not is_testnet_chain(chain_id):
         org_row = None
         if resolved_org_id is not None:
             org_row = (
@@ -408,7 +421,15 @@ async def create_intent(
     # instructions, no indexer watcher for the chain, and therefore no settlement
     # and no webhook — silently, with the key's quota already spent. Refuse here,
     # BEFORE the monthly-limit check and before anything is persisted.
-    if not chain_has_settlement_router(requested_chain):
+    #
+    # WATCH-ONLY EXEMPTION: a watch-only chain has no router by construction —
+    # the payer sends the token straight to the merchant's own address and the
+    # indexer observes it. The exemption is read from the registry's explicit
+    # `settlement` field, never inferred from a missing router, so an EVM chain
+    # that merely lost its config still fails closed here.
+    if not is_watch_only_chain(requested_chain) and not chain_has_settlement_router(
+        requested_chain
+    ):
         logger.warning(
             "ROUTER_UNAVAILABLE: refusing intent on chain=%s (environment=%s, "
             "merchant=%s, org=%s) — no RSendsRouter v1/v2 configured",
@@ -433,7 +454,16 @@ async def create_intent(
     now = datetime.now(timezone.utc)
     intent_id = f"pi_{secrets.token_hex(16)}"
     reference_id = generate_reference_id(merchant_id)
-    onchain_invoice_id = derive_invoice_id(reference_id, chain_id_for(requested_chain))
+    # A watch-only intent has NO on-chain invoice id: no contract will ever emit
+    # one. Deriving it anyway would fold the literal string "None" (the absent
+    # chain id) into a keccak and store a plausible-looking bytes32 that means
+    # nothing — noise the matcher must never key off. NULL is the honest value,
+    # and the column and the webhook key are both already nullable.
+    onchain_invoice_id = (
+        None
+        if is_watch_only_chain(requested_chain)
+        else derive_invoice_id(reference_id, chain_id_for(requested_chain))
+    )
 
     # RECIPIENT GATE (Phase B): explicit override OR settlement_wallet default —
     # org_id set (session) resolves the org's wallet directly. On the API-key
@@ -461,6 +491,21 @@ async def create_intent(
         recipient = await resolve_recipient(
             db, merchant_id, payload.recipient, org_id=resolved_org_id
         )
+        # CHAIN ↔ ADDRESS-FAMILY GATE. The org's settlement_wallet is EVM-only,
+        # so on a non-EVM chain the recipient can only come from the explicit
+        # per-intent override — and omitting it silently falls back to the EVM
+        # wallet, persisting an intent whose payee cannot receive the token and
+        # which no watcher could ever match. Reject instead of storing nonsense.
+        expected_format = chain_address_format(requested_chain)
+        actual_format = "evm" if recipient.startswith("0x") else "base58check"
+        if actual_format != expected_format:
+            raise HTTPException(422, {
+                "error": "RECIPIENT_CHAIN_MISMATCH",
+                "message": (
+                    f"Chain {requested_chain} expects a {expected_format} recipient; "
+                    f"pass an explicit `recipient` in that format."
+                ),
+            })
 
     # NETWORK is DERIVED from the (already validated + env-gated) chain, never
     # trusted from merchant free-text: `payload.network` is unvalidated and can

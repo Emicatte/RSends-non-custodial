@@ -17,6 +17,8 @@ Access rule (staged onboarding):
 # Testnet chain ids (Base Sepolia, Ethereum Sepolia, Arbitrum Sepolia,
 # Goerli, Polygon Amoy). Moved verbatim from app/security/auth.py so there
 # is exactly one definition.
+from typing import Optional
+
 TESTNET_CHAIN_IDS = frozenset({84532, 11155111, 421614, 5, 80002})
 
 # Canonical chain-name -> chain-id map covering every name the payment API
@@ -38,13 +40,17 @@ class ChainAccessError(Exception):
         super().__init__(f"{code}: {detail}")
 
 
-def is_testnet_chain(chain_id: int) -> bool:
-    """Unknown ids classify as mainnet — deny by default."""
+def is_testnet_chain(chain_id: Optional[int]) -> bool:
+    """Unknown ids classify as mainnet — deny by default.
+
+    `None` is a legitimate input, not a caller bug: a watch-only chain has no
+    EVM chain id and is mainnet, so it must classify as mainnet here.
+    """
     return chain_id in TESTNET_CHAIN_IDS
 
 
 def check_org_chain_access(
-    onboarding_status: str, activation_status: str, chain_id: int
+    onboarding_status: str, activation_status: str, chain_id: Optional[int]
 ) -> None:
     """Raise ChainAccessError unless the org may transact on this chain."""
     if onboarding_status != "company_submitted":

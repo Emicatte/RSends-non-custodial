@@ -2,9 +2,16 @@
 
 Invariant under test: a merchant cannot create an intent on a chain the system
 categorically cannot settle — i.e. any chain that does not canonicalize into
-app/token_registry.json (no tokens, no router, no indexer). TRON is the
-canonical case: FeeRouterV4Tron is a never-deployed dead stub and no TRON
-network has any settlement path.
+app/token_registry.json (no tokens, no router, no indexer). `solana` is the
+canonical case.
+
+TRON **used** to be that case, and no longer is: it was admitted as a
+watch-only chain (Phase 1 slice 1 — the payer sends TRC-20 USDT straight to the
+merchant's own address and the indexer observes it, so there is no router by
+design). The gate is registry-derived, not a denylist, so admitting TRON to the
+registry is what changed the verdict — see test_tron_watchonly_intent.py. TRON's
+own testnets (nile/shasta) were never admitted and are still rejected here,
+which is what keeps this file honest: the gate still bites.
 
 Before the gate, the rejection came from the token-policy check with a
 misleading error ("Token USDC is not enabled on chain tron" — blaming the
@@ -135,28 +142,33 @@ def _stub_side_effects(monkeypatch):
     monkeypatch.setattr(mr, "log_event", _no_log)
 
 
-# ── Categorical rejection: TRON has no settlement path ───────
+# ── TRON is now a registered watch-only chain, not a rejection ───
 
 @pytest.mark.asyncio
-async def test_tron_rejected_on_live_key_and_not_persisted(session):
-    """chain='tron' → 400 UNSUPPORTED_CHAIN naming the chain; nothing persisted."""
+async def test_tron_is_no_longer_categorically_rejected(session):
+    """TRON canonicalizes into the registry now, so it must NOT hit the
+    categorical CHAIN gate. It still fails here — this module's payload asks for
+    USDC, and TRON registers only USDT — but the verdict has moved to the
+    per-chain TOKEN gate, which is the honest reason. That distinction is the
+    whole point of the categorical gate existing separately."""
     with pytest.raises(HTTPException) as exc:
         await create_payment_intent(_payload("tron"), _req("live"), db=session)
 
-    assert exc.value.status_code == 400
-    assert exc.value.detail["error"] == "UNSUPPORTED_CHAIN"
-    assert "tron" in exc.value.detail["message"]
+    assert exc.value.detail["error"] != "UNSUPPORTED_CHAIN"
+    assert exc.value.detail["error"] == "UNSUPPORTED_TOKEN"
     assert await _intent_count(session) == 0
 
 
 @pytest.mark.asyncio
-async def test_tron_rejected_on_test_key_same_categorical_error(session):
-    """The verdict is categorical: a test key gets the SAME error, not TESTNET_ONLY."""
+async def test_tron_on_a_test_key_is_env_bound_not_categorical(session):
+    """TRON is mainnet-only, so a test key is refused by the env binding —
+    proving it is in exactly one of _TESTNET_CHAINS/_MAINNET_CHAINS and does not
+    fall through both branches of the allowlist-of-the-opposite."""
     with pytest.raises(HTTPException) as exc:
         await create_payment_intent(_payload("tron"), _req("test"), db=session)
 
     assert exc.value.status_code == 400
-    assert exc.value.detail["error"] == "UNSUPPORTED_CHAIN"
+    assert exc.value.detail["error"] == "TESTNET_ONLY"
     assert await _intent_count(session) == 0
 
 
