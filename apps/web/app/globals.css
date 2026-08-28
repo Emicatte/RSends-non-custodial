@@ -70,12 +70,43 @@ body {
      Changing values here cascades globally.
      Do not introduce hardcoded hex colors in components — use
      Tailwind classes (bg-paper, text-ink, etc.) which read from here.
+
+     These values are MIRRORED in app/designTokens.ts, which must hold
+     literal hex (its values are handed to a <canvas>, and a canvas
+     cannot parse `var()`). The duplication is pinned by
+     app/__tests__/marketing/brandTokens.test.ts — change one, the test
+     tells you about the other.
+
+     Terracotta has two values and they are not interchangeable:
+       --rs-terracotta       #C8512C  3.87:1 on paper. Large text only
+                                      (>=24px, or >=18.66px bold) and
+                                      graphics. NEVER a filled surface
+                                      behind body text: white on it is
+                                      4.4975:1, which rounds to 4.50 but
+                                      is UNDER the 4.5 AA line, not on it.
+       --rs-terracotta-deep  #A8401F  5.29:1 on paper, and white on IT
+                                      is 6.14:1. This is the token for
+                                      filled surfaces, inline links and
+                                      any brand-coloured small text.
+     Full table with measured ratios: docs/brand-tokens.md
      ============================================================ */
   --rs-ink: #0A0A0A;
+  --rs-ink-muted: #55534E;
+  --rs-line: #DEDCD6;
   --rs-terracotta: #C8512C;
-  --rs-paper: #FAFAFA;
-  --rs-surface: #FFFFFF;
-  --rs-wash: #F5E8E0;
+  --rs-terracotta-deep: #A8401F;
+  --rs-paper: #EFEEEA;
+  --rs-surface: #F7F6F3;
+  --rs-wash: #F6E6DF;
+
+  /* Foreground for genuinely dark surfaces — the ink CTA band, text over the
+     hero videos, the terracotta-deep navbar. This is the ONLY sanctioned white
+     in the palette: it exists so those surfaces stay legible without scattering
+     raw #fff through the components, where it always ended up on light
+     backgrounds too. Never use it on paper or surface. */
+  --rs-on-dark: #FFFFFF;
+  --rs-on-dark-muted: rgba(255, 255, 255, 0.72);
+  --rs-on-dark-line: rgba(255, 255, 255, 0.12);
 
   /* Opacity helpers — for semi-transparent fills that must match palette */
   --rs-ink-12: rgba(10, 10, 10, 0.12);
@@ -1081,7 +1112,7 @@ body.admin-mode [class*="RainbowKit"] {
 }
 
 body.admin-mode {
-  background: #FAFAFA !important;
+  background: var(--rs-paper) !important;
 }
 
 /* Reset any RainbowKit global backdrop/overlay styles */
@@ -1199,4 +1230,87 @@ body.admin-mode::after {
   .rs-hero-word-clip {
     overflow: hidden;
   }
+}
+
+/* ============================================================
+   MARKETING NAV
+   ============================================================
+   Lives here rather than in an inline <style> inside MarketingNav.
+   React escapes text children, and <style> is a raw-text element the
+   browser does not un-escape, so an apostrophe in a selector ships as
+   &#x27; and breaks both the rule and hydration.
+
+   The bar is solid --rs-terracotta-deep (white on it is 6.14:1). It is
+   position:fixed and every marketing page reserves its top padding as a
+   fixed value rather than measuring the nav, so the compact-on-scroll
+   height change cannot move page content.
+   ============================================================ */
+
+/* >=1024: 3-region grid — equal 1fr flanks keep the link row truly centered
+   in the viewport regardless of logo / control widths. Below 1024 the links
+   collapse into the toggle, so the header falls back to the plain
+   logo-to-controls flex row (a 1fr flank would starve the control cluster on
+   narrow screens). */
+.rs-mnav {
+  height: 60px;
+  padding-left: 24px;
+  padding-right: 24px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  border-bottom: 1px solid transparent;
+  transition: height 180ms ease, border-color 180ms ease;
+}
+.rs-mnav--compact {
+  height: 52px;
+  border-bottom-color: rgba(0, 0, 0, 0.12);
+}
+.rs-mnav-links { display: flex; align-items: center; gap: 28px; }
+.rs-mnav-toggle { display: none; }
+
+.rs-mnav-logo { transition: transform 180ms ease; transform-origin: left center; }
+.rs-mnav--compact .rs-mnav-logo { transform: scale(0.92); }
+
+/* Underline, never a fill: a filled pill would put small nav text on a second
+   background and cost the 6.14:1 the bar is chosen for. */
+.rs-mnav-link { position: relative; }
+.rs-mnav-link::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -6px;
+  height: 2px;
+  background: var(--rs-wash);
+  border-radius: 1px;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 180ms ease;
+}
+.rs-mnav-link:hover::after,
+.rs-mnav-link[aria-current="page"]::after { transform: scaleX(1); }
+
+/* White on terracotta-deep is 6.14:1 — double the 3:1 a focus indicator needs
+   against its own background. */
+.rs-mnav a:focus-visible,
+.rs-mnav button:focus-visible {
+  outline: 2px solid var(--rs-on-dark);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rs-mnav,
+  .rs-mnav-logo,
+  .rs-mnav-link::after { transition: none; }
+}
+
+@media (max-width: 1023px) {
+  .rs-mnav { display: flex; justify-content: space-between; }
+  .rs-mnav-links { display: none; }
+  .rs-mnav-toggle { display: inline-flex; }
+}
+@media (max-width: 767px) {
+  .rs-mnav { height: 56px; padding-left: 12px; padding-right: 12px; }
+  .rs-mnav--compact { height: 50px; }
 }

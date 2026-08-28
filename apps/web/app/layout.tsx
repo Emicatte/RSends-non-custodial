@@ -28,9 +28,10 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 5,
-  // Dark theme: prevents iOS Safari from rendering the status bar
-  // in light mode when the app background is dark.
-  themeColor: '#FAFAFA',
+  // Matches --rs-paper so iOS Safari tints the status bar to the page
+  // background. Metadata is serialised before CSS resolves, so this one has
+  // to stay a literal — keep it in step with --rs-paper in globals.css.
+  themeColor: '#EFEEEA',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -44,9 +45,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
       </head>
+      {/* Background comes from the `body` rule in globals.css (var(--rs-paper));
+          repeating it inline only created a second place to forget. */}
       <body
         className="overflow-x-hidden"
-        style={{ background: '#FAFAFA', minHeight: '100dvh' }}
+        style={{ minHeight: '100dvh' }}
       >
         <AuthSessionProvider>
           <Providers>

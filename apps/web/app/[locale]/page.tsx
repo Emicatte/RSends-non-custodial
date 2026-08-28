@@ -323,7 +323,7 @@ function NetworkTokenWidget({
                 e.currentTarget.style.boxShadow = '0 2px 12px rgba(200,81,44,0.30)'
               }}
               style={{
-                fontFamily: C.D, fontSize: 12, fontWeight: 700, color: '#fff',
+                fontFamily: C.D, fontSize: 12, fontWeight: 700, color: C.onDark,
                 letterSpacing: '0.02em',
                 background: 'linear-gradient(135deg, #C8512C, #C8512C)',
                 border: 'none', borderRadius: 10,
@@ -412,7 +412,7 @@ function NetworkTokenWidget({
             transition={{ duration: 0.15, ease: [0.4, 0, 0.2, 1] }}
             style={{
               position: 'absolute', top: 'calc(100%)', right: 0, zIndex: 100,
-              minWidth: 220, maxHeight: 300, overflowY: 'auto' as const, background: '#FFFFFF',
+              minWidth: 220, maxHeight: 300, overflowY: 'auto' as const, background: C.surface,
               border: '1px solid rgba(10,10,10,0.10)',
               borderRadius: 14,
               boxShadow: '0 16px 48px rgba(0,0,0,0.7), 0 0 0 1px rgba(10,10,10,0.03)',
@@ -479,7 +479,7 @@ function NetworkTokenWidget({
             transition={{ duration: 0.15, ease: [0.4, 0, 0.2, 1] }}
             style={{
               position: 'absolute', top: 'calc(100%)', right: 0, zIndex: 100,
-              minWidth: 240, background: '#FFFFFF',
+              minWidth: 240, background: C.surface,
               border: '1px solid rgba(10,10,10,0.10)',
               borderRadius: 14, overflow: 'hidden',
               boxShadow: '0 16px 48px rgba(0,0,0,0.7), 0 0 0 1px rgba(10,10,10,0.03)',

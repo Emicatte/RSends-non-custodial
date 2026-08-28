@@ -26,7 +26,7 @@ function CtaLink({ children, color, outlined, style, href, ...rest }: Omit<React
     padding: '12px 24px', borderRadius: 10, transition: 'all 0.2s',
     border: outlined ? `1.5px solid ${color}` : 'none',
     background: outlined ? (hov ? color : 'transparent') : color,
-    color: outlined ? (hov ? '#fff' : color) : '#fff',
+    color: outlined ? (hov ? C.onDark : color) : C.onDark,
     opacity: hov ? 1 : (outlined ? 0.9 : 0.95),
     transform: hov ? 'translateY(-1px)' : 'none',
     display: 'inline-block',

@@ -145,7 +145,7 @@ export function WhySignInSection() {
                 fontFamily: C.D,
                 fontSize: isMobile ? 28 : 32,
                 fontWeight: 600,
-                color: "#FFFFFF",
+                color: C.onDark,
                 lineHeight: 1.1,
                 letterSpacing: "-0.5px",
                 margin: "0 0 14px",
@@ -159,7 +159,7 @@ export function WhySignInSection() {
               style={{
                 fontFamily: C.D,
                 fontSize: 14,
-                color: "rgba(255,255,255,0.82)",
+                color: C.onDarkMuted,
                 lineHeight: 1.5,
                 margin: 0,
                 maxWidth: 240,

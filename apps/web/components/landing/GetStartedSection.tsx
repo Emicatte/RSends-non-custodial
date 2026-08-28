@@ -124,7 +124,7 @@ export default function GetStartedSection() {
               fontFamily: C.D,
               fontSize: isMobile ? 32 : 40,
               fontWeight: 600,
-              color: '#fff',
+              color: C.onDark,
               letterSpacing: '-1px',
               lineHeight: 1.1,
               margin: '0 0 16px',
@@ -138,7 +138,7 @@ export default function GetStartedSection() {
             style={{
               fontFamily: C.D,
               fontSize: 16,
-              color: 'rgba(255,255,255,0.8)',
+              color: C.onDarkMuted,
               lineHeight: 1.6,
               maxWidth: 420,
               margin: '0 0 28px',
@@ -147,7 +147,7 @@ export default function GetStartedSection() {
             {t('subcopy')}
           </p>
 
-          <div style={{ height: 1, background: 'rgba(255,255,255,0.12)', margin: '0 0 28px' }} />
+          <div style={{ height: 1, background: C.onDarkLine, margin: '0 0 28px' }} />
 
           {FEATURES.map(({ key, Icon }) => (
             <div
@@ -155,12 +155,12 @@ export default function GetStartedSection() {
               className="rs-gs-text"
               style={{ display: 'flex', gap: 14, alignItems: 'flex-start', marginBottom: 20 }}
             >
-              <Icon size={20} color="#fff" strokeWidth={2} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />
+              <Icon size={20} color={C.onDark} strokeWidth={2} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />
               <div>
-                <div style={{ fontFamily: C.D, fontSize: 15, fontWeight: 600, color: '#fff', marginBottom: 4 }}>
+                <div style={{ fontFamily: C.D, fontSize: 15, fontWeight: 600, color: C.onDark, marginBottom: 4 }}>
                   {t(`features.${key}.title`)}
                 </div>
-                <div style={{ fontFamily: C.D, fontSize: 14, color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>
+                <div style={{ fontFamily: C.D, fontSize: 14, color: C.onDarkMuted, lineHeight: 1.5 }}>
                   {t(`features.${key}.desc`)}
                 </div>
               </div>
@@ -173,7 +173,7 @@ export default function GetStartedSection() {
             style={{
               display: 'block',
               textAlign: 'center',
-              background: '#fff',
+              background: C.onDark,
               color: C.text,
               fontFamily: C.D,
               fontSize: 16,
@@ -194,7 +194,7 @@ export default function GetStartedSection() {
               textAlign: 'center',
               fontFamily: C.D,
               fontSize: 14,
-              color: 'rgba(255,255,255,0.7)',
+              color: C.onDarkMuted,
               textDecoration: 'none',
               marginTop: 16,
             }}

@@ -109,7 +109,7 @@ export default async function HowItWorksPage({ params }: PageProps) {
               fontWeight: 400,
               lineHeight: 1.06,
               letterSpacing: '-0.5px',
-              color: '#FFFFFF',
+              color: C.onDark,
               margin: 0,
               maxWidth: 880,
             }}
@@ -121,7 +121,7 @@ export default async function HowItWorksPage({ params }: PageProps) {
               fontFamily: C.D,
               fontSize: 18,
               lineHeight: 1.6,
-              color: 'rgba(255,255,255,0.8)',
+              color: C.onDarkMuted,
               margin: '22px 0 0',
               maxWidth: 620,
             }}

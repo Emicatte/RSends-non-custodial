@@ -37,7 +37,7 @@ function LetterBubble({ letter, color }: { letter: string; color: string }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: '#fff',
+        color: C.onDark,
         fontFamily: C.D,
         fontWeight: 600,
         fontSize: 20,
