@@ -212,6 +212,22 @@ def test_indexer_confirmations_config_default_is_15():
     assert idx.DEFAULT_CONFIRMATIONS == DEPTH
 
 
+@pytest.fixture(autouse=True)
+def _chain_identity_proven(monkeypatch):
+    """PaymentWatcher.start() proves the chain via eth_chainId before scheduling
+    the loop (F1). These tests are about finality-mode announcements, not about
+    the network, so the proof is stubbed AT THE TEST BOUNDARY — patching the
+    module-level function, not a config flag: the guard deliberately has no off
+    switch (test_chain_identity_guard::test_no_configuration_surface_can_disable_chain_identity).
+    """
+    async def _proven(chain_id, timeout=None):
+        return None
+
+    monkeypatch.setattr(
+        "app.services.rpc_manager.assert_chain_identity", _proven
+    )
+
+
 @pytest.mark.asyncio
 async def test_watcher_start_logs_depth_mode_warning(depth_mode, monkeypatch, caplog):
     """In depth mode the watcher must announce it LOUDLY at start — the demo
