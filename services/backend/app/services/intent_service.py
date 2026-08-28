@@ -12,9 +12,11 @@ from __future__ import annotations
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 
 from fastapi import HTTPException
 from sqlalchemy import and_, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.merchant_models import (
@@ -42,12 +44,15 @@ from app.services.key_usage_service import (
     increment_intent_count,
 )
 from app.services.router_registry import (
+    chain_address_format,
     chain_has_settlement_router,
     chain_id_for,
     chain_is_supported,
     derive_invoice_id,
+    is_watch_only_chain,
     network_name_for_chain_id,
     split_router_address_for,
+    token_for,
     token_is_enabled,
 )
 
@@ -299,7 +304,79 @@ async def list_org_intents(
 # directly instead of the reverse wallet→org lookup.
 
 _TESTNET_CHAINS = {"base_sepolia", "sepolia"}
-_MAINNET_CHAINS = {"base", "ethereum", "eth"}
+# NOTE: the env check below is an allowlist-of-the-OPPOSITE — a chain in neither
+# set passes both branches silently. Every accepted chain name must therefore
+# appear in exactly one of these two sets. "tron" is mainnet-only (watch-only,
+# TRON mainnet); its testnets (nile/shasta) remain unsupported entirely.
+_MAINNET_CHAINS = {"base", "ethereum", "eth", "tron"}
+
+
+# ── Duplicate pending intent (uq_intent_pending_amount, migration 0019) ──
+
+_PENDING_INDEX = "uq_intent_pending_amount"
+# The index's full column list. Used ONLY by the SQLite arm below, which has no
+# other way to identify which index was hit.
+_PENDING_INDEX_COLUMNS = ("merchant_id", "environment", "chain", "currency", "amount")
+
+_DUPLICATE_PENDING = {
+    "error": "DUPLICATE_PENDING_INTENT",
+    "message": (
+        "A pending payment intent already exists for this environment, chain, "
+        "currency and amount. Reuse it, cancel it, or let it expire before "
+        "creating an identical one: a payment arriving for one of two identical "
+        "pending intents cannot be attributed to either."
+    ),
+}
+
+
+def _is_pending_amount_conflict(exc: IntegrityError) -> bool:
+    """True only for a unique violation of `uq_intent_pending_amount`.
+
+    Matched by CONSTRAINT, never by catching IntegrityError broadly. Every other
+    integrity failure — a duplicate reference_id, a NOT NULL breach, a constraint
+    nobody has written yet — must keep propagating instead of being reported to
+    the merchant as a duplicate-amount 409.
+
+    The two backends report different things, so each is matched on what it
+    actually says. Postgres names the constraint structurally on the
+    asyncpg/psycopg error, and again in its message text. SQLite never names an
+    index here — it lists the columns — so that arm demands the index's FULL
+    column set; no other unique index on `payment_intents` spans those five, and
+    a partial match is not accepted.
+
+    Anything unrecognised returns False and the error propagates: this fails
+    closed in the direction of NOT swallowing.
+    """
+    orig = getattr(exc, "orig", None)
+    for candidate in (orig, getattr(orig, "__cause__", None)):
+        if candidate is None:
+            continue
+        name = getattr(candidate, "constraint_name", None)
+        if name is None:
+            name = getattr(getattr(candidate, "diag", None), "constraint_name", None)
+        if name == _PENDING_INDEX:
+            return True
+
+    text = str(orig) if orig is not None else str(exc)
+    if _PENDING_INDEX in text:
+        return True
+    return "UNIQUE constraint failed" in text and all(
+        f"payment_intents.{column}" in text for column in _PENDING_INDEX_COLUMNS
+    )
+
+
+async def _translate_pending_conflict(db: AsyncSession, exc: IntegrityError) -> None:
+    """Re-raise `exc` as a 409 when it is the duplicate-pending violation.
+
+    Returns normally for nothing — it either raises the 409 or re-raises the
+    original untouched. The rollback is not optional: an IntegrityError leaves
+    the transaction unusable, and the caller (a request handler) still has to be
+    able to answer.
+    """
+    if not _is_pending_amount_conflict(exc):
+        raise exc
+    await db.rollback()
+    raise HTTPException(409, _DUPLICATE_PENDING) from exc
 
 
 async def create_intent(
@@ -365,6 +442,34 @@ async def create_intent(
             "message": f"Token {payload.currency} is not enabled on chain {requested_chain}.",
         })
 
+    # AMOUNT PRECISION GATE. `amount` is a Float with no scale bound, so an amount
+    # finer than the token can express used to be accepted and silently rounded at
+    # settlement — the merchant then gets invoiced for a value nobody asked for
+    # (123.4567895 USDC settles as 123456790 base units), and at the extreme the
+    # check disappears entirely: 1e-07 USDC converts to 0 base units, and the
+    # settlement comparison is `event_amount < expected_amount`, which nothing can
+    # fail against 0.
+    #
+    # The rule is exactly "to_base_units must not have to round", so the stored
+    # amount always survives the conversion the indexer and the calldata builder
+    # both perform. Decimals come from the registry, never hardcoded; token_for is
+    # guaranteed non-None here because token_is_enabled just passed (both maps are
+    # built in the same loader pass).
+    #
+    # Placed before the monthly-limit check so a malformed amount never spends the
+    # key's quota, for the same reason the router gate sits where it does.
+    _token = token_for(requested_chain, payload.currency)
+    if _token is not None:
+        _decimals = _token[1]
+        if (Decimal(str(payload.amount)) * (Decimal(10) ** _decimals)) % 1 != 0:
+            raise HTTPException(400, {
+                "error": "AMOUNT_PRECISION_EXCEEDED",
+                "message": (
+                    f"{payload.currency} on {requested_chain} has {_decimals} decimals; "
+                    f"amount {payload.amount} is finer than that and would be rounded."
+                ),
+            })
+
     # MAINNET ACTIVATION GATE. `check_org_chain_access` is the single definition
     # of "may this org transact on this chain", but until now only the session
     # route called it — so a merchant API key could create a mainnet intent for
@@ -375,8 +480,15 @@ async def create_intent(
     # testnet `company_profile_required` rule, a session-onboarding concept the
     # API-key path has never had. Applying it to every chain here would change
     # testnet behaviour, so the session route keeps its own (broader) call.
+    #
+    # Gated on testnet-ness, NOT on chain-id presence. A watch-only chain is
+    # mainnet but has no EVM chain id, so `chain_id is not None` would skip the
+    # gate for it — and behind that gate is the only KYB control standing
+    # between an unverified org and a live payable page. `is_testnet_chain`
+    # already classifies an absent or unknown id as mainnet ("deny by default"),
+    # which is exactly the fail-closed answer for a chain we cannot number.
     chain_id = chain_id_for(requested_chain)
-    if chain_id is not None and not is_testnet_chain(chain_id):
+    if not is_testnet_chain(chain_id):
         org_row = None
         if resolved_org_id is not None:
             org_row = (
@@ -408,7 +520,15 @@ async def create_intent(
     # instructions, no indexer watcher for the chain, and therefore no settlement
     # and no webhook — silently, with the key's quota already spent. Refuse here,
     # BEFORE the monthly-limit check and before anything is persisted.
-    if not chain_has_settlement_router(requested_chain):
+    #
+    # WATCH-ONLY EXEMPTION: a watch-only chain has no router by construction —
+    # the payer sends the token straight to the merchant's own address and the
+    # indexer observes it. The exemption is read from the registry's explicit
+    # `settlement` field, never inferred from a missing router, so an EVM chain
+    # that merely lost its config still fails closed here.
+    if not is_watch_only_chain(requested_chain) and not chain_has_settlement_router(
+        requested_chain
+    ):
         logger.warning(
             "ROUTER_UNAVAILABLE: refusing intent on chain=%s (environment=%s, "
             "merchant=%s, org=%s) — no RSendsRouter v1/v2 configured",
@@ -433,7 +553,16 @@ async def create_intent(
     now = datetime.now(timezone.utc)
     intent_id = f"pi_{secrets.token_hex(16)}"
     reference_id = generate_reference_id(merchant_id)
-    onchain_invoice_id = derive_invoice_id(reference_id, chain_id_for(requested_chain))
+    # A watch-only intent has NO on-chain invoice id: no contract will ever emit
+    # one. Deriving it anyway would fold the literal string "None" (the absent
+    # chain id) into a keccak and store a plausible-looking bytes32 that means
+    # nothing — noise the matcher must never key off. NULL is the honest value,
+    # and the column and the webhook key are both already nullable.
+    onchain_invoice_id = (
+        None
+        if is_watch_only_chain(requested_chain)
+        else derive_invoice_id(reference_id, chain_id_for(requested_chain))
+    )
 
     # RECIPIENT GATE (Phase B): explicit override OR settlement_wallet default —
     # org_id set (session) resolves the org's wallet directly. On the API-key
@@ -461,6 +590,21 @@ async def create_intent(
         recipient = await resolve_recipient(
             db, merchant_id, payload.recipient, org_id=resolved_org_id
         )
+        # CHAIN ↔ ADDRESS-FAMILY GATE. The org's settlement_wallet is EVM-only,
+        # so on a non-EVM chain the recipient can only come from the explicit
+        # per-intent override — and omitting it silently falls back to the EVM
+        # wallet, persisting an intent whose payee cannot receive the token and
+        # which no watcher could ever match. Reject instead of storing nonsense.
+        expected_format = chain_address_format(requested_chain)
+        actual_format = "evm" if recipient.startswith("0x") else "base58check"
+        if actual_format != expected_format:
+            raise HTTPException(422, {
+                "error": "RECIPIENT_CHAIN_MISMATCH",
+                "message": (
+                    f"Chain {requested_chain} expects a {expected_format} recipient; "
+                    f"pass an explicit `recipient` in that format."
+                ),
+            })
 
     # NETWORK is DERIVED from the (already validated + env-gated) chain, never
     # trusted from merchant free-text: `payload.network` is unvalidated and can
@@ -501,7 +645,13 @@ async def create_intent(
                 share_bps=leg.share_bps,
                 label=leg.label,
             ))
-    await db.flush()
+    # The INSERT goes out here, so this is where uq_intent_pending_amount bites.
+    # Without this the index reached the merchant as an unhandled exception — a
+    # 500 on a condition the server understands exactly.
+    try:
+        await db.flush()
+    except IntegrityError as exc:
+        await _translate_pending_conflict(db, exc)
     # Populate the (selectin) relationship on the freshly built instance — an
     # async lazy-load on attribute access would raise MissingGreenlet when the
     # caller serializes the response. Split: read the flushed legs back; single:
@@ -547,7 +697,12 @@ async def create_intent(
     if key_id:
         await increment_intent_count(db, key_id)
 
-    await db.commit()
+    # Belt-and-braces: the flush above is where this index fires today, but a
+    # commit that re-issues the INSERT must not degrade to a 500 either.
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await _translate_pending_conflict(db, exc)
 
     logger.info(
         "PaymentIntent created: %s ref=%s invoiceId=%s (merchant=%s, %.6f %s, chain=%s, sender=%s, expires=%s)",

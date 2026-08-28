@@ -509,7 +509,9 @@ class TestRegistryLoaderFeeKeysOptional:
         p.write_text(json.dumps(reg))
         monkeypatch.setenv("TOKEN_REGISTRY_PATH", str(p))
 
-        tokens, policy = router_registry._load_registry()
+        tokens, policy, meta = router_registry._load_registry()
+        # A chain that declares nothing defaults to the EVM/router shape.
+        assert meta["base"] == {"addressFormat": "evm", "settlement": "router"}
         pol = policy["base"]["USDC"]
         assert pol["flatFee"] == 0
         assert pol["threshold"] == 0

@@ -357,10 +357,16 @@ async def test_cross_type_events_rejected(webhook_calls):
     assert (await _settlement(ev1["tx_hash"])).status == SettlementStatus.rejected
 
     # single event → split intent (recipient NULL → pre-existing fail-closed)
+    # The split intent takes a different amount: it is the same merchant on
+    # the same chain and environment as the single intent above, so
+    # uq_intent_pending_amount leaves the amount as the only free column. The
+    # event's total moves with it so the ONLY rejection reason stays the type
+    # mismatch (a short total would add a second, spurious one).
     inv2 = "0x" + "26" * 32
-    await _make_split_intent(invoice_id=inv2)
+    await _make_split_intent(invoice_id=inv2, amount=101.0)
     ev2 = _ev_single(invoice_id=inv2, tx_hash="0x" + "bf" * 32, block_number=100,
-                     block_hash="0x" + "b6" * 32)
+                     block_hash="0x" + "b6" * 32,
+                     amount=to_base_units(101.0, USDC_DEC))
     await _record_settlement(CHAIN, ev2)
     assert (await _settlement(ev2["tx_hash"])).status == SettlementStatus.rejected
 

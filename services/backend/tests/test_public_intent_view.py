@@ -76,13 +76,14 @@ def _intent(
     metadata: dict | None = None,
     tx_hash: str | None = None,
     matched_tx_hash: str | None = None,
+    amount: float = 100.0,
 ) -> PaymentIntent:
     return PaymentIntent(
         intent_id=f"pi_{secrets.token_hex(16)}",
         reference_id=secrets.token_hex(8),
         merchant_id=OWNER,
         environment="live",
-        amount=100.0,
+        amount=amount,
         currency="USDC",
         chain="base",
         status=status,
@@ -133,8 +134,11 @@ async def test_public_view_leaks_nothing(session):
 
 @pytest.mark.asyncio
 async def test_merchant_name_falls_back_and_stays_optional(session):
-    store = _intent(metadata={"store_name": "Bottega"})
-    bare = _intent()
+    # Distinct amounts — uq_intent_pending_amount forbids two pending intents
+    # sharing (merchant_id, environment, chain, currency, amount); these two
+    # agree on all of it. Only merchant_name is asserted.
+    store = _intent(metadata={"store_name": "Bottega"}, amount=100.0)
+    bare = _intent(amount=101.0)
     session.add_all([store, bare])
     await session.commit()
 

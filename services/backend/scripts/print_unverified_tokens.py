@@ -24,8 +24,8 @@ def main() -> int:
 
     rows = []
     for chain_id, obj in raw.items():
-        if not chain_id.isdigit():
-            continue
+        if chain_id.startswith("_"):
+            continue  # file metadata, not a chain
         for sym, t in obj.get("tokens", {}).items():
             if t.get("native"):
                 continue

@@ -126,9 +126,12 @@ async def test_cross_org_isolation_no_leak(session):
     """A session scoped to org A sees ONLY org A's intents — never org B's."""
     org_a = await _make_org(session, owner_address=OWNER_A)
     org_b = await _make_org(session, owner_address=OWNER_B)
+    # Distinct amounts: uq_intent_pending_amount forbids two pending intents
+    # sharing (merchant_id, environment, chain, currency, amount), and these
+    # agree on everything but the amount.
     session.add_all([
-        _mk_intent(OWNER_A), _mk_intent(OWNER_A),
-        _mk_intent(OWNER_B),
+        _mk_intent(OWNER_A, amount=100.0), _mk_intent(OWNER_A, amount=101.0),
+        _mk_intent(OWNER_B, amount=100.0),
     ])
     await session.commit()
 
@@ -204,7 +207,9 @@ async def test_no_primary_wallet_409(session):
 async def test_pagination_bounds(session):
     """Paging is honoured: total is the full count; a page returns its slice."""
     org_a = await _make_org(session, owner_address=OWNER_A)
-    session.add_all([_mk_intent(OWNER_A) for _ in range(3)])
+    # Amount varies per row — uq_intent_pending_amount would reject three
+    # identical pending intents. Paging does not depend on the values.
+    session.add_all([_mk_intent(OWNER_A, amount=100.0 + i) for i in range(3)])
     await session.commit()
 
     p1 = await _call(org_a, session, page=1, per_page=2)
@@ -223,7 +228,9 @@ async def test_shared_helper_matches_apikey_path(session):
     """Session and API-key list paths return identical records for the same
     owner+environment (both delegate to list_org_intents — no divergent query)."""
     org_a = await _make_org(session, owner_address=OWNER_A)
-    session.add_all([_mk_intent(OWNER_A), _mk_intent(OWNER_A)])
+    # Distinct amounts — uq_intent_pending_amount. Both views read the same
+    # two rows whatever the amounts are.
+    session.add_all([_mk_intent(OWNER_A, amount=100.0), _mk_intent(OWNER_A, amount=101.0)])
     await session.commit()
 
     session_view = await _call(org_a, session)

@@ -33,6 +33,7 @@ from app.api.deps.require_org_approved import require_org_approved
 from app.api.merchant_profile_routes import _resolve_owner_address
 from app.api.merchant_routes import _intent_to_response
 from app.db.session import get_db
+from app.services.router_registry import is_watch_only_chain
 from app.models.merchant_models import (
     CreatePaymentIntentRequest,
     IntentStatus,
@@ -108,9 +109,16 @@ async def create_org_payment_intent(
     # activation_status == 'active' — which nothing sets in-app yet, so mainnet
     # is uniformly denied here. Unknown chain names fall through to
     # create_intent's existing 422 UNSUPPORTED_CHAIN.
+    #
+    # A watch-only chain is absent from CHAIN_ID_BY_NAME (it has no EVM chain
+    # id), so `chain_id is not None` alone would skip the guard — and unlike an
+    # unknown chain name, it is NOT caught by create_intent's 422 afterwards,
+    # because watch-only chains are exempt from the router gate by design. It
+    # goes through the same check_org_chain_access as every other mainnet chain;
+    # a null chain_id classifies as mainnet, so activation is required.
     requested_chain = (payload.chain or "base").lower()
     chain_id = CHAIN_ID_BY_NAME.get(requested_chain)
-    if chain_id is not None:
+    if chain_id is not None or is_watch_only_chain(requested_chain):
         org = (
             await db.execute(
                 select(Organization).where(Organization.id == org_id)

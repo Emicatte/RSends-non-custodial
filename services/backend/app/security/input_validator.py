@@ -5,12 +5,15 @@ Pure validation functions for all user-facing inputs.
 
 Functions:
   validate_eth_address()     — checksum, non-zero
+  is_tron_address()          — TRON mainnet base58check (T-prefix, 0x41, checksum)
+  normalize_payment_address() — EVM lowercases, base58 strips only
   validate_amount_wei()      — numeric string, positive, max 78 digits
   validate_percent_bps()     — integer 1-10000
   validate_distribution_list() — addresses + bps, no dupes, sum=10000, max 500
   sanitize_label()           — strip HTML, trim, max 100 chars
 """
 
+import hashlib
 import re
 import logging
 from typing import Optional
@@ -29,6 +32,14 @@ MAX_LABEL_LEN = 100
 
 _ETH_ADDR_RE = re.compile(r"^0x[0-9a-fA-F]{40}$")
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
+
+# TRON mainnet addresses are base58check: 'T' + 33 base58 chars. The alphabet
+# deliberately omits 0 O I l, which is why lowercasing one does not merely
+# change it — it can produce characters that are not base58 at all.
+_B58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+_B58_INDEX = {c: i for i, c in enumerate(_B58_ALPHABET)}
+_TRON_ADDR_RE = re.compile(r"^T[1-9A-HJ-NP-Za-km-z]{33}$")
+_TRON_MAINNET_PREFIX = 0x41  # the payload byte every mainnet T-address decodes to
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -86,6 +97,49 @@ def validate_eth_address(address: str, field: str = "address") -> str:
             raise ValidationError(field, "invalid EIP-55 checksum")
 
     return to_checksum_address(address)
+
+
+def is_tron_address(address: object) -> bool:
+    """True iff `address` is a valid TRON **mainnet** base58check address.
+
+    Full checksum verification, not a shape check: a single mistyped character
+    changes the payload and fails the double-SHA256 tail. That matters because
+    this is a payment recipient — a bad checksum means funds sent nowhere, and
+    there is no contract in the watch-only path to reject it for us.
+
+    Stdlib only (hashlib); deliberately no base58/tron dependency.
+    """
+    if not isinstance(address, str) or not _TRON_ADDR_RE.match(address):
+        return False
+
+    n = 0
+    for ch in address:
+        n = n * 58 + _B58_INDEX[ch]  # regex already fenced the alphabet
+    if n.bit_length() > 200:  # would not fit the 25-byte base58check envelope
+        return False
+    raw = n.to_bytes(25, "big")
+
+    if raw[0] != _TRON_MAINNET_PREFIX:
+        return False
+    payload, checksum = raw[:21], raw[21:]
+    return hashlib.sha256(hashlib.sha256(payload).digest()).digest()[:4] == checksum
+
+
+def normalize_payment_address(address: object) -> Optional[str]:
+    """Normalize a payment address, or return None if it is neither family.
+
+    EVM addresses are case-insensitive, so they fold to lowercase exactly as
+    they always have. TRON addresses are base58check and case-SENSITIVE, so
+    they are only stripped — lowercasing one destroys it.
+    """
+    if not isinstance(address, str):
+        return None
+    candidate = address.strip()
+    if _ETH_ADDR_RE.match(candidate):
+        return candidate.lower()
+    if is_tron_address(candidate):
+        return candidate
+    return None
 
 
 # ═══════════════════════════════════════════════════════════════
