@@ -376,19 +376,44 @@ error codes in §6.
 the contract, §"Your half", item 1 — and several existing ones are currently unreachable.
 Honest reachability today:
 
-| Statuses that actually occur | `pending`, `paid`, `expired`, `cancelled` |
+| Statuses that actually occur | `pending`, `paid`, `expired`, `cancelled`, and — on watch-only chains only — `partial` |
 |---|---|
-| Unreachable | `review` is written only by a matcher with zero production callers (`webhook_service.py:377, 913, 922, 926`). `completed`, `refunded`, `partial` and `overpaid` all require passing through `review` first, so they are transitively unreachable. `completed` does still exist on legacy rows. |
+| Unreachable | `review` is written only by a matcher with zero production callers (`webhook_service.py:377, 913, 922, 926`). `completed`, `refunded` and `overpaid` all require passing through `review` first, so they are transitively unreachable. `completed` does still exist on legacy rows. |
+
+**`partial` became reachable on 2026-08-29**, on watch-only chains (TRON) only
+(`app/services/tron_matcher.py`). There is no router and no escrow on such a chain, so an
+underpayment has already arrived in the merchant's wallet and cannot be refused: the intent
+moves to `partial` and carries `amount_received` + `underpaid_amount`. It does **not** pass
+through `review`, and it is **terminal for now** — partial payments do not accumulate, so a
+second transfer completing the amount does not close the invoice. On router chains
+(EVM), an underpayment is still refused on-chain and `partial` still cannot occur.
 
 Because `review` is unreachable, **`POST /payment-intent/{id}/resolve` can only ever return
 `400 INVALID_STATE`** (`merchant_routes.py:438-445`).
 
-| Events that actually fire | `payment.completed`, `payment.reversed`, `payment.expired`, and `test` |
+| Events that actually fire | `payment.completed`, `payment.reversed`, `payment.expired`, `test`, and — on watch-only chains only — `payment.partial` and `payment.ambiguous` |
 |---|---|
-| Never fired | `payment.cancelled` and `payment.ambiguous` are reserved placeholders. `payment.expired_rejected`, `payment.needs_review`, `payment.partial`, `payment.overpaid` come only from the dead matcher. `payment.completed_late` requires `review`, so in practice it does not fire either. |
+| Never fired | `payment.cancelled` is a reserved placeholder. `payment.expired_rejected`, `payment.needs_review` and `payment.overpaid` come only from the dead matcher. `payment.completed_late` requires `review`, so in practice it does not fire either. |
 
-**Six of the ten event names are subscribable and will never arrive.** Subscribe to what you
+**Four of the ten event names are subscribable and will never arrive.** Subscribe to what you
 need; do not build logic that waits on the others.
+
+**`payment.partial` and `payment.ambiguous` became reachable on 2026-08-29**, on watch-only
+chains (TRON) only (`app/services/tron_matcher.py`):
+
+- **`payment.partial`** — the payer sent less than the invoice. The intent is `partial`, not
+  `paid`; `amount_received` and `underpaid_amount` are populated (both in **token** units,
+  like `amount`). The money is already at the merchant.
+- **`payment.ambiguous`** — one transfer could be paying more than one of your pending
+  invoices, and we will not guess. **No intent was modified**; the `intent_id` in the payload
+  is one representative candidate, and the full list is in the extra key
+  `candidate_intent_ids`. Reconcile by hand. Note that overpayment does **not** produce
+  `payment.overpaid`: an overpaid invoice is satisfied, so it fires `payment.completed` with
+  `overpaid_amount` set.
+
+Note this is the first path in production that populates `amount_received`,
+`overpaid_amount` and `underpaid_amount` at all — they have carried `"0"`/`null` on every
+event until now. Their type is unchanged (**string \| null**).
 
 One asymmetry worth naming: **`test` is emitted but is not in `VALID_EVENTS`, and it bypasses
 your subscription list** (`webhook_service.py:1327-1331`). If anyone presses "Send test" you

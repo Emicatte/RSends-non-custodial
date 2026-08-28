@@ -3,9 +3,14 @@
 Phase 1, slice 2. Pending TRON intents carry a base58 recipient and no router;
 nothing on chain emits an invoiceId for them. This service asks TronGrid which
 USDT TRC-20 transfers landed on those recipients and writes one
-`PaymentSettlement` row per transfer, with `intent_id = NULL`. Matching a
-settlement to an intent, changing intent status, and firing webhooks are slice
-3's job and appear nowhere in this file.
+`PaymentSettlement` row per transfer, with `intent_id = NULL`.
+
+Deciding what those rows MEAN — matching one to an intent, closing the intent,
+firing the webhook — is `tron_matcher`'s job (slice 3) and appears nowhere in
+this file. The tick calls it through `_run_matching_pass`, but only after the
+rows are written and the cursor has advanced, and wrapped so that no matching
+failure can cost an observation: a payment we failed to record is gone, while a
+payment we recorded but failed to match is still on the table.
 
 A SIBLING of `payment_indexer`, not a parameterization of it. `PaymentWatcher`
 requires a router address, ticks `eth_*` every 5s against an integer block
@@ -360,8 +365,28 @@ async def _record_settlement(transfer: dict, event: dict) -> str:
 #  The poller
 # ═══════════════════════════════════════════════════════════════
 
+async def _run_matching_pass() -> dict:
+    """Run slice 3's matcher and webhook redrive. Never raises.
+
+    Imported lazily: `tron_matcher` imports `TRON_CHAIN_ID` from here, so a
+    module-level import either way round would be circular.
+    """
+    from app.services import tron_matcher
+
+    try:
+        counts = await tron_matcher.match_pending_tron_settlements()
+        counts["redriven"] = await tron_matcher.redrive_tron_webhooks()
+        return counts
+    except Exception:
+        logger.exception(
+            "[tron-poller] matching pass failed — settlements ARE recorded and "
+            "the cursor is unaffected; they will be matched on a later tick"
+        )
+        return {}
+
+
 class TronPoller:
-    """Polls TronGrid for incoming USDT TRC-20 transfers. Records only."""
+    """Polls TronGrid for incoming USDT TRC-20 transfers, then matches them."""
 
     def __init__(self, node_urls: list[str]) -> None:
         if not node_urls:
@@ -429,6 +454,20 @@ class TronPoller:
 
     # ── one pass ─────────────────────────────────────────────
     async def _tick(self) -> dict:
+        """Observe and record, then match — in that order, and isolated.
+
+        Matching is slice 3's `tron_matcher`, deliberately run AFTER the
+        settlement rows are written and after the cursor has advanced, and
+        deliberately wrapped: a matching bug must never be able to prevent a
+        settlement from being recorded or hold the cursor. Recording is the
+        irreplaceable half — a payment we failed to observe is gone, while a
+        payment we recorded but failed to match is still on the table.
+        """
+        observed = await self._observe()
+        observed.update(await _run_matching_pass())
+        return observed
+
+    async def _observe(self) -> dict:
         cursor = await _get_tron_cursor()
         if cursor is None:
             # Cold start: anchor at now and scan nothing, the same posture the

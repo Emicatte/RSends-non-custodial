@@ -388,7 +388,25 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
   at `STALL_TICKS` consecutive failures (`payment_indexer._note_failure`), the TRON poller has
   no equivalent. The fix is that hook, in the `INDEXER_STALLED` style, keyed on consecutive
   ticks blocked at the same cursor. Deferred to slice 3 or later — do not build it as a
-  drive-by.
+  drive-by. (Slice 3 did build the **webhook** redrive this note's sibling gap needed —
+  `tron_matcher.redrive_tron_webhooks` — because the EVM unfired-webhook sweep is
+  `chain_id`-scoped inside an EVM-only watcher and would never have retried a TRON dispatch.
+  The cursor-stall alert is still open.)
+- **A TRON intent that expires between payment and matching is never matched, silently.** The
+  TRON matcher (`app/services/tron_matcher.py`) requires `status == pending`, so an intent the
+  expiry loop flips to `expired` in the ≤60s window between the payer's transfer and the next
+  poller tick gets **zero candidates forever**: the settlement row stays `pending` with
+  `intent_id` NULL, the merchant has the money, and nothing in the product says so. This is a
+  deliberate **divergence from the EVM path**, which treats `expired` as payable
+  (`payment_indexer.py:826-832`, "money on-chain wins over the timer — rescue the intent
+  instead of stranding a settled payment"). The reason the EVM race is benign and this one is
+  not: the settlement hold that normally protects a paid-but-unfinalized intent from the expiry
+  sweep (`intent_service.settlement_hold_exists`) correlates on `intent_id`, which is NULL on a
+  TRON settlement until the matcher runs — so on TRON the hold cannot engage before the race is
+  already lost. Pinned as intentional by
+  `test_tron_matching.py::test_an_intent_that_expired_since_payment_is_not_matched`. Fixing it
+  means either adding `expired` to the matcher's candidate statuses (EVM parity) or holding on
+  `(chain, recipient, window)` before an `intent_id` exists — a decision, not a bug fix.
 
 Closed (2026-07-05): **CI backend job now has a Redis service** (`redis:7`, health-checked,
 `REDIS_URL=redis://localhost:6379/0` — plain scheme is CI/test-scoped, the `rediss://` guard
