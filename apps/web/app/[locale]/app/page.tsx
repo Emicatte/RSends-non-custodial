@@ -1,5 +1,6 @@
 'use client'
 
+import type { CSSProperties } from 'react'
 import { useTranslations } from 'next-intl'
 import { GetStartedChecklist } from '@/components/app/GetStartedChecklist'
 import { VolumeTrendChart } from '@/components/app/VolumeTrendChart'
@@ -22,6 +23,15 @@ const COLORS = {
   orangeLight: 'rgba(217, 122, 46, 0.08)',
   red: '#C03A3A',
   redLight: 'rgba(192, 58, 58, 0.08)',
+}
+
+// Shared by the two exclusion notices. Quiet, not an error: excluded payments
+// are a normal state, they just must never be silent.
+const noticeStyle: CSSProperties = {
+  margin: '-16px 0 0',
+  fontSize: 12,
+  lineHeight: 1.5,
+  color: COLORS.muted,
 }
 
 const CHAIN_BADGE: Record<string, { bg: string; text: string }> = {
@@ -107,6 +117,7 @@ export default function AppDashboardPage() {
   // designed empty state rather than a chart built from nothing.
   const {
     buckets: series,
+    unpricedCount: seriesUnpriced,
     loading: seriesLoading,
     error: seriesError,
   } = useOrgVolumeSeries(7)
@@ -134,7 +145,12 @@ export default function AppDashboardPage() {
     id: r.id || idx + 1,
     time: relTime(r.timestamp_iso, nowMs),
     type: r.type,
-    amount: USD_FMT.format(r.amount_usd),
+    // `amount_usd` is meaningless when the token has no USD peg — the backend
+    // sends 0.0 there and flags it. Rendering "$0" would claim a real payment
+    // was worth nothing, so name the token instead.
+    amount: r.amount_usd_known
+      ? USD_FMT.format(r.amount_usd)
+      : t('recentTransactions.amountUnpriced', { symbol: r.currency }),
     chain: FE_CHAINS.includes(r.chain) ? r.chain : 'Base',
     status: FE_STATUS_MAP[r.status] ?? 'pending',
   }))
@@ -205,6 +221,21 @@ export default function AppDashboardPage() {
         })}
       </div>
 
+      {/* Payments the volume tile could not value. Without this line a
+          merchant paid only in ETH reads "$0" and cannot tell it apart from
+          having been paid nothing at all. Rendered only when there is
+          something to disclose — a zero count says nothing and shows nothing. */}
+      {!showErr && stats.volume_24h_unpriced_count > 0 && (
+        <p data-testid="volume-unpriced-notice" style={noticeStyle}>
+          {stats.volume_24h_unpriced_symbols.length > 0
+            ? t('unpriced.volumeTokens', {
+                count: stats.volume_24h_unpriced_count,
+                symbols: stats.volume_24h_unpriced_symbols.join(', '),
+              })
+            : t('unpriced.volume', { count: stats.volume_24h_unpriced_count })}
+        </p>
+      )}
+
       {/* Volume trend chart */}
       <section className={card}>
         <h2
@@ -219,6 +250,16 @@ export default function AppDashboardPage() {
         >
           {t('volumeTrend.title')}
         </h2>
+        {/* The chart's own window (7d), which is not the tile's (24h) — so it
+            states its own exclusion rather than borrowing the one above. */}
+        {!seriesError && seriesUnpriced > 0 && (
+          <p
+            data-testid="series-unpriced-notice"
+            style={{ ...noticeStyle, marginTop: 0, marginBottom: 12 }}
+          >
+            {t('unpriced.series', { count: seriesUnpriced })}
+          </p>
+        )}
         <VolumeTrendChart
           buckets={seriesError ? null : series}
           loading={seriesLoading && !series}

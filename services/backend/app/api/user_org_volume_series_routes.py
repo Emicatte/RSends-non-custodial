@@ -28,11 +28,17 @@ indexer INGEST time, not on-chain time, so a re-index would land historical rows
 in today's bucket. Consistency with the neighbouring tile wins over semantic
 purity; changing it means changing both together.
 
-USD conversion mirrors the stats route (`app.tokens.registry` for decimals +
-coingecko id, `price_service.get_price` for the rate), with one difference: the
-price is resolved ONCE per distinct (chain_id, token) rather than once per row,
-because a 7-day window carries many more rows than a 24h one. Tokens with no
-registry entry or no cached price contribute 0 — inherited, not invented.
+USD conversion mirrors the stats route (`app.tokens.registry` for decimals + the
+static USD peg), with one difference: the peg is resolved ONCE per distinct
+(chain_id, token) rather than once per row, because a 7-day window carries many
+more rows than a 24h one.
+
+Tokens with no registry entry and no peg are EXCLUDED from the totals and
+counted in `unpriced_count` — on their own bucket as well as on the window.
+They are not summed as zero: a flat line that a merchant reads as "we took
+nothing this week" must not be what "we took ETH and could not value it" looks
+like. Same rule as the tile beside it, pinned by
+`test_series_agrees_with_the_stats_tile`.
 
 Read-only: SELECTs only, no writes, no migration.
 """
@@ -55,7 +61,7 @@ from app.db.session import get_db
 from app.models.dashboard_schemas import VolumeBucket, VolumeSeriesResponse
 from app.models.merchant_models import PaymentIntent
 from app.models.settlement_models import PaymentSettlement, SettlementStatus
-from app.services.price_service import get_price
+from app.tokens.registry import get_usd_peg
 
 router = APIRouter(prefix="/api/v1/user/org", tags=["user-org-stats"])
 
@@ -76,14 +82,16 @@ def _as_utc(dt: datetime) -> datetime:
     return dt.astimezone(timezone.utc)
 
 
-async def _usd_factors(
+def _usd_factors(
     rows: Iterable[PaymentSettlement],
-) -> Dict[Tuple[int, str], Optional[Tuple[int, float]]]:
-    """(chain_id, token) → (decimals, usd_price), or None when unpriceable.
+) -> Dict[Tuple[int, str], Optional[Tuple[int, Decimal]]]:
+    """(chain_id, token) → (decimals, usd_peg), or None when unvaluable.
 
-    One `get_price` per distinct token instead of one per settlement.
+    One peg lookup per distinct token instead of one per settlement. A `None`
+    factor means EXCLUDE the row from the totals and count it — never multiply
+    by zero.
     """
-    factors: Dict[Tuple[int, str], Optional[Tuple[int, float]]] = {}
+    factors: Dict[Tuple[int, str], Optional[Tuple[int, Decimal]]] = {}
     for s in rows:
         key = (int(s.chain_id), (s.token or "").lower())
         if key in factors:
@@ -92,8 +100,8 @@ async def _usd_factors(
         if info is None:
             factors[key] = None
             continue
-        price = await get_price(info.coingecko_id, "usd")
-        factors[key] = None if price is None else (info.decimals, price)
+        peg = get_usd_peg(int(s.chain_id), None if info.is_native else s.token)
+        factors[key] = None if peg is None else (info.decimals, peg)
     return factors
 
 
@@ -121,14 +129,22 @@ async def get_org_volume_series(
     totals: Dict[date_, float] = {
         start_day + timedelta(days=i): 0.0 for i in range(days)
     }
+    # Parallel to `totals` and seeded with it, so the fresh-org early return
+    # below reports a truthful zero rather than a missing key.
+    unpriced: Dict[date_, int] = {d: 0 for d in totals}
 
     def _response() -> VolumeSeriesResponse:
         return VolumeSeriesResponse(
             days=days,
             buckets=[
-                VolumeBucket(date=d, volume_usd=round(totals[d], 2))
+                VolumeBucket(
+                    date=d,
+                    volume_usd=round(totals[d], 2),
+                    unpriced_count=unpriced[d],
+                )
                 for d in sorted(totals)
             ],
+            unpriced_count=sum(unpriced.values()),
         )
 
     try:
@@ -161,7 +177,7 @@ async def get_org_volume_series(
     )
     rows = (await db.execute(stmt)).scalars().all()
 
-    factors = await _usd_factors(rows)
+    factors = _usd_factors(rows)
     for s in rows:
         if s.created_at is None:
             continue
@@ -171,8 +187,11 @@ async def get_org_volume_series(
             continue
         factor = factors.get((int(s.chain_id), (s.token or "").lower()))
         if factor is None:
+            # Unvaluable: excluded from the total, counted on ITS day so the
+            # bucket cannot pass for a quiet one.
+            unpriced[day] += 1
             continue
-        decimals, price = factor
-        totals[day] += float(Decimal(s.amount) / (Decimal(10) ** decimals)) * price
+        decimals, peg = factor
+        totals[day] += float(Decimal(s.amount) / (Decimal(10) ** decimals) * peg)
 
     return _response()

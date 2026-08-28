@@ -20,6 +20,7 @@ Direct-handler tests, same pattern as test_org_stats_usd.py.
 
 import secrets
 from datetime import datetime, timezone, timedelta
+from decimal import Decimal
 from uuid import uuid4
 
 import pytest
@@ -40,6 +41,11 @@ from app.api.user_org_stats_routes import get_org_stats
 OWNER_A = "0x" + "a" * 40
 OWNER_B = "0x" + "b" * 40
 SETTLE_WALLET = "0x" + "d" * 40
+
+# The suite runs at this instant, always — same reasoning as the sibling
+# stats/series files: a KPI route that reads the wall clock makes the result
+# depend on when you happen to run it. Fixtures are seeded relative to this.
+FROZEN_NOW = datetime(2026, 3, 15, 0, 4, 0, tzinfo=timezone.utc)
 USDC_SEPOLIA = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"  # 6 decimals, usd-coin
 
 
@@ -59,10 +65,29 @@ async def session():
 
 
 @pytest.fixture(autouse=True)
-def _patch_price(monkeypatch):
-    async def _fake_price(coingecko_id, currency="usd"):
-        return {"usd-coin": 1.0, "ethereum": 2000.0}.get(coingecko_id)
-    monkeypatch.setattr(stats_mod, "get_price", _fake_price)
+def _patch_peg(monkeypatch):
+    """Rebound from the removed `price_service.get_price` — same seam (the name
+    bound IN THE ROUTE MODULE), new source. USDC pegs at exactly 1.00; anything
+    else returns None, which means EXCLUDE rather than count as zero."""
+
+    def _fake_peg(chain_id, address):
+        if (address or "").lower() == USDC_SEPOLIA.lower():
+            return Decimal("1")
+        return None
+
+    monkeypatch.setattr(stats_mod, "get_usd_peg", _fake_peg)
+
+
+@pytest.fixture(autouse=True)
+def _freeze_clock(monkeypatch):
+    """Pin the clock the route reads, so its 24h/48h windows are fixed."""
+
+    class _FrozenDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return FROZEN_NOW if tz is not None else FROZEN_NOW.replace(tzinfo=None)
+
+    monkeypatch.setattr(stats_mod, "datetime", _FrozenDatetime)
 
 
 async def _make_org(session, *, primary_wallet=None, settlement_wallet=None):
@@ -103,7 +128,7 @@ async def _seed_intent(session, *, owner, status, environment="test"):
         intent_id=intent_id, reference_id=secrets.token_hex(8),
         merchant_id=owner, environment=environment, amount=5.0, currency="USDC",
         chain="base_sepolia", status=status, recipient=SETTLE_WALLET,
-        expires_at=datetime.now(timezone.utc) + timedelta(minutes=30),
+        expires_at=FROZEN_NOW + timedelta(minutes=30),
     ))
     await session.commit()
     return intent_id
@@ -119,13 +144,14 @@ async def _seed_settled_intent(session, *, owner, recipient, status,
         intent_id=intent_id, reference_id=secrets.token_hex(8),
         merchant_id=owner, environment=environment, amount=5.0, currency="USDC",
         chain="base_sepolia", status=status, recipient=recipient,
-        expires_at=datetime.now(timezone.utc) + timedelta(minutes=30),
+        expires_at=FROZEN_NOW + timedelta(minutes=30),
     ))
     session.add(PaymentSettlement(
         invoice_id="0x" + "1" * 64, merchant=recipient,
         payer="0x" + "e" * 40, token=USDC_SEPOLIA, amount=amount_base,
         chain_id=84532, tx_hash="0x" + secrets.token_hex(32), log_index=0,
         block_number=1, status=SettlementStatus.final, intent_id=intent_id,
+        created_at=FROZEN_NOW - timedelta(hours=1),
     ))
     await session.commit()
     return intent_id
@@ -235,7 +261,7 @@ async def test_has_api_key_false_when_inactive_or_revoked(session):
     user, org = await _make_org(session, primary_wallet=OWNER_A)
     await _seed_user_key(session, user=user, org=org, is_active=False)
     await _seed_user_key(
-        session, user=user, org=org, revoked_at=datetime.now(timezone.utc)
+        session, user=user, org=org, revoked_at=FROZEN_NOW
     )
 
     stats = await get_org_stats(ctx=_ctx(org), environment="test", db=session)

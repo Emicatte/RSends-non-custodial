@@ -129,8 +129,17 @@ Public (unauthenticated, what the hosted checkout polls):
 
 Plus `/api/v1/auth/*` (login/signup/OAuth/SIWE/refresh), `/api/v1/user/*` (account,
 sessions, devices, wallets, contacts, notifications), `/api/v1/organizations`,
-`/api/v1/dashboard/stats`, `/api/v1/prices`, and `/health*` probes
+`/api/v1/dashboard/stats`, and `/health*` probes
 (`/health`, `/live`, `/ready`, `/rpc`, `/dependencies`).
+
+> `GET /api/v1/prices` is **gone**. It was a keyless CoinGecko relay feeding only
+> display surfaces; the dashboard now values stablecoins from a static peg on the
+> token registry, and a token with no peg is excluded from the aggregate and
+> reported — never counted as zero. The docs also used it as the
+> "backend is up, doesn't touch the DB" probe: use **`GET /health/live`**
+> (`{"status":"alive"}`, no DB, no Redis) for that. `/health` covers liveness too
+> but additionally reports Redis and the indexer, so it is not the DB-independent
+> signal on its own.
 
 ### Migrations
 

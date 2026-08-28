@@ -22,11 +22,19 @@ export interface VolumeSeriesBucket {
   /** Bare UTC calendar date, `YYYY-MM-DD`. */
   date: string
   volume_usd: number
+  /**
+   * Settlements on this day the backend could not value, and therefore did NOT
+   * add to `volume_usd`. A bucket at 0.0 with a non-zero count was not a quiet
+   * day — it is the one place a dropped payment can hide in this chart.
+   */
+  unpriced_count: number
 }
 
 export interface VolumeSeriesPayload {
   days: number
   buckets: VolumeSeriesBucket[]
+  /** Window total; always equal to the sum of the buckets' counts. */
+  unpriced_count: number
 }
 
 export function useOrgVolumeSeries(days = 7) {
@@ -35,6 +43,10 @@ export function useOrgVolumeSeries(days = 7) {
   const tokenRef = useRef<string | undefined>(accessToken)
 
   const [buckets, setBuckets] = useState<VolumeSeriesBucket[] | null>(null)
+  // Kept beside `buckets` rather than derived from them: the card states the
+  // window's exclusion once, and a flat series with a non-zero count is
+  // exactly the case the notice exists for.
+  const [unpricedCount, setUnpricedCount] = useState<number>(0)
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<boolean>(false)
   // Bumped on active-org switch to force a refetch.
@@ -58,6 +70,7 @@ export function useOrgVolumeSeries(days = 7) {
   const reload = useCallback(async () => {
     if (status !== 'authenticated' || !accessToken) {
       setBuckets(null)
+      setUnpricedCount(0)
       setError(false)
       setLoading(false)
       return
@@ -68,10 +81,12 @@ export function useOrgVolumeSeries(days = 7) {
         tokenRef.current,
       )
       setBuckets(data.buckets ?? [])
+      setUnpricedCount(data.unpriced_count ?? 0)
       setError(false)
     } catch (e) {
       setError(true)
       setBuckets(null)
+      setUnpricedCount(0)
       console.error('[useOrgVolumeSeries] reload', e)
     } finally {
       setLoading(false)
@@ -92,6 +107,7 @@ export function useOrgVolumeSeries(days = 7) {
 
   return {
     buckets,
+    unpricedCount,
     loading,
     error,
     isAuthed: status === 'authenticated',

@@ -325,16 +325,6 @@ async def set_portfolio(address: str, chain_id: int, data: dict) -> None:
     await cache_set(key, data, ttl_seconds=30)
 
 
-async def get_prices() -> Optional[dict]:
-    """Cache prezzi token per 2 minuti."""
-    return await cache_get("prices:usd")
-
-
-async def set_prices(prices: dict) -> None:
-    """Salva prezzi in cache."""
-    await cache_set("prices:usd", prices, ttl_seconds=120)
-
-
 # ═══════════════════════════════════════════════════════════
 #  Rate Limiting (Sliding Window)
 # ═══════════════════════════════════════════════════════════

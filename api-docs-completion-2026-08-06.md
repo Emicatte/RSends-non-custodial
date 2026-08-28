@@ -38,7 +38,7 @@ Conseguenze osservate in produzione, adesso:
 | Idem | `GET /api/v1/tx/recent` → `500` |
 | **Il checkout ospitato non carica** | `https://demo.rsends.io/api/pay/{id}` → `500` (è il proxy che alimenta `/pay`) |
 | Indexer fermo | `health` → `stalled: true`, `last_block 45127159` contro un tip a `45134310` (~7000 blocchi indietro, non avanza) |
-| Non tocca il DB → funziona | `GET /api/v1/prices` → `200`; auth middleware → `401` corretto |
+| Non tocca il DB → funziona | `GET /health/live` → `200 {"status":"alive"}`; auth middleware → `401` corretto |
 
 **Non ho toccato nulla** — è infra/operator, fuori dallo scope e fuori dal mandato. Ma va
 sistemato prima di mandare la doc a chiunque: oggi un partner che segue il quickstart arriva
@@ -150,7 +150,7 @@ doc** — decidi tu se qualcosa merita di entrare.
 | **Auth utente** | `/api/v1/auth/*` — signup, login, refresh, logout, me, wallet-session | Autenticazione dell'utente umano |
 | **Custodial-era / dormienti** | `/api/v1/tx/*`, `/api/v1/anomalies`, `/api/v1/keys/*` (wallet-sig, in ritiro), `/api/v1/dashboard/stats` (congelato e scope-broken), `/api/v1/forwarding`, `/api/v1/distributions`, `/api/v1/aml/check` | Residuo pre-non-custodial, o in dismissione |
 | **Rotte non raggiungibili in prod** | `/api/v1/merchant/profile`, `/api/v1/merchant/invoices` | JWT-authed ma fuori da `EXEMPT_PATHS`: in produzione danno 401 senza `RSEND_DEV_AUTH_BYPASS`. Hanno prefisso `/merchant` ma **non** sono API merchant |
-| **Infra** | `/health`, `/health/deep`, `/api/v1/prices*`, `/api/v1/organizations*`, `/api/v1/invites*` | Non fanno parte del contratto d'integrazione |
+| **Infra** | `/health`, `/health/live`, `/health/deep`, `/api/v1/organizations*`, `/api/v1/invites*` | Non fanno parte del contratto d'integrazione |
 
 **Una eccezione che ho preso io, dimmi se la vuoi diversa:**
 `GET /api/v1/public/payment-intent/{intent_id}` — pubblico by-design (id-as-secret, view

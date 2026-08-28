@@ -75,8 +75,8 @@ def is_exempt(path: str) -> bool:
 #   - self-authenticating: the handler enforces its own auth via a route
 #     dependency or @require_wallet_auth (X-Admin-Token / wallet signature),
 #     which runs INSIDE the handler — the middleware must let the GET through.
-#   - genuinely public: open reads by design (price feed, public checkout
-#     status, health probe, account-header recent tx).
+#   - genuinely public: open reads by design (public checkout status, health
+#     probe, account-header recent tx).
 GET_PUBLIC_PREFIXES = {
     # self-authenticating (own dependency runs in the handler)
     "/api/v1/ledger",                   # require_admin
@@ -84,7 +84,6 @@ GET_PUBLIC_PREFIXES = {
     "/api/v1/splits",                   # @require_wallet_auth
     "/api/v1/dashboard",                # @require_wallet_auth
     # genuinely public
-    "/api/v1/prices",                   # public price feed
     "/api/v1/health/sweep",             # public health probe (sweeper router)
     "/api/v1/public/payment-intent",    # hosted checkout status — id-as-secret, limited view
     "/api/v1/tx/recent",                # account-header recent tx (public read)

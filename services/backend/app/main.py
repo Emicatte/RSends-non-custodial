@@ -32,7 +32,6 @@ from app.db.session import close_db, async_session, _is_sqlite, engine
 from app.api.routes import router
 from app.services.cache_service import close_redis
 from app.services.payment_indexer import start_indexer_if_needed, stop_indexer
-from app.services.price_service import fetch_all_prices, price_refresh_loop
 from app.logging_config import setup_logging
 logger = logging.getLogger(__name__)
 
@@ -151,15 +150,9 @@ async def lifespan(app: FastAPI):
     except Exception as e:  # never let a guard bug break startup
         logger.warning("[registry-guard] skipped due to unexpected error: %s", e)
 
-    # ── Price service: initial fetch + background loop ──
+    # `_aio` is used by the webhook/expiration block below and by the shutdown
+    # cancellation loop; it lived here when the price refresh task owned it.
     import asyncio as _aio
-    _price_refresh_task = None
-    try:
-        await fetch_all_prices()
-        _price_refresh_task = _aio.create_task(price_refresh_loop())
-        logger.info("Price service started (interval=%ds)", 60)
-    except Exception as e:
-        logger.warning("Price service init failed: %s — prices will be unavailable", e)
 
     # ── Webhook delivery + intent expiration loops (asyncio fallback) ──
     # Se Celery non e' raggiungibile, usa background tasks asyncio
@@ -206,7 +199,7 @@ async def lifespan(app: FastAPI):
     import asyncio as _aio  # local alias (matches startup section)
 
     # 1) Cancel orphaned background tasks (mirror of stop_* helpers).
-    for _task in (_price_refresh_task, _webhook_delivery_task, _intent_expiration_task):
+    for _task in (_webhook_delivery_task, _intent_expiration_task):
         if _task is not None:
             _task.cancel()
             try:
@@ -325,8 +318,6 @@ except ImportError:
 app.include_router(router)
 from app.api.audit_routes import audit_router
 app.include_router(audit_router)
-from app.api.price_routes import price_router
-app.include_router(price_router)
 from app.api.merchant_routes import merchant_router
 app.include_router(merchant_router)
 from app.api.public_routes import public_router  # payer-facing, id-as-secret

@@ -20,9 +20,16 @@ the intent. Same response shape as `DashboardStats` so the widget re-point is a
 one-line URL change.
 
 USD volume: `PaymentSettlement.amount` is base units; per row we map
-(chain_id, token) → decimals + coingecko_id via `app.tokens.registry`, normalize,
-and multiply by the cached USD price (`price_service.get_price`). Tokens with no
-registry entry or no cached price are counted but contribute 0 to USD volume.
+(chain_id, token) → decimals + USD peg via `app.tokens.registry`, normalize, and
+multiply by the peg. The peg is static and exact — a stablecoin is one unit of
+its currency — which is why this route no longer calls a price feed.
+
+A token with NO peg (ETH, or anything the registry does not know) is EXCLUDED
+from `volume_24h` and reported in `volume_24h_unpriced_count` /
+`volume_24h_unpriced_symbols`. It is deliberately not summed as zero: a
+merchant paid 2 ETH would otherwise read "$0.00", which is what a merchant paid
+nothing also reads. Callers must be able to tell those apart, so the response
+carries the exclusion rather than hiding it.
 """
 
 from __future__ import annotations
@@ -47,9 +54,8 @@ from app.models.settlement_models import PaymentSettlement, SettlementStatus
 # import is lazy — import it here so Base.metadata registers the table for
 # any consumer that create_all's after importing this module.
 from app.models.user_api_keys_models import UserApiKey  # noqa: F401
-from app.services.price_service import get_price
 from app.services.user_api_key_service import count_active_keys_for_org
-from app.tokens.registry import get_token
+from app.tokens.registry import get_token, get_usd_peg
 
 router = APIRouter(prefix="/api/v1/user/org", tags=["user-org-stats"])
 
@@ -68,17 +74,21 @@ def _token_info(chain_id, token_addr):
     return get_token(int(chain_id), None if is_native else token_addr)
 
 
-async def _usd_value(chain_id, token_addr, amount_base) -> Optional[float]:
+def _usd_value(chain_id, token_addr, amount_base) -> Optional[float]:
     """USD controvalue of one settlement's base-unit amount, or None when the
-    token is unknown or unpriced."""
+    token is unknown or has no peg.
+
+    None means EXCLUDE — the caller must count it separately, never fold it in
+    as 0.0. Synchronous on purpose: the peg is a dict lookup, not a fetch.
+    """
     info = _token_info(chain_id, token_addr)
     if info is None:
         return None
-    price = await get_price(info.coingecko_id, "usd")
-    if price is None:
+    peg = get_usd_peg(int(chain_id), None if info.is_native else token_addr)
+    if peg is None:
         return None
     human = Decimal(amount_base) / (Decimal(10) ** info.decimals)
-    return float(human) * price
+    return float(human * peg)
 
 
 @router.get("/stats", response_model=OrgDashboardStats)
@@ -129,6 +139,8 @@ async def get_org_stats(
             active_clients=0,
             active_clients_this_week=0,
             recent_transactions=[],
+            volume_24h_unpriced_count=0,
+            volume_24h_unpriced_symbols=[],
             settlement_wallet_set=settlement_wallet_set,
             has_api_key=has_api_key,
             has_paid_payment=False,
@@ -233,8 +245,14 @@ async def get_org_stats(
         or 0
     )
 
-    # ── USD volume: 24h + previous 24h (rows fetched, priced in Python) ──
-    async def _volume(since, until=None) -> float:
+    # ── USD volume: 24h + previous 24h (rows fetched, valued in Python) ──
+    async def _volume(since, until=None) -> Tuple[float, int, list[str]]:
+        """(total_usd, unpriced_count, unpriced_symbols).
+
+        Rows we cannot value are left OUT of the total and counted, never
+        added as 0.0 — see the module docstring. A token the registry does not
+        know contributes to the count but has no symbol to report.
+        """
         stmt = scoped(select(PaymentSettlement)).where(
             PaymentSettlement.created_at >= since
         )
@@ -242,14 +260,21 @@ async def get_org_stats(
             stmt = stmt.where(PaymentSettlement.created_at < until)
         rows = (await db.execute(stmt)).scalars().all()
         total = 0.0
+        unpriced = 0
+        symbols: set[str] = set()
         for s in rows:
-            usd = await _usd_value(s.chain_id, s.token, s.amount)
-            if usd is not None:
-                total += usd
-        return round(total, 2)
+            usd = _usd_value(s.chain_id, s.token, s.amount)
+            if usd is None:
+                unpriced += 1
+                info = _token_info(s.chain_id, s.token)
+                if info is not None:
+                    symbols.add(info.symbol)
+                continue
+            total += usd
+        return round(total, 2), unpriced, sorted(symbols)
 
-    volume_24h = await _volume(win_24h)
-    volume_prev = await _volume(win_48h, win_24h)
+    volume_24h, unpriced_24h, unpriced_symbols_24h = await _volume(win_24h)
+    volume_prev, _, _ = await _volume(win_48h, win_24h)
     volume_24h_delta_pct = (
         round((volume_24h - volume_prev) / volume_prev * 100, 1)
         if volume_prev > 0
@@ -266,7 +291,7 @@ async def get_org_stats(
     ).scalars().all()
     recent = []
     for s in recent_rows:
-        usd = await _usd_value(s.chain_id, s.token, s.amount)
+        usd = _usd_value(s.chain_id, s.token, s.amount)
         info = _token_info(s.chain_id, s.token)
         recent.append(
             RecentTransaction(
@@ -274,6 +299,9 @@ async def get_org_stats(
                 tx_hash=s.tx_hash,
                 type="transfer",
                 amount_usd=round(usd, 2) if usd is not None else 0.0,
+                # The row carries a dollar figure only when one exists. Clients
+                # must render the symbol instead of "$0.00" when this is False.
+                amount_usd_known=usd is not None,
                 currency=info.symbol if info else "TOKEN",
                 chain=_chain_label(s.chain_id),
                 status="confirmed",
@@ -292,6 +320,8 @@ async def get_org_stats(
         active_clients=active_clients,
         active_clients_this_week=active_clients_this_week,
         recent_transactions=recent,
+        volume_24h_unpriced_count=unpriced_24h,
+        volume_24h_unpriced_symbols=unpriced_symbols_24h,
         settlement_wallet_set=settlement_wallet_set,
         has_api_key=has_api_key,
         has_paid_payment=has_paid_payment,

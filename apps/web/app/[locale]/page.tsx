@@ -19,8 +19,6 @@ import AntiPhishingSetup from '../AntiPhishingSetup'
 import { TokenRow } from '../TokenSelector'
 import { getNativeToken, getTokensForChain, type TokenInfo } from '../tokens/tokenRegistry'
 import { ChainLogo } from '../../src/components/ChainLogo'
-import { useTokenBalance } from '../hooks/useTokenBalance'
-import { useTokenPrices } from '../hooks/useTokenPrices'
 import { ChainFamilySwitch } from '../../components/shared/ChainFamilySwitch'
 import { useUniversalWallet } from '../../hooks/useUniversalWallet'
 import type { ChainFamily } from '../../lib/chain-adapters/types'
@@ -743,13 +741,6 @@ export default function Home() {
     setSelectedChainId(chainId)
     setSelectedToken(getNativeToken(chainId) ?? null)
   }, [chainId])
-
-  // ── Selected token balance + EUR for inline display ────────────────
-  const { balance: selTokenBal, formatted: selTokenFmt, isLoading: selTokenLoading } = useTokenBalance(selectedToken, address)
-  const { prices: tokenPricesPage } = useTokenPrices()
-  const selTokenEur = selectedToken && tokenPricesPage[selectedToken.coingeckoId]?.eur
-    ? parseFloat(selTokenFmt) * tokenPricesPage[selectedToken.coingeckoId].eur
-    : null
 
   // Track unseen sweep events for Flow badge
   const { events: sweepEvents } = useSweepWebSocket(address)

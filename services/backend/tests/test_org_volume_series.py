@@ -17,6 +17,7 @@ trustworthy rather than merely plausible:
 
 import secrets
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from uuid import uuid4
 
 import pytest
@@ -36,8 +37,9 @@ from app.models.user_wallets_models import UserWallet
 OWNER_A = "0x" + "a" * 40
 OWNER_B = "0x" + "b" * 40
 SETTLE_WALLET_A = "0x" + "d" * 40  # org A's settlement_wallet ≠ its primary wallet
-USDC_SEPOLIA = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"  # 6 decimals, usd-coin
-ONE_USDC = 1_000_000  # base units → $1.00 at the patched price
+USDC_SEPOLIA = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"  # 6 decimals, pegged
+NATIVE_ETH = "0x" + "0" * 40  # the indexer's native sentinel — ETH, no peg
+ONE_USDC = 1_000_000  # base units → $1.00 at the 1:1 peg
 
 # The suite runs at this instant, always. 00:04 UTC is deliberate: it is the
 # condition under which this file used to fail in CI, once a day, for a one-hour
@@ -68,20 +70,26 @@ async def session():
 
 
 @pytest.fixture(autouse=True)
-def _patch_price(monkeypatch):
-    """Patch the name bound IN THE ROUTE MODULE, not price_service's."""
+def _patch_peg(monkeypatch):
+    """Rebound from the removed `price_service.get_price` — same seam, new
+    source. Patch the name bound IN THE ROUTE MODULE, not the registry's.
 
-    async def _fake_price(coingecko_id, currency="usd"):
-        return {"usd-coin": 1.0, "ethereum": 2000.0}.get(coingecko_id)
+    USDC pegs at exactly 1.00; anything else returns None, and None means
+    EXCLUDE — counted and named, never added as 0.0.
+    """
 
-    monkeypatch.setattr(series_mod, "get_price", _fake_price)
-    # The cross-check test calls the stats route, which binds its OWN get_price
-    # (user_org_stats_routes imports it directly). Left unpatched it falls
-    # through price_service's Redis/memory cache to a live CoinGecko fetch, so
-    # the tile priced at whatever the network returned — or 0.0 when it
-    # returned nothing. Same reason as above: patch the name bound in EACH
-    # route module.
-    monkeypatch.setattr(stats_mod, "get_price", _fake_price)
+    def _fake_peg(chain_id, address):
+        if (address or "").lower() == USDC_SEPOLIA.lower():
+            return Decimal("1")
+        return None
+
+    monkeypatch.setattr(series_mod, "get_usd_peg", _fake_peg)
+    # The cross-check test calls the stats route, which binds its OWN copy
+    # (user_org_stats_routes imports the name directly). Leaving it unpatched
+    # would let the card and the tile resolve pegs from different sources and
+    # disagree by construction. Same reason as above: patch the name bound in
+    # EACH route module.
+    monkeypatch.setattr(stats_mod, "get_usd_peg", _fake_peg)
 
 
 @pytest.fixture(autouse=True)
@@ -384,15 +392,17 @@ async def test_only_final_settlements_count(session):
 
 
 @pytest.mark.asyncio
-async def test_unpriced_token_contributes_zero_but_does_not_break(session):
-    """Inherited from the stats route: an unknown/unpriced token contributes 0
-    rather than raising or guessing. Same rule as the tile beside it."""
+async def test_unpriced_token_is_excluded_and_reported_not_zeroed(session):
+    """An unpeggable token must not raise, must not guess, and must not be
+    summed as zero. It is left OUT of the total and counted — on the bucket it
+    belongs to as well as on the window, because a single quiet-looking bucket
+    is exactly where a dropped payment hides."""
     org = await _make_org(session, owner_address=OWNER_A)
     await _seed(
         session,
         owner=OWNER_A,
         created_at=FROZEN_NOW,
-        token="0x" + "9" * 40,  # not in the token registry
+        token="0x" + "9" * 40,  # not in the token registry at all
     )
 
     res = await get_org_volume_series(
@@ -401,6 +411,82 @@ async def test_unpriced_token_contributes_zero_but_does_not_break(session):
 
     assert len(res.buckets) == 7
     assert sum(b.volume_usd for b in res.buckets) == 0.0
+    assert res.unpriced_count == 1
+    assert res.buckets[-1].unpriced_count == 1
+    assert sum(b.unpriced_count for b in res.buckets) == res.unpriced_count
+
+
+@pytest.mark.asyncio
+async def test_empty_window_is_distinguishable_from_an_unvaluable_one(session):
+    """The series counterpart of the stats regression: two orgs, the same flat
+    zero line, one of them actually got paid."""
+    paid_in_eth = await _make_org(session, owner_address=OWNER_A)
+    paid_nothing = await _make_org(session, owner_address=OWNER_B)
+    await _seed(
+        session,
+        owner=OWNER_A,
+        created_at=FROZEN_NOW,
+        token=NATIVE_ETH,
+        amount_base=2 * 10**18,
+    )
+
+    eth = await get_org_volume_series(
+        ctx=_ctx(paid_in_eth), days=7, environment="test", db=session
+    )
+    none = await get_org_volume_series(
+        ctx=_ctx(paid_nothing), days=7, environment="test", db=session
+    )
+
+    assert sum(b.volume_usd for b in eth.buckets) == 0.0
+    assert sum(b.volume_usd for b in none.buckets) == 0.0
+    assert eth.unpriced_count == 1
+    assert none.unpriced_count == 0
+    assert all(b.unpriced_count == 0 for b in none.buckets)
+
+
+@pytest.mark.asyncio
+async def test_mixed_window_totals_the_pegged_and_counts_the_rest(session):
+    org = await _make_org(session, owner_address=OWNER_A)
+    await _seed(session, owner=OWNER_A, created_at=FROZEN_NOW)
+    await _seed(
+        session,
+        owner=OWNER_A,
+        created_at=FROZEN_NOW,
+        token=NATIVE_ETH,
+        amount_base=10**18,
+    )
+
+    res = await get_org_volume_series(
+        ctx=_ctx(org), days=7, environment="test", db=session
+    )
+
+    assert sum(b.volume_usd for b in res.buckets) == 1.0
+    assert res.unpriced_count == 1
+
+
+@pytest.mark.asyncio
+async def test_unpriced_counts_land_in_their_own_bucket(session):
+    """Two unvaluable payments on two different days must be attributed to those
+    days, not lumped onto one."""
+    org = await _make_org(session, owner_address=OWNER_A)
+    await _seed(
+        session, owner=OWNER_A, created_at=_at(_today()),
+        token=NATIVE_ETH, amount_base=10**18,
+    )
+    await _seed(
+        session, owner=OWNER_A, created_at=_at(_today() - timedelta(days=3)),
+        token=NATIVE_ETH, amount_base=10**18,
+    )
+
+    res = await get_org_volume_series(
+        ctx=_ctx(org), days=7, environment="test", db=session
+    )
+
+    by_day = {b.date: b.unpriced_count for b in res.buckets}
+    assert by_day[_today()] == 1
+    assert by_day[_today() - timedelta(days=3)] == 1
+    assert res.unpriced_count == 2
+    assert sum(by_day.values()) == 2
 
 
 # ── 6. days parameter ──────────────────────────────────────────────────────
@@ -451,6 +537,16 @@ async def test_series_agrees_with_the_stats_tile(session):
 
     org = await _make_org(session, owner_address=OWNER_A)
     await _seed(session, owner=OWNER_A, created_at=FROZEN_NOW)
+    # An unvaluable payment in the same window: the two surfaces must agree on
+    # what they LEFT OUT as well as on what they summed, or the dashboard shows
+    # one exclusion notice next to a card that admits nothing.
+    await _seed(
+        session,
+        owner=OWNER_A,
+        created_at=FROZEN_NOW,
+        token=NATIVE_ETH,
+        amount_base=10**18,
+    )
 
     stats = await get_org_stats(ctx=_ctx(org), environment="test", db=session)
     series = await get_org_volume_series(
@@ -459,6 +555,9 @@ async def test_series_agrees_with_the_stats_tile(session):
 
     assert stats.volume_24h == 1.0  # guard: the tile actually saw it
     assert series.buckets[-1].volume_usd == stats.volume_24h
+    assert stats.volume_24h_unpriced_count == 1  # guard: it saw the ETH leg too
+    assert series.unpriced_count == stats.volume_24h_unpriced_count
+    assert series.buckets[-1].unpriced_count == stats.volume_24h_unpriced_count
 
 
 # ── 8. wire shape ──────────────────────────────────────────────────────────
@@ -482,7 +581,7 @@ def test_route_is_registered_with_the_right_response_model():
     assert routes[0].response_model is VolumeSeriesResponse
 
 
-def test_openapi_exposes_days_and_buckets_on_the_wire():
+def test_openapi_exposes_days_buckets_and_the_exclusion_on_the_wire():
     from app.main import app
 
     schema = app.openapi()
@@ -490,10 +589,13 @@ def test_openapi_exposes_days_and_buckets_on_the_wire():
     ref = path["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
     model = schema["components"]["schemas"][ref.split("/")[-1]]
 
-    assert set(model["properties"]) == {"days", "buckets"}
+    # `unpriced_count` is part of the contract at BOTH levels, not an internal
+    # detail: without it on the wire a flat chart cannot say why it is flat,
+    # and the client would be back to rendering a silent zero.
+    assert set(model["properties"]) == {"days", "buckets", "unpriced_count"}
     bucket_ref = model["properties"]["buckets"]["items"]["$ref"]
     bucket = schema["components"]["schemas"][bucket_ref.split("/")[-1]]
-    assert set(bucket["properties"]) == {"date", "volume_usd"}
+    assert set(bucket["properties"]) == {"date", "volume_usd", "unpriced_count"}
     # A bare UTC calendar date, not a datetime — the client must not have to
     # guess an offset to place the point.
     assert bucket["properties"]["date"]["format"] == "date"
