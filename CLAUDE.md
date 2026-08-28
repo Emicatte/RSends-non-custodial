@@ -375,6 +375,20 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
   not a better validator** — `settlement_models.py:72-73` already uses `Numeric`, commented
   "never float", so the settlement side is right and the intent side is the outlier. Until then,
   treat the amount gate as airtight for stablecoins and best-effort for native/18-decimal assets.
+- **An unenrichable TRON transaction freezes the poller's cursor indefinitely, and pages
+  nobody.** `tron_poller` fails closed by design: a transfer whose `/v1/transactions/{txid}/events`
+  enrichment errors, matches nothing, or matches ambiguously writes no settlement row, and the
+  cursor pins to that transaction's `block_timestamp` (`min_timestamp` is inclusive, so it is
+  re-observed, never skipped). That is the correct trade — a payment re-observed forever is
+  recoverable, one skipped once is not — but the consequence is that the tick retries the same
+  transaction every 60s with an `ERROR`, and **while the cursor is frozen no LATER TRON payment
+  is recorded either**, so a single poison transaction silently stalls the whole chain's
+  observation behind a log line no one is watching. There is no alert-service hook: unlike the
+  EVM indexer, which escalates to a single `logger.critical` + `INDEXER_STALLED` alert + gauge
+  at `STALL_TICKS` consecutive failures (`payment_indexer._note_failure`), the TRON poller has
+  no equivalent. The fix is that hook, in the `INDEXER_STALLED` style, keyed on consecutive
+  ticks blocked at the same cursor. Deferred to slice 3 or later — do not build it as a
+  drive-by.
 
 Closed (2026-07-05): **CI backend job now has a Redis service** (`redis:7`, health-checked,
 `REDIS_URL=redis://localhost:6379/0` — plain scheme is CI/test-scoped, the `rediss://` guard
