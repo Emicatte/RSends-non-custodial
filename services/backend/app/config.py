@@ -108,6 +108,17 @@ class Settings(BaseSettings):
     indexer_reorg_safety_depth: int = 64
     # JSON map of chain_id → start block for first-run backfill, e.g. {"8453": 0}
     indexer_start_blocks_json: str = ""
+    # ── TRON watch-only poller ────────────────────────────────
+    # JSON array of TRON HTTP node base URLs, primary first:
+    #   TRON_NODE_URLS_JSON='["https://api.trongrid.io","https://<failover>"]'
+    # Empty (the default) means the poller does not start, which is not an
+    # error — the same shape as an empty router map skipping the EVM indexer.
+    # Every listed node must prove it serves TRON mainnet at boot or the
+    # backend refuses to start; see app/services/tron_poller.py.
+    tron_node_urls_json: str = ""
+    # TronGrid API key, sent as the TRON-PRO-API-KEY header. Optional: the free
+    # tier answers keyless at a lower rate limit.
+    trongrid_api_key: str = ""
     # Widest eth_getLogs block range a single request may span. The per-tick
     # window is scanned in chunks of at most this many blocks. Default 10 =
     # the Alchemy free-tier cap on Base Sepolia; raise only if EVERY
