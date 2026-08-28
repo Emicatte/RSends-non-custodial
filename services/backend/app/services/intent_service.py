@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 
 from fastapi import HTTPException
 from sqlalchemy import and_, func, select
@@ -50,6 +51,7 @@ from app.services.router_registry import (
     is_watch_only_chain,
     network_name_for_chain_id,
     split_router_address_for,
+    token_for,
     token_is_enabled,
 )
 
@@ -370,6 +372,34 @@ async def create_intent(
             "error": "UNSUPPORTED_TOKEN",
             "message": f"Token {payload.currency} is not enabled on chain {requested_chain}.",
         })
+
+    # AMOUNT PRECISION GATE. `amount` is a Float with no scale bound, so an amount
+    # finer than the token can express used to be accepted and silently rounded at
+    # settlement — the merchant then gets invoiced for a value nobody asked for
+    # (123.4567895 USDC settles as 123456790 base units), and at the extreme the
+    # check disappears entirely: 1e-07 USDC converts to 0 base units, and the
+    # settlement comparison is `event_amount < expected_amount`, which nothing can
+    # fail against 0.
+    #
+    # The rule is exactly "to_base_units must not have to round", so the stored
+    # amount always survives the conversion the indexer and the calldata builder
+    # both perform. Decimals come from the registry, never hardcoded; token_for is
+    # guaranteed non-None here because token_is_enabled just passed (both maps are
+    # built in the same loader pass).
+    #
+    # Placed before the monthly-limit check so a malformed amount never spends the
+    # key's quota, for the same reason the router gate sits where it does.
+    _token = token_for(requested_chain, payload.currency)
+    if _token is not None:
+        _decimals = _token[1]
+        if (Decimal(str(payload.amount)) * (Decimal(10) ** _decimals)) % 1 != 0:
+            raise HTTPException(400, {
+                "error": "AMOUNT_PRECISION_EXCEEDED",
+                "message": (
+                    f"{payload.currency} on {requested_chain} has {_decimals} decimals; "
+                    f"amount {payload.amount} is finer than that and would be rounded."
+                ),
+            })
 
     # MAINNET ACTIVATION GATE. `check_org_chain_access` is the single definition
     # of "may this org transact on this chain", but until now only the session

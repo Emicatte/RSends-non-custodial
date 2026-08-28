@@ -263,7 +263,7 @@ followed; the retry count and backoff values; the 10 s timeout; `Content-Type`;
 
 | Field | Type | Required | Default | Bounds |
 |---|---|---|---|---|
-| `amount` | float | **yes** | — | `> 0` |
+| `amount` | float | **yes** | — | `> 0`, and its decimal scale must not exceed the token's `decimals` for the requested `(chain, currency)` — 6 for USDC/USDT/EURC, 18 for ETH/DAI. `10.000001` USDC is accepted; `10.0000001` is `400 AMOUNT_PRECISION_EXCEEDED`. We reject rather than round, because rounding would invoice a value you did not ask for. |
 | `currency` | string | **yes** | — | case-sensitive member of `{ETH, USDC, USDT, DAI, cbBTC, DEGEN}` |
 | `chain` | string | no | **`"BASE"`** | — |
 | `expires_in_minutes` | integer | no | `30` | `5..1440` |
@@ -335,6 +335,9 @@ discarded).
 `tests/test_creation_token_gate.py` (3 tests — unregistered and disabled tokens rejected
 with no row persisted), `tests/test_recipient_gate.py` (5 tests — the 422s and the
 settlement-wallet resolution).
+Amount precision: `tests/test_tron_watchonly_intent.py` (over-scale rejected on base and on
+tron, an amount that would convert to 0 base units rejected, and an accepted amount asserted to
+survive `to_base_units` without rounding).
 `onchain` branches: `tests/test_fee_model.py::TestBuildOnchainPayment::test_includes_fee_total_maxfee_and_calldata`,
 `::test_degrades_when_quote_unavailable`, `tests/test_router_v2.py` (v2 branch, v2 wins over
 v1, v1 still reports `routerVersion 1`).
@@ -498,7 +501,8 @@ Error codes on the merchant surface: `INVALID_API_KEY`, `INSUFFICIENT_SCOPE`,
 `TESTNET_ONLY`, `MAINNET_ONLY`, `INVALID_STATE`, `INVALID_STATUS`, `WEBHOOK_INACTIVE`,
 `INTENT_NOT_FOUND`, `WEBHOOK_NOT_FOUND`, `SETTLEMENT_IN_FLIGHT`,
 `DUPLICATE_REQUEST_IN_FLIGHT`, `SETTLEMENT_WALLET_MISSING`, `SETTLEMENT_WALLET_AMBIGUOUS`,
-`SPLIT_UNAVAILABLE`, `WEBHOOK_URL_FORBIDDEN`, `RATE_LIMIT_EXCEEDED`,
+`SPLIT_UNAVAILABLE`, `RECIPIENT_CHAIN_MISMATCH`, `AMOUNT_PRECISION_EXCEEDED`,
+`WEBHOOK_URL_FORBIDDEN`, `RATE_LIMIT_EXCEEDED`,
 `KEY_RATE_LIMIT_EXCEEDED`, `MONTHLY_LIMIT_EXCEEDED`, `RATE_LIMIT_UNAVAILABLE`,
 `PAYLOAD_TOO_LARGE`, `SERVICE_OVERLOADED`, `REQUEST_TIMEOUT`, `INTERNAL_ERROR`.
 

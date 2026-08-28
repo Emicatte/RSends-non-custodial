@@ -432,3 +432,99 @@ async def test_session_environment_live_cannot_bypass_activation_for_tron(sessio
         )
     assert exc.value.status_code == 403
     assert exc.value.detail == {"code": "mainnet_activation_required"}
+
+
+# ── Amount precision: what is stored must survive to_base_units ──
+#
+# Not TRON-specific — silently rounding a payment amount is a bug on Base too.
+# These live here because this module already has the harness; the gate itself
+# is chain-agnostic and sits at the shared construction site.
+
+@pytest.mark.asyncio
+async def test_amount_within_token_decimals_is_accepted(session, _quiet_audit):
+    """6 decimals is exactly what USDC can express, so it must go through."""
+    owner = _fresh_owner()
+    _org, key = await _org_and_key(session, owner=owner, activation_status="active")
+
+    payload = CreatePaymentIntentRequest(
+        amount=10.000001, currency="USDC", chain="base", recipient=SETTLE,
+    )
+    resp = await create_payment_intent(payload, _req(owner=owner, key_id=key.id), db=session)
+
+    row = await _row(session, resp)
+    assert row.amount == 10.000001
+
+
+@pytest.mark.asyncio
+async def test_amount_finer_than_token_decimals_is_rejected(session, _quiet_audit):
+    """A 7th decimal on a 6-decimal token would be rounded away at settlement."""
+    owner = _fresh_owner()
+    _org, key = await _org_and_key(session, owner=owner, activation_status="active")
+
+    payload = CreatePaymentIntentRequest(
+        amount=10.0000001, currency="USDC", chain="base", recipient=SETTLE,
+    )
+    with pytest.raises(HTTPException) as exc:
+        await create_payment_intent(payload, _req(owner=owner, key_id=key.id), db=session)
+
+    assert exc.value.status_code == 400
+    assert exc.value.detail["error"] == "AMOUNT_PRECISION_EXCEEDED"
+    assert "6" in exc.value.detail["message"]          # names the token's decimals
+    assert "USDC" in exc.value.detail["message"]
+
+
+@pytest.mark.asyncio
+async def test_amount_precision_rejected_on_tron_too(session, _quiet_audit):
+    """Same gate, same code, on the watch-only chain — it is one shared rule."""
+    owner = _fresh_owner()
+    _org, key = await _org_and_key(session, owner=owner, activation_status="active")
+
+    with pytest.raises(HTTPException) as exc:
+        await create_payment_intent(
+            _tron_payload(amount=10.0000001), _req(owner=owner, key_id=key.id), db=session
+        )
+    assert exc.value.status_code == 400
+    assert exc.value.detail["error"] == "AMOUNT_PRECISION_EXCEEDED"
+
+
+@pytest.mark.asyncio
+async def test_amount_that_would_convert_to_zero_base_units_is_rejected(session, _quiet_audit):
+    """1e-07 USDC passed `gt=0` and converted to 0 base units. The settlement
+    check is `event_amount < expected_amount`, so nothing could ever fail it —
+    the amount check was entirely defeated for such an intent."""
+    owner = _fresh_owner()
+    _org, key = await _org_and_key(session, owner=owner, activation_status="active")
+
+    payload = CreatePaymentIntentRequest(
+        amount=1e-07, currency="USDC", chain="base", recipient=SETTLE,
+    )
+    with pytest.raises(HTTPException) as exc:
+        await create_payment_intent(payload, _req(owner=owner, key_id=key.id), db=session)
+
+    assert exc.value.status_code == 400
+    assert exc.value.detail["error"] == "AMOUNT_PRECISION_EXCEEDED"
+
+
+@pytest.mark.asyncio
+async def test_accepted_amount_round_trips_through_to_base_units(session, _quiet_audit):
+    """The invariant the gate exists to guarantee: for any amount that gets
+    stored, to_base_units performs no rounding at all — the scaled Decimal is
+    already integral, so the stored value and the on-chain expectation cannot
+    drift apart."""
+    from decimal import Decimal
+
+    from app.services.router_registry import to_base_units, token_for
+
+    owner = _fresh_owner()
+    _org, key = await _org_and_key(session, owner=owner, activation_status="active")
+
+    payload = CreatePaymentIntentRequest(
+        amount=10.000001, currency="USDC", chain="base", recipient=SETTLE,
+    )
+    resp = await create_payment_intent(payload, _req(owner=owner, key_id=key.id), db=session)
+    row = await _row(session, resp)
+
+    _addr, decimals = token_for("base", "USDC")
+    scaled = Decimal(str(row.amount)) * (Decimal(10) ** decimals)
+    assert scaled % 1 == 0, "stored amount must not need rounding"
+    assert to_base_units(row.amount, decimals) == int(scaled)
