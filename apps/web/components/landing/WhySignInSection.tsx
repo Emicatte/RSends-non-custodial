@@ -83,7 +83,7 @@ export function WhySignInSection() {
           display: "grid",
           gridTemplateColumns: isMobile ? "1fr" : "0.84fr 1.16fr",
           alignItems: "stretch",
-          borderRadius: 24,
+          borderRadius: 12,
           background: C.bg,
           border: `1px solid ${C.border}`,
         }}
@@ -98,7 +98,7 @@ export function WhySignInSection() {
             overflow: "hidden",
             // Rounded clip frame for the image. Round only the OUTER corners
             // (the inner seam between the two columns stays square).
-            borderRadius: isMobile ? "24px 24px 0 0" : "24px 0 0 24px",
+            borderRadius: isMobile ? "12px 12px 0 0" : "12px 0 0 12px",
           }}
         >
           <Image
@@ -143,11 +143,11 @@ export function WhySignInSection() {
               className="rs-hiw-text"
               style={{
                 fontFamily: C.D,
-                fontSize: isMobile ? 28 : 32,
+                fontSize: isMobile ? 28 : 34,
                 fontWeight: 600,
                 color: C.onDark,
                 lineHeight: 1.1,
-                letterSpacing: "-0.5px",
+                letterSpacing: "-0.02em",
                 margin: "0 0 14px",
                 textWrap: "balance",
               }}
@@ -196,7 +196,7 @@ export function WhySignInSection() {
                 style={{
                   background: C.surface,
                   border: `1px solid ${C.border}`,
-                  borderRadius: 16,
+                  borderRadius: 8,
                   padding: isMobile ? 22 : 28,
                   // Stacked cards hug their content; the fixed height only
                   // equalizes the desktop 2×2 grid.

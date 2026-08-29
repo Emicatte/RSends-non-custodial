@@ -144,7 +144,7 @@ export default async function PricingPage({ params }: PageProps) {
                 style={{
                   background: C.surface,
                   border: emphasized ? `1.5px solid ${C.purple}` : `1px solid ${C.border}`,
-                  borderRadius: 16,
+                  borderRadius: 8,
                   padding: '28px 30px',
                 }}
               >
@@ -215,7 +215,7 @@ export default async function PricingPage({ params }: PageProps) {
             style={{
               background: C.surface,
               border: `1.5px solid ${C.purple}`,
-              borderRadius: 16,
+              borderRadius: 8,
               padding: 'clamp(28px, 4vw, 44px)',
               display: 'flex',
               flexDirection: 'column',
@@ -289,7 +289,7 @@ export default async function PricingPage({ params }: PageProps) {
               style={{
                 background: C.surface,
                 border: `1px solid ${C.border}`,
-                borderRadius: 24,
+                borderRadius: 12,
                 overflow: 'hidden',
               }}
             >

@@ -200,7 +200,7 @@ export default async function HowItWorksPage({ params }: PageProps) {
             className="rs-reveal"
             style={{
               border: `1px solid ${C.border}`,
-              borderRadius: 16,
+              borderRadius: 8,
               background: C.surface,
               padding: 'clamp(24px, 4vw, 40px)',
             }}
@@ -345,7 +345,7 @@ function cardShell(): React.CSSProperties {
   return {
     background: C.surface,
     border: `1px solid ${C.border}`,
-    borderRadius: 24,
+    borderRadius: 12,
     overflow: 'hidden',
   }
 }

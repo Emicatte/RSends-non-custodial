@@ -23,7 +23,7 @@ function CtaLink({ children, color, outlined, style, href, ...rest }: Omit<React
   const [hov, setHov] = useState(false)
   const linkStyle: React.CSSProperties = {
     fontFamily: C.D, fontSize: 14, fontWeight: 600, cursor: 'pointer',
-    padding: '12px 24px', borderRadius: 10, transition: 'all 0.2s',
+    padding: '12px 24px', borderRadius: 4, transition: 'all 0.2s',
     border: outlined ? `1.5px solid ${color}` : 'none',
     background: outlined ? (hov ? color : 'transparent') : color,
     color: outlined ? (hov ? C.onDark : color) : C.onDark,
@@ -33,8 +33,11 @@ function CtaLink({ children, color, outlined, style, href, ...rest }: Omit<React
     textDecoration: 'none',
     ...style,
   }
-  // Same-page hash anchors use a native <a>; next-intl Link is for routes.
-  if (href.startsWith('#')) {
+  // Same-page hash anchors use a native <a>; so does /docs, which is the
+  // English-only API documentation living outside the [locale] tree (a
+  // next-intl Link would prefix it and bounce through a redirect).
+  // next-intl Link is for locale routes.
+  if (href.startsWith('#') || href.startsWith('/docs')) {
     return (
       <a
         href={href}
@@ -64,7 +67,7 @@ export default function LandingSections() {
   const cardStyle: React.CSSProperties = {
     background: C.surface,
     border: `1px solid ${C.border}`,
-    borderRadius: 16,
+    borderRadius: 8,
     padding: isMobile ? '28px 24px' : '40px 36px',
     display: 'flex',
     flexDirection: 'column',
@@ -72,7 +75,7 @@ export default function LandingSections() {
 
   const iconBoxStyle: React.CSSProperties = {
     width: 40, height: 40,
-    borderRadius: 10,
+    borderRadius: 4,
     background: `${C.purple}15`,
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     marginBottom: 24,
@@ -117,8 +120,8 @@ export default function LandingSections() {
         <div className="rs-reveal" style={{ maxWidth: 880, marginBottom: isMobile ? 32 : 56 }}>
             <h2 style={{
               fontFamily: C.D,
-              fontSize: 'clamp(28px, 4vw, 52px)',
-              fontWeight: 500,
+              fontSize: 'clamp(34px, 5vw, 64px)',
+              fontWeight: 600,
               color: C.text,
               lineHeight: 1.1,
               letterSpacing: '-0.02em',
@@ -198,7 +201,7 @@ export default function LandingSections() {
                 ))}
               </ul>
               <div style={{ marginTop: 'auto' }}>
-                <CtaLink color={C.text} outlined href="/pricing">{t('businesses.cta')}</CtaLink>
+                <CtaLink color={C.text} outlined href="/docs/quickstart">{t('businesses.cta')}</CtaLink>
               </div>
             </motion.div>
             </div>

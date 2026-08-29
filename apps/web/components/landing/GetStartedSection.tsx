@@ -86,7 +86,7 @@ export default function GetStartedSection() {
           display: 'grid',
           gridTemplateColumns: isMobile ? '1fr' : '0.58fr 0.42fr',
           alignItems: 'stretch',
-          borderRadius: 24,
+          borderRadius: 12,
           border: `1px solid ${C.border}`,
         }}
       >
@@ -96,7 +96,7 @@ export default function GetStartedSection() {
             position: 'relative',
             minHeight: isMobile ? 260 : undefined,
             overflow: 'hidden',
-            borderRadius: isMobile ? '24px 24px 0 0' : '24px 0 0 24px',
+            borderRadius: isMobile ? '12px 12px 0 0' : '12px 0 0 12px',
           }}
         >
           <Image
@@ -115,17 +115,17 @@ export default function GetStartedSection() {
           style={{
             background: C.text,
             padding: isMobile ? '40px 28px' : 56,
-            borderRadius: isMobile ? '0 0 24px 24px' : '0 24px 24px 0',
+            borderRadius: isMobile ? '0 0 12px 12px' : '0 12px 12px 0',
           }}
         >
           <h2
             className="rs-gs-text"
             style={{
               fontFamily: C.D,
-              fontSize: isMobile ? 32 : 40,
+              fontSize: isMobile ? 34 : 64,
               fontWeight: 600,
               color: C.onDark,
-              letterSpacing: '-1px',
+              letterSpacing: '-0.02em',
               lineHeight: 1.1,
               margin: '0 0 16px',
             }}
