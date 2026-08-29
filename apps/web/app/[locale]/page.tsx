@@ -33,7 +33,6 @@ import { C, EASE } from '@/app/designTokens'
 import SplitText from '@/components/motion/SplitText'
 import SmoothScroll from '@/components/SmoothScroll'
 import { WhySignInSection } from '@/components/landing/WhySignInSection'
-import SupportedNetworksCarousel from '@/components/landing/SupportedNetworksCarousel'
 
 
 
@@ -653,7 +652,12 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
         </Link>
       </div>
 
-      {/* Divider — scaleX reveal 1.35s */}
+      {/* Divider — scaleX reveal 1.35s.
+          marginBottom is 80/40, not 8, because this rule used to be followed
+          by the supported-networks logo band (~76-92px tall) and is now the
+          last thing in the hero. Those are the values <main> already uses for
+          its own paddingBottom at the same breakpoint, so the hero keeps the
+          vertical rhythm it had without introducing a new spacing step. */}
       <div
         className="rs-hero-line"
         style={{
@@ -662,24 +666,10 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
           background: C.border,
           maxWidth: 1600,
           marginTop: 20,
-          marginBottom: 8,
+          marginBottom: isMobile ? 40 : 80,
           '--rs-hero-delay': '1.35s',
         } as React.CSSProperties}
       />
-
-      {/* Supported Networks carousel — replaces old metrics row */}
-      <div
-        className="rs-hero-rise"
-        style={{
-          marginLeft: isMobile ? -20 : -96,
-          marginRight: isMobile ? -20 : -96,
-          '--rs-hero-dur': '0.8s',
-          '--rs-hero-delay': '1.5s',
-          '--rs-hero-y': '12px',
-        } as React.CSSProperties}
-      >
-        <SupportedNetworksCarousel />
-      </div>
     </div>
   )
 }
