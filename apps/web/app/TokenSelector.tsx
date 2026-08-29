@@ -43,7 +43,7 @@ function TokenIcon({ token, size = 28 }: { token: TokenInfo; size?: number }) {
       ) : (
         <span style={{
           fontSize: size * 0.36, fontWeight: 800,
-          color: C.onDark, fontFamily: C.D,
+          color: '#fff', fontFamily: C.D,
         }}>
           {token.symbol.slice(0, 2)}
         </span>
@@ -237,7 +237,7 @@ export default function TokenSelector({
               top: 'calc(100% + 6px)',
               left: 0, right: 0,
               zIndex: 200,
-              background: C.surface,
+              background: '#FFFFFF',
               border: '1px solid rgba(10,10,10,0.10)',
               borderRadius: 14,
               overflow: 'hidden',

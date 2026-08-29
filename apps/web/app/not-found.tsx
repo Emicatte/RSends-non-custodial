@@ -6,8 +6,8 @@ export default function NotFound() {
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'var(--rs-paper)',
-      color: 'var(--rs-ink)',
+      background: '#FAFAFA',
+      color: '#0A0A0A',
       fontFamily: 'var(--font-display)',
     }}>
       <h1 style={{ fontSize: 72, fontWeight: 800, margin: 0, lineHeight: 1 }}>404</h1>

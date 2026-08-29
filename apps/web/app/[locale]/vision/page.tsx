@@ -128,7 +128,7 @@ export default async function VisionPage({ params }: PageProps) {
               className="rs-card"
               style={{
                 border: `1px solid ${C.border}`,
-                borderRadius: 8,
+                borderRadius: 16,
                 background: C.surface,
                 padding: 'clamp(24px, 3.5vw, 36px)',
               }}
@@ -183,7 +183,7 @@ export default async function VisionPage({ params }: PageProps) {
               <div
                 style={{
                   border: `1px solid ${C.border}`,
-                  borderRadius: 8,
+                  borderRadius: 16,
                   background: C.surface,
                   padding: 'clamp(24px, 3.5vw, 36px)',
                   height: '100%',

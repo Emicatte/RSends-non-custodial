@@ -86,7 +86,7 @@ export default function GetStartedSection() {
           display: 'grid',
           gridTemplateColumns: isMobile ? '1fr' : '0.58fr 0.42fr',
           alignItems: 'stretch',
-          borderRadius: 12,
+          borderRadius: 24,
           border: `1px solid ${C.border}`,
         }}
       >
@@ -96,7 +96,7 @@ export default function GetStartedSection() {
             position: 'relative',
             minHeight: isMobile ? 260 : undefined,
             overflow: 'hidden',
-            borderRadius: isMobile ? '12px 12px 0 0' : '12px 0 0 12px',
+            borderRadius: isMobile ? '24px 24px 0 0' : '24px 0 0 24px',
           }}
         >
           <Image
@@ -115,17 +115,17 @@ export default function GetStartedSection() {
           style={{
             background: C.text,
             padding: isMobile ? '40px 28px' : 56,
-            borderRadius: isMobile ? '0 0 12px 12px' : '0 12px 12px 0',
+            borderRadius: isMobile ? '0 0 24px 24px' : '0 24px 24px 0',
           }}
         >
           <h2
             className="rs-gs-text"
             style={{
               fontFamily: C.D,
-              fontSize: isMobile ? 34 : 64,
+              fontSize: isMobile ? 32 : 40,
               fontWeight: 600,
-              color: C.onDark,
-              letterSpacing: '-0.02em',
+              color: '#fff',
+              letterSpacing: '-1px',
               lineHeight: 1.1,
               margin: '0 0 16px',
             }}
@@ -138,7 +138,7 @@ export default function GetStartedSection() {
             style={{
               fontFamily: C.D,
               fontSize: 16,
-              color: C.onDarkMuted,
+              color: 'rgba(255,255,255,0.8)',
               lineHeight: 1.6,
               maxWidth: 420,
               margin: '0 0 28px',
@@ -147,7 +147,7 @@ export default function GetStartedSection() {
             {t('subcopy')}
           </p>
 
-          <div style={{ height: 1, background: C.onDarkLine, margin: '0 0 28px' }} />
+          <div style={{ height: 1, background: 'rgba(255,255,255,0.12)', margin: '0 0 28px' }} />
 
           {FEATURES.map(({ key, Icon }) => (
             <div
@@ -155,12 +155,12 @@ export default function GetStartedSection() {
               className="rs-gs-text"
               style={{ display: 'flex', gap: 14, alignItems: 'flex-start', marginBottom: 20 }}
             >
-              <Icon size={20} color={C.onDark} strokeWidth={2} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />
+              <Icon size={20} color="#fff" strokeWidth={2} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />
               <div>
-                <div style={{ fontFamily: C.D, fontSize: 15, fontWeight: 600, color: C.onDark, marginBottom: 4 }}>
+                <div style={{ fontFamily: C.D, fontSize: 15, fontWeight: 600, color: '#fff', marginBottom: 4 }}>
                   {t(`features.${key}.title`)}
                 </div>
-                <div style={{ fontFamily: C.D, fontSize: 14, color: C.onDarkMuted, lineHeight: 1.5 }}>
+                <div style={{ fontFamily: C.D, fontSize: 14, color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>
                   {t(`features.${key}.desc`)}
                 </div>
               </div>
@@ -173,7 +173,7 @@ export default function GetStartedSection() {
             style={{
               display: 'block',
               textAlign: 'center',
-              background: C.onDark,
+              background: '#fff',
               color: C.text,
               fontFamily: C.D,
               fontSize: 16,
@@ -194,7 +194,7 @@ export default function GetStartedSection() {
               textAlign: 'center',
               fontFamily: C.D,
               fontSize: 14,
-              color: C.onDarkMuted,
+              color: 'rgba(255,255,255,0.7)',
               textDecoration: 'none',
               marginTop: 16,
             }}

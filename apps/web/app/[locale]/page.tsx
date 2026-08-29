@@ -31,17 +31,14 @@ import GetStartedSection from '@/components/landing/GetStartedSection'
 import LandingSections from '../LandingSections'
 import { C, EASE } from '@/app/designTokens'
 import SplitText from '@/components/motion/SplitText'
-import DeviceShowcase from '@/components/landing/DeviceShowcase'
 import SmoothScroll from '@/components/SmoothScroll'
 import { WhySignInSection } from '@/components/landing/WhySignInSection'
 
 
 
 
-// Not a gradient any more, despite the name — kept because several call sites
-// spread it. Terracotta here is only ever applied to large display text.
 const GRAD: React.CSSProperties = {
-  color: C.terracotta,
+  color: '#C8512C',
 }
 
 const cinematicT: Transition = { duration: 0.45, ease: EASE }
@@ -124,7 +121,7 @@ function ParticleIntro({ onDone }: { onDone: () => void }) {
       <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0 }} />
       <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center' }}>
         <div style={{ opacity: phase >= 2 ? 1 : 0, transition: 'opacity 0.6s ease', marginBottom: 8 }}>
-          <div style={{ width: 52, height: 52, borderRadius: 4, background: C.text, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto', boxShadow: phase >= 2 ? '0 0 50px rgba(200,81,44,0.4)' : 'none' }}>
+          <div style={{ width: 52, height: 52, borderRadius: 13, background: C.text, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto', boxShadow: phase >= 2 ? '0 0 50px rgba(200,81,44,0.4)' : 'none' }}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M13 2L4.5 12.5h5.5l-1 9.5 8.5-11.5h-5.5L13 2z" fill="white" fillOpacity="0.95"/></svg>
           </div>
         </div>
@@ -274,7 +271,7 @@ function NetworkTokenWidget({
             style={{
               display: 'flex', alignItems: 'center', gap: 8,
               background: C.surface,
-              borderRadius: 8, padding: '8px 14px',
+              borderRadius: 14, padding: '8px 14px',
               border: '1px solid rgba(10,10,10,0.12)',
             }}
           >
@@ -325,14 +322,14 @@ function NetworkTokenWidget({
                 e.currentTarget.style.boxShadow = '0 2px 12px rgba(200,81,44,0.30)'
               }}
               style={{
-                fontFamily: C.D, fontSize: 12, fontWeight: 700, color: C.onDark,
+                fontFamily: C.D, fontSize: 12, fontWeight: 700, color: '#fff',
                 letterSpacing: '0.02em',
-                background: C.terracottaDeep,
-                border: 'none', borderRadius: 4,
+                background: 'linear-gradient(135deg, #C8512C, #C8512C)',
+                border: 'none', borderRadius: 10,
                 padding: '8px 18px',
                 cursor: connecting ? 'default' : 'pointer',
                 opacity: connecting ? 0.7 : 1,
-                boxShadow: '0 2px 12px rgba(168,64,31,0.30)',
+                boxShadow: '0 2px 12px rgba(200,81,44,0.30)',
                 transition: 'filter 0.15s, transform 0.15s, box-shadow 0.15s, opacity 0.15s',
               }}
             >
@@ -348,7 +345,7 @@ function NetworkTokenWidget({
         style={{
           display: 'flex', alignItems: 'center',
           background: C.surface,
-          borderRadius: 8,
+          borderRadius: 14,
           border: `1px solid ${openPanel ? 'rgba(10,10,10,0.12)' : 'rgba(10,10,10,0.12)'}`,
           transition: 'border-color 0.2s ease',
           overflow: 'hidden',
@@ -368,7 +365,7 @@ function NetworkTokenWidget({
           <ChainLogo chainId={chain.id} size={20} />
           <span style={{ fontFamily: C.D, fontSize: 11, fontWeight: 600, color: C.text }}>{chain.short}</span>
           {isTestnet && (
-            <span style={{ fontFamily: C.M, fontSize: 8, fontWeight: 700, color: '#ffb800', background: 'rgba(255,184,0,0.1)', padding: '1px 4px', borderRadius: 4, lineHeight: '1.2' }}>TEST</span>
+            <span style={{ fontFamily: C.M, fontSize: 8, fontWeight: 700, color: '#ffb800', background: 'rgba(255,184,0,0.1)', padding: '1px 4px', borderRadius: 3, lineHeight: '1.2' }}>TEST</span>
           )}
           <span style={{ color: C.dim, fontSize: 7 }}>▾</span>
         </button>
@@ -414,9 +411,9 @@ function NetworkTokenWidget({
             transition={{ duration: 0.15, ease: [0.4, 0, 0.2, 1] }}
             style={{
               position: 'absolute', top: 'calc(100%)', right: 0, zIndex: 100,
-              minWidth: 220, maxHeight: 300, overflowY: 'auto' as const, background: C.surface,
+              minWidth: 220, maxHeight: 300, overflowY: 'auto' as const, background: '#FFFFFF',
               border: '1px solid rgba(10,10,10,0.10)',
-              borderRadius: 8,
+              borderRadius: 14,
               boxShadow: '0 16px 48px rgba(0,0,0,0.7), 0 0 0 1px rgba(10,10,10,0.03)',
             }}
           >
@@ -481,9 +478,9 @@ function NetworkTokenWidget({
             transition={{ duration: 0.15, ease: [0.4, 0, 0.2, 1] }}
             style={{
               position: 'absolute', top: 'calc(100%)', right: 0, zIndex: 100,
-              minWidth: 240, background: C.surface,
+              minWidth: 240, background: '#FFFFFF',
               border: '1px solid rgba(10,10,10,0.10)',
-              borderRadius: 8, overflow: 'hidden',
+              borderRadius: 14, overflow: 'hidden',
               boxShadow: '0 16px 48px rgba(0,0,0,0.7), 0 0 0 1px rgba(10,10,10,0.03)',
             }}
           >
@@ -519,7 +516,7 @@ function EngineStatus() {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 6,
-      padding: '5px 12px', borderRadius: 8,
+      padding: '5px 12px', borderRadius: 16,
       background: 'rgba(10,10,10,0.04)',
       border: `1px solid ${C.border}`,
     }}>
@@ -563,14 +560,11 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
             fontFamily: C.M,
             fontSize: 16,
             fontWeight: 500,
-            // terracotta-deep, not terracotta: at 16px this is small text and
-            // #C8512C is only 3.87:1 on paper. #A8401F is 5.29:1.
-            color: C.terracottaDeep,
+            color: C.purple,
             letterSpacing: '0.18em',
             marginBottom: 8,
             textTransform: 'uppercase' as const,
-            '--rs-hero-dur': '0.4s',
-            '--rs-hero-delay': '0.06s',
+            '--rs-hero-dur': '0.6s',
             '--rs-hero-y': '12px',
           } as React.CSSProperties}
         >
@@ -578,29 +572,27 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
         </div>
       )}
 
-      {/* Title — split reveal 0.15s / 0.45s */}
+      {/* Title — split reveal 0.15s / 0.45s / 0.75s */}
       <h1 style={{
         fontFamily: C.D,
         // Mobile steps down with the viewport (351px → ~49px); a fixed 56px
-        // broke the second line awkwardly below ~400px.
-        // 64-80px, not the old 74-96px. The previous size was set for a
-        // three-word-per-line headline ("Your money." / "Your wallet."); the
-        // sentence that replaced it wrapped to four lines at 96px and left
-        // "wallet." alone on the last one.
-        fontSize: isMobile ? 'clamp(38px, 12vw, 52px)' : 'clamp(48px, 5.4vw, 76px)',
-        fontWeight: 600,
+        // broke "Your wallet." awkwardly below ~400px.
+        fontSize: isMobile ? 'clamp(38px, 14vw, 56px)' : 'clamp(74px, 8vw, 96px)',
+        fontWeight: 500,
         color: C.text,
-        lineHeight: 1.08,
+        lineHeight: 1.1,
         letterSpacing: '-0.02em',
         margin: '0 0 18px',
-        maxWidth: 980,
+        maxWidth: 880,
       }}>
-        <SplitText text={t('titleLine1')} delay={0.12} stagger={0.03} style={{ fontFamily: C.D }} />
+        <SplitText text={t('titleLine1')} delay={0.15} style={{ fontFamily: C.D }} />
         <br/>
-        <SplitText text={t('titleLine2')} delay={0.18} stagger={0.03} style={{ fontFamily: C.D }} />
+        <SplitText text={t('titleLine2')} delay={0.45} style={{ fontFamily: C.D }} />
+        <br/>
+        <SplitText text={t('titleLine3')} delay={0.75} style={{ fontFamily: C.D }} />
       </h1>
 
-      {/* Subtitle — 0.24s */}
+      {/* Subtitle — 0.95s */}
       <p
         className="rs-hero-rise"
         style={{
@@ -610,8 +602,8 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
           lineHeight: 1.6,
           margin: '0 0 22px',
           maxWidth: 560,
-          '--rs-hero-dur': '0.4s',
-          '--rs-hero-delay': '0.24s',
+          '--rs-hero-dur': '0.8s',
+          '--rs-hero-delay': '0.95s',
           '--rs-hero-y': '16px',
         } as React.CSSProperties}
       >
@@ -630,8 +622,8 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
           marginBottom: 24,
           flexWrap: 'wrap',
           justifyContent: isMobile ? 'center' : 'flex-start',
-          '--rs-hero-dur': '0.4s',
-          '--rs-hero-delay': '0.30s',
+          '--rs-hero-dur': '0.7s',
+          '--rs-hero-delay': '1.15s',
           '--rs-hero-y': '12px',
         } as React.CSSProperties}
       >
@@ -647,7 +639,7 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
               background: C.text,
               color: C.bg,
               border: 'none',
-              borderRadius: 4,
+              borderRadius: 3,
               fontFamily: C.D,
               fontSize: 16,
               fontWeight: 500,
@@ -660,28 +652,22 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
         </Link>
       </div>
 
-      {/* The payment path. One continuous terracotta stroke, drawn once from
-          left to right (scaleX from a left origin — transform only, so it
-          cannot reflow anything), 400ms to 1100ms. Same geometry as the globe
-          arcs and the connector in the device showcase: payer to merchant,
-          nothing stopping in the middle. It does not loop.
-
-          marginBottom is 80/40 rather than 8 because the supported-networks
-          logo band that used to follow this rule (~76-92px tall) was deleted,
-          leaving the stroke as the last thing in the hero. Those are the values
-          <main> already uses for its own paddingBottom at the same breakpoint,
-          so the hero keeps its vertical rhythm with no new spacing step. */}
+      {/* Divider — scaleX reveal 1.35s.
+          marginBottom is 80/40, not 8, because this rule used to be followed
+          by the supported-networks logo band (~76-92px tall) and is now the
+          last thing in the hero. Those are the values <main> already uses for
+          its own paddingBottom at the same breakpoint, so the hero keeps the
+          vertical rhythm it had without introducing a new spacing step. */}
       <div
-        aria-hidden="true"
         className="rs-hero-line"
         style={{
           transformOrigin: 'left',
-          height: 2,
-          background: C.terracotta,
+          height: '0.5px',
+          background: C.border,
           maxWidth: 1600,
           marginTop: 20,
           marginBottom: isMobile ? 40 : 80,
-          '--rs-hero-delay': '0.4s',
+          '--rs-hero-delay': '1.35s',
         } as React.CSSProperties}
       />
     </div>
@@ -807,10 +793,6 @@ export default function Home() {
           The page-in fade lives in globals.css under MOTION_QUERY; it used to be
           `opacity: ready ? 1 : 0` flipped by an effect, which shipped the whole
           page at opacity 0 and left it blank until hydration. */}
-      {/* Fades --surface out to --paper in the first 200ms. display:none unless
-          .rs-intro is on <html>, so it can never sit over the page. */}
-      <div className="rs-intro-veil" aria-hidden="true" />
-
       <main className="main-content" style={{
         minHeight: '100dvh',
         paddingTop: isMobileHome ? '72px' : 'clamp(64px, 5vh, 76px)',
@@ -848,9 +830,6 @@ export default function Home() {
         </div>
 
       </main>
-
-      {/* ── The two ends of a payment, side by side ──── */}
-      <DeviceShowcase />
 
       {/* ── Why Sign In value props ──── */}
       <WhySignInSection />

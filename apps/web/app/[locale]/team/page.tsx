@@ -58,7 +58,7 @@ const body: React.CSSProperties = {
 
 const card: React.CSSProperties = {
   border: `1px solid ${C.border}`,
-  borderRadius: 8,
+  borderRadius: 16,
   background: C.surface,
   padding: 'clamp(24px, 3.5vw, 36px)',
 }
@@ -121,7 +121,7 @@ export default async function TeamPage({ params }: PageProps) {
             <div
               style={{
                 background: '#0A0A0A',
-                borderRadius: 8,
+                borderRadius: 16,
                 padding: 'clamp(28px, 4vw, 44px)',
               }}
             >
@@ -145,7 +145,7 @@ export default async function TeamPage({ params }: PageProps) {
                   fontFamily: C.D,
                   fontSize: 17,
                   lineHeight: 1.65,
-                  color: C.onDarkMuted,
+                  color: 'rgba(255,255,255,0.78)',
                   maxWidth: 640,
                   margin: '0 0 24px',
                 }}
@@ -191,7 +191,7 @@ export default async function TeamPage({ params }: PageProps) {
                 style={{
                   width: 72,
                   height: 72,
-                  borderRadius: 4,
+                  borderRadius: 10,
                   background: C.text,
                   display: 'flex',
                   alignItems: 'center',

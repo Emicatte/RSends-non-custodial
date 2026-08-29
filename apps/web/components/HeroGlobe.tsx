@@ -42,17 +42,14 @@ export default function HeroGlobe({ className }: Props) {
           an explicit width here; the globe is 1:1 and derives its own height from that
           width via width:100% (no aspect-ratio / height:100% — a height-derived width can
           collapse to 0 and the canvas paints invisibly). maxWidth keeps it bounded.
-          City-name labels stay off (show-labels="false"): the only caption the
-          globe carries is the active arc's chain·token, drawn by the element
-          itself. `halo` is the knockout behind that caption and must track the
-          page background, so it is passed rather than left on its default. */}
+          Labels hidden for the minimal/airy light hero; routes/packets stay on
+          (show-routes defaults to true). Set show-labels="true" to show city names. */}
       <div style={{ width: 'min(560px, 42vw)', maxWidth: '100%', margin: '0 auto' }}>
         <rsends-globe
           rotation-seconds="45"
           tilt="20"
-          accent={C.terracotta}
+          accent={C.purple}
           ink={C.text}
-          halo={C.bg}
           show-labels="false"
           style={{ display: 'block', width: '100%' }}
         />

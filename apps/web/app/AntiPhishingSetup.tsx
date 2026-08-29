@@ -80,7 +80,7 @@ export default function AntiPhishingSetup({ isOpen, onClose, onSave }: AntiPhish
               zIndex: 3001,
               width: '90%',
               maxWidth: 400,
-              background: C.surface,
+              background: '#FFFFFF',
               borderRadius: 20,
               border: '1px solid rgba(10,10,10,0.10)',
               boxShadow: '0 40px 100px rgba(0,0,0,0.7)',
@@ -168,7 +168,7 @@ export default function AntiPhishingSetup({ isOpen, onClose, onSave }: AntiPhish
                   : code.trim()
                     ? 'linear-gradient(135deg, #C8512C, #C8512C)'
                     : 'rgba(10,10,10,0.08)',
-                color: saved ? '#000' : code.trim() ? C.onDark : T.dim,
+                color: saved ? '#000' : code.trim() ? '#fff' : T.dim,
                 cursor: code.trim() ? 'pointer' : 'not-allowed',
                 transition: 'all 0.2s ease',
               }}
