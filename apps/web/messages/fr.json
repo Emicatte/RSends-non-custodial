@@ -173,6 +173,13 @@
     },
     "titleLine3": "Always."
   },
+  "showcase": {
+    "heading": "Vous créez la demande. Votre client la paie.",
+    "subheading": "Ce sont des captures du produit en fonctionnement, pas des illustrations.",
+    "demoDataLabel": "Données de démonstration",
+    "dashboardAlt": "Le tableau de bord RSends sur un ordinateur portable, avec la liste des demandes de paiement et, pour chacune, son montant, son token, sa chain, son statut et son heure.",
+    "payAlt": "La page de paiement RSends sur un téléphone, avec un paiement confirmé, son montant, son token et un lien vers la transaction sur l’explorateur de blocs."
+  },
   "twoPaths": {
     "title": "Two reasons businesses choose RSends.",
     "subtitle": "Non-custodial par conception. Un abonnement mensuel, jamais une part de ce que vous gagnez.",

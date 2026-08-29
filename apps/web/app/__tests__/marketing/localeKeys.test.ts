@@ -17,7 +17,15 @@ const LOCALES: Record<string, Record<string, unknown>> = {
   fr: frMessages,
   de: deMessages,
 }
-const NAMESPACES = ['vision', 'team', 'onboarding', 'pricing', 'howItWorks', 'auth'] as const
+const NAMESPACES = [
+  'vision',
+  'team',
+  'onboarding',
+  'pricing',
+  'howItWorks',
+  'auth',
+  'showcase',
+] as const
 
 // Keys whose value is deliberately empty in every locale (not a missing
 // translation): the strength meter renders no label before the user types.

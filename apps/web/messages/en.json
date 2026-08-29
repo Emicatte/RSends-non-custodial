@@ -172,6 +172,13 @@
     },
     "titleLine3": "Always."
   },
+  "showcase": {
+    "heading": "You create the request. Your customer pays it.",
+    "subheading": "These are screenshots of the running product, not drawings of it.",
+    "demoDataLabel": "Demo data",
+    "dashboardAlt": "The RSends dashboard on a laptop, listing payment requests with their amount, token, chain, status and time.",
+    "payAlt": "The RSends payment page on a phone, showing a confirmed payment with its amount, its token, and a link to the transaction on the block explorer."
+  },
   "twoPaths": {
     "title": "Two reasons businesses choose RSends.",
     "subtitle": "Non-custodial by design. Priced as a monthly subscription, never a cut of what you earn.",

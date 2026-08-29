@@ -173,6 +173,13 @@
     },
     "titleLine3": "Always."
   },
+  "showcase": {
+    "heading": "Du erstellst die Anfrage. Dein Kunde bezahlt sie.",
+    "subheading": "Das sind Screenshots des laufenden Produkts, keine Zeichnungen.",
+    "demoDataLabel": "Demodaten",
+    "dashboardAlt": "Das RSends-Dashboard auf einem Laptop mit der Liste der Zahlungsanfragen samt Betrag, Token, Chain, Status und Uhrzeit.",
+    "payAlt": "Die RSends-Zahlungsseite auf einem Smartphone mit einer bestätigten Zahlung, ihrem Betrag, ihrem Token und einem Link zur Transaktion im Block-Explorer."
+  },
   "twoPaths": {
     "title": "Two reasons businesses choose RSends.",
     "subtitle": "Non-custodial by design. Ein Monatsabo, nie ein Anteil an dem, was Sie verdienen.",

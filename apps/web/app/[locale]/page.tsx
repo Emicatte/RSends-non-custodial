@@ -33,6 +33,7 @@ import { C, EASE } from '@/app/designTokens'
 import SplitText from '@/components/motion/SplitText'
 import SmoothScroll from '@/components/SmoothScroll'
 import { WhySignInSection } from '@/components/landing/WhySignInSection'
+import DeviceShowcase from '@/components/landing/DeviceShowcase'
 
 
 
@@ -830,6 +831,9 @@ export default function Home() {
         </div>
 
       </main>
+
+      {/* ── The two real surfaces, in device frames ──── */}
+      <DeviceShowcase />
 
       {/* ── Why Sign In value props ──── */}
       <WhySignInSection />

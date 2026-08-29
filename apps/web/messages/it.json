@@ -172,6 +172,13 @@
     },
     "titleLine3": "Sempre."
   },
+  "showcase": {
+    "heading": "Tu crei la richiesta. Il tuo cliente la paga.",
+    "subheading": "Sono screenshot del prodotto in funzione, non disegni.",
+    "demoDataLabel": "Dati dimostrativi",
+    "dashboardAlt": "La dashboard RSends su un portatile, con l’elenco delle richieste di pagamento e per ognuna importo, token, chain, stato e orario.",
+    "payAlt": "La pagina di pagamento RSends su uno smartphone, con un pagamento confermato, il suo importo, il suo token e un link alla transazione sul block explorer."
+  },
   "twoPaths": {
     "title": "Due motivi per cui le aziende scelgono RSends.",
     "subtitle": "Non-custodial per design. Un abbonamento mensile, mai una quota di ciò che incassi.",
