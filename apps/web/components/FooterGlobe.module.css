@@ -10,7 +10,7 @@
 }
 
 .linksBackground {
-  background: #FAFAFA;
+  background: var(--rs-paper);
 }
 
 .linksBar {

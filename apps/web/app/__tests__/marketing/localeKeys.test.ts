@@ -17,7 +17,12 @@ const LOCALES: Record<string, Record<string, unknown>> = {
   fr: frMessages,
   de: deMessages,
 }
-const NAMESPACES = ['vision', 'team', 'onboarding', 'pricing', 'howItWorks', 'auth'] as const
+const NAMESPACES = ['vision', 'team', 'onboarding', 'pricing', 'howItWorks', 'auth',
+  // Added with the brand pass: these four are what the marketing home page
+  // actually renders, and until now none of them was parity-checked.
+  'hero', 'twoPaths', 'getStarted', 'nav',
+  // The device showcase, added in the same pass.
+  'showcase'] as const
 
 // Keys whose value is deliberately empty in every locale (not a missing
 // translation): the strength meter renders no label before the user types.

@@ -14,7 +14,13 @@ const LOCALES: { code: Locale; label: string; flag: string }[] = [
   { code: 'de', label: 'Deutsch', flag: 'DE' },
 ]
 
-export default function LanguageSwitcher() {
+/**
+ * @param onDark render for a dark surface (the terracotta-deep marketing nav).
+ *   Additive and opt-in — every existing call site keeps the light styling.
+ *   Only the trigger flips; the dropdown itself is a floating light panel in
+ *   both modes, so it keeps its own contrast.
+ */
+export default function LanguageSwitcher({ onDark = false }: { onDark?: boolean } = {}) {
   const locale = useLocale()
   const router = useRouter()
   const pathname = usePathname()
@@ -42,15 +48,15 @@ export default function LanguageSwitcher() {
           padding: '6px 10px',
           background: 'transparent',
           border: 'none',
-          borderRadius: 8,
+          borderRadius: 4,
           cursor: 'pointer',
           fontFamily: C.D,
           fontSize: 12,
           fontWeight: 500,
-          color: C.text,
+          color: onDark ? C.onDark : C.text,
           transition: 'background 0.2s',
         }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(10,10,10,0.05)' }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = onDark ? 'rgba(255,255,255,0.14)' : 'rgba(10,10,10,0.05)' }}
         onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
       >
         <span style={{ fontFamily: C.M, fontSize: 10, opacity: 0.6 }}>{current.flag}</span>
@@ -71,9 +77,9 @@ export default function LanguageSwitcher() {
             top: '100%',
             marginTop: 6,
             width: 160,
-            background: '#fff',
+            background: C.surface,
             border: `1px solid ${C.border}`,
-            borderRadius: 10,
+            borderRadius: 8,
             boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
             zIndex: 1050,
             overflow: 'hidden',
@@ -92,8 +98,8 @@ export default function LanguageSwitcher() {
                   fontFamily: C.D,
                   fontSize: 13,
                   fontWeight: l.code === locale ? 600 : 400,
-                  color: l.code === locale ? C.purple : C.text,
-                  background: l.code === locale ? `${C.purple}08` : 'transparent',
+                  color: l.code === locale ? C.terracottaDeep : C.text,
+                  background: l.code === locale ? C.terracottaWash : 'transparent',
                   transition: 'background 0.15s',
                 }}
                 onMouseEnter={(e) => { if (l.code !== locale) e.currentTarget.style.background = 'rgba(10,10,10,0.04)' }}
