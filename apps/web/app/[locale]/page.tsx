@@ -538,17 +538,21 @@ function EngineStatus() {
 //  HERO TITLE — AnimatePresence mode="wait" for no overlap
 // ═══════════════════════════════════════════════════════════
 
-function HeroTitle() {
+function HeroTitle({ isMobile }: { isMobile?: boolean }) {
   const t = useTranslations('hero')
   // The hero entrance easing is now cubic-bezier(0.22, 1, 0.36, 1) in globals.css
   // (.rs-hero-rise / .rs-hero-line / .rs-hero-word) — same curve, applied by CSS.
 
-  // Layout lives in `.rs-hero` in app/globals.css, not here. Responsive
-  // behaviour must be expressed in CSS so the first paint is already correct
-  // at every width — the same rule MarketingNav documents and follows. Driving
-  // it from React state cost 0.285 of mobile CLS.
   return (
-    <div className="rs-hero">
+    <div style={{
+      width: '100%',
+      maxWidth: 1440,
+      margin: '0 auto',
+      padding: isMobile ? '0 20px' : '0 96px',
+      textAlign: isMobile ? 'center' : 'left',
+      position: 'relative',
+      zIndex: 2,
+    }}>
       {/* Eyebrow — 0.0s (hidden when empty).
           The entrance is CSS (.rs-hero-rise, gated by MOTION_QUERY in globals.css)
           so the copy is in the served HTML at full opacity and never waits on JS. */}
@@ -575,15 +579,15 @@ function HeroTitle() {
       )}
 
       {/* Title — split reveal 0.15s / 0.45s */}
-      <h1 className="rs-hero-h1" style={{
+      <h1 style={{
         fontFamily: C.D,
         // Mobile steps down with the viewport (351px → ~49px); a fixed 56px
         // broke the second line awkwardly below ~400px.
-        // Size lives in .rs-hero-h1 (globals.css): 38-52px below 768,
-        // 48-76px above. Not the old 74-96px — that was set for a
+        // 64-80px, not the old 74-96px. The previous size was set for a
         // three-word-per-line headline ("Your money." / "Your wallet."); the
         // sentence that replaced it wrapped to four lines at 96px and left
         // "wallet." alone on the last one.
+        fontSize: isMobile ? 'clamp(38px, 12vw, 52px)' : 'clamp(48px, 5.4vw, 76px)',
         fontWeight: 600,
         color: C.text,
         lineHeight: 1.08,
@@ -598,9 +602,10 @@ function HeroTitle() {
 
       {/* Subtitle — 0.24s */}
       <p
-        className="rs-hero-rise rs-hero-sub"
+        className="rs-hero-rise"
         style={{
           fontFamily: C.D,
+          fontSize: isMobile ? 17 : 19,
           color: C.sub,
           lineHeight: 1.6,
           margin: '0 0 22px',
@@ -617,19 +622,20 @@ function HeroTitle() {
           Only the entrance moves to CSS; the buttons keep their framer-motion
           hover/tap, which needs JS anyway and cannot hide anything. */}
       <div
-        className="rs-hero-rise rs-hero-cta"
+        className="rs-hero-rise"
         style={{
           display: 'flex',
           gap: 16,
           alignItems: 'center',
           marginBottom: 24,
           flexWrap: 'wrap',
+          justifyContent: isMobile ? 'center' : 'flex-start',
           '--rs-hero-dur': '0.4s',
           '--rs-hero-delay': '0.30s',
           '--rs-hero-y': '12px',
         } as React.CSSProperties}
       >
-        <Link href="/login" style={{ textDecoration: 'none' }}>
+        <Link href="/login" style={{ textDecoration: 'none', width: isMobile ? '100%' : 'auto' }}>
           <motion.button
             whileHover={{ y: -2 }}
             whileTap={{ y: 0, scale: 0.98 }}
@@ -637,6 +643,7 @@ function HeroTitle() {
             style={{
               padding: '14px 28px',
               minHeight: 48,
+              width: isMobile ? '100%' : 'auto',
               background: C.text,
               color: C.bg,
               border: 'none',
@@ -673,6 +680,7 @@ function HeroTitle() {
           background: C.terracotta,
           maxWidth: 1600,
           marginTop: 20,
+          marginBottom: isMobile ? 40 : 80,
           '--rs-hero-delay': '0.4s',
         } as React.CSSProperties}
       />
@@ -714,10 +722,12 @@ export default function Home() {
   })()
   const [showIntro, setShowIntro] = useState(false)
   const [showAntiPhishing, setShowAntiPhishing] = useState(false)
+  const [isMobileHome, setIsMobileHome] = useState(false)
   // Globe panel only renders when the split hero has room for it beside the text.
   const [globeFits, setGlobeFits] = useState(false)
   useEffect(() => {
     const check = () => {
+      setIsMobileHome(window.innerWidth < 768)
       setGlobeFits(window.innerWidth >= 1024)
     }
     check()
@@ -803,12 +813,14 @@ export default function Home() {
 
       <main className="main-content" style={{
         minHeight: '100dvh',
+        paddingTop: isMobileHome ? '72px' : 'clamp(64px, 5vh, 76px)',
+        paddingBottom: isMobileHome ? '40px' : '80px',
         display: 'flex', flexDirection: 'column', alignItems: 'stretch',
       }}>
 
         {/* Hero */}
         <div style={{ width: '100%', position: 'relative' }}>
-          <HeroTitle />
+          <HeroTitle isMobile={isMobileHome} />
           {/* Only rendered at >=1024px, so it never reaches a phone — but framer-motion
               defaults to reducedMotion:'never' and there is no MotionConfig in this app,
               so as a `motion.div` its entrance still ran for users who asked for reduced
