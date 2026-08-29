@@ -731,7 +731,7 @@
       "sections": {
         "service": {
           "heading": "1. Der Dienst",
-          "body": "RSends stellt ein <strong>nicht-verwahrendes Stablecoin-Payment-Gateway</strong> bereit, mit dem Unternehmen Stablecoin-Zahlungen (USDC, USDT und EURC) auf <strong>Base und Ethereum</strong> akzeptieren können. Zahlungen werden on-chain direkt in die eigene Wallet des Händlers über einen unveränderlichen Smart Contract abgewickelt; RSends hält oder kontrolliert die Gelder nie. Funktionen, unterstützte Netzwerke und Limits können sich im Laufe der Zeit ändern."
+          "body": "RSends stellt ein <strong>nicht-verwahrendes Stablecoin-Payment-Gateway</strong> bereit, mit dem Unternehmen Stablecoin-Zahlungen (USDC und USDT) auf <strong>Base und Ethereum</strong> akzeptieren können. Zahlungen werden on-chain direkt in die eigene Wallet des Händlers über einen unveränderlichen Smart Contract abgewickelt; RSends hält oder kontrolliert die Gelder nie. Funktionen, unterstützte Netzwerke und Limits können sich im Laufe der Zeit ändern."
         },
         "eligibility": {
           "heading": "2. Voraussetzungen",
@@ -1234,7 +1234,7 @@
         },
         {
           "q": "Welche Chains und Tokens werden unterstützt?",
-          "a": "USDC, USDT und EURC auf Base und Ethereum. Das Produkt ist derzeit eine Testnet-Demo auf Base Sepolia."
+          "a": "USDC und USDT auf Base und Ethereum. Das Produkt ist derzeit eine Testnet-Demo auf Base Sepolia."
         },
         {
           "q": "Kann ich es vor dem Kauf testen?",

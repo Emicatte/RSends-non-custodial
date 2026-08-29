@@ -730,7 +730,7 @@
       "sections": {
         "service": {
           "heading": "1. Il Servizio",
-          "body": "RSends fornisce un <strong>gateway di pagamento non-custodial per stablecoin</strong> che consente alle aziende di accettare pagamenti in stablecoin (USDC, USDT ed EURC) su <strong>Base ed Ethereum</strong>. I pagamenti si regolano on-chain direttamente nel wallet del merchant tramite uno smart contract immutabile; RSends non detiene né controlla mai i fondi. Funzionalità, reti supportate e limiti possono cambiare nel tempo."
+          "body": "RSends fornisce un <strong>gateway di pagamento non-custodial per stablecoin</strong> che consente alle aziende di accettare pagamenti in stablecoin (USDC e USDT) su <strong>Base ed Ethereum</strong>. I pagamenti si regolano on-chain direttamente nel wallet del merchant tramite uno smart contract immutabile; RSends non detiene né controlla mai i fondi. Funzionalità, reti supportate e limiti possono cambiare nel tempo."
         },
         "eligibility": {
           "heading": "2. Requisiti di idoneità",
@@ -1233,7 +1233,7 @@
         },
         {
           "q": "Quali chain e token sono supportati?",
-          "a": "USDC, USDT ed EURC su Base ed Ethereum. Il prodotto è attualmente una demo su testnet Base Sepolia."
+          "a": "USDC e USDT su Base ed Ethereum. Il prodotto è attualmente una demo su testnet Base Sepolia."
         },
         {
           "q": "Posso provarlo prima di pagare?",
