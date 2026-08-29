@@ -13,8 +13,8 @@ const dmMono = DM_Mono({
 
 export const metadata: Metadata = {
   title:       'RSends — Non-custodial stablecoin payment gateway',
-  description: 'Get paid in stablecoin, straight to your own wallet. A non-custodial B2B payment gateway priced as a monthly subscription, not a percentage of your sales. USDC, USDT and EURC on Base and Ethereum.',
-  keywords:    ['non-custodial', 'stablecoin', 'payment gateway', 'USDC', 'USDT', 'EURC', 'Base', 'Ethereum', 'B2B', 'subscription'],
+  description: 'Get paid in stablecoin, straight to your own wallet. A non-custodial B2B payment gateway priced as a monthly subscription, not a percentage of your sales. USDC and USDT on Base and Ethereum.',
+  keywords:    ['non-custodial', 'stablecoin', 'payment gateway', 'USDC', 'USDT', 'Base', 'Ethereum', 'B2B', 'subscription'],
   icons: {
     icon: [
       
