@@ -3,6 +3,9 @@
 import type { CSSProperties } from 'react'
 import { useTranslations } from 'next-intl'
 import { GetStartedChecklist } from '@/components/app/GetStartedChecklist'
+// The KPI cards moved to components/app so the marketing landing page can render
+// the SAME cards the merchant sees. Values are unchanged; only the file.
+import { MetricCards, type Metric } from '@/components/app/MetricCards'
 import { VolumeTrendChart } from '@/components/app/VolumeTrendChart'
 import { appPage, card } from '@/components/app/pageStyles'
 import { useClientNow } from '@/hooks/useClientNow'
@@ -47,14 +50,6 @@ const STATUS_BADGE: Record<TxStatus, { bg: string; text: string; key: 'statusCon
   confirmed: { bg: COLORS.greenLight, text: COLORS.green, key: 'statusConfirmed' },
   pending: { bg: COLORS.orangeLight, text: COLORS.orange, key: 'statusPending' },
   failed: { bg: COLORS.redLight, text: COLORS.red, key: 'statusFailed' },
-}
-
-type Metric = {
-  key: 'volume24h' | 'transactions24h' | 'totalBalance' | 'activeClients'
-  value: string
-  delta: string
-  deltaPositive: boolean
-  deltaIsCount?: boolean
 }
 
 const USD_FMT = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
@@ -173,53 +168,7 @@ export default function AppDashboardPage() {
         }
       />
       {/* Metric cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {metrics.map((m) => {
-          const deltaText = m.delta
-          return (
-            <div key={m.key} className={`${card} flex flex-col gap-1.5`}>
-              <div
-                style={{
-                  fontFamily: 'var(--font-display)',
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: COLORS.muted,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.08em',
-                }}
-              >
-                {t(`metrics.${m.key}`)}
-              </div>
-              {loading && !stats ? (
-                <div className="h-8 w-3/5 rounded-lg" style={{ background: '#e5e4e0', animation: 'rsendsPulse 1.5s ease-in-out infinite' }} />
-              ) : (
-                <div
-                  style={{
-                    fontFamily: 'var(--font-display)',
-                    fontSize: 26,
-                    fontWeight: 700,
-                    color: COLORS.ink,
-                    letterSpacing: '-0.02em',
-                    lineHeight: 1.1,
-                  }}
-                >
-                  {m.value}
-                </div>
-              )}
-              <div
-                style={{
-                  fontFamily: 'var(--font-display)',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: m.deltaPositive ? COLORS.green : COLORS.red,
-                }}
-              >
-                {deltaText}
-              </div>
-            </div>
-          )
-        })}
-      </div>
+      <MetricCards metrics={metrics} loading={loading && !stats} />
 
       {/* Payments the volume tile could not value. Without this line a
           merchant paid only in ETH reads "$0" and cannot tell it apart from
