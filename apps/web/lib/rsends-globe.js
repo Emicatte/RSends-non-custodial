@@ -35,9 +35,12 @@
     ['Mumbai', 19.08, 72.88]
   ];
 
-  // [fromIndex, toIndex, label]. Labels name ONLY chains and tokens the
-  // product actually accepts: USDC on Base; USDC and USDT on Ethereum.
-  // No latency, volume, transaction counts or hashes — the globe is not
+  // [fromIndex, toIndex, label]. Labels name ONLY what the backend token
+  // registry actually holds — services/backend/app/tokens/registry.py:61-74:
+  // USDC and USDT on Base (8453), USDC and USDT on Ethereum (1), USDC on Base
+  // Sepolia (84532). EURC is registered on NO chain, so no arc may name it;
+  // that the ToS promises EURC is issue #87, not a licence to draw it here.
+  // No latency, volume, transaction counts or hashes either — the globe is not
   // allowed to imply a number nobody measured.
   //
   // Corridors are long on purpose. A set of short intra-Europe hops rendered
@@ -45,17 +48,12 @@
   const DEFAULT_ROUTES = [
     [0, 4, 'BASE · USDC'],
     [1, 5, 'BASE · USDC'],
-    [1, 9, 'BASE · USDC'],
+    [1, 9, 'BASE · USDT'],
+    [3, 8, 'BASE · USDT'],
     [2, 6, 'ETHEREUM · USDC'],
     [0, 7, 'ETHEREUM · USDC'],
-    [3, 8, 'ETHEREUM · USDT'],
     [2, 5, 'ETHEREUM · USDT'],
-    // --- EURC block ---------------------------------------------------------
-    // EURC is promised in the ToS but the create-intent API currently rejects
-    // it (issue #87: the two token gates diverge). These two entries are last
-    // so they can be deleted as a block the moment that is decided either way.
-    [3, 0, 'BASE · EURC'],
-    [1, 2, 'ETHEREUM · EURC'],
+    [3, 0, 'ETHEREUM · USDT'],
   ];
 
   /** Seconds each arc stays the active one. */
