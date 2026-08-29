@@ -359,6 +359,54 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
   `No projectId found` at module load, so `/pay` renders the error boundary instead of the
   checkout and no amount of stubbing gets past it. Any non-empty string works for local work
   (WalletConnect itself stays unusable). See the note added to `.env.example`.
+- **The amount-scale gate cannot protect 18-decimal tokens — only `Numeric` can.**
+  `create_intent` rejects `400 AMOUNT_PRECISION_EXCEEDED` when an amount's decimal scale exceeds
+  the token's `decimals`, so `to_base_units` never silently rounds a stored amount. That gate is
+  exact for 6-decimal tokens (USDC/USDT/EURC): `amount * 10^6` stays inside float64's exact
+  integer range up to ~9.0e9 tokens, far beyond any invoice. It is **structurally unable** to do
+  the same for the 18-decimal ones (ETH/DAI, enabled on base/base_sepolia/ethereum today).
+  `PaymentIntent.amount` is a `Float`, and FastAPI parses the body with `json.loads`, so a JSON
+  number is already a rounded float64 **before any validator runs** — `mode="before"` included.
+  A client sending `10.000000000000000001` ETH has had the excess destroyed upstream; the gate
+  sees scale 1 and correctly accepts what is now `10.0`. Sending the amount as a JSON string does
+  not help: Pydantic coerces it to the same float. float64 holds `amount * 10^18` exactly only up
+  to ~0.009 tokens, so above that the scale is unknowable in principle, not merely unchecked.
+  **The fix is the `Float` → `Numeric(78, 0)` (or scaled-decimal) migration on `payment_intents`,
+  not a better validator** — `settlement_models.py:72-73` already uses `Numeric`, commented
+  "never float", so the settlement side is right and the intent side is the outlier. Until then,
+  treat the amount gate as airtight for stablecoins and best-effort for native/18-decimal assets.
+- **An unenrichable TRON transaction freezes the poller's cursor indefinitely, and pages
+  nobody.** `tron_poller` fails closed by design: a transfer whose `/v1/transactions/{txid}/events`
+  enrichment errors, matches nothing, or matches ambiguously writes no settlement row, and the
+  cursor pins to that transaction's `block_timestamp` (`min_timestamp` is inclusive, so it is
+  re-observed, never skipped). That is the correct trade — a payment re-observed forever is
+  recoverable, one skipped once is not — but the consequence is that the tick retries the same
+  transaction every 60s with an `ERROR`, and **while the cursor is frozen no LATER TRON payment
+  is recorded either**, so a single poison transaction silently stalls the whole chain's
+  observation behind a log line no one is watching. There is no alert-service hook: unlike the
+  EVM indexer, which escalates to a single `logger.critical` + `INDEXER_STALLED` alert + gauge
+  at `STALL_TICKS` consecutive failures (`payment_indexer._note_failure`), the TRON poller has
+  no equivalent. The fix is that hook, in the `INDEXER_STALLED` style, keyed on consecutive
+  ticks blocked at the same cursor. Deferred to slice 3 or later — do not build it as a
+  drive-by. (Slice 3 did build the **webhook** redrive this note's sibling gap needed —
+  `tron_matcher.redrive_tron_webhooks` — because the EVM unfired-webhook sweep is
+  `chain_id`-scoped inside an EVM-only watcher and would never have retried a TRON dispatch.
+  The cursor-stall alert is still open.)
+- **A TRON intent that expires between payment and matching is never matched, silently.** The
+  TRON matcher (`app/services/tron_matcher.py`) requires `status == pending`, so an intent the
+  expiry loop flips to `expired` in the ≤60s window between the payer's transfer and the next
+  poller tick gets **zero candidates forever**: the settlement row stays `pending` with
+  `intent_id` NULL, the merchant has the money, and nothing in the product says so. This is a
+  deliberate **divergence from the EVM path**, which treats `expired` as payable
+  (`payment_indexer.py:826-832`, "money on-chain wins over the timer — rescue the intent
+  instead of stranding a settled payment"). The reason the EVM race is benign and this one is
+  not: the settlement hold that normally protects a paid-but-unfinalized intent from the expiry
+  sweep (`intent_service.settlement_hold_exists`) correlates on `intent_id`, which is NULL on a
+  TRON settlement until the matcher runs — so on TRON the hold cannot engage before the race is
+  already lost. Pinned as intentional by
+  `test_tron_matching.py::test_an_intent_that_expired_since_payment_is_not_matched`. Fixing it
+  means either adding `expired` to the matcher's candidate statuses (EVM parity) or holding on
+  `(chain, recipient, window)` before an `intent_id` exists — a decision, not a bug fix.
 
 Closed (2026-07-05): **CI backend job now has a Redis service** (`redis:7`, health-checked,
 `REDIS_URL=redis://localhost:6379/0` — plain scheme is CI/test-scoped, the `rediss://` guard

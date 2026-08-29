@@ -64,7 +64,13 @@ class PaymentSettlement(Base):
 
     # ── Decoded event fields ────────────────────────────────────
     # invoiceId is a bytes32; stored as 0x-prefixed 66-char hex string.
-    invoice_id = Column(String(66), nullable=False, index=True)
+    # NULLABLE since 0018: only a router emits an invoiceId. A watch-only
+    # settlement is a bare TRC-20 Transfer to the merchant's own address and has
+    # none — and a synthetic value would make this table, which records what
+    # happened on-chain, claim a contract emitted something it never did.
+    # Dedup does not depend on it: the idempotency key is
+    # (chain_id, tx_hash, log_index), see uq_settlement_onchain_log below.
+    invoice_id = Column(String(66), nullable=True, index=True)
     merchant = Column(String(42), nullable=False, index=True)
     payer = Column(String(42), nullable=False)
     # token == "0x0000...0000" for native ETH.

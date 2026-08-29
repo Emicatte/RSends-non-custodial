@@ -468,6 +468,8 @@ async def match_and_complete_intent(
         PaymentIntent.currency == currency.upper(),
     ]
     if recipient:
+        # EVM-only: .lower() corrupts a base58check address (base58 has no 0 O I l),
+        # so this matches zero rows for a TRON recipient. Do NOT wire for watch-only.
         filters.append(PaymentIntent.recipient == recipient.lower())
 
     result = await db.execute(
@@ -713,6 +715,8 @@ async def match_transaction_to_intent(
         PaymentIntent.currency == currency.upper(),
     ]
     if recipient:
+        # EVM-only: .lower() corrupts a base58check address (base58 has no 0 O I l),
+        # so this matches zero rows for a TRON recipient. Do NOT wire for watch-only.
         filters.append(PaymentIntent.recipient == recipient.lower())
 
     result = await db.execute(

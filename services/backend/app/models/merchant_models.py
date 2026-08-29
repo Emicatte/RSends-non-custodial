@@ -11,7 +11,7 @@ from datetime import datetime, timezone, timedelta
 from sqlalchemy import (
     Column, String, Float, Boolean, DateTime, Integer,
     Text, ForeignKey, Index, Enum as SAEnum, JSON,
-    CheckConstraint, UniqueConstraint,
+    CheckConstraint, UniqueConstraint, text,
 )
 from sqlalchemy.orm import relationship
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -173,6 +173,28 @@ class PaymentIntent(Base):
     __table_args__ = (
         Index("ix_intent_merchant_status", "merchant_id", "status"),
         Index("ix_intent_status_expires", "status", "expires_at"),
+        # One pending intent per payable coordinate — migration 0019.
+        # A watch-only transfer carries no invoiceId and can only be matched on
+        # (recipient, token, amount, window), so a duplicate pending tuple makes
+        # an arriving payment genuinely ambiguous. Declared here as well as in
+        # the migration because the test suite builds schema with create_all,
+        # never with alembic; 0019 is existence-guarded for the same reason.
+        # `environment` and `chain` are IN the key: ambiguity only exists
+        # between intents one transfer could BOTH be, and a test intent is
+        # never a candidate for a live transfer (every path is already filtered
+        # by environment) nor a Base intent for a TRON one.
+        # On the float column deliberately — see 0019's docstring: the ingest
+        # scale gate bounds `amount`, so distinct accepted amounts differ by at
+        # least one base unit and this separates exactly what the matcher
+        # compares. An expression index reproducing to_base_units is not
+        # writable in SQL.
+        Index(
+            "uq_intent_pending_amount",
+            "merchant_id", "environment", "chain", "currency", "amount",
+            unique=True,
+            postgresql_where=text("status = 'pending'"),
+            sqlite_where=text("status = 'pending'"),
+        ),
     )
 
 
@@ -376,21 +398,32 @@ class CreatePaymentIntentRequest(BaseModel):
     @field_validator("recipient")
     @classmethod
     def validate_recipient(cls, v: Optional[str]) -> Optional[str]:
+        # EVM addresses fold to lowercase exactly as before. TRON addresses are
+        # base58check and case-SENSITIVE — lowercasing one destroys it (base58
+        # has no 0 O I l), so they are validated by checksum and stored verbatim.
         if v is not None:
-            import re
-            if not re.match(r"^0x[a-fA-F0-9]{40}$", v):
-                raise ValueError("recipient deve essere un indirizzo Ethereum valido")
-            return v.lower()
+            from app.security.input_validator import normalize_payment_address
+
+            normalized = normalize_payment_address(v)
+            if normalized is None:
+                raise ValueError(
+                    "recipient deve essere un indirizzo Ethereum (0x…) o TRON (T…) valido"
+                )
+            return normalized
         return v
 
     @field_validator("expected_sender")
     @classmethod
     def validate_expected_sender(cls, v: Optional[str]) -> Optional[str]:
         if v is not None:
-            import re
-            if not re.match(r"^0x[a-fA-F0-9]{40}$", v):
-                raise ValueError("expected_sender deve essere un indirizzo Ethereum valido")
-            return v.lower()
+            from app.security.input_validator import normalize_payment_address
+
+            normalized = normalize_payment_address(v)
+            if normalized is None:
+                raise ValueError(
+                    "expected_sender deve essere un indirizzo Ethereum (0x…) o TRON (T…) valido"
+                )
+            return normalized
         return v
 
 

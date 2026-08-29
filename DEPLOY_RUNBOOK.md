@@ -47,7 +47,7 @@ Legend: **[AUTO]** = done by Render/Vercel/CI · **[AZIONE UTENTE]** = you do it
 **Always enforced (any posture) — ERROR = startup blocked:**
 | Guard | Severity | How we satisfy it |
 |---|---|---|
-| `ALCHEMY_API_KEY` non-empty | ERROR | real Alchemy key |
+| every indexed chain has a configured RPC provider | ERROR | real Alchemy key, and/or `RPC_PROVIDERS_JSON` (public fallbacks do NOT count) |
 | `APP_URL` set + non-localhost (if prod *or* email on) | ERROR | Vercel URL |
 
 **Enforced only when `is_prod` — ERROR unless noted:**
@@ -228,7 +228,7 @@ In the `rsends-shared` env group (Render dashboard):
 | `CELERY_RESULT_BACKEND` | `rediss://…/2` |
 | `AUTH_JWT_SECRET` | **manual** — `python -c 'import secrets;print(secrets.token_hex(32))'` (≥64 chars; Render's generated value may be too short) |
 | `ADMIN_API_TOKEN` | **manual** — `openssl rand -hex 32` (≥32 chars, **must differ from `HMAC_SECRET`**; startup fails on empty/short/equal) |
-| `ALCHEMY_API_KEY` | your Alchemy key (always required) |
+| `ALCHEMY_API_KEY` | your Alchemy key — required unless `RPC_PROVIDERS_JSON` covers every chain in `RSENDS_ROUTER_ADDRESSES_JSON` |
 | `RPC_PROVIDERS_JSON` | second RPC vendor — see **2b-ter** (unset = Alchemy + public fallbacks only, i.e. no paid redundancy) |
 | `RSENDS_ROUTER_ADDRESSES_JSON` | `{"84532":"<ROUTER_ADDRESS>"}` (from Part 1) |
 | `CORS_ORIGINS` / `APP_URL` | your Vercel URL, e.g. `https://<app>.vercel.app` |
@@ -427,7 +427,7 @@ re-deploy re-runs `upgrade head`, which is a no-op once at `0007`.
 | `INTERNAL_PROXY_SECRET` | gates `/api/internal/*` | SECRET | Render generateValue | (auto) |
 | `AUTH_JWT_SECRET` | session JWT (≥64) | SECRET | **manual** `token_hex(32)` | (64-char hex) |
 | `ADMIN_API_TOKEN` | admin surface bearer (≥32, ≠ `HMAC_SECRET`) | SECRET | **manual** `openssl rand -hex 32` | (64-char hex) |
-| `ALCHEMY_API_KEY` | RPC (always required) | SECRET | dashboard.alchemy.com | `<alchemy_key>` |
+| `ALCHEMY_API_KEY` | RPC — required unless `RPC_PROVIDERS_JSON` covers every indexed chain | SECRET | dashboard.alchemy.com | `<alchemy_key>` |
 | `RSENDS_ROUTER_ADDRESSES_JSON` | chain→router map (v1) | PUBLIC | Part 1 deploy output | `{"84532":"<FILL_AFTER_CONTRACT_DEPLOY>"}` |
 | `RSENDS_ROUTER_V2_ADDRESSES_JSON` | chain→RouterV2 map — **the mainnet cutover** (Part 6) | PUBLIC | Part 6 deploy output; **manual on Render: NOT in `render.yaml`**, the blueprint will never carry it | unset until cutover |
 | `RPC_PROVIDERS_JSON` | second RPC vendor, chain→list (**§2b-ter**) | SECRET (holds the endpoint token) | QuickNode dashboard; **manual on Render: NOT in `render.yaml`** | `{"84532":[{"name":"quicknode","url":"https://<SUB>.base-sepolia.quiknode.pro/<TOKEN>/"}]}` |

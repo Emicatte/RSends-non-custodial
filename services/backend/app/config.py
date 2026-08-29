@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     api_get_deny_by_default: bool = True
 
     # ── Alchemy ───────────────────────────────────────────
+    # Optional. A key yields an RPC endpoint only for the chains in
+    # ALCHEMY_RPC_URL_TEMPLATES (below); coverage for anything else comes from
+    # RPC_PROVIDERS_JSON. See the provider-coverage block in validate_settings.
     alchemy_api_key: str = ""
 
     # ══════════════════════════════════════════════════════
@@ -105,6 +108,17 @@ class Settings(BaseSettings):
     indexer_reorg_safety_depth: int = 64
     # JSON map of chain_id → start block for first-run backfill, e.g. {"8453": 0}
     indexer_start_blocks_json: str = ""
+    # ── TRON watch-only poller ────────────────────────────────
+    # JSON array of TRON HTTP node base URLs, primary first:
+    #   TRON_NODE_URLS_JSON='["https://api.trongrid.io","https://<failover>"]'
+    # Empty (the default) means the poller does not start, which is not an
+    # error — the same shape as an empty router map skipping the EVM indexer.
+    # Every listed node must prove it serves TRON mainnet at boot or the
+    # backend refuses to start; see app/services/tron_poller.py.
+    tron_node_urls_json: str = ""
+    # TronGrid API key, sent as the TRON-PRO-API-KEY header. Optional: the free
+    # tier answers keyless at a lower rate limit.
+    trongrid_api_key: str = ""
     # Widest eth_getLogs block range a single request may span. The per-tick
     # window is scanned in chunks of at most this many blocks. Default 10 =
     # the Alchemy free-tier cap on Base Sepolia; raise only if EVERY
@@ -183,17 +197,17 @@ class Settings(BaseSettings):
     @property
     def rsends_router_addresses(self) -> dict:
         """{chain_id(str) -> RSendsRouter address} parsed from the JSON env."""
-        return _parse_json_map(self.rsends_router_addresses_json)
+        return _parse_json_map(self.rsends_router_addresses_json, "RSENDS_ROUTER_ADDRESSES_JSON")
 
     @property
     def rsends_router_v2_addresses(self) -> dict:
         """{chain_id(str) -> RSendsRouterV2 address} parsed from the JSON env."""
-        return _parse_json_map(self.rsends_router_v2_addresses_json)
+        return _parse_json_map(self.rsends_router_v2_addresses_json, "RSENDS_ROUTER_V2_ADDRESSES_JSON")
 
     @property
     def split_router_addresses(self) -> dict:
         """{chain_id(str) -> RSendsSplitRouter address} parsed from the JSON env."""
-        return _parse_json_map(self.split_router_addresses_json)
+        return _parse_json_map(self.split_router_addresses_json, "SPLIT_ROUTER_ADDRESSES_JSON")
 
     @property
     def rpc_extra_providers(self) -> dict:
@@ -248,22 +262,52 @@ class Settings(BaseSettings):
 
     @property
     def indexer_start_blocks(self) -> dict:
-        return _parse_json_map(self.indexer_start_blocks_json)
+        return _parse_json_map(self.indexer_start_blocks_json, "INDEXER_START_BLOCKS_JSON")
 
+
+# Chains for which an ALCHEMY_API_KEY yields a usable RPC endpoint, and the URL
+# it produces. Single source of truth: rpc_manager builds its Alchemy provider
+# from this table and validate_settings decides provider coverage from the same
+# keys. Two gates over one concept that drift apart is issue #87 — do not
+# re-declare this set anywhere else.
+ALCHEMY_RPC_URL_TEMPLATES: dict[int, str] = {
+    8453: "https://base-mainnet.g.alchemy.com/v2/{key}",
+    84532: "https://base-sepolia.g.alchemy.com/v2/{key}",
+    1: "https://eth-mainnet.g.alchemy.com/v2/{key}",
+    42161: "https://arb-mainnet.g.alchemy.com/v2/{key}",
+}
 
 _HEX_KEY_RE = re.compile(r"^0x[0-9a-fA-F]{64}$")
 
 
-def _parse_json_map(raw: str) -> dict:
-    """Parse a JSON object env string into a dict; {} on empty/invalid."""
+def _parse_json_map(raw: str, name: str = "JSON map") -> dict:
+    """Parse a JSON object env string into a dict; {} on empty/invalid.
+
+    Malformed input WARNS, matching what RPC_PROVIDERS_JSON already does. It
+    used to return `{}` in silence, which for the router maps means the indexer
+    is disabled and payment detection stops with no log line naming the cause.
+    Empty stays quiet: unset is a legitimate state and the callers that care
+    already say so at startup.
+    """
     if not raw:
         return {}
     import json
     try:
         val = json.loads(raw)
-        return val if isinstance(val, dict) else {}
     except (ValueError, TypeError):
+        logger.warning(
+            "%s: malformed JSON — ignoring the value, the map is EMPTY. "
+            "Anything that reads it is now disabled.", name,
+        )
         return {}
+    if not isinstance(val, dict):
+        logger.warning(
+            "%s: JSON parsed as %s, expected an object — ignoring the value, "
+            "the map is EMPTY. Anything that reads it is now disabled.",
+            name, type(val).__name__,
+        )
+        return {}
+    return val
 
 
 class StartupValidationError(SystemExit):
@@ -325,12 +369,39 @@ def validate_settings(settings: Settings) -> None:
     # NON-CUSTODIAL: no SWEEP_PRIVATE_KEY / SIGNER_MODE / KMS / Vault validation.
     # The platform holds no keys and signs nothing.
 
-    # ── ALCHEMY_API_KEY ───────────────────────────────────
-    if not settings.alchemy_api_key:
+    # ── RPC provider coverage (per chain, vendor-neutral) ──
+    # ALCHEMY_API_KEY used to be an unconditional error. That made a
+    # dual-provider deployment behave as a single-provider one: a merchant with
+    # a healthy second vendor still could not remove a quota-exhausted Alchemy
+    # key, because startup refused without it (incident 2026-08-28).
+    #
+    # What actually matters is that every chain the indexer watches has at
+    # least one CONFIGURED provider — Alchemy, or an RPC_PROVIDERS_JSON entry.
+    # rpc_manager's built-in public fallbacks deliberately do NOT count: they
+    # are best-effort and rate-limited, and a chain keys the payment cursor,
+    # the test/live stamp and the on-chain invoice id. Name the chain, never a
+    # vendor — the old message sent operators to one signup page, which is why
+    # the reflex fix was "put the dead key back" instead of "configure a
+    # provider".
+    _uncovered: list[str] = []
+    _extra_providers = settings.rpc_extra_providers or {}
+    for _chain_key in (settings.rsends_router_addresses or {}):
+        try:
+            _cid = int(_chain_key)
+        except (TypeError, ValueError):
+            continue  # a non-numeric key is already reported by the map checks
+        _has_alchemy = bool(settings.alchemy_api_key) and _cid in ALCHEMY_RPC_URL_TEMPLATES
+        if not _has_alchemy and not _extra_providers.get(_cid):
+            _uncovered.append(str(_cid))
+    if _uncovered:
         errors.append(
-            "ALCHEMY_API_KEY is empty. "
-            "RPC calls (gas estimation, tx broadcast, receipt polling) will all fail. "
-            "Get a key at https://dashboard.alchemy.com/"
+            f"No RPC provider is configured for chain(s) {', '.join(_uncovered)}. "
+            "Only the built-in best-effort public endpoints remain, which are "
+            "rate-limited and unfit as the sole source for a chain that keys the "
+            "payment cursor, the test/live stamp and the invoice id. Set "
+            "ALCHEMY_API_KEY (it serves chains "
+            f"{', '.join(str(c) for c in sorted(ALCHEMY_RPC_URL_TEMPLATES))}), or add "
+            "an entry for each chain above to RPC_PROVIDERS_JSON."
         )
 
     # ── HMAC_SECRET (prod only) ───────────────────────────
@@ -380,6 +451,26 @@ def validate_settings(settings: Settings) -> None:
             "RSENDS_ROUTER_ADDRESSES_JSON is empty. The on-chain PaymentMade "
             "indexer will be disabled until per-chain RSendsRouter addresses are set."
         )
+
+    # A router map that is PRESENT but does not parse is a typo in one of the
+    # env vars the money path depends on. The parsed map is {} and, before the
+    # parser learned to warn, nothing said so — the indexer just never started.
+    # Empty is still only a warning (a not-yet-configured deployment is a real
+    # state); *malformed* is an error in prod, because it is never intentional.
+    for _env, _json_attr, _map_attr in (
+        ("RSENDS_ROUTER_ADDRESSES_JSON", "rsends_router_addresses_json", "rsends_router_addresses"),
+        ("RSENDS_ROUTER_V2_ADDRESSES_JSON", "rsends_router_v2_addresses_json", "rsends_router_v2_addresses"),
+        ("SPLIT_ROUTER_ADDRESSES_JSON", "split_router_addresses_json", "split_router_addresses"),
+    ):
+        _raw = (getattr(settings, _json_attr, "") or "").strip()
+        if _raw and not (getattr(settings, _map_attr, {}) or {}):
+            _msg = (
+                f"{_env} is set but does not parse to a JSON object. The map is "
+                f"EMPTY, so everything reading it (indexer chains, router lookups, "
+                f"split availability) is silently disabled. Fix the value, or unset "
+                f"it deliberately."
+            )
+            (errors if is_prod else warnings).append(_msg)
 
     # ── Telegram (informational) ──────────────────────────
     if not settings.telegram_bot_token:

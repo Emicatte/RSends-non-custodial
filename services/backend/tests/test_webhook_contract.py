@@ -112,6 +112,14 @@ EVENT_EXTRAS = {
         "expected_amount": "50.0", "received_amount": "60.0",
         "overpaid_amount": "10.0", "underpaid_amount": None,
     },
+    # Watch-only (TRON): one transfer, several pending invoices it could be
+    # paying. The matcher refuses to choose, so the subject intent here is
+    # REPRESENTATIVE — the real candidate list rides in the extras and no
+    # intent was touched. See app/services/tron_matcher.py.
+    "payment.ambiguous": {
+        "tx_hash": "e" * 64, "settlement": "onchain",
+        "candidate_intent_ids": ["pi_aaaa", "pi_bbbb"],
+    },
 }
 
 
@@ -384,5 +392,9 @@ def test_every_emitted_event_is_subscribable():
         "payment.completed", "payment.completed_late", "payment.expired",
         "payment.expired_rejected", "payment.needs_review", "payment.partial",
         "payment.overpaid", "payment.reversed",
+        # Reserved since the contract was written; first emitted by the TRON
+        # watch-only matcher (slice 3) — payment.partial too, which until then
+        # came only from the dead matcher.
+        "payment.ambiguous",
     }
     assert emitted.issubset(VALID_EVENTS)

@@ -21,7 +21,7 @@ from typing import Any, Optional
 import httpx
 from prometheus_client import Counter as PromCounter, Gauge, Histogram
 
-from app.config import get_settings
+from app.config import ALCHEMY_RPC_URL_TEMPLATES, get_settings
 from app.services.circuit_breaker import CircuitBreaker, CircuitOpenError
 
 logger = logging.getLogger(__name__)
@@ -263,23 +263,18 @@ class RPCManager:
         settings = get_settings()
         alchemy_key = settings.alchemy_api_key
 
-        # Add Alchemy as highest-priority provider if key is configured
-        if alchemy_key:
-            alchemy_urls = {
-                8453: f"https://base-mainnet.g.alchemy.com/v2/{alchemy_key}",
-                84532: f"https://base-sepolia.g.alchemy.com/v2/{alchemy_key}",
-                1: f"https://eth-mainnet.g.alchemy.com/v2/{alchemy_key}",
-                42161: f"https://arb-mainnet.g.alchemy.com/v2/{alchemy_key}",
-            }
-            if chain_id in alchemy_urls:
-                self._providers.append(
-                    RPCProvider(
-                        name="alchemy",
-                        url=alchemy_urls[chain_id],
-                        chain_id=chain_id,
-                        priority=-1,  # highest priority
-                    )
+        # Add Alchemy as highest-priority provider if key is configured.
+        # The chain→URL table lives in config.ALCHEMY_RPC_URL_TEMPLATES so that
+        # validate_settings' provider-coverage check reads the same keys.
+        if alchemy_key and chain_id in ALCHEMY_RPC_URL_TEMPLATES:
+            self._providers.append(
+                RPCProvider(
+                    name="alchemy",
+                    url=ALCHEMY_RPC_URL_TEMPLATES[chain_id].format(key=alchemy_key),
+                    chain_id=chain_id,
+                    priority=-1,  # highest priority
                 )
+            )
 
         # Add config-driven extra providers (RPC_PROVIDERS_JSON) BEFORE the
         # public defaults: with the default priority 0 the stable sort keeps
@@ -611,6 +606,40 @@ class RPCManager:
 
     # ── Consensus call (critical reads) ───────────────────
 
+    async def poll_providers(
+        self,
+        method: str,
+        params: list,
+        timeout: int = REQUEST_TIMEOUT,
+        providers: Optional[list[RPCProvider]] = None,
+    ) -> list[tuple[str, Any]]:
+        """Ask several providers the SAME question concurrently and report each
+        answer verbatim, `(provider_name, result_or_Exception)`.
+
+        This is the fan-out `consensus_call` has always done, exposed on its own
+        because agreement is sometimes the answer a caller needs rather than the
+        majority value. `consensus_call` collapses divergence (it logs and
+        returns the primary's result), so a caller that must distinguish "every
+        provider says the same thing" from "the providers disagree" cannot use
+        it directly — see `router_registry._empty_is_unanimous`.
+
+        Defaults to EVERY configured provider, not the healthy subset: a
+        provider excluded for being unhealthy is exactly the one whose answer
+        would change the verdict.
+        """
+        targets = self._providers if providers is None else providers
+
+        async def _query(provider: RPCProvider) -> tuple[str, Any]:
+            try:
+                result = await provider.cb.call(
+                    _raw_rpc_call, provider.url, method, params, timeout
+                )
+                return (provider.name, result)
+            except Exception as exc:
+                return (provider.name, exc)
+
+        return list(await asyncio.gather(*[_query(p) for p in targets]))
+
     async def consensus_call(
         self,
         method: str,
@@ -639,17 +668,8 @@ class RPCManager:
         # Query up to 3 providers concurrently
         providers_to_query = healthy[:3]
 
-        async def _query(provider: RPCProvider) -> tuple[str, Any]:
-            try:
-                result = await provider.cb.call(
-                    _raw_rpc_call, provider.url, method, params, timeout
-                )
-                return (provider.name, result)
-            except Exception as exc:
-                return (provider.name, exc)
-
-        results = await asyncio.gather(
-            *[_query(p) for p in providers_to_query]
+        results = await self.poll_providers(
+            method, params, timeout=timeout, providers=providers_to_query
         )
 
         # Collect successful results
@@ -759,6 +779,144 @@ def get_rpc_manager(chain_id: int = 8453) -> RPCManager:
     if chain_id not in _managers:
         _managers[chain_id] = RPCManager(chain_id=chain_id)
     return _managers[chain_id]
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Chain identity — PROVEN, not declared (F1)
+# ═══════════════════════════════════════════════════════════════
+
+class ChainIdentityError(RuntimeError):
+    """The chain could not be proven, or was disproven.
+
+    Raised when NO configured provider could be reached, when a provider that
+    DID answer answered with the wrong chain id or an unparseable one, and when
+    no provider is configured at all. There is deliberately no "probably fine"
+    branch: an unproven chain is not a safe chain.
+
+    Not raised merely because one provider is unreachable — that is a statement
+    about a vendor, not about the network. See `assert_chain_identity`.
+    """
+
+
+# Proof is immutable — a node that served chain X at boot cannot start serving
+# chain Y under the same URL without being a different node. Cached per
+# (provider_url, chain_id) for the process lifetime. ONLY successes are ever
+# recorded here; a failure leaves no trace, so a later call re-probes and fails
+# again rather than inheriting a pass.
+_CHAIN_ID_VERIFIED: set[tuple[str, int]] = set()
+
+
+async def assert_chain_identity(chain_id: int, timeout: int = REQUEST_TIMEOUT) -> None:
+    """Prove, via `eth_chainId`, that the providers for `chain_id` serve
+    `chain_id`. Raise `ChainIdentityError` if the chain cannot be proven, or is
+    disproven by any provider that answers.
+
+    The chain is PROVEN once at least one configured provider returns
+    `chain_id`. A provider that cannot be reached is logged at WARNING and
+    skipped: its silence is a fact about that vendor, not about the network.
+    The original guard collapsed the two, so one vendor's HTTP 429 killed a
+    boot that a second, healthy, correctly-configured vendor could have carried
+    (incident 2026-08-28 — a dual-provider deployment failing as though it were
+    single-provider).
+
+    Every provider is still probed, and any that ANSWERS must answer correctly:
+    a wrong answer is worse than no answer, and stays fatal even when a sibling
+    provider proves the chain. Stopping at the first proof would leave a
+    wrong-chain node dormant until failover adopted it, with no further check
+    anywhere downstream — the chain id keys the cursor, the test/live
+    environment stamp and the on-chain invoice id, none of which re-derives it
+    from the network.
+
+    Why provider health is not enough: `_check_provider` asks `eth_blockNumber`
+    and compares lag BETWEEN the providers of the same declared chain. A whole
+    provider set on the wrong network agrees with itself and is marked healthy.
+
+    This function reads no configuration and has no off switch, by design — see
+    `tests/test_chain_identity_guard.py::test_no_configuration_surface_can_disable_chain_identity`.
+    """
+    providers = list(get_rpc_manager(chain_id)._providers)
+    if not providers:
+        raise ChainIdentityError(
+            f"chain {chain_id}: no RPC provider is configured, so the chain "
+            f"cannot be proven. Refusing to operate on an unproven chain."
+        )
+
+    proven: list[str] = []
+    unreachable: list[str] = []
+
+    for p in providers:
+        if (p.url, chain_id) in _CHAIN_ID_VERIFIED:
+            proven.append(p.name)
+            continue
+
+        try:
+            raw = await _raw_rpc_call(p.url, "eth_chainId", [], timeout=timeout)
+        except Exception as exc:
+            # Availability fault. Skipped, never cached — the next call
+            # re-probes it, so a recovering provider is re-proven and a
+            # wrong-chain one it might be replaced by is still caught.
+            logger.warning(
+                "[chain-identity] chain %d: provider %s (%s) could not be asked "
+                "for eth_chainId (%r) — SKIPPED. An unreachable provider proves "
+                "nothing either way; another provider must prove this chain.",
+                chain_id, p.name, p.url, exc,
+            )
+            unreachable.append(f"{p.name} ({exc!r})")
+            continue
+
+        if not isinstance(raw, str):
+            raise ChainIdentityError(
+                f"chain {chain_id}: provider {p.name} ({p.url}) answered "
+                f"eth_chainId with {raw!r}, which is not a hex string."
+            )
+        try:
+            observed = int(raw, 16)
+        except ValueError as exc:
+            raise ChainIdentityError(
+                f"chain {chain_id}: provider {p.name} ({p.url}) answered "
+                f"eth_chainId with {raw!r}, which is not parseable as hex."
+            ) from exc
+
+        if observed != chain_id:
+            raise ChainIdentityError(
+                f"chain {chain_id}: provider {p.name} ({p.url}) serves chain "
+                f"{observed}, not {chain_id}. Indexing it would key the cursor, "
+                f"the environment stamp and the invoice id to the wrong network."
+            )
+
+        # Recorded only after the proof succeeded.
+        _CHAIN_ID_VERIFIED.add((p.url, chain_id))
+        proven.append(p.name)
+
+    if not proven:
+        raise ChainIdentityError(
+            f"chain {chain_id}: NO configured provider could be reached, so the "
+            f"chain is unproven — refusing to operate. Tried: "
+            f"{'; '.join(unreachable)}."
+        )
+
+    if unreachable:
+        logger.warning(
+            "[chain-identity] chain %d proven by %s, with %d provider(s) "
+            "unreachable (%s). Payment detection is running WITHOUT its full "
+            "failover set.",
+            chain_id, ", ".join(proven), len(unreachable), ", ".join(unreachable),
+        )
+
+
+async def verify_chain_identity_for_boot(chain_ids: list[int]) -> None:
+    """Boot guard: prove every configured chain, or refuse to start.
+
+    Raises `SystemExit`, matching `router_registry.verify_enabled_tokens_onchain`
+    — the existing convention for "a boot fact was wrong, do not serve traffic".
+    No chains configured is a no-op; it must not invent a default chain to check.
+    """
+    for chain_id in chain_ids:
+        try:
+            await assert_chain_identity(chain_id)
+        except ChainIdentityError as exc:
+            raise SystemExit(f"[chain-identity] FATAL {exc}") from exc
+        logger.info("[chain-identity] chain %d proven on every provider", chain_id)
 
 
 def log_provider_inventory(chain_ids: list[int]) -> None:

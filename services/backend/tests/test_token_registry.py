@@ -27,8 +27,20 @@ from app.services.router_registry import (
 
 
 def _stablecoins():
-    """Yield (chain, symbol, policy) for every non-native token in the registry."""
+    """Yield (chain, symbol, policy) for every non-native token on a ROUTER chain.
+
+    Watch-only chains are excluded on purpose, not skipped for convenience: the
+    fee keys configure RSendsRouter, and a watch-only chain has no router — the
+    payer sends the token straight to the merchant, so there is no contract that
+    could take a fee. Asserting the flat-fee encoding there would be asserting a
+    number that nothing reads. `test_watch_only_chains_carry_no_fees` below pins
+    the positive invariant for those chains instead.
+    """
+    from app.services.router_registry import is_watch_only_chain
+
     for chain, syms in FEE_POLICY.items():
+        if is_watch_only_chain(chain):
+            continue
         for sym, pol in syms.items():
             if not pol["native"]:
                 yield chain, sym, pol
@@ -102,14 +114,41 @@ def test_enable_gate_rejects_unknown_token_or_chain():
 def test_backend_matches_json_file():
     raw = json.loads(rr._registry_path().read_text())
     for chain_id_str, chain_obj in raw.items():
-        if not chain_id_str.isdigit():
-            continue
+        if chain_id_str.startswith("_"):
+            continue  # file metadata, not a chain
         name = chain_obj["name"].lower()
         for sym, t in chain_obj["tokens"].items():
             pol = FEE_POLICY[name][sym.upper()]
-            assert pol["address"] == t["address"].lower()
+            # EVM addresses are case-insensitive and the loader folds them.
+            # base58check addresses are case-SENSITIVE and must survive verbatim.
+            raw_addr = t["address"]
+            expected_addr = raw_addr.lower() if raw_addr.startswith("0x") else raw_addr
+            assert pol["address"] == expected_addr
             assert pol["decimals"] == t["decimals"]
             assert pol["flatFee"] == t["flatFee"]
             assert pol["threshold"] == t["threshold"]
             assert pol["aboveFee"] == t["aboveFee"]
             assert pol["enabled"] == t["enabled"]
+
+
+# ── Watch-only chains: no router, therefore no fee, and a non-EVM address ──
+def test_watch_only_chains_carry_no_fees():
+    """A watch-only chain has no router, so there is no contract that could take
+    a fee. The fee keys must all be zero — the counterpart to _stablecoins()
+    excluding these chains from the flat-fee encoding assertions."""
+    from app.services.router_registry import (
+        chain_has_settlement_router,
+        is_watch_only_chain,
+    )
+
+    watch_only = [c for c in FEE_POLICY if is_watch_only_chain(c)]
+    assert watch_only, "expected at least one watch-only chain in the registry"
+
+    for chain in watch_only:
+        assert chain_has_settlement_router(chain) is False, (
+            f"{chain} is watch-only but has a router configured — contradiction"
+        )
+        for sym, pol in FEE_POLICY[chain].items():
+            assert pol["flatFee"] == 0, f"{chain}.{sym} flatFee must be 0"
+            assert pol["threshold"] == 0, f"{chain}.{sym} threshold must be 0"
+            assert pol["aboveFee"] == 0, f"{chain}.{sym} aboveFee must be 0"

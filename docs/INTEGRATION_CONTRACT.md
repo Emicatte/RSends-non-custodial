@@ -263,12 +263,12 @@ followed; the retry count and backoff values; the 10 s timeout; `Content-Type`;
 
 | Field | Type | Required | Default | Bounds |
 |---|---|---|---|---|
-| `amount` | float | **yes** | — | `> 0` |
+| `amount` | float | **yes** | — | `> 0`, and its decimal scale must not exceed the token's `decimals` for the requested `(chain, currency)` — 6 for USDC/USDT/EURC, 18 for ETH/DAI. `10.000001` USDC is accepted; `10.0000001` is `400 AMOUNT_PRECISION_EXCEEDED`. We reject rather than round, because rounding would invoice a value you did not ask for. |
 | `currency` | string | **yes** | — | case-sensitive member of `{ETH, USDC, USDT, DAI, cbBTC, DEGEN}` |
 | `chain` | string | no | **`"BASE"`** | — |
 | `expires_in_minutes` | integer | no | `30` | `5..1440` |
-| `recipient` | string \| null | no | `null` | `^0x[a-fA-F0-9]{40}$`, lowercased on ingest |
-| `expected_sender` | string \| null | no | `null` | same regex, lowercased |
+| `recipient` | string \| null | no | `null` | EVM `^0x[a-fA-F0-9]{40}$` (lowercased on ingest) **or**, on a watch-only chain, a base58check address (e.g. TRON `T…`) validated by checksum and stored **case-preserved** |
+| `expected_sender` | string \| null | no | `null` | same rule as `recipient` |
 | `metadata` | object \| null | no | `null` | free-form |
 | `split` | array \| null | no | `null` | 2..20 legs, no duplicate addresses, `share_bps` sums to exactly 10000, mutually exclusive with `recipient` |
 | `late_payment_policy` | string | no | `"auto"` | `{reject, auto, review}` |
@@ -278,6 +278,9 @@ followed; the retry count and backoff values; the 10 s timeout; `Content-Type`;
 
 > **`chain` defaults to `"BASE"`, which is mainnet.** Always send it explicitly. A
 > `rsend_test_` key that omits it gets `400 TESTNET_ONLY`.
+>
+> **`TRON` is mainnet-only** (watch-only settlement, TRON mainnet). A `rsend_test_` key
+> asking for it gets `400 TESTNET_ONLY`; `nile`/`shasta` are not supported at all.
 
 **Identifier formats.** `intent_id` is `pi_` + 32 lowercase hex — `secrets.token_hex(16)`,
 128 bits of CSPRNG (`app/services/intent_service.py:363`). This is load-bearing: the hosted
@@ -289,11 +292,18 @@ checkout's access model is id-as-secret. `reference_id` is exactly 16 lowercase 
 object: all 19 of its keys are always present, because it is validated through a Pydantic
 model with defaults (`merchant_models.py:411-445`).
 
-**`onchain` is `null`** when the intent cannot be paid on-chain. Four conditions
-(`router_registry.py:510-511`, `:530-532`): the chain has no known chain-id; **no router is
-configured for that chain** (the realistic production case); the token is not in that
-chain's registry; or the intent is a split and no split router is configured. **Treat
-`onchain: null` as a hard error — the intent exists but is unpayable.**
+**`onchain` is `null`** when there are no router instructions to give. Conditions
+(`router_registry.py:528-529` and `:549-550`): the chain has no known chain-id; **no router is
+configured for that chain**; the token is not in that chain's registry; or the intent is a
+split and no split router is configured.
+
+> **`onchain: null` is no longer always an error.** It has two meanings now, and `chain` tells
+> them apart. On a **router chain** it still means the intent is unpayable — treat it as a hard
+> error. On a **watch-only chain** it is the normal, expected shape: there is no contract to
+> call because the payer sends the token **directly to `recipient`**, and the indexer observes
+> the transfer. `TRON` is the first such chain. A watch-only intent also carries
+> `onchain_invoice_id: null` — no contract will ever emit one — so do not use that field's
+> presence as a payability signal either. **Branch on `chain`, not on `onchain == null`.**
 
 ### We do not promise
 
@@ -325,16 +335,22 @@ discarded).
 `tests/test_creation_token_gate.py` (3 tests — unregistered and disabled tokens rejected
 with no row persisted), `tests/test_recipient_gate.py` (5 tests — the 422s and the
 settlement-wallet resolution).
+Amount precision: `tests/test_tron_watchonly_intent.py` (over-scale rejected on base and on
+tron, an amount that would convert to 0 base units rejected, and an accepted amount asserted to
+survive `to_base_units` without rounding).
 `onchain` branches: `tests/test_fee_model.py::TestBuildOnchainPayment::test_includes_fee_total_maxfee_and_calldata`,
 `::test_degrades_when_quote_unavailable`, `tests/test_router_v2.py` (v2 branch, v2 wins over
 v1, v1 still reports `routerVersion 1`).
+Watch-only chains: `tests/test_tron_watchonly_intent.py` (base58 recipient round-trips
+byte-identical; `onchain` is null without a 422; `onchain_invoice_id` is null; the chain↔
+address-family gate; TRON classified live, not test).
 Environment binding: `tests/test_merchant_env_isolation.py::test_create_stamps_key_environment`,
 `::test_get_intent_blocked_across_environment`, `::test_list_transactions_scoped_to_environment`.
 
 ⚠ **NOT ENFORCED:** the complete key set of `PaymentIntentResponse` and of
 `MerchantTransactionItem` — there is no `set(keys()) ==` assertion for either, unlike the
 webhook payload; the `reference_id` format; the `intent_id` entropy; the split branch of
-`onchain`; the `onchain is None` conditions; the `currency` allowlist; the
+`onchain`; the `currency` allowlist; the
 `expires_in_minutes` bounds; extra-field tolerance.
 
 ---
@@ -360,19 +376,44 @@ error codes in §6.
 the contract, §"Your half", item 1 — and several existing ones are currently unreachable.
 Honest reachability today:
 
-| Statuses that actually occur | `pending`, `paid`, `expired`, `cancelled` |
+| Statuses that actually occur | `pending`, `paid`, `expired`, `cancelled`, and — on watch-only chains only — `partial` |
 |---|---|
-| Unreachable | `review` is written only by a matcher with zero production callers (`webhook_service.py:377, 913, 922, 926`). `completed`, `refunded`, `partial` and `overpaid` all require passing through `review` first, so they are transitively unreachable. `completed` does still exist on legacy rows. |
+| Unreachable | `review` is written only by a matcher with zero production callers (`webhook_service.py:377, 913, 922, 926`). `completed`, `refunded` and `overpaid` all require passing through `review` first, so they are transitively unreachable. `completed` does still exist on legacy rows. |
+
+**`partial` became reachable on 2026-08-29**, on watch-only chains (TRON) only
+(`app/services/tron_matcher.py`). There is no router and no escrow on such a chain, so an
+underpayment has already arrived in the merchant's wallet and cannot be refused: the intent
+moves to `partial` and carries `amount_received` + `underpaid_amount`. It does **not** pass
+through `review`, and it is **terminal for now** — partial payments do not accumulate, so a
+second transfer completing the amount does not close the invoice. On router chains
+(EVM), an underpayment is still refused on-chain and `partial` still cannot occur.
 
 Because `review` is unreachable, **`POST /payment-intent/{id}/resolve` can only ever return
 `400 INVALID_STATE`** (`merchant_routes.py:438-445`).
 
-| Events that actually fire | `payment.completed`, `payment.reversed`, `payment.expired`, and `test` |
+| Events that actually fire | `payment.completed`, `payment.reversed`, `payment.expired`, `test`, and — on watch-only chains only — `payment.partial` and `payment.ambiguous` |
 |---|---|
-| Never fired | `payment.cancelled` and `payment.ambiguous` are reserved placeholders. `payment.expired_rejected`, `payment.needs_review`, `payment.partial`, `payment.overpaid` come only from the dead matcher. `payment.completed_late` requires `review`, so in practice it does not fire either. |
+| Never fired | `payment.cancelled` is a reserved placeholder. `payment.expired_rejected`, `payment.needs_review` and `payment.overpaid` come only from the dead matcher. `payment.completed_late` requires `review`, so in practice it does not fire either. |
 
-**Six of the ten event names are subscribable and will never arrive.** Subscribe to what you
+**Four of the ten event names are subscribable and will never arrive.** Subscribe to what you
 need; do not build logic that waits on the others.
+
+**`payment.partial` and `payment.ambiguous` became reachable on 2026-08-29**, on watch-only
+chains (TRON) only (`app/services/tron_matcher.py`):
+
+- **`payment.partial`** — the payer sent less than the invoice. The intent is `partial`, not
+  `paid`; `amount_received` and `underpaid_amount` are populated (both in **token** units,
+  like `amount`). The money is already at the merchant.
+- **`payment.ambiguous`** — one transfer could be paying more than one of your pending
+  invoices, and we will not guess. **No intent was modified**; the `intent_id` in the payload
+  is one representative candidate, and the full list is in the extra key
+  `candidate_intent_ids`. Reconcile by hand. Note that overpayment does **not** produce
+  `payment.overpaid`: an overpaid invoice is satisfied, so it fires `payment.completed` with
+  `overpaid_amount` set.
+
+Note this is the first path in production that populates `amount_received`,
+`overpaid_amount` and `underpaid_amount` at all — they have carried `"0"`/`null` on every
+event until now. Their type is unchanged (**string \| null**).
 
 One asymmetry worth naming: **`test` is emitted but is not in `VALID_EVENTS`, and it bypasses
 your subscription list** (`webhook_service.py:1327-1331`). If anyone presses "Send test" you
@@ -485,7 +526,9 @@ Error codes on the merchant surface: `INVALID_API_KEY`, `INSUFFICIENT_SCOPE`,
 `TESTNET_ONLY`, `MAINNET_ONLY`, `INVALID_STATE`, `INVALID_STATUS`, `WEBHOOK_INACTIVE`,
 `INTENT_NOT_FOUND`, `WEBHOOK_NOT_FOUND`, `SETTLEMENT_IN_FLIGHT`,
 `DUPLICATE_REQUEST_IN_FLIGHT`, `SETTLEMENT_WALLET_MISSING`, `SETTLEMENT_WALLET_AMBIGUOUS`,
-`SPLIT_UNAVAILABLE`, `WEBHOOK_URL_FORBIDDEN`, `RATE_LIMIT_EXCEEDED`,
+`SPLIT_UNAVAILABLE`, `RECIPIENT_CHAIN_MISMATCH`, `AMOUNT_PRECISION_EXCEEDED`,
+`DUPLICATE_PENDING_INTENT`,
+`WEBHOOK_URL_FORBIDDEN`, `RATE_LIMIT_EXCEEDED`,
 `KEY_RATE_LIMIT_EXCEEDED`, `MONTHLY_LIMIT_EXCEEDED`, `RATE_LIMIT_UNAVAILABLE`,
 `PAYLOAD_TOO_LARGE`, `SERVICE_OVERLOADED`, `REQUEST_TIMEOUT`, `INTERNAL_ERROR`.
 

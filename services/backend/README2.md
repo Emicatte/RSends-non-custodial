@@ -333,7 +333,7 @@ See `.env.example` for full documentation. Key variables:
 |---|---|---|
 | `DATABASE_URL` | Yes | PostgreSQL async URL (`sqlite+aiosqlite://` in tests) |
 | `REDIS_URL` | Prod | Redis URL (cache, rate limit, idempotency, sessions) |
-| `ALCHEMY_API_KEY` | Yes | Alchemy RPC |
+| `ALCHEMY_API_KEY` | Yes* | Alchemy RPC (*unless `RPC_PROVIDERS_JSON` covers every indexed chain) |
 | `SWEEP_PRIVATE_KEY` | Yes* | Hot wallet key (*unless SIGNER_MODE=kms) |
 | `SIGNER_MODE` | No | `local` (default), `kms`, or `vault` |
 | `KMS_KEY_ID` | If kms | AWS KMS key ID |
