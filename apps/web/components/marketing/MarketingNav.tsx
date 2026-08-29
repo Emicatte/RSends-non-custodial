@@ -16,8 +16,12 @@ const NAV_LINKS = [
 ] as const
 
 /**
- * The liquid-glass marketing header (extracted from the home page) plus the
- * flat page nav. Rendered on every marketing route via HeaderMount.
+ * The marketing header (extracted from the home page) plus the flat page nav.
+ * Rendered on every marketing route via HeaderMount.
+ *
+ * One surface, solid --rs-terracotta-deep, with white text on it (6.14:1).
+ * It is --rs-terracotta-DEEP and not --rs-terracotta because white on the
+ * lighter #C8512C is 4.4975:1, i.e. just under AA — see app/designTokens.ts.
  *
  * Responsive behavior lives in CSS (not a JS resize listener) so the server
  * markup is already correct at every width: inline links ≥1024px, a minimal
@@ -35,19 +39,29 @@ export default function MarketingNav() {
     fontSize: 14,
     fontWeight: 500,
     letterSpacing: '-0.01em',
-    color: hovered === key ? C.purple : C.text,
+    // Resting is full white so 14px nav text keeps 6.14:1; hover dims rather
+    // than brightens, because the old hover colour (C.purple) is the bar's own
+    // hue and would vanish into it.
+    color: hovered === key ? C.onDarkMuted : C.onDark,
     textDecoration: 'none',
     transition: 'color 150ms ease',
   })
 
   return (
     <nav
-      className="bf-blur-24s rs-mnav"
+      // No bf-blur-24s. That utility paints a ::before whose backdrop-filter is
+      // `blur(24px) saturate(180%)`; behind the old translucent bar it saturated
+      // the PAGE, but behind an opaque fill its backdrop is the bar's own colour,
+      // so it repainted #A8401F as #EB3000 (measured off the rendered pixel).
+      // Dropping it costs no layout: the class only adds position:relative and
+      // isolation:isolate, and the inline position:fixed + z-index already
+      // establish both.
+      className="rs-mnav"
       style={{
         position: 'fixed', top: 3, left: 0, right: 0, zIndex: 1000,
         paddingTop: 'var(--sat, 0px)',
-        background: 'rgba(250,250,250,0.85)',
-        borderBottom: '1px solid rgba(10,10,10,0.08)',
+        background: C.terracottaDeep,
+        borderBottom: '1px solid var(--rs-on-dark-line)',
       }}
     >
       <style>{`
@@ -74,7 +88,7 @@ export default function MarketingNav() {
       <div style={{ display: 'flex', alignItems: 'center', justifySelf: 'start' }}>
         <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
           <img src="/favicon.svg" alt="RSends" width={28} height={28} style={{ borderRadius: 7 }} />
-          <span style={{ fontFamily: C.D, fontSize: 16, fontWeight: 800, color: C.text, letterSpacing: '-0.03em' }}>
+          <span style={{ fontFamily: C.D, fontSize: 16, fontWeight: 800, color: C.onDark, letterSpacing: '-0.03em' }}>
             RSends
           </span>
         </Link>
@@ -97,8 +111,8 @@ export default function MarketingNav() {
 
       {/* Right: language + auth, plus the mobile disclosure toggle */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifySelf: 'end', gridColumn: 3 }}>
-        <LanguageSwitcher />
-        <LandingAuthButtons />
+        <LanguageSwitcher onDark />
+        <LandingAuthButtons onDark />
         <button
           type="button"
           className="rs-mnav-toggle"
@@ -110,7 +124,7 @@ export default function MarketingNav() {
             alignItems: 'center', justifyContent: 'center',
             width: 36, height: 36, padding: 0,
             background: 'transparent', border: 'none', cursor: 'pointer',
-            color: C.text,
+            color: C.onDark,
           }}
         >
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
@@ -129,8 +143,8 @@ export default function MarketingNav() {
           id="rs-mnav-panel"
           style={{
             position: 'absolute', top: '100%', left: 0, right: 0,
-            background: 'rgba(250,250,250,0.97)',
-            borderBottom: '1px solid rgba(10,10,10,0.08)',
+            background: C.terracottaDeep,
+            borderBottom: '1px solid var(--rs-on-dark-line)',
             display: 'flex', flexDirection: 'column',
             padding: '8px 12px 14px',
             gap: 4,
@@ -143,9 +157,9 @@ export default function MarketingNav() {
               onClick={() => setOpen(false)}
               style={{
                 fontFamily: C.D, fontSize: 15, fontWeight: 500,
-                color: C.text, textDecoration: 'none',
+                color: C.onDark, textDecoration: 'none',
                 padding: '10px 4px',
-                borderBottom: '1px solid rgba(10,10,10,0.06)',
+                borderBottom: '1px solid var(--rs-on-dark-line)',
               }}
             >
               {t(link.key)}

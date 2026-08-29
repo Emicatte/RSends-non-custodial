@@ -411,7 +411,7 @@ function NetworkTokenWidget({
             transition={{ duration: 0.15, ease: [0.4, 0, 0.2, 1] }}
             style={{
               position: 'absolute', top: 'calc(100%)', right: 0, zIndex: 100,
-              minWidth: 220, maxHeight: 300, overflowY: 'auto' as const, background: '#FFFFFF',
+              minWidth: 220, maxHeight: 300, overflowY: 'auto' as const, background: C.card,
               border: '1px solid rgba(10,10,10,0.10)',
               borderRadius: 14,
               boxShadow: '0 16px 48px rgba(0,0,0,0.7), 0 0 0 1px rgba(10,10,10,0.03)',
@@ -478,7 +478,7 @@ function NetworkTokenWidget({
             transition={{ duration: 0.15, ease: [0.4, 0, 0.2, 1] }}
             style={{
               position: 'absolute', top: 'calc(100%)', right: 0, zIndex: 100,
-              minWidth: 240, background: '#FFFFFF',
+              minWidth: 240, background: C.card,
               border: '1px solid rgba(10,10,10,0.10)',
               borderRadius: 14, overflow: 'hidden',
               boxShadow: '0 16px 48px rgba(0,0,0,0.7), 0 0 0 1px rgba(10,10,10,0.03)',

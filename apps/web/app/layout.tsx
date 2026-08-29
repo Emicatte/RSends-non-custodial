@@ -46,7 +46,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body
         className="overflow-x-hidden"
-        style={{ background: '#FAFAFA', minHeight: '100dvh' }}
+        style={{ background: 'var(--rs-paper)', minHeight: '100dvh' }}
       >
         <AuthSessionProvider>
           <Providers>

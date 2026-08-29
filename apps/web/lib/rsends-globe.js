@@ -122,7 +122,16 @@
       const showRoutes = this.getAttribute('show-routes') !== 'false';
 
       ctx.clearRect(0, 0, S, S);
-      ctx.fillStyle = ink;
+      // Land dots are the accent and the route arcs are the ink — the two
+      // swapped roles, the dots are no longer the grey field they used to be.
+      // The ramp drops 0.16-0.78 -> 0.12-0.52 so the field reads as ground and
+      // does not compete with the ink lines drawn over it. Not dimmer still:
+      // terracotta on warm paper carries far less contrast than near-black did
+      // on white, so the same alpha buys much less presence and the globe
+      // washes out below roughly 0.5 at the front of the sphere. Only colour
+      // and alpha changed here — dot count, dot radius and the z-depth cue are
+      // untouched. `ink` still backs labels too.
+      ctx.fillStyle = accent;
       for (let i = 0; i < LAND.length; i += 2) {
         const phi = (LAND[i + 1] / 10) * Math.PI / 180;
         const lam = (LAND[i] / 10) * Math.PI / 180 + rot;
@@ -130,7 +139,7 @@
         const x0 = cph * Math.sin(lam), y0 = Math.sin(phi), z0 = cph * Math.cos(lam);
         const y1 = y0 * ct - z0 * st, z1 = y0 * st + z0 * ct;
         if (z1 <= 0.02) continue;
-        ctx.globalAlpha = 0.16 + 0.62 * z1;
+        ctx.globalAlpha = 0.12 + 0.40 * z1;
         ctx.beginPath();
         ctx.arc(cx + R * x0, cy - R * y1, (0.9 + 1.9 * z1) * k, 0, 6.2832);
         ctx.fill();
@@ -149,7 +158,12 @@
         ctx.lineCap = 'round';
         for (const rt of this._routes) {
           const va = this._cities[rt.a].v, vb = this._cities[rt.b].v;
-          ctx.strokeStyle = accent; ctx.lineWidth = 2.4 * k; ctx.setLineDash([2.4 * k, 9 * k]);
+          // The transaction lines are the INK, over a terracotta land field —
+          // the inverse of the old arrangement. Alpha stays at the 0.6 the arcs
+          // have always used: near-black at 0.6 over dots that top out at 0.52
+          // of a much lighter hue is legible everywhere on the sphere, front
+          // hemisphere included, so no new value was needed to keep them read.
+          ctx.strokeStyle = ink; ctx.lineWidth = 2.4 * k; ctx.setLineDash([2.4 * k, 9 * k]);
           ctx.globalAlpha = 0.6; ctx.beginPath();
           let dr = false;
           for (let s = 0; s <= 36; s++) {
