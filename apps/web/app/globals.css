@@ -2,6 +2,28 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Metric-matched fallback for General Sans ─────────────────────────────────
+   General Sans is fetched from the Fontshare CDN with display=swap, so the
+   headline paints in a fallback first and reflows when the real face lands
+   (~800ms locally). Measured on the hero string at 100px: General Sans is
+   2272px wide, Arial/Helvetica 2190px, -apple-system 2005px — so swapping in
+   from the old stack moved every word.
+
+   size-adjust 103.74% is exactly 2272/2190, which makes Arial advance like
+   General Sans. Listed immediately after it in --font-display, this keeps the
+   pre-swap and post-swap layouts the same width.
+
+   This is a stopgap on top of a real problem: the face is a render-blocking
+   third-party <link> with no next/font, no self-hosting and no preload, and
+   globals.css elsewhere asks for weights 300 and 800 that the CDN URL never
+   loads. Self-hosting it is its own change. */
+@font-face {
+  font-family: 'General Sans Fallback';
+  src: local('Arial'), local('Helvetica Neue'), local('Helvetica'), local('Liberation Sans');
+  size-adjust: 103.74%;
+  font-display: swap;
+}
+
 /* ============================================================
    globals.css — GPU-Accelerated Background System
    RPagos · Ultra-Bright Cyan + Magenta Light Sources
@@ -44,7 +66,7 @@ body {
 
 /* ── Theme variables ──────────────────────────────────────── */
 :root {
-  --font-display: 'General Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'General Sans', 'General Sans Fallback', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 
   /* Colori tema */
   --c-bg:      #050510;
@@ -1182,9 +1204,9 @@ body.admin-mode::after {
    `backwards` (not `both`/`forwards`) is load-bearing: it holds the `from` state
    through the delay and then leaves the element on its own visible styles, so
    nothing is ever left hidden by a finished or interrupted animation. */
-@keyframes rsPageIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+@keyframes rsVeilOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
 }
 @keyframes rsHeroRise {
   from { opacity: 0; transform: translateY(var(--rs-hero-y, 12px)); }
@@ -1204,30 +1226,56 @@ body.admin-mode::after {
   to   { opacity: 1; transform: translateY(-50%) scale(1); }
 }
 
+/* The veil is the "background settles" step: a --surface sheet over the page
+   that fades to nothing in 200ms, leaving --paper. Doing it this way rather
+   than animating background-color keeps the whole entrance on transform and
+   opacity. It only exists while .rs-intro is on the document, so on every
+   other render it is display:none and cannot cover anything. */
+.rs-intro-veil { display: none; }
+
+/* ── The entrance is scoped to .rs-intro ──────────────────────────────────────
+   That class is added by the pre-paint script in app/layout.tsx: locale home
+   only, once per session. Everything below therefore does not exist for a
+   repeat view, for a page that is not the home page, with JavaScript off, or
+   under prefers-reduced-motion — all of which land on the finished state at
+   first paint, which is also the resting state of the markup.
+
+   Total budget 1200ms:
+     0-200ms    veil fades out          (opacity)
+     120-580ms  H1 line 1, line 2, subhead, CTA — 60ms apart   (transform+opacity)
+     400-1100ms the payment-path stroke draws left to right    (scaleX)
+     400-1100ms the globe settles in                           (transform+opacity)
+   Nothing animates a layout property, so none of it can shift the page. */
 @media (min-width: 768px) and (prefers-reduced-motion: no-preference) {
-  .main-content {
-    animation: rsPageIn 0.9s ease backwards;
+  .rs-intro .rs-intro-veil {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    background: var(--rs-surface);
+    pointer-events: none;
+    animation: rsVeilOut 0.2s ease-out forwards;
   }
-  .rs-hero-rise {
-    animation: rsHeroRise var(--rs-hero-dur, 0.6s) cubic-bezier(0.22, 1, 0.36, 1)
+  .rs-intro .rs-hero-rise {
+    animation: rsHeroRise var(--rs-hero-dur, 0.4s) cubic-bezier(0.22, 1, 0.36, 1)
                var(--rs-hero-delay, 0s) backwards;
   }
-  .rs-hero-line {
-    animation: rsHeroLine 1.2s cubic-bezier(0.22, 1, 0.36, 1)
-               var(--rs-hero-delay, 0s) backwards;
+  .rs-intro .rs-hero-line {
+    animation: rsHeroLine 0.7s cubic-bezier(0.22, 1, 0.36, 1)
+               var(--rs-hero-delay, 0.4s) backwards;
   }
   /* Its own variable, not --rs-hero-delay: custom properties inherit, so a
      .rs-hero-rise ancestor would otherwise hand its delay to every word. */
-  .rs-hero-word {
-    animation: rsHeroWord 0.9s cubic-bezier(0.22, 1, 0.36, 1)
+  .rs-intro .rs-hero-word {
+    animation: rsHeroWord 0.4s cubic-bezier(0.22, 1, 0.36, 1)
                var(--rs-hero-word-delay, 0s) backwards;
   }
-  .rs-hero-globe {
-    animation: rsHeroGlobe 1.2s cubic-bezier(0.22, 1, 0.36, 1) 0.4s backwards;
+  .rs-intro .rs-hero-globe {
+    animation: rsHeroGlobe 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.4s backwards;
   }
   /* The clip box exists ONLY while the words actually travel. Outside this
      query the wrapper does not clip, so the headline can never be hidden. */
-  .rs-hero-word-clip {
+  .rs-intro .rs-hero-word-clip {
     overflow: hidden;
   }
 }
@@ -1313,4 +1361,43 @@ body.admin-mode::after {
 @media (max-width: 767px) {
   .rs-mnav { height: 56px; padding-left: 12px; padding-right: 12px; }
   .rs-mnav--compact { height: 50px; }
+}
+
+/* ============================================================
+   DEVICE SHOWCASE
+   ============================================================
+   In globals.css, not an inline <style> — see the MARKETING NAV
+   note above for why (React escapes text children and <style> is
+   a raw-text element, so quotes in selectors break hydration).
+
+   The connector stroke RESTS drawn (scaleX 1). GSAP only ever
+   animates it from 0 -> 1 when it creates the tween, which it
+   does not do below 768px or under prefers-reduced-motion. So
+   the "no animation" state is the finished state, never a
+   missing line.
+   ============================================================ */
+.rs-showcase-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 40px;
+  align-items: center;
+}
+.rs-showcase-connector { display: none; }
+.rs-showcase-path {
+  height: 2px;
+  width: 100%;
+  transform: scaleX(1);
+}
+
+@media (min-width: 900px) {
+  .rs-showcase-grid {
+    grid-template-columns: minmax(0, 1fr) 72px 300px;
+    gap: 0;
+  }
+  .rs-showcase-connector {
+    display: block;
+    padding: 0 12px;
+    /* Sits level with the middle of the two frames, not the captions. */
+    align-self: center;
+  }
 }
