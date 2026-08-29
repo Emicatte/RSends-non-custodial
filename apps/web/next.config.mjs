@@ -42,6 +42,22 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // There was no `images` block at all before this, so `formats` sat at the
+  // Next 14 default of ['image/webp'] and AVIF was never negotiated. This is
+  // SITE-WIDE, not scoped to one section: every next/image call site goes
+  // through the same optimiser — today the landing photos in
+  // components/landing/{WhySignInSection,GetStartedSection}.tsx and the device
+  // screenshots in components/landing/DeviceShowcase.tsx.
+  //
+  // Note what this does and does not do. /_next/image picks a format per
+  // request from the browser's Accept header, so AVIF is never emitted into
+  // the build output and there is no .avif file to commit. The committed PNG
+  // IS the fallback: a client that accepts neither AVIF nor WebP gets it
+  // unchanged. Verify with a request, not by looking in .next — see the
+  // command in scripts/capture-mockups.ts.
+  images: {
+    formats: ['image/avif', 'image/webp'],
+  },
   webpack: (config) => {
     config.resolve.fallback = {
       ...config.resolve.fallback,
