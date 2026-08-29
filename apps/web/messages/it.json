@@ -145,7 +145,7 @@
       },
       "history": {
         "title": "Il cliente paga in stablecoin",
-        "description": "Paga in USDC, USDT o EURC su Base o Ethereum."
+        "description": "Paga in USDC o USDT su Base o Ethereum."
       },
       "contacts": {
         "title": "I fondi si regolano on-chain",
@@ -192,7 +192,7 @@
       "b1": "Abbonamento mensile fisso",
       "b2": "Prezzo concordato all'onboarding",
       "b3": "Nessuna % sul volume",
-      "b4": "USDC · USDT · EURC",
+      "b4": "USDC · USDT",
       "cta": "Vedi i prezzi →"
     }
   },

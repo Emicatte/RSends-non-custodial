@@ -146,7 +146,7 @@
       },
       "history": {
         "title": "Customer pays in stablecoin",
-        "description": "They pay in USDC, USDT or EURC on Base or Ethereum."
+        "description": "They pay in USDC or USDT on Base or Ethereum."
       },
       "contacts": {
         "title": "Funds settle on-chain",
@@ -193,7 +193,7 @@
       "b1": "Festes Monatsabo",
       "b2": "Preis beim Onboarding vereinbart",
       "b3": "Kein % Ihres Volumens",
-      "b4": "USDC · USDT · EURC",
+      "b4": "USDC · USDT",
       "cta": "See pricing →"
     }
   },
