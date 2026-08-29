@@ -13,6 +13,8 @@ declare global {
         halo?: string
         'show-labels'?: string
         'show-routes'?: string
+        /** Caption naming the active arc's chain and token. Default on. */
+        'show-route-labels'?: string
         paused?: string
       }
     }
