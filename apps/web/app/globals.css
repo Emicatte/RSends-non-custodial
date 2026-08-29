@@ -75,28 +75,16 @@ body {
      hex (its values are handed to a <canvas>, and a canvas cannot parse
      `var()`). Change one, change the other in the same edit.
 
-     Terracotta has two values and they are not interchangeable:
-       --rs-terracotta       #C8512C  large text and graphics (the hero globe).
-                                      NEVER a filled surface behind body text:
-                                      white on it is 4.4975:1, which rounds to
-                                      4.50 but is UNDER the 4.5 AA line.
-       --rs-terracotta-deep  #A8401F  filled surfaces — white on it is 6.14:1.
-                                      This is the marketing nav bar.
+     --rs-terracotta is for graphics and large text, and there is deliberately
+     no filled-surface variant: white on #C8512C is 4.4975:1, which rounds to
+     4.50 but sits UNDER the 4.5 AA line, so anything filled with this hue and
+     carrying white body text would need a darker value than this one.
      ============================================================ */
   --rs-ink: #0A0A0A;
   --rs-terracotta: #C8512C;
-  --rs-terracotta-deep: #A8401F;
   --rs-paper: #EFEEEA;
   --rs-surface: #F7F6F3;
   --rs-wash: #F5E8E0;
-
-  /* Foreground for genuinely dark surfaces — today only the terracotta-deep
-     nav bar. The only sanctioned white in the palette: it exists so that bar
-     stays legible without scattering raw #fff through components, where it
-     always ends up on light backgrounds too. Never use it on paper. */
-  --rs-on-dark: #FFFFFF;
-  --rs-on-dark-muted: rgba(255, 255, 255, 0.72);
-  --rs-on-dark-line: rgba(255, 255, 255, 0.14);
 
   /* Opacity helpers — for semi-transparent fills that must match palette */
   --rs-ink-12: rgba(10, 10, 10, 0.12);

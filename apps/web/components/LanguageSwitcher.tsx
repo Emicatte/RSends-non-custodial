@@ -14,13 +14,7 @@ const LOCALES: { code: Locale; label: string; flag: string }[] = [
   { code: 'de', label: 'Deutsch', flag: 'DE' },
 ]
 
-/**
- * @param onDark render the trigger against a dark surface (the terracotta-deep
- *   marketing nav). Additive and default-false, so every other call site keeps
- *   the light path unchanged. Only the TRIGGER flips: the dropdown opens below
- *   the bar onto paper and stays light.
- */
-export default function LanguageSwitcher({ onDark = false }: { onDark?: boolean } = {}) {
+export default function LanguageSwitcher() {
   const locale = useLocale()
   const router = useRouter()
   const pathname = usePathname()
@@ -53,10 +47,10 @@ export default function LanguageSwitcher({ onDark = false }: { onDark?: boolean 
           fontFamily: C.D,
           fontSize: 12,
           fontWeight: 500,
-          color: onDark ? C.onDark : C.text,
+          color: C.text,
           transition: 'background 0.2s',
         }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = onDark ? 'rgba(255,255,255,0.14)' : 'rgba(10,10,10,0.05)' }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(10,10,10,0.05)' }}
         onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
       >
         <span style={{ fontFamily: C.M, fontSize: 10, opacity: 0.6 }}>{current.flag}</span>

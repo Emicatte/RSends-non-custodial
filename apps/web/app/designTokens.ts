@@ -22,21 +22,15 @@ export const C = {
   sub:     'rgba(10,10,10,0.55)',
   dim:     'rgba(10,10,10,0.55)',
 
-  // Foreground for dark surfaces only — today that is the terracotta-deep
-  // marketing nav. Never on paper or surface.
-  onDark:      '#FFFFFF',                  // --rs-on-dark
-  onDarkMuted: 'rgba(255,255,255,0.72)',   // --rs-on-dark-muted
-
   // ── Borders ──────────────────────────────────────────────
   border:  'rgba(10,10,10,0.12)',
 
   // ── Brand accent ─────────────────────────────────────────
-  // Two values. White on #C8512C is 4.4975:1 — it rounds to 4.50 but is UNDER
-  // the AA line, so #C8512C stays on large text and graphics (the globe) and
-  // #A8401F carries filled surfaces such as the nav bar, where white on it is
-  // 6.14:1.
-  purple:         '#C8512C',   // --rs-terracotta
-  terracottaDeep: '#A8401F',   // --rs-terracotta-deep
+  // Graphics and large text only. There is no filled-surface variant because
+  // nothing is filled with it: white on #C8512C is 4.4975:1, which rounds to
+  // 4.50 but sits UNDER the AA line, so a filled bar in this hue would need a
+  // darker value than this one.
+  purple:  '#C8512C',   // --rs-terracotta
 
   // ── Semantic status ──────────────────────────────────────
   green:   '#00D68F',
