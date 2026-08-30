@@ -194,6 +194,39 @@ def test_lowercasing_destroys_a_tron_address():
     assert is_tron_address(USDT_TRC20[:-1] + "u") is False
 
 
+def test_display_payment_address_shows_without_destroying():
+    """The READ-path sibling of normalize_payment_address.
+
+    Read paths used to reach for `.lower()` because every address in this system
+    was EVM. This is what they use instead, and it is deliberately total: a value
+    it cannot classify is echoed, not dropped, because a dashboard row rendering
+    nothing is worse than one rendering a value we could not vouch for. Covers
+    the two stats routes, whose call is the same one-liner.
+    """
+    from app.security.input_validator import display_payment_address
+
+    # base58check survives, byte for byte
+    assert display_payment_address(TRON_PAYEE) == TRON_PAYEE
+    assert display_payment_address(TRON_PAYEE) != TRON_PAYEE.lower()
+
+    # EVM folds, exactly as `.lower()` did
+    mixed = "0xAbCdEf0123456789aBcDeF0123456789AbCdEf01"
+    assert display_payment_address(mixed) == mixed.lower()
+    assert display_payment_address(mixed.lower()) == mixed.lower()
+
+    # Neither family: echoed unchanged rather than folded or dropped. Not
+    # reachable from a real settlement row, whose only writers are the indexer
+    # and the poller, but it is the fallback and it should not be destructive.
+    assert display_payment_address("not-an-address") == "not-an-address"
+    assert display_payment_address(TRON_PAYEE.lower()) == TRON_PAYEE.lower()
+
+    # Absent stays the empty string, so callers keep the non-null guarantee the
+    # `(x or "")` idiom gave them.
+    assert display_payment_address(None) == ""
+    assert display_payment_address("") == ""
+    assert display_payment_address(12345) == ""
+
+
 # ── Regression pin: EVM behaviour is exactly as before ───────
 
 @pytest.mark.asyncio
