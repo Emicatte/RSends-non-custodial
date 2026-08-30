@@ -25,7 +25,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.models.merchant_models import IntentStatus, OnchainPayment, PaymentIntent
-from app.services.router_registry import build_onchain_payment
+from app.services.router_registry import (
+    build_onchain_payment,
+    from_base_units,
+    to_base_units,
+    token_for,
+)
 
 logger = logging.getLogger("rsend.public")
 
@@ -41,6 +46,14 @@ class PublicPaymentIntentResponse(BaseModel):
     late_payment_policy, merchant_id. `onchain` is the full payment
     instruction set — every field is payer-facing (incl. permitType/
     permitVersion/calldata, required to actually execute the payment).
+
+    On a WATCH-ONLY chain (TRON) `onchain` is null by construction: there is no
+    contract to call, and the payer sends the token straight to `recipient`.
+    That makes `recipient` and `amount_exact` the entire payment instruction —
+    the checkout has nothing else to render, and no way to derive either.
+    They carry no information a payer holding this link does not already need,
+    and on a router chain the same address already ships inside
+    `onchain.merchant`.
     """
     status: str
     amount: float
@@ -50,6 +63,20 @@ class PublicPaymentIntentResponse(BaseModel):
     merchant_name: Optional[str] = None   # display name only, from merchant metadata
     tx_hash: Optional[str] = None         # settlement receipt, null until completed
     onchain: Optional[OnchainPayment] = None
+    # The payee, byte-identical. On a base58check chain this address is
+    # case-SENSITIVE and folding it does not merely change it, it stops it
+    # decoding — so it is echoed verbatim, never normalized on the way out.
+    # Null on a split intent, which has no single payee.
+    recipient: Optional[str] = None
+    # `amount` rendered as the EXACT decimal the settlement layer compares
+    # against, so a payer typing it by hand types the value that matches.
+    amount_exact: Optional[str] = None
+    # Echoed as stored, exactly as the webhook payload carries them: in TOKEN
+    # units like `amount`, and written only by the watch-only matcher. On every
+    # other path `amount_received` stays at its "0" default and
+    # `underpaid_amount` stays null, so read them only on `status == "partial"`.
+    amount_received: Optional[str] = None
+    underpaid_amount: Optional[str] = None
 
 
 def _effective_status(intent: PaymentIntent) -> str:
@@ -63,6 +90,26 @@ def _effective_status(intent: PaymentIntent) -> str:
         if expires_at < datetime.now(timezone.utc):
             return IntentStatus.expired.value
     return intent.status.value
+
+
+def _exact_amount(intent: PaymentIntent) -> Optional[str]:
+    """`intent.amount` as the exact decimal the settlement layer compares to.
+
+    `PaymentIntent.amount` is a `Float`, and on a watch-only chain a HUMAN
+    retypes it into a wallet while the matcher compares base units with zero
+    tolerance — one wrong character is an underpayment that cannot be undone.
+    So the value the payer is shown is round-tripped through the very function
+    that produces the expected base units, rather than through whatever
+    `str(float)` happens to print.
+
+    None when the token is not in the registry for this chain: better to render
+    nothing than a number derived from a guessed scale.
+    """
+    token = token_for(intent.chain or "", intent.currency or "")
+    if token is None:
+        return None
+    _address, decimals = token
+    return from_base_units(to_base_units(intent.amount, decimals), decimals)
 
 
 def _merchant_display_name(intent: PaymentIntent) -> Optional[str]:
@@ -110,4 +157,8 @@ async def get_public_payment_intent(
         merchant_name=_merchant_display_name(intent),
         tx_hash=intent.matched_tx_hash or intent.tx_hash,
         onchain=onchain,
+        recipient=intent.recipient,
+        amount_exact=_exact_amount(intent),
+        amount_received=intent.amount_received,
+        underpaid_amount=intent.underpaid_amount,
     )

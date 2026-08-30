@@ -32,6 +32,7 @@ from app.db.session import async_session, engine
 from app.models.db_models import Base
 from app.models.merchant_models import IntentStatus, PaymentIntent
 from app.api.public_routes import get_public_payment_intent, public_router
+from app.services.router_registry import to_base_units
 
 OWNER = "0x742d35cc6634c0532925a3b844bc9e7595f2bd18"
 
@@ -39,7 +40,16 @@ OWNER = "0x742d35cc6634c0532925a3b844bc9e7595f2bd18"
 PUBLIC_FIELDS = {
     "status", "amount", "currency", "chain", "expires_at",
     "merchant_name", "tx_hash", "onchain",
+    # Watch-only chains have no `onchain` block, so these four ARE the payment
+    # instruction there: where to send, how much exactly, and what has arrived.
+    "recipient", "amount_exact", "amount_received", "underpaid_amount",
 }
+
+# A real TRON mainnet address (the USDT TRC-20 contract), used purely as a
+# well-formed base58check value. Mixed case is the point: base58 excludes
+# 0 O I l, so folding it does not produce a different address, it produces a
+# string that no longer decodes.
+TRON_PAYEE = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
 
 
 # ── Fixtures ─────────────────────────────────────────────────
@@ -77,21 +87,38 @@ def _intent(
     tx_hash: str | None = None,
     matched_tx_hash: str | None = None,
     amount: float = 100.0,
+    currency: str = "USDC",
+    chain: str = "base",
+    recipient: str | None = None,
+    amount_received: str | None = None,
+    underpaid_amount: str | None = None,
 ) -> PaymentIntent:
+    # amount_received carries a column default of "0"; pass it only when the
+    # test actually wants a value, so the default is exercised otherwise.
+    observed = {
+        k: v
+        for k, v in (
+            ("amount_received", amount_received),
+            ("underpaid_amount", underpaid_amount),
+        )
+        if v is not None
+    }
     return PaymentIntent(
         intent_id=f"pi_{secrets.token_hex(16)}",
         reference_id=secrets.token_hex(8),
         merchant_id=OWNER,
         environment="live",
         amount=amount,
-        currency="USDC",
-        chain="base",
+        currency=currency,
+        chain=chain,
+        recipient=recipient,
         status=status,
         metadata_=metadata,
         expected_sender="0x00000000000000000000000000000000000000aa",
         tx_hash=tx_hash,
         matched_tx_hash=matched_tx_hash,
         expires_at=datetime.now(timezone.utc) + timedelta(minutes=expires_in_minutes),
+        **observed,
     )
 
 
@@ -158,6 +185,113 @@ async def test_tx_hash_prefers_matched_settlement(session):
 
     resp = await get_public_payment_intent(intent.intent_id, db=session)
     assert resp.tx_hash == "0x" + "22" * 32
+
+
+# ── watch-only: the address IS the payment instruction ───────
+
+@pytest.mark.asyncio
+async def test_tron_recipient_round_trips_byte_identical(session):
+    """A base58check payee survives the public view with its case intact.
+
+    This is the whole reason the field exists. `onchain` is null on a
+    watch-only chain, so this string is the only thing telling the payer where
+    to send; base58 has no 0 O I l, so a folded T-address does not decode at
+    all, and the matcher compares `recipient == settlement.merchant` with no
+    folding on either side.
+    """
+    intent = _intent(currency="USDT", chain="TRON", recipient=TRON_PAYEE)
+    session.add(intent)
+    await session.commit()
+
+    resp = await get_public_payment_intent(intent.intent_id, db=session)
+
+    assert resp.recipient == TRON_PAYEE
+    assert resp.recipient != TRON_PAYEE.lower()      # nothing folded it
+    assert resp.recipient != TRON_PAYEE.upper()
+
+
+@pytest.mark.asyncio
+async def test_amount_exact_is_what_the_matcher_expects(session):
+    """The decimal the payer retypes converts to the base units we compare.
+
+    Asserted through `to_base_units` rather than against a literal, because the
+    promise is agreement with the settlement layer, not a particular spelling.
+    """
+    intent = _intent(
+        currency="USDT", chain="TRON", recipient=TRON_PAYEE, amount=10.000001,
+    )
+    session.add(intent)
+    await session.commit()
+
+    resp = await get_public_payment_intent(intent.intent_id, db=session)
+
+    assert resp.amount_exact == "10.000001"
+    assert to_base_units(float(resp.amount_exact), 6) == to_base_units(intent.amount, 6)
+
+
+@pytest.mark.asyncio
+async def test_amount_exact_never_uses_scientific_notation(session):
+    """A payer cannot paste "1e-06" into a wallet."""
+    intent = _intent(
+        currency="USDT", chain="TRON", recipient=TRON_PAYEE, amount=0.000001,
+    )
+    session.add(intent)
+    await session.commit()
+
+    resp = await get_public_payment_intent(intent.intent_id, db=session)
+    assert resp.amount_exact == "0.000001"
+    assert "e" not in resp.amount_exact.lower()
+
+
+@pytest.mark.asyncio
+async def test_amount_exact_is_null_for_an_unregistered_token(session):
+    """No known scale means no number — never one derived from a guess."""
+    intent = _intent(currency="NOPE", chain="base")
+    session.add(intent)
+    await session.commit()
+
+    resp = await get_public_payment_intent(intent.intent_id, db=session)
+    assert resp.amount_exact is None
+
+
+@pytest.mark.asyncio
+async def test_partial_carries_received_and_missing(session):
+    """The two numbers the partial card is built from, as the matcher wrote them."""
+    intent = _intent(
+        status=IntentStatus.partial,
+        currency="USDT",
+        chain="TRON",
+        recipient=TRON_PAYEE,
+        amount=10.0,
+        amount_received="4.5",
+        underpaid_amount="5.5",
+        matched_tx_hash="a" * 64,
+    )
+    session.add(intent)
+    await session.commit()
+
+    resp = await get_public_payment_intent(intent.intent_id, db=session)
+
+    assert resp.status == "partial"
+    assert resp.amount_received == "4.5"
+    assert resp.underpaid_amount == "5.5"
+    assert resp.tx_hash == "a" * 64
+
+
+@pytest.mark.asyncio
+async def test_evm_intent_keeps_its_shape(session):
+    """Regression pin: the router-chain view is unchanged except for the
+    additions, and a split intent (no single payee) reports a null recipient."""
+    intent = _intent(recipient=None)
+    session.add(intent)
+    await session.commit()
+
+    resp = await get_public_payment_intent(intent.intent_id, db=session)
+
+    assert resp.recipient is None
+    assert resp.amount_exact == "100"          # USDC, 6 decimals
+    assert resp.amount_received == "0"         # column default, never written on EVM
+    assert resp.underpaid_amount is None
 
 
 # ── 404 on miss, single-object only ──────────────────────────

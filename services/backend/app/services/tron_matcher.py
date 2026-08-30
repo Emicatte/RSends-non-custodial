@@ -66,7 +66,6 @@ Recorded as a known follow-up in CLAUDE.md.
 
 import logging
 from datetime import datetime, timezone
-from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import func, select, update
@@ -75,7 +74,7 @@ from app.models.merchant_models import IntentStatus, PaymentIntent
 from app.models.settlement_models import PaymentSettlement, SettlementStatus
 from app.services.chain_access import is_watch_only_testnet
 from app.services.payment_indexer import _finalize_settlement
-from app.services.router_registry import to_base_units, token_for
+from app.services.router_registry import from_base_units, to_base_units, token_for
 from app.services.tron_poller import TronNetwork
 
 logger = logging.getLogger("tron_matcher")
@@ -112,9 +111,11 @@ def _token_units(base_units: int, decimals: int) -> str:
     have merchants comparing "10.0" against "10000000".
 
     `Decimal` throughout — never float — and `:f` so a large or small value can
-    never come out in scientific notation.
+    never come out in scientific notation. The formatter itself lives beside
+    its inverse in `router_registry`, so the public checkout view renders the
+    exact same decimal this matcher writes.
     """
-    return f"{Decimal(base_units) / (Decimal(10) ** decimals):f}"
+    return from_base_units(base_units, decimals)
 
 
 async def _fire_once(db, settlement, intent, event: str, extra: dict) -> bool:
