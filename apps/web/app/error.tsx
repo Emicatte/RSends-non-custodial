@@ -14,8 +14,8 @@ export default function Error({
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'var(--rs-paper)',
-      color: 'var(--rs-ink)',
+      background: '#FAFAFA',
+      color: '#0A0A0A',
       fontFamily: 'var(--font-display)',
     }}>
       <h1 style={{ fontSize: 48, fontWeight: 800, margin: 0 }}>Something went wrong</h1>

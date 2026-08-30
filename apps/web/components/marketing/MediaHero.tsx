@@ -90,7 +90,7 @@ export default function MediaHero({
               fontWeight: 400,
               lineHeight: 1.08,
               letterSpacing: '-0.5px',
-              color: C.onDark,
+              color: '#FFFFFF',
               margin: 0,
             }}
             subline={subline}
@@ -98,7 +98,7 @@ export default function MediaHero({
               fontFamily: C.D,
               fontSize: 16.5,
               lineHeight: 1.6,
-              color: C.onDarkMuted,
+              color: 'rgba(255,255,255,0.68)',
               // ~52ch in loaded General Sans; px so the box doesn't reflow
               // when the webfont swaps in (ch resolves against the fallback
               // font first).

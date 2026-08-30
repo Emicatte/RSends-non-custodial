@@ -109,7 +109,7 @@ export default async function HowItWorksPage({ params }: PageProps) {
               fontWeight: 400,
               lineHeight: 1.06,
               letterSpacing: '-0.5px',
-              color: C.onDark,
+              color: '#FFFFFF',
               margin: 0,
               maxWidth: 880,
             }}
@@ -121,7 +121,7 @@ export default async function HowItWorksPage({ params }: PageProps) {
               fontFamily: C.D,
               fontSize: 18,
               lineHeight: 1.6,
-              color: C.onDarkMuted,
+              color: 'rgba(255,255,255,0.8)',
               margin: '22px 0 0',
               maxWidth: 620,
             }}
@@ -200,7 +200,7 @@ export default async function HowItWorksPage({ params }: PageProps) {
             className="rs-reveal"
             style={{
               border: `1px solid ${C.border}`,
-              borderRadius: 8,
+              borderRadius: 16,
               background: C.surface,
               padding: 'clamp(24px, 4vw, 40px)',
             }}
@@ -345,7 +345,7 @@ function cardShell(): React.CSSProperties {
   return {
     background: C.surface,
     border: `1px solid ${C.border}`,
-    borderRadius: 12,
+    borderRadius: 24,
     overflow: 'hidden',
   }
 }

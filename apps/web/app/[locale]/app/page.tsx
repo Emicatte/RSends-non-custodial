@@ -3,6 +3,18 @@
 import type { CSSProperties } from 'react'
 import { useTranslations } from 'next-intl'
 import { GetStartedChecklist } from '@/components/app/GetStartedChecklist'
+// The KPI cards moved to components/app so the marketing landing page can render
+// the SAME cards the merchant sees. Values are unchanged; only the file.
+import { MetricCards, type Metric } from '@/components/app/MetricCards'
+// The recent-settlements table moved to components/app for the same reason as
+// the cards: the landing page's device mockup renders it against a fixture, so
+// the marketing screenshot cannot drift from the dashboard. Formatting stays
+// HERE — the page is what knows an amount has no USD peg.
+import {
+  RecentTransactionsTable,
+  type TxRow,
+  type TxStatus,
+} from '@/components/app/RecentTransactionsTable'
 import { VolumeTrendChart } from '@/components/app/VolumeTrendChart'
 import { appPage, card } from '@/components/app/pageStyles'
 import { useClientNow } from '@/hooks/useClientNow'
@@ -34,28 +46,7 @@ const noticeStyle: CSSProperties = {
   color: COLORS.muted,
 }
 
-const CHAIN_BADGE: Record<string, { bg: string; text: string }> = {
-  Base: { bg: 'rgba(0, 82, 255, 0.08)', text: '#0052ff' },
-  Tron: { bg: 'rgba(255, 6, 10, 0.08)', text: '#cc0510' },
-  Sol: { bg: 'rgba(153, 69, 255, 0.08)', text: '#7c2dc7' },
-}
 
-
-type TxStatus = 'confirmed' | 'pending' | 'failed'
-
-const STATUS_BADGE: Record<TxStatus, { bg: string; text: string; key: 'statusConfirmed' | 'statusPending' | 'statusFailed' }> = {
-  confirmed: { bg: COLORS.greenLight, text: COLORS.green, key: 'statusConfirmed' },
-  pending: { bg: COLORS.orangeLight, text: COLORS.orange, key: 'statusPending' },
-  failed: { bg: COLORS.redLight, text: COLORS.red, key: 'statusFailed' },
-}
-
-type Metric = {
-  key: 'volume24h' | 'transactions24h' | 'totalBalance' | 'activeClients'
-  value: string
-  delta: string
-  deltaPositive: boolean
-  deltaIsCount?: boolean
-}
 
 const USD_FMT = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
 const FE_CHAINS: ReadonlyArray<string> = ['Base', 'Tron', 'Sol']
@@ -63,15 +54,6 @@ const FE_STATUS_MAP: Record<string, TxStatus> = {
   confirmed: 'confirmed',
   pending: 'pending',
   failed: 'failed',
-}
-
-type TxRow = {
-  id: number
-  time: string
-  type: string
-  amount: string
-  chain: keyof typeof CHAIN_BADGE
-  status: TxStatus
 }
 
 const RTF = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
@@ -125,18 +107,33 @@ export default function AppDashboardPage() {
   const showErr = error || !stats
   const pct = stats?.volume_24h_delta_pct ?? 0
   const txDelta = stats?.transactions_24h_delta ?? 0
+  const pct30 = stats?.volume_30d_delta_pct ?? 0
+  // Attempted is the denominator. 0 delivered of 0 attempted is "no webhooks
+  // configured" and 0 of 12 is "every one failed" — rendering both as 0% would
+  // merge two facts a merchant needs to tell apart, so the no-denominator case
+  // gets an em-dash instead of an invented percentage.
+  const hookSent = stats?.webhooks_delivered_24h ?? 0
+  const hookTried = stats?.webhooks_attempted_24h ?? 0
   const metrics: ReadonlyArray<Metric> = showErr
     ? [
         { key: 'volume24h', value: '--', delta: '', deltaPositive: true },
         { key: 'transactions24h', value: '--', delta: '', deltaPositive: true },
-        { key: 'totalBalance', value: '--', delta: '', deltaPositive: true, deltaIsCount: true },
-        { key: 'activeClients', value: '--', delta: '', deltaPositive: true, deltaIsCount: true },
+        { key: 'volume30d', value: '--', delta: '', deltaPositive: true },
+        { key: 'webhooksDelivered24h', value: '--', delta: '', deltaPositive: true, deltaIsCount: true },
       ]
     : [
         { key: 'volume24h', value: USD_FMT.format(stats.volume_24h), delta: `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`, deltaPositive: pct >= 0 },
-        { key: 'transactions24h', value: String(stats.transactions_24h), delta: `${txDelta >= 0 ? '+' : ''}${txDelta}`, deltaPositive: txDelta >= 0 },
-        { key: 'totalBalance', value: USD_FMT.format(stats.total_balance), delta: t('metrics.chainsLabel', { count: stats.total_balance_chains }), deltaPositive: true, deltaIsCount: true },
-        { key: 'activeClients', value: String(stats.active_clients), delta: t('metrics.thisWeek', { count: stats.active_clients_this_week }), deltaPositive: true, deltaIsCount: true },
+        { key: 'transactions24h', value: String(stats.transactions_24h), delta: { key: 'metrics.vsYesterday', values: { count: `${txDelta >= 0 ? '+' : ''}${txDelta}` } }, deltaPositive: txDelta >= 0 },
+        { key: 'volume30d', value: USD_FMT.format(stats.volume_30d), delta: `${pct30 >= 0 ? '+' : ''}${pct30.toFixed(1)}%`, deltaPositive: pct30 >= 0 },
+        {
+          key: 'webhooksDelivered24h',
+          value: String(hookSent),
+          delta: hookTried > 0
+            ? { key: 'metrics.deliveryRate', values: { rate: Math.round((hookSent / hookTried) * 100) } }
+            : '—',
+          deltaPositive: hookSent === hookTried,
+          deltaIsCount: true,
+        },
       ]
 
   // Never `Date.now()` in the render body — see useClientNow.
@@ -173,53 +170,7 @@ export default function AppDashboardPage() {
         }
       />
       {/* Metric cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {metrics.map((m) => {
-          const deltaText = m.delta
-          return (
-            <div key={m.key} className={`${card} flex flex-col gap-1.5`}>
-              <div
-                style={{
-                  fontFamily: 'var(--font-display)',
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: COLORS.muted,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.08em',
-                }}
-              >
-                {t(`metrics.${m.key}`)}
-              </div>
-              {loading && !stats ? (
-                <div className="h-8 w-3/5 rounded-lg" style={{ background: '#e5e4e0', animation: 'rsendsPulse 1.5s ease-in-out infinite' }} />
-              ) : (
-                <div
-                  style={{
-                    fontFamily: 'var(--font-display)',
-                    fontSize: 26,
-                    fontWeight: 700,
-                    color: COLORS.ink,
-                    letterSpacing: '-0.02em',
-                    lineHeight: 1.1,
-                  }}
-                >
-                  {m.value}
-                </div>
-              )}
-              <div
-                style={{
-                  fontFamily: 'var(--font-display)',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: m.deltaPositive ? COLORS.green : COLORS.red,
-                }}
-              >
-                {deltaText}
-              </div>
-            </div>
-          )
-        })}
-      </div>
+      <MetricCards metrics={metrics} loading={loading && !stats} />
 
       {/* Payments the volume tile could not value. Without this line a
           merchant paid only in ETH reads "$0" and cannot tell it apart from
@@ -284,84 +235,7 @@ export default function AppDashboardPage() {
           {/* "View all" link removed in Phase A (custodial /app/transactions gone);
               Phase C re-adds it pointing at the real /app/payments list. */}
         </header>
-        <div style={{ overflowX: 'auto' }}>
-          <table
-            style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              fontFamily: 'var(--font-display)',
-              fontSize: 13,
-            }}
-          >
-            <thead>
-              <tr>
-                {(['time', 'type', 'amount', 'chain', 'status'] as const).map((col) => (
-                  <th
-                    key={col}
-                    className="px-4 py-3"
-                    style={{
-                      textAlign: 'left',
-                      borderBottom: `1px solid ${COLORS.border}`,
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: COLORS.muted,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.08em',
-                    }}
-                  >
-                    {t(`recentTransactions.${col}`)}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {txs.map((tx) => {
-                const chainBadge = CHAIN_BADGE[tx.chain]
-                const statusBadge = STATUS_BADGE[tx.status]
-                return (
-                  <tr key={tx.id}>
-                    <td className="px-4 py-3" style={{ color: COLORS.muted, borderBottom: `1px solid ${COLORS.border}` }}>
-                      {tx.time}
-                    </td>
-                    <td className="px-4 py-3" style={{ color: COLORS.ink, fontWeight: 600, borderBottom: `1px solid ${COLORS.border}` }}>
-                      {tx.type}
-                    </td>
-                    <td className="px-4 py-3" style={{ color: COLORS.ink, fontWeight: 600, borderBottom: `1px solid ${COLORS.border}` }}>
-                      {tx.amount}
-                    </td>
-                    <td className="px-4 py-3" style={{ borderBottom: `1px solid ${COLORS.border}` }}>
-                      <span
-                        className="inline-block px-2 py-0.5 rounded-md"
-                        style={{
-                          background: chainBadge.bg,
-                          color: chainBadge.text,
-                          fontSize: 11,
-                          fontWeight: 700,
-                          letterSpacing: '0.02em',
-                        }}
-                      >
-                        {tx.chain}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3" style={{ borderBottom: `1px solid ${COLORS.border}` }}>
-                      <span
-                        className="inline-block px-2 py-0.5 rounded-md"
-                        style={{
-                          background: statusBadge.bg,
-                          color: statusBadge.text,
-                          fontSize: 11,
-                          fontWeight: 700,
-                        }}
-                      >
-                        {t(`recentTransactions.${statusBadge.key}`)}
-                      </span>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+        <RecentTransactionsTable rows={txs} />
       </section>
     </main>
   )

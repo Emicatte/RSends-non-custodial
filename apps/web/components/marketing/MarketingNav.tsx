@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useTranslations } from 'next-intl'
-import { Link, usePathname } from '@/i18n/navigation'
+import { Link } from '@/i18n/navigation'
 import { C } from '@/app/designTokens'
 import LanguageSwitcher from '@/components/LanguageSwitcher'
 import { LandingAuthButtons } from '@/components/auth/LandingAuthButtons'
@@ -15,83 +15,80 @@ const NAV_LINKS = [
   { key: 'team', href: '/team' },
 ] as const
 
-/** Compacts past this many pixels of scroll. */
-const COMPACT_AT = 24
-
 /**
- * The marketing header, rendered on every marketing route via HeaderMount.
+ * The marketing header (extracted from the home page) plus the flat page nav.
+ * Rendered on every marketing route via HeaderMount.
  *
- * One surface, always solid terracotta-deep. There is deliberately no
- * transparent-over-hero variant: `--rs-terracotta-deep` carries white text at
- * 6.14:1, and that guarantee evaporates the moment the bar goes translucent
- * over arbitrary hero content.
- *
- * `--rs-terracotta-deep` and not `--rs-terracotta`: white on the lighter
- * terracotta is 4.4975:1, i.e. just under AA. See docs/brand-tokens.md.
+ * The bar carries no colour of its own: its background IS --rs-paper, the page
+ * background, so it reads as part of the page rather than as a band across it.
+ * The only thing separating it is the hairline at its bottom edge, which is
+ * therefore load-bearing — remove that and the bar has no boundary at all.
  *
  * Responsive behavior lives in CSS (not a JS resize listener) so the server
  * markup is already correct at every width: inline links ≥1024px, a minimal
  * disclosure toggle below. The collapse point is 1024 (not 768) because the
  * centered link row plus the side clusters need ~860px in the widest locale
  * (fr) before they collide.
- *
- * The compact-on-scroll state is the one thing that does need JS. It only ever
- * shrinks a `position: fixed` bar, and every marketing page reserves its top
- * padding as a fixed value rather than measuring the nav — so this cannot move
- * page content, and contributes nothing to CLS.
  */
 export default function MarketingNav() {
   const t = useTranslations('nav')
-  const pathname = usePathname()
   const [open, setOpen] = useState(false)
-  const [compact, setCompact] = useState(false)
+  const [hovered, setHovered] = useState<string | null>(null)
 
-  useEffect(() => {
-    // rAF-coalesced: scroll fires far more often than we can usefully repaint,
-    // and this listener must never be the reason a scroll janks.
-    let frame = 0
-    const onScroll = () => {
-      if (frame) return
-      frame = requestAnimationFrame(() => {
-        frame = 0
-        setCompact(window.scrollY > COMPACT_AT)
-      })
-    }
-    onScroll()
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => {
-      window.removeEventListener('scroll', onScroll)
-      if (frame) cancelAnimationFrame(frame)
-    }
-  }, [])
-
-  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`)
+  const linkStyle = (key: string): React.CSSProperties => ({
+    fontFamily: C.D,
+    fontSize: 14,
+    fontWeight: 500,
+    letterSpacing: '-0.01em',
+    color: hovered === key ? C.purple : C.text,
+    textDecoration: 'none',
+    transition: 'color 150ms ease',
+  })
 
   return (
     <nav
-      className={`rs-mnav${compact ? ' rs-mnav--compact' : ''}`}
+      // No bf-blur-24s. That utility paints a ::before whose backdrop-filter is
+      // `blur(24px) saturate(180%)`. It worked under the old TRANSLUCENT bar,
+      // where the backdrop was the page; under an opaque fill the backdrop is
+      // the bar's own colour and the filter repaints it — measured at the pixel
+      // while the bar was terracotta, where it turned #A8401F into #EB3000. An
+      // opaque paper bar would be resaturated the same way, so the class stays
+      // off. It costs no layout: it only adds position:relative and
+      // isolation:isolate, and the inline position:fixed + z-index establish
+      // both already.
+      className="rs-mnav"
       style={{
-        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 1000,
+        position: 'fixed', top: 3, left: 0, right: 0, zIndex: 1000,
         paddingTop: 'var(--sat, 0px)',
-        background: C.terracottaDeep,
+        background: C.bg,
+        borderBottom: '1px solid rgba(10,10,10,0.08)',
       }}
     >
-      {/* The nav's CSS lives in app/globals.css under "MARKETING NAV", not in an
-          inline <style>. React HTML-escapes text children, and <style> is a
-          raw-text element the browser never un-escapes — so an apostrophe in a
-          selector like [aria-current='page'] ships to the client as &#x27;,
-          breaking both the rule and hydration. The previous inline block only
-          survived because it happened to contain no quotes. */}
+      <style>{`
+        /* ≥1024: 3-region grid — equal 1fr flanks keep the link row truly
+           centered in the viewport regardless of logo / control widths.
+           Below 1024 the links collapse into the toggle, so the header falls
+           back to the plain logo↔controls flex row (a 1fr flank would starve
+           the control cluster on narrow screens). */
+        .rs-mnav { height: 60px; padding-left: 24px; padding-right: 24px;
+                   display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
+        .rs-mnav-links { display: flex; align-items: center; gap: 28px; }
+        .rs-mnav-toggle { display: none; }
+        @media (max-width: 1023px) {
+          .rs-mnav { display: flex; justify-content: space-between; }
+          .rs-mnav-links { display: none; }
+          .rs-mnav-toggle { display: inline-flex; }
+        }
+        @media (max-width: 767px) {
+          .rs-mnav { height: 52px; padding-left: 12px; padding-right: 12px; }
+        }
+      `}</style>
 
       {/* Left: logo → locale home */}
       <div style={{ display: 'flex', alignItems: 'center', justifySelf: 'start' }}>
-        <Link
-          href="/"
-          className="rs-mnav-logo"
-          style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}
-        >
-          <img src="/favicon.svg" alt="RSends" width={28} height={28} style={{ borderRadius: 4 }} />
-          <span style={{ fontFamily: C.D, fontSize: 16, fontWeight: 700, color: C.onDark, letterSpacing: '-0.03em' }}>
+        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
+          <img src="/favicon.svg" alt="RSends" width={28} height={28} style={{ borderRadius: 7 }} />
+          <span style={{ fontFamily: C.D, fontSize: 16, fontWeight: 800, color: C.text, letterSpacing: '-0.03em' }}>
             RSends
           </span>
         </Link>
@@ -103,16 +100,9 @@ export default function MarketingNav() {
           <Link
             key={link.key}
             href={link.href}
-            className="rs-mnav-link"
-            aria-current={isActive(link.href) ? 'page' : undefined}
-            style={{
-              fontFamily: C.D,
-              fontSize: 14,
-              fontWeight: 500,
-              letterSpacing: '-0.01em',
-              color: C.onDark,
-              textDecoration: 'none',
-            }}
+            style={linkStyle(link.key)}
+            onMouseEnter={() => setHovered(link.key)}
+            onMouseLeave={() => setHovered(null)}
           >
             {t(link.key)}
           </Link>
@@ -121,8 +111,8 @@ export default function MarketingNav() {
 
       {/* Right: language + auth, plus the mobile disclosure toggle */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifySelf: 'end', gridColumn: 3 }}>
-        <LanguageSwitcher onDark />
-        <LandingAuthButtons onDark />
+        <LanguageSwitcher />
+        <LandingAuthButtons />
         <button
           type="button"
           className="rs-mnav-toggle"
@@ -132,11 +122,9 @@ export default function MarketingNav() {
           onClick={() => setOpen(prev => !prev)}
           style={{
             alignItems: 'center', justifyContent: 'center',
-            // 44×44 is the floor for a touch target, and this is the only
-            // control on the bar below 1024px.
-            width: 44, height: 44, padding: 0,
+            width: 36, height: 36, padding: 0,
             background: 'transparent', border: 'none', cursor: 'pointer',
-            color: C.onDark,
+            color: C.text,
           }}
         >
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
@@ -149,14 +137,14 @@ export default function MarketingNav() {
         </button>
       </div>
 
-      {/* Mobile disclosure panel — same surface as the bar it drops out of */}
+      {/* Mobile disclosure panel */}
       {open && (
         <div
           id="rs-mnav-panel"
           style={{
             position: 'absolute', top: '100%', left: 0, right: 0,
-            background: C.terracottaDeep,
-            borderBottom: '1px solid rgba(0,0,0,0.12)',
+            background: C.bg,
+            borderBottom: '1px solid rgba(10,10,10,0.08)',
             display: 'flex', flexDirection: 'column',
             padding: '8px 12px 14px',
             gap: 4,
@@ -167,14 +155,11 @@ export default function MarketingNav() {
               key={link.key}
               href={link.href}
               onClick={() => setOpen(false)}
-              aria-current={isActive(link.href) ? 'page' : undefined}
               style={{
                 fontFamily: C.D, fontSize: 15, fontWeight: 500,
-                color: C.onDark, textDecoration: 'none',
-                // 44px min so the panel rows are touch targets too.
-                minHeight: 44, display: 'flex', alignItems: 'center',
-                padding: '0 4px',
-                borderBottom: `1px solid ${C.onDarkLine}`,
+                color: C.text, textDecoration: 'none',
+                padding: '10px 4px',
+                borderBottom: '1px solid rgba(10,10,10,0.06)',
               }}
             >
               {t(link.key)}

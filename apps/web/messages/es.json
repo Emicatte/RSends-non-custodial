@@ -5,7 +5,7 @@
     "vision": "Visión",
     "team": "Team"
   },
-  "_TODO": "Translations pending — hero, twoPaths, getStarted and auth.whySignIn currently show the authoritative English copy as a placeholder. TODO(i18n): translate before launch.",
+  "_TODO": "Translations pending — currently showing English as placeholder. Replace before production launch.",
   "auth": {
     "signIn": "Iniciar sesión",
     "signUp": "Registrarse",
@@ -138,40 +138,55 @@
     },
     "whySignIn": {
       "eyebrow": "HOW IT WORKS",
-      "heading": "From request to your wallet, in four steps.",
-      "subheading": "You create a payment request. Your customer pays it. The funds arrive in your wallet without passing through ours.",
+      "heading": "From invoice to your wallet, in four steps.",
+      "subheading": "Create a request, your customer pays in stablecoin, and the funds settle on-chain into your own wallet, automatically.",
       "routes": {
-        "title": "Create a payment request",
-        "description": "You create it in the dashboard or through the API, with the amount, the token and the chain."
+        "title": "Create an invoice",
+        "description": "You generate a payment request for your customer in the dashboard or via the API."
       },
       "history": {
-        "title": "Your customer pays",
-        "description": "They send USDC or USDT from their own wallet on Base or Ethereum."
+        "title": "Customer pays in stablecoin",
+        "description": "They pay in USDC or USDT on Base or Ethereum."
       },
       "contacts": {
-        "title": "The contract settles it",
-        "description": "An immutable contract forwards the payment to your wallet in the same transaction. RSends never holds it."
+        "title": "Funds settle on-chain",
+        "description": "An immutable smart contract sends the payment straight to your own wallet. RSends never holds it."
       },
       "notifications": {
-        "title": "Your webhook fires",
-        "description": "The indexer detects the transaction, marks the request paid, and posts a signed event to your endpoint."
+        "title": "Webhook fires",
+        "description": "The payment is auto-detected, the invoice is marked paid, and your webhook is called."
       }
     }
   },
   "hero": {
-    "eyebrow": "TESTNET LIVE ON BASE SEPOLIA",
-    "titleLine1": "Stablecoin payments that",
-    "titleLine2": "land in your own wallet.",
-    "subtitle": "RSends creates the payment. The chain settles it. Funds move from your customer's wallet to yours in one on-chain transaction, and we never hold the keys or the money.",
-    "ctaPrimary": "Create an invoice →"
+    "eyebrow": "",
+    "titleLine1": "Your money.",
+    "titleLine2": "Your wallet.",
+    "subtitle": "Una pasarela de pagos non-custodial para empresas. Una suscripción mensual — y desde el lanzamiento en mainnet, sin comisión por transacción. Los fondos se liquidan on-chain directamente en tu cartera; RSends nunca los retiene.",
+    "ctaPrimary": "Create an invoice →",
+    "ctaSecondary": "Read the spec",
+    "metrics": {
+      "chainsLive": "Chains live",
+      "amlScreening": "AML screening",
+      "euReady": "EU-ready",
+      "custodialRisk": "Custodial risk"
+    },
+    "titleLine3": "Always."
+  },
+  "showcase": {
+    "heading": "Tú creas la solicitud. Tu cliente la paga.",
+    "subheading": "Es el producto en funcionamiento, no una imagen de él.",
+    "demoDataLabel": "Datos de demostración",
+    "merchantLabel": "Panel del comercio",
+    "payerLabel": "Lo que ve quien paga"
   },
   "twoPaths": {
-    "title": "Two properties you can check yourself.",
-    "subtitle": "Both are visible in the contract and in the API, not only on this page.",
+    "title": "Two reasons businesses choose RSends.",
+    "subtitle": "Non-custodial por diseño. Con una suscripción mensual, nunca una parte de lo que ganas.",
     "developers": {
       "eyebrow": "NON-CUSTODIAL",
-      "title": "You hold the keys",
-      "body": "Payments settle on-chain from your customer's wallet to yours through an immutable contract. RSends never takes custody, cannot move your funds, and cannot freeze them.",
+      "title": "You hold the keys, always",
+      "body": "Payments settle on-chain straight to your own wallet through an immutable smart contract. RSends never takes custody, can’t move your funds, and can’t freeze them.",
       "b1": "Funds settle straight to your wallet",
       "b2": "Immutable smart contract",
       "b3": "RSends never takes custody",
@@ -179,14 +194,14 @@
       "cta": "How it works →"
     },
     "businesses": {
-      "eyebrow": "INTEGRATION",
-      "title": "Built to be wired into your system",
-      "body": "Create payment requests from the dashboard or the REST API. Every status change fires a webhook signed with HMAC-SHA256, so your server can verify an event came from us before it acts on it.",
-      "b1": "REST API with scoped keys",
-      "b2": "Webhooks signed HMAC-SHA256",
-      "b3": "Test and live environments stay separate",
-      "b4": "USDC and USDT on Base and Ethereum",
-      "cta": "Read the API docs →"
+      "eyebrow": "SUSCRIPCIÓN",
+      "title": "Una suscripción, no una parte de tus ventas",
+      "body": "Pagas un precio mensual fijo por el software, acordado contigo en el onboarding. RSends no cobra porcentaje de tu volumen — y desde el lanzamiento en mainnet, tampoco comisión por transacción — así tu margen sigue siendo tuyo mientras creces.",
+      "b1": "Suscripción mensual fija",
+      "b2": "Precio acordado en el onboarding",
+      "b3": "Sin % de tu volumen",
+      "b4": "USDC · USDT",
+      "cta": "See pricing →"
     }
   },
   "exploreTokens": {
@@ -1153,20 +1168,20 @@
     }
   },
   "getStarted": {
-    "heading": "Get started",
-    "subcopy": "Create a payment request on Base Sepolia and pay it from your own wallet. No funds pass through RSends at any point.",
+    "heading": "Empezar",
+    "subcopy": "Empieza a aceptar pagos en stablecoins que se liquidan directamente en tu propia wallet. Demo de testnet activa en Base Sepolia.",
     "features": {
       "noncustodial": {
-        "title": "Non-custodial by design",
-        "desc": "Funds settle on-chain into your wallet. RSends never holds them."
+        "title": "Non-custodial por diseño",
+        "desc": "Los fondos se liquidan on-chain en tu wallet; RSends nunca los custodia."
       },
       "developers": {
-        "title": "Built for developers",
-        "desc": "Create payment requests from the dashboard or the API, and verify the signed webhook."
+        "title": "Hecho para desarrolladores",
+        "desc": "Crea solicitudes de pago desde el panel o la API, con webhooks."
       }
     },
-    "cta": "Get started",
-    "secondary": "Talk to us"
+    "cta": "Empezar",
+    "secondary": "Habla con nosotros"
   },
   "pricing": {
     "compliance": "Non-custodial · solo B2B · Disponible fuera de Estados Unidos y Türkiye.",
@@ -1399,12 +1414,12 @@
       "title": "Dashboard",
       "mainnetBadge": "Mainnet",
       "metrics": {
-        "volume24h": "Volume 24h",
-        "transactions24h": "Transactions 24h",
-        "totalBalance": "Total balance",
-        "activeClients": "Active clients",
-        "chainsLabel": "{count} chains",
-        "thisWeek": "+{count} this week"
+        "volume24h": "Volumen 24h",
+        "transactions24h": "Transacciones 24h",
+        "volume30d": "Volumen 30 días",
+        "webhooksDelivered24h": "Webhooks entregados 24h",
+        "vsYesterday": "{count} frente a ayer",
+        "deliveryRate": "{rate}%"
       },
       "volumeTrend": {
         "title": "Volume trend (7d)",
@@ -1690,14 +1705,5 @@
     "walletChainUnsupported": "Esta cartera no es compatible con {network}. No se envió nada y no se cobró nada. Puedes pagar con otra cartera.",
     "payingFrom": "Pagas desde",
     "paidFrom": "Pagado desde"
-  },
-  "showcase": {
-    "heading": "What you see, and what your customer sees.",
-    "subcopy": "The dashboard where you create the request, and the page your customer opens to pay it.",
-    "dashboardCaption": "Your dashboard",
-    "payCaption": "Your customer's payment page",
-    "dashboardAlt": "The RSends dashboard showing a list of payment requests with their amount, token, chain and status.",
-    "payAlt": "The RSends payment page on a phone, showing the amount, the token, the chain and a connect-wallet button.",
-    "placeholder": "Screenshot pending"
   }
 }

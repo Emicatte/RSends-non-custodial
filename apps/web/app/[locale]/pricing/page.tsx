@@ -87,7 +87,7 @@ export default async function PricingPage({ params }: PageProps) {
               fontWeight: 400,
               lineHeight: 1.06,
               letterSpacing: '-0.5px',
-              color: C.onDark,
+              color: '#FFFFFF',
               margin: 0,
               maxWidth: 880,
             }}
@@ -99,7 +99,7 @@ export default async function PricingPage({ params }: PageProps) {
               fontFamily: C.D,
               fontSize: 18,
               lineHeight: 1.6,
-              color: C.onDarkMuted,
+              color: 'rgba(255,255,255,0.8)',
               margin: '22px 0 0',
               maxWidth: 620,
             }}
@@ -144,7 +144,7 @@ export default async function PricingPage({ params }: PageProps) {
                 style={{
                   background: C.surface,
                   border: emphasized ? `1.5px solid ${C.purple}` : `1px solid ${C.border}`,
-                  borderRadius: 8,
+                  borderRadius: 16,
                   padding: '28px 30px',
                 }}
               >
@@ -215,7 +215,7 @@ export default async function PricingPage({ params }: PageProps) {
             style={{
               background: C.surface,
               border: `1.5px solid ${C.purple}`,
-              borderRadius: 8,
+              borderRadius: 16,
               padding: 'clamp(28px, 4vw, 44px)',
               display: 'flex',
               flexDirection: 'column',
@@ -289,7 +289,7 @@ export default async function PricingPage({ params }: PageProps) {
               style={{
                 background: C.surface,
                 border: `1px solid ${C.border}`,
-                borderRadius: 12,
+                borderRadius: 24,
                 overflow: 'hidden',
               }}
             >

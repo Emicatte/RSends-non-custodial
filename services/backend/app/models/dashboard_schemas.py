@@ -71,6 +71,28 @@ class OrgDashboardStats(DashboardStats):
     # invented label.
     volume_24h_unpriced_symbols: List[str]
 
+    # ── The two tiles that replaced `total_balance` / `active_clients` ──
+    #
+    # `total_balance` is hard-coded 0.0 upstream and always was: RSends is
+    # non-custodial, it holds nothing, so a balance tile can only ever assert a
+    # custody the product does not have. `active_clients` is a fact about the
+    # business, not about the interface. Both are still SENT — narrowing a
+    # response is a wire change nothing here forces — but the /app home reads
+    # these two instead, and so does the landing page's device mockup, which
+    # renders the same `MetricCards` component against a fixture.
+    #
+    # `volume_30d` carries the same "unpriced is excluded, never zero" contract
+    # as `volume_24h`; its exclusions are not reported separately, because the
+    # 24h counters above are what the disclosure line on the page is built from.
+    volume_30d: float
+    volume_30d_delta_pct: float
+    # Deliveries ATTEMPTED is the denominator of the rate the UI shows. Sending
+    # the two counts rather than a pre-divided percentage keeps "no webhooks at
+    # all" (0/0) distinguishable from "every one failed" (0/N) — the same
+    # absent-is-not-zero rule the volume fields above follow.
+    webhooks_delivered_24h: int
+    webhooks_attempted_24h: int
+
 
 class VolumeBucket(BaseModel):
     """One UTC calendar day of settled USD volume.

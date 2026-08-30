@@ -46,7 +46,13 @@ from app.api.deps.require_org_approved import require_org_approved
 from app.api.merchant_profile_routes import _resolve_owner_address
 from app.db.session import get_db
 from app.models.dashboard_schemas import OrgDashboardStats, RecentTransaction
-from app.models.merchant_models import IntentStatus, PaymentIntent
+from app.models.merchant_models import (
+    DeliveryStatus,
+    IntentStatus,
+    MerchantWebhook,
+    PaymentIntent,
+    WebhookDelivery,
+)
 from app.models.org_models import Organization
 from app.models.settlement_models import PaymentSettlement, SettlementStatus
 
@@ -141,6 +147,10 @@ async def get_org_stats(
             recent_transactions=[],
             volume_24h_unpriced_count=0,
             volume_24h_unpriced_symbols=[],
+            volume_30d=0.0,
+            volume_30d_delta_pct=0.0,
+            webhooks_delivered_24h=0,
+            webhooks_attempted_24h=0,
             settlement_wallet_set=settlement_wallet_set,
             has_api_key=has_api_key,
             has_paid_payment=False,
@@ -275,10 +285,50 @@ async def get_org_stats(
 
     volume_24h, unpriced_24h, unpriced_symbols_24h = await _volume(win_24h)
     volume_prev, _, _ = await _volume(win_48h, win_24h)
-    volume_24h_delta_pct = (
-        round((volume_24h - volume_prev) / volume_prev * 100, 1)
-        if volume_prev > 0
-        else 0.0
+
+    def _delta_pct(now_total: float, prev_total: float) -> float:
+        """Percent change, or 0.0 with nothing to compare against.
+
+        A jump from nothing to something has no defined percentage, and an
+        invented "+100%" would read as growth measured against a real prior
+        month. Zero is the honest answer until there is a denominator.
+        """
+        if prev_total <= 0:
+            return 0.0
+        return round((now_total - prev_total) / prev_total * 100, 1)
+
+    volume_24h_delta_pct = _delta_pct(volume_24h, volume_prev)
+
+    # ── 30-day volume, against the 30 days before it ──
+    win_60d = now - timedelta(days=60)
+    volume_30d, _, _ = await _volume(win_30d)
+    volume_30d_prev, _, _ = await _volume(win_60d, win_30d)
+    volume_30d_delta_pct = _delta_pct(volume_30d, volume_30d_prev)
+
+    # ── Webhook deliveries in the last 24h ──
+    #
+    # Scoped through MerchantWebhook, which carries both the tenant key and the
+    # environment column — WebhookDelivery has neither, exactly as
+    # PaymentSettlement has no environment and borrows the intent's.
+    webhook_scope = (
+        select(func.count(WebhookDelivery.id))
+        .join(MerchantWebhook, WebhookDelivery.webhook_id == MerchantWebhook.id)
+        .where(
+            and_(
+                MerchantWebhook.merchant_id == owner,
+                MerchantWebhook.environment == environment,
+                WebhookDelivery.created_at >= win_24h,
+            )
+        )
+    )
+    webhooks_attempted_24h = int((await db.execute(webhook_scope)).scalar() or 0)
+    webhooks_delivered_24h = int(
+        (
+            await db.execute(
+                webhook_scope.where(WebhookDelivery.status == DeliveryStatus.delivered)
+            )
+        ).scalar()
+        or 0
     )
 
     # ── Recent 5 settlements (with per-row USD) ──
@@ -322,6 +372,10 @@ async def get_org_stats(
         recent_transactions=recent,
         volume_24h_unpriced_count=unpriced_24h,
         volume_24h_unpriced_symbols=unpriced_symbols_24h,
+        volume_30d=volume_30d,
+        volume_30d_delta_pct=volume_30d_delta_pct,
+        webhooks_delivered_24h=webhooks_delivered_24h,
+        webhooks_attempted_24h=webhooks_attempted_24h,
         settlement_wallet_set=settlement_wallet_set,
         has_api_key=has_api_key,
         has_paid_payment=has_paid_payment,
