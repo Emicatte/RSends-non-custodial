@@ -116,23 +116,30 @@ async def _make_org(session, *, owner_address):
 
 async def _seed_settled_intent(session, *, owner, recipient, environment="test",
                                token=USDC_SEPOLIA, amount_base=5_000_000,
-                               chain_id=84532, payer=None, created_at=None):
+                               chain_id=84532, payer=None, created_at=None,
+                               merchant=None, chain="base_sepolia"):
     """A completed intent for `owner` plus its FINAL on-chain settlement landing
     on `recipient` (the org's settlement wallet).
 
     `created_at` defaults to an instant inside the frozen 24h window; it is set
     explicitly rather than left to the column default so bucket/window placement
     never depends on when the suite runs.
+
+    `merchant` defaults to `recipient` — the two agree on every existing test —
+    and is separable because the settlement's `merchant` is what the response's
+    `recipient` field is rendered from, so a test about that rendering has to be
+    able to set it without also moving the intent's own recipient.
     """
     intent_id = f"pi_{secrets.token_hex(16)}"
     session.add(PaymentIntent(
         intent_id=intent_id, reference_id=secrets.token_hex(8),
         merchant_id=owner, environment=environment, amount=5.0, currency="USDC",
-        chain="base_sepolia", status=IntentStatus.completed, recipient=recipient,
+        chain=chain, status=IntentStatus.completed, recipient=recipient,
         expires_at=FROZEN_NOW + timedelta(minutes=30),
     ))
     session.add(PaymentSettlement(
-        invoice_id="0x" + "1" * 64, merchant=recipient,
+        invoice_id="0x" + "1" * 64,
+        merchant=recipient if merchant is None else merchant,
         payer=payer or ("0x" + "e" * 40), token=token, amount=amount_base,
         chain_id=chain_id, tx_hash="0x" + secrets.token_hex(32), log_index=0,
         block_number=1, status=SettlementStatus.final, intent_id=intent_id,
@@ -488,3 +495,60 @@ async def test_webhook_counts_org_isolation_no_leak(session):
 
     assert a.webhooks_delivered_24h == 1
     assert b.webhooks_delivered_24h == 3
+
+
+# ── The payee is rendered, not folded ────────────────────────
+#
+# `recipient` on a recent-transaction row comes from `PaymentSettlement.merchant`,
+# which the TRON poller writes base58 and UNFOLDED. Lowercasing that does not
+# show a different address, it shows one that no longer decodes: base58 has no
+# 0 O I l. Both stats routes now go through `display_payment_address`.
+
+TRON_PAYEE = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
+USDT_TRC20 = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
+TRON_CHAIN_ID = 728126428
+
+
+@pytest.mark.asyncio
+async def test_tron_settlement_merchant_round_trips_byte_identical(session):
+    """A base58 payee survives the response with its case intact.
+
+    Asserted against the fold rather than only for equality: `== TRON_PAYEE`
+    alone would still pass if someone reintroduced `.lower()` on a value that
+    happened to be lowercase already, and the whole point is that this one is
+    not.
+    """
+    org = await _make_org(session, owner_address=OWNER_A)
+    await _seed_settled_intent(
+        session, owner=OWNER_A, recipient=SETTLE_WALLET_A,
+        merchant=TRON_PAYEE, token=USDT_TRC20, chain_id=TRON_CHAIN_ID,
+        chain="tron",
+    )
+
+    stats = await get_org_stats(ctx=_ctx(org), environment="test", db=session)
+
+    row = stats.recent_transactions[0]
+    assert row.recipient == TRON_PAYEE
+    assert row.recipient != TRON_PAYEE.lower()
+    assert row.recipient != TRON_PAYEE.upper()
+    # No peg for USDT on a TRON chain id, so the row is present but unpriced —
+    # the existing "absent is not zero" rule, unchanged by this fix.
+    assert row.amount_usd_known is False
+
+
+@pytest.mark.asyncio
+async def test_evm_settlement_merchant_still_lowercases(session):
+    """Unchanged for every EVM row, which is every row that exists today.
+
+    The fixture is deliberately MIXED CASE: `SETTLE_WALLET_A` is already
+    lowercase, so seeding with it would assert nothing about folding.
+    """
+    mixed = "0xAbCdEf0123456789aBcDeF0123456789AbCdEf01"
+    org = await _make_org(session, owner_address=OWNER_A)
+    await _seed_settled_intent(
+        session, owner=OWNER_A, recipient=SETTLE_WALLET_A, merchant=mixed,
+    )
+
+    stats = await get_org_stats(ctx=_ctx(org), environment="test", db=session)
+
+    assert stats.recent_transactions[0].recipient == mixed.lower()

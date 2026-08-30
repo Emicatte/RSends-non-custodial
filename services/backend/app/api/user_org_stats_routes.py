@@ -55,6 +55,7 @@ from app.models.merchant_models import (
 )
 from app.models.org_models import Organization
 from app.models.settlement_models import PaymentSettlement, SettlementStatus
+from app.security.input_validator import display_payment_address
 
 # The route reads user_api_keys via count_active_keys_for_org, whose model
 # import is lazy — import it here so Base.metadata registers the table for
@@ -355,7 +356,7 @@ async def get_org_stats(
                 currency=info.symbol if info else "TOKEN",
                 chain=_chain_label(s.chain_id),
                 status="confirmed",
-                recipient=(s.merchant or "").lower(),
+                recipient=display_payment_address(s.merchant),
                 timestamp_iso=s.created_at.isoformat() if s.created_at else "",
             )
         )

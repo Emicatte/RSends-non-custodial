@@ -1703,6 +1703,25 @@
     "walletSilent": "Il tuo wallet non ha ancora risposto. Controlla se ha aperto una finestra o un popup. Se dice che questa rete non è supportata, puoi pagare con un altro wallet.",
     "walletChainUnsupported": "Questo wallet non supporta {network}. Non è stato inviato nulla e non è stato addebitato nulla. Puoi pagare con un altro wallet.",
     "payingFrom": "Paghi da",
-    "paidFrom": "Pagato da"
+    "paidFrom": "Pagato da",
+    "tron": {
+      "sendExactly": "Invia esattamente",
+      "toAddress": "A questo indirizzo TRON",
+      "copy": "Copia",
+      "copied": "Copiato",
+      "copyAmount": "Copia l'importo",
+      "copyAddress": "Copia l'indirizzo",
+      "exactAmountNote": "Invia esattamente questo importo. Un importo inferiore viene registrato come pagamento parziale e non completa questa fattura.",
+      "qrNote": "Scansiona l'indirizzo con il tuo wallet o con l'app di exchange. L'importo non è nel codice, inseriscilo a mano.",
+      "networkWarning": "Questo è {token} su {network}, la rete TRC-20. Inviare da qualsiasi altra rete, ERC-20 compresa, comporta la perdita dei fondi.",
+      "waiting": "In attesa del tuo trasferimento. Questa pagina si aggiorna da sola appena la rete lo conferma.",
+      "unavailable": "I dati di pagamento non sono ancora disponibili. La pagina continua a controllare.",
+      "partial": {
+        "title": "Pagamento parziale",
+        "body": "Abbiamo ricevuto {received} {token}. Mancano {missing} {token} rispetto alla fattura.",
+        "bodyReceivedOnly": "Abbiamo ricevuto {received} {token}, meno dell'importo della fattura.",
+        "note": "Il denaro è arrivato al merchant e un ulteriore trasferimento non completerà questa fattura. Contatta il merchant per chiuderla."
+      }
+    }
   }
 }

@@ -28,6 +28,24 @@ export interface RawPaymentIntent {
   metadata?: Record<string, unknown> | null
   // Public limited view: the backend derives the display name server-side.
   merchant_name?: string | null
+  // Watch-only chains (TRON) have no `onchain` block, so these carry the whole
+  // payment instruction: where to send, and how much exactly.
+  //
+  // `recipient` is byte-identical to what the merchant registered. On a
+  // base58check chain it is case-SENSITIVE — base58 excludes 0 O I l, so
+  // folding a T-address does not produce a different address, it produces a
+  // string that does not decode. Nothing here or downstream may normalize it.
+  recipient?: string | null
+  // The amount as the exact decimal the settlement layer compares against,
+  // computed server-side from the token's decimals. On a watch-only chain a
+  // human retypes this into a wallet and the matcher compares base units with
+  // zero tolerance, so it is never re-derived from the float in the browser.
+  amount_exact?: string | null
+  // Written only by the watch-only matcher, in token units like `amount`.
+  // Everywhere else `amount_received` sits at its "0" default, so read these
+  // two only when `status === 'partial'`.
+  amount_received?: string | null
+  underpaid_amount?: string | null
   onchain?: {
     invoiceId?: string
     merchant?: string
@@ -106,6 +124,20 @@ export interface PaymentIntent {
   txHash: string | null
   metadata: Record<string, unknown> | null
   onchain: OnChainIntent | null
+  /**
+   * The payee, verbatim. Present on watch-only intents, where it is the whole
+   * payment instruction; null on split intents, which have no single payee.
+   * Carried through with NO transform — see RawPaymentIntent.recipient.
+   */
+  recipient: string | null
+  /**
+   * The exact decimal to send, as computed by the backend from the token's
+   * decimals. Null when the backend could not name a scale, in which case the
+   * page must show no amount rather than one it derived itself.
+   */
+  amountExact: string | null
+  amountReceived: string | null
+  underpaidAmount: string | null
   raw: RawPaymentIntent
 }
 
@@ -113,6 +145,7 @@ export const CHAIN_LABELS: Record<string, string> = {
   BASE: 'Base', ETH: 'Ethereum', ARBITRUM: 'Arbitrum', OPTIMISM: 'Optimism',
   POLYGON: 'Polygon', BSC: 'BNB Chain', AVALANCHE: 'Avalanche',
   BASE_SEPOLIA: 'Base Sepolia', SEPOLIA: 'Sepolia',
+  TRON: 'TRON', TRON_NILE: 'TRON Nile',
 }
 
 export const PAID_STATES = new Set(['completed', 'paid'])
@@ -213,6 +246,14 @@ export function normalizeIntent(
     txHash: raw.matched_tx_hash || raw.tx_hash || null,
     metadata: raw.metadata ?? null,
     onchain,
+    // Copied, never touched. No trim, no case fold, no checksum helper: on a
+    // base58check chain every one of those is destructive, and viem's
+    // getAddress() in particular throws on a T-address, which the catch above
+    // would silently turn into "not available".
+    recipient: raw.recipient ?? null,
+    amountExact: raw.amount_exact ?? null,
+    amountReceived: raw.amount_received ?? null,
+    underpaidAmount: raw.underpaid_amount ?? null,
     raw,
   }
 }

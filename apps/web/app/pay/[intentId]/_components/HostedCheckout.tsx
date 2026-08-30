@@ -16,6 +16,7 @@ import { useTranslations } from 'next-intl'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { C } from '@/app/designTokens'
 import { Eyebrow, Mono } from '@/app/pay/_components/payUi'
+import { payFlowFor } from '@/lib/web3/chainFamily'
 import { useHostedCheckout } from '@/lib/web3/useHostedCheckout'
 import { usePaymentIntent } from '@/lib/web3/usePaymentIntent'
 import { formatTokenAmount } from '@/lib/web3/feeMath'
@@ -28,6 +29,7 @@ import {
 import { ActionArea } from './ActionArea'
 import { CheckoutFrame } from './CheckoutFrame'
 import { CheckoutSkeleton } from './CheckoutSkeleton'
+import { TronCheckout } from './TronCheckout'
 import {
   GasNote,
   PayerAddress,
@@ -57,6 +59,15 @@ export default function HostedCheckout() {
 
   const intent = phase.intent
 
+  // Which flow this intent belongs to is decided by its CHAIN, never by
+  // `onchain == null`. On a watch-only chain a null block is the normal shape
+  // (there is no contract to call), while on a router chain it means the
+  // intent is unpayable — branching on the null would render a valid TRON
+  // invoice as a broken EVM one, and vice versa.
+  if (payFlowFor(intent) === 'tron_instructions') {
+    return <TronCheckout intent={intent} onLocalExpiry={refresh} />
+  }
+
   // An intent that is terminal on arrival never mounts wallet UI. Status
   // flips DURING an active payment session are handled inside CheckoutActive
   // (which knows whether a tx of ours is in flight).
@@ -64,7 +75,13 @@ export default function HostedCheckout() {
     const kind = terminalKind(intent.status)
     if (kind === 'expired') return <ExpiredView />
     if (kind === 'already_paid') {
-      return <AlreadyPaidView chainId={null} txHash={intent.txHash} />
+      return (
+        <AlreadyPaidView
+          chainId={null}
+          chain={intent.raw.chain}
+          txHash={intent.txHash}
+        />
+      )
     }
     // Pending but the on-chain payment block is missing: keep the reserved
     // skeleton; the watch poll keeps refetching and recovers when the
@@ -141,7 +158,13 @@ function CheckoutActive({
   const kind = terminalKind(intent.status)
   if (kind === 'expired' && !paymentInFlight) return <ExpiredView />
   if (kind === 'already_paid' && !paymentInFlight) {
-    return <AlreadyPaidView chainId={onchain.chainId} txHash={intent.txHash} />
+    return (
+      <AlreadyPaidView
+        chainId={onchain.chainId}
+        chain={intent.raw.chain}
+        txHash={intent.txHash}
+      />
+    )
   }
 
   return (

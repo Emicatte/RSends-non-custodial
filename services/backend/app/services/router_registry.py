@@ -330,6 +330,21 @@ def to_base_units(amount: float, decimals: int) -> int:
     return int((Decimal(str(amount)) * (Decimal(10) ** decimals)).to_integral_value())
 
 
+def from_base_units(base_units: int, decimals: int) -> str:
+    """The inverse of `to_base_units`, as a decimal string in TOKEN units.
+
+    `Decimal` throughout — never float — and `:f` so a large or small value can
+    never come out in scientific notation. Round-tripping an amount through
+    `to_base_units` and back is how a caller obtains the EXACT decimal the
+    settlement logic will compare against, rather than whatever `str(float)`
+    happens to print.
+
+    Lives here, beside its inverse, because two Decimal formatters that drift
+    apart is exactly the bug this avoids.
+    """
+    return f"{Decimal(base_units) / (Decimal(10) ** decimals):f}"
+
+
 def _selector(signature: str) -> bytes:
     return _keccak(signature.encode("utf-8"))[:4]
 

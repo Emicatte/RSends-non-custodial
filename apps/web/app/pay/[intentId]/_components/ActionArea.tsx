@@ -103,10 +103,20 @@ function TxLink({
   hash: string
   label: string
 }) {
+  const href = explorerTxUrl(chainId, hash)
+  // With no explorer for this chain the hash is still the thing the payer
+  // needs; it just is not a link. Better than a link to another network.
+  if (!href) {
+    return (
+      <div style={{ textAlign: 'center' }}>
+        <Mono style={{ fontSize: 12, color: C.sub }}>{truncate(hash, 10, 6)}</Mono>
+      </div>
+    )
+  }
   return (
     <div style={{ textAlign: 'center' }}>
       <a
-        href={explorerTxUrl(chainId, hash)}
+        href={href}
         target="_blank"
         rel="noopener noreferrer"
         style={{

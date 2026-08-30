@@ -174,6 +174,31 @@ def normalize_payment_address(address: object) -> Optional[str]:
     return None
 
 
+def display_payment_address(address: object) -> str:
+    """A stored payment address as it should be SHOWN, never destroyed.
+
+    Same family rule as `normalize_payment_address`, which this delegates to
+    rather than restating: one decoder, one fold policy. The difference is what
+    happens to a value in neither family. On the write path that is a rejection,
+    because an address we cannot classify must not become a payment recipient.
+    On a read path there is nothing to reject — the row already exists — and
+    dropping it would replace a real payee with nothing, so it is echoed
+    unchanged.
+
+    Read paths reached for `.lower()` because every address in this system used
+    to be EVM. A base58check address does not survive that: base58 excludes
+    0 O I l, so folding a T-address does not show a different address, it shows
+    a string that no longer decodes, and a merchant cannot check it against
+    their wallet.
+
+    Returns "" for a missing value, so callers keep the non-null guarantee the
+    `(x or "")` idiom gave them.
+    """
+    if not isinstance(address, str) or not address:
+        return ""
+    return normalize_payment_address(address) or address
+
+
 # ═══════════════════════════════════════════════════════════════
 #  Amount Validation
 # ═══════════════════════════════════════════════════════════════

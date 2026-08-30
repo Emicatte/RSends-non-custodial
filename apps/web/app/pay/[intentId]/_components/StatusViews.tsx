@@ -94,11 +94,25 @@ function Body({ children }: { children: ReactNode }) {
   )
 }
 
-function ViewTxLink({ chainId, hash }: { chainId: number; hash: string }) {
+function ViewTxLink({
+  chainId,
+  hash,
+  chain,
+}: {
+  chainId: number | null
+  hash: string
+  /** the intent's chain name, for chains with no numeric id (watch-only) */
+  chain?: string | null
+}) {
   const t = useTranslations('pay')
+  const href = explorerTxUrl(chainId, hash, chain)
+  // No explorer we can name means no link. The alternative this replaced was a
+  // basescan URL for whatever chain we failed to recognise: it resolved, so it
+  // read as correct, and pointed at the wrong network.
+  if (!href) return null
   return (
     <a
-      href={explorerTxUrl(chainId, hash)}
+      href={href}
       target="_blank"
       rel="noopener noreferrer"
       style={{
@@ -156,15 +170,24 @@ export function ExpiredView() {
 export function AlreadyPaidView({
   chainId,
   txHash,
+  chain,
 }: {
   chainId: number | null
   txHash: string | null
+  /**
+   * The intent's chain name. This card is reached with `chainId === null`
+   * whenever there is no on-chain block to read an id from — the unpayable-EVM
+   * path and every watch-only intent — and the name is the only thing that can
+   * resolve an explorer there. It used to fall through to a hardcoded Base
+   * Sepolia id, which linked a mainnet hash to a testnet explorer.
+   */
+  chain?: string | null
 }) {
   const t = useTranslations('pay')
   return (
     <StatusCard mark="✓">
       <Body>{t('alreadyPaid')}</Body>
-      {txHash && <ViewTxLink chainId={chainId ?? 84532} hash={txHash} />}
+      {txHash && <ViewTxLink chainId={chainId} hash={txHash} chain={chain} />}
     </StatusCard>
   )
 }

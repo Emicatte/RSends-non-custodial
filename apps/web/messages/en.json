@@ -1703,6 +1703,25 @@
     "walletSilent": "Your wallet has not answered yet. Check for a wallet window or popup. If it says this network is not supported, you can pay with a different wallet.",
     "walletChainUnsupported": "This wallet does not support {network}. Nothing was sent and nothing was charged. You can pay with a different wallet.",
     "payingFrom": "Paying from",
-    "paidFrom": "Paid from"
+    "paidFrom": "Paid from",
+    "tron": {
+      "sendExactly": "Send exactly",
+      "toAddress": "To this TRON address",
+      "copy": "Copy",
+      "copied": "Copied",
+      "copyAmount": "Copy the amount",
+      "copyAddress": "Copy the address",
+      "exactAmountNote": "Send this exact amount. A smaller amount is recorded as a partial payment and does not complete this invoice.",
+      "qrNote": "Scan the address with your wallet or exchange app. The amount is not in the code, enter it yourself.",
+      "networkWarning": "This is {token} on {network}, the TRC-20 network. Sending from any other network, including ERC-20, loses the funds.",
+      "waiting": "Waiting for your transfer. This page updates on its own once the network confirms it.",
+      "unavailable": "The payment details are not available yet. This page keeps checking.",
+      "partial": {
+        "title": "Partial payment",
+        "body": "We received {received} {token}. That is {missing} {token} short of the invoice.",
+        "bodyReceivedOnly": "We received {received} {token}, which is less than the invoice.",
+        "note": "The money reached the merchant, and a further transfer will not complete this invoice. Contact the merchant to settle it."
+      }
+    }
   }
 }

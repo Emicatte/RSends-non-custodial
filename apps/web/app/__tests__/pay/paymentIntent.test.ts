@@ -158,3 +158,57 @@ describe('merchantName / formatCountdown', () => {
     expect(formatCountdown(29 * 60_000 + 5_000)).toBe('29:05')
   })
 })
+
+describe('watch-only intents', () => {
+  const RAW_TRON = {
+    status: 'pending',
+    expires_at: '2026-07-09T12:00:00Z',
+    amount: 10.000001,
+    amount_exact: '10.000001',
+    currency: 'USDT',
+    chain: 'TRON',
+    recipient: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+    onchain: null,
+  }
+
+  it('normalizes without throwing, and without an onchain block', () => {
+    // `onchain: null` is the CORRECT shape here, not a degraded one: there is
+    // no contract to call. The build gate never opens, so viem's getAddress()
+    // is never handed a T-address -- it would throw, and the catch around it
+    // would quietly report a valid invoice as unpayable.
+    const intent = normalizeIntent(RAW_TRON, 'pi_tron')
+    expect(intent.onchain).toBeNull()
+    expect(intent.status).toBe('pending')
+  })
+
+  it('carries the base58 recipient through byte-identical', () => {
+    const intent = normalizeIntent(RAW_TRON, 'pi_tron')
+    expect(intent.recipient).toBe('TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t')
+    expect(intent.recipient).not.toBe(intent.recipient!.toLowerCase())
+  })
+
+  it('carries the exact amount and the partial figures', () => {
+    const intent = normalizeIntent(
+      { ...RAW_TRON, status: 'partial', amount_received: '4.5', underpaid_amount: '5.500001' },
+      'pi_tron',
+    )
+    expect(intent.amountExact).toBe('10.000001')
+    expect(intent.amountReceived).toBe('4.5')
+    expect(intent.underpaidAmount).toBe('5.500001')
+  })
+
+  it('labels both TRON networks', () => {
+    expect(normalizeIntent(RAW_TRON, 'x').chainLabel).toBe('TRON')
+    expect(
+      normalizeIntent({ ...RAW_TRON, chain: 'tron_nile' }, 'x').chainLabel,
+    ).toBe('TRON Nile')
+  })
+
+  it('leaves the new fields null on an intent that omits them', () => {
+    const intent = normalizeIntent(RAW_BASE, 'x')
+    expect(intent.recipient).toBeNull()
+    expect(intent.amountExact).toBeNull()
+    expect(intent.amountReceived).toBeNull()
+    expect(intent.underpaidAmount).toBeNull()
+  })
+})

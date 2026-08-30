@@ -29,6 +29,7 @@ from app.db.session import get_db
 from app.models.dashboard_schemas import DashboardStats, RecentTransaction
 from app.models.settlement_models import PaymentSettlement
 from app.security.auth import require_wallet_auth
+from app.security.input_validator import display_payment_address
 
 
 router = APIRouter(prefix="/api/v1/dashboard", tags=["dashboard"])
@@ -132,7 +133,7 @@ async def get_dashboard_stats(
             currency="ETH" if s.token == "0x" + "0" * 40 else "TOKEN",
             chain=_chain_label(s.chain_id),
             status="confirmed",
-            recipient=(s.merchant or "").lower(),
+            recipient=display_payment_address(s.merchant),
             timestamp_iso=s.created_at.isoformat() if s.created_at else "",
         )
         for s in q_recent.scalars().all()

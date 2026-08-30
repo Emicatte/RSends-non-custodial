@@ -1704,6 +1704,25 @@
     "walletSilent": "Votre portefeuille n'a pas encore répondu. Vérifiez s'il a ouvert une fenêtre ou une fenêtre contextuelle. S'il indique que ce réseau n'est pas pris en charge, vous pouvez payer avec un autre portefeuille.",
     "walletChainUnsupported": "Ce portefeuille ne prend pas en charge {network}. Rien n'a été envoyé et rien n'a été débité. Vous pouvez payer avec un autre portefeuille.",
     "payingFrom": "Paiement depuis",
-    "paidFrom": "Payé depuis"
+    "paidFrom": "Payé depuis",
+    "tron": {
+      "sendExactly": "Envoyez exactement",
+      "toAddress": "À cette adresse TRON",
+      "copy": "Copier",
+      "copied": "Copié",
+      "copyAmount": "Copier le montant",
+      "copyAddress": "Copier l'adresse",
+      "exactAmountNote": "Envoyez exactement ce montant. Un montant inférieur est enregistré comme paiement partiel et ne solde pas cette facture.",
+      "qrNote": "Scannez l'adresse avec votre portefeuille ou l'application de votre plateforme. Le montant n'est pas dans le code, saisissez-le vous-même.",
+      "networkWarning": "Il s'agit de {token} sur {network}, le réseau TRC-20. Un envoi depuis un autre réseau, ERC-20 compris, fait perdre les fonds.",
+      "waiting": "En attente de votre transfert. Cette page se met à jour seule dès que le réseau le confirme.",
+      "unavailable": "Les informations de paiement ne sont pas encore disponibles. La page continue de vérifier.",
+      "partial": {
+        "title": "Paiement partiel",
+        "body": "Nous avons reçu {received} {token}. Il manque {missing} {token} pour la facture.",
+        "bodyReceivedOnly": "Nous avons reçu {received} {token}, moins que le montant de la facture.",
+        "note": "L'argent est arrivé chez le marchand et un nouveau transfert ne soldera pas cette facture. Contactez le marchand pour la régler."
+      }
+    }
   }
 }

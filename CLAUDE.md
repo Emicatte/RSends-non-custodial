@@ -337,7 +337,13 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
   `useOrgStats`). Legacy **`dashboard_routes.py` stays frozen and scope-broken** — it filters
   `PaymentSettlement.merchant == owner` (the org's *primary* wallet), reading **zero** once
   `settlement_wallet ≠ primary wallet`; the new `/stats` route (correct intent-join scope) is its
-  replacement, `dashboard_routes.py` itself is intentionally left untouched. **Still deferred:** the
+  replacement, `dashboard_routes.py` itself is intentionally left untouched — with one named
+  exception (2026-08-30): its `RecentTransaction.recipient` line stopped lowercasing the settlement
+  merchant, because `.lower()` destroys a base58check address rather than merely changing it. Both
+  stats routes now share `display_payment_address` (`app/security/input_validator.py`). The fix is
+  **latent** there: that route's scope filter is `PaymentSettlement.merchant == wallet_address.lower()`,
+  which matches zero base58 merchants, so no TRON row ever reaches the line. It was changed to stop
+  the two routes diverging, not because it is reachable; the scope filter stays as-is. **Still deferred:** the
   session `/api/v1/user/org/settlements` endpoint. **Pre-existing (plan anchor 10):** `/api/v1/merchant/profile` and
   `/api/v1/merchant/invoices` are `require_org_role`/JWT-authed but NOT in `EXEMPT_PATHS`, so
   they're unreachable in prod without `RSEND_DEV_AUTH_BYPASS` — new session routes correctly live
