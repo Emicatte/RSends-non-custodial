@@ -70,6 +70,7 @@ recoverable, a payment skipped once is not.
 import asyncio
 import json
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
@@ -120,6 +121,56 @@ TRON_CHAIN_ID = 728126428
 TRON_NILE_CHAIN_ID = 3448148188
 
 USDT_TRC20_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
+USDT_TRC20_CONTRACT_NILE = "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf"
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Networks
+# ═══════════════════════════════════════════════════════════════
+#
+# Everything that differs between two TRON networks, in one place. These fields
+# are not configuration — each is a KEY that something is stored or looked up
+# by, and two networks sharing any one of them is a silent cross-network read
+# rather than an error:
+#
+#   chain_id       the cursor row's primary key, and a third of the settlement
+#                  idempotency key (chain_id, tx_hash, log_index)
+#   chain_name     which intents this network's poller is watching for
+#   usdt_contract  a contract that does not exist on the other network, so
+#                  getting it wrong observes nothing forever, quietly
+#   key            which pinned genesis the node must match
+#   settings_attr  a SEPARATE settings field per network, never one field with
+#                  a flag choosing between them
+#
+# A third network is a new instance here plus a new genesis entry — the same
+# "new entry, not a refactor" shape `tron_chain_identity` is built around.
+
+@dataclass(frozen=True)
+class TronNetwork:
+    key: str
+    chain_name: str
+    chain_id: int
+    usdt_contract: str
+    settings_attr: str
+
+
+TRON_MAINNET = TronNetwork(
+    key="mainnet",
+    chain_name="tron",
+    chain_id=TRON_CHAIN_ID,
+    usdt_contract=USDT_TRC20_CONTRACT,
+    settings_attr="tron_node_urls_json",
+)
+
+TRON_NILE = TronNetwork(
+    key="nile",
+    chain_name="tron_nile",
+    chain_id=TRON_NILE_CHAIN_ID,
+    usdt_contract=USDT_TRC20_CONTRACT_NILE,
+    settings_attr="tron_nile_node_urls_json",
+)
+
+TRON_NETWORKS = (TRON_MAINNET, TRON_NILE)
 
 # TronGrid's free tier is ~15 QPS, so the number of pending recipient addresses
 # is the limit here, not the cadence.
@@ -142,27 +193,33 @@ class TronEnrichmentError(RuntimeError):
 #  Configuration
 # ═══════════════════════════════════════════════════════════════
 
-def _configured_nodes() -> list[str]:
-    """Ordered TRON node base URLs, primary first. Empty when unconfigured.
+def _configured_nodes(network: TronNetwork) -> list[str]:
+    """Ordered node base URLs for `network`, primary first. Empty if unset.
 
-    An empty list means the poller does not start, which is not an error — the
-    same shape as `start_indexer_if_needed` returning [] on empty router maps.
+    One parser, but each network reads its OWN settings field — there is no
+    single variable with a flag selecting which network it means, because that
+    would make pointing production at a testnet a one-character mistake with no
+    signal. An empty list means this network's poller does not start, which is
+    not an error and does not affect the other: the same shape as
+    `start_indexer_if_needed` returning [] on empty router maps.
     """
-    raw = (get_settings().tron_node_urls_json or "").strip()
+    env_name = network.settings_attr.upper()
+    raw = (getattr(get_settings(), network.settings_attr, "") or "").strip()
     if not raw:
         return []
     try:
         parsed = json.loads(raw)
     except (ValueError, TypeError):
         logger.warning(
-            "[tron-poller] TRON_NODE_URLS_JSON is not valid JSON; "
-            "the poller will not start"
+            "[tron-poller] %s is not valid JSON; the %s poller will not start",
+            env_name, network.key,
         )
         return []
     if not isinstance(parsed, list):
         logger.warning(
-            "[tron-poller] TRON_NODE_URLS_JSON must be a JSON array of node "
-            "URLs; got %s. The poller will not start", type(parsed).__name__
+            "[tron-poller] %s must be a JSON array of node URLs; got %s. The "
+            "%s poller will not start",
+            env_name, type(parsed).__name__, network.key,
         )
         return []
     return [u.rstrip("/") for u in parsed if isinstance(u, str) and u.strip()]
@@ -177,40 +234,46 @@ def _auth_headers() -> dict:
 #  Cursor
 # ═══════════════════════════════════════════════════════════════
 #
-# The cursor row is `IndexerCursor(chain_id=728126428)` and reuses the EVM
-# indexer's table. Its `last_block` column holds a MILLISECOND
+# The cursor row is `IndexerCursor(chain_id=network.chain_id)` and reuses the
+# EVM indexer's table. Its `last_block` column holds a MILLISECOND
 # `block_timestamp`, NOT a block number: the column is a BigInteger monotonic
 # cursor, and this is TRON's meaning of it. TronGrid's trc20 endpoint pages by
 # timestamp and never returns a block number, so a block cursor is not
 # available to us even in principle.
+#
+# ONE ROW PER NETWORK, and the chain id is what separates them. Sharing a row
+# would not fail loudly: both networks write plausible millisecond timestamps,
+# so they would simply drag one cursor back and forth, each re-scanning or
+# stepping over windows of the other's history. Nile's id is also why
+# `indexer_cursors.chain_id` had to widen to BIGINT (migration 0020).
 
 def _now_ms() -> int:
     """Wall clock in ms. A named seam so tests can freeze it."""
     return int(datetime.now(timezone.utc).timestamp() * 1000)
 
 
-async def _get_tron_cursor() -> Optional[int]:
+async def _get_tron_cursor(network: TronNetwork) -> Optional[int]:
     """Last observed `block_timestamp` in MILLISECONDS (not a block number)."""
     from app.db.session import async_session
 
     async with async_session() as db:
         row = (await db.execute(
-            select(IndexerCursor).where(IndexerCursor.chain_id == TRON_CHAIN_ID)
+            select(IndexerCursor).where(IndexerCursor.chain_id == network.chain_id)
         )).scalar_one_or_none()
         return int(row.last_block) if row is not None else None
 
 
-async def _set_tron_cursor(timestamp_ms: int) -> None:
+async def _set_tron_cursor(network: TronNetwork, timestamp_ms: int) -> None:
     """Persist the cursor. `last_block` holds MILLISECONDS, not a block number."""
     from app.db.session import async_session
 
     async with async_session() as db:
         row = (await db.execute(
-            select(IndexerCursor).where(IndexerCursor.chain_id == TRON_CHAIN_ID)
+            select(IndexerCursor).where(IndexerCursor.chain_id == network.chain_id)
         )).scalar_one_or_none()
         if row is None:
             db.add(IndexerCursor(
-                chain_id=TRON_CHAIN_ID,
+                chain_id=network.chain_id,
                 last_block=timestamp_ms,
                 updated_at=datetime.now(timezone.utc),
             ))
@@ -224,19 +287,23 @@ async def _set_tron_cursor(timestamp_ms: int) -> None:
 #  What to watch
 # ═══════════════════════════════════════════════════════════════
 
-async def _pending_tron_recipients() -> list[str]:
-    """Distinct recipients of pending TRON intents.
+async def _pending_tron_recipients(network: TronNetwork) -> list[str]:
+    """Distinct recipients of pending intents ON THIS NETWORK'S CHAIN.
 
     `chain` is stored VERBATIM as the caller sent it — slice 1 pins the real
     value as "TRON", uppercase — so the comparison folds case in the query, the
     same idiom `payment_indexer` uses for its chain filter.
+
+    Scoped by network because this set IS the poller's whole notion of who to
+    ask about: watching mainnet's merchants from a Nile node returns nothing,
+    raises nothing, and reports a clean tick forever.
     """
     from app.db.session import async_session
 
     async with async_session() as db:
         rows = (await db.execute(
             select(distinct(PaymentIntent.recipient)).where(
-                func.lower(PaymentIntent.chain) == "tron",
+                func.lower(PaymentIntent.chain) == network.chain_name,
                 PaymentIntent.status == IntentStatus.pending,
                 PaymentIntent.recipient.isnot(None),
             )
@@ -317,7 +384,9 @@ def _pair_transfer_to_event(transfer: dict, events: list) -> dict:
 #  The write
 # ═══════════════════════════════════════════════════════════════
 
-async def _record_settlement(transfer: dict, event: dict) -> str:
+async def _record_settlement(
+    transfer: dict, event: dict, network: TronNetwork
+) -> str:
     """Insert one watch-only settlement. Returns "new" or "duplicate".
 
     Idempotency is the read-then-branch on `uq_settlement_onchain_log` that
@@ -332,7 +401,10 @@ async def _record_settlement(transfer: dict, event: dict) -> str:
 
     from app.db.session import async_session
 
-    chain_id = TRON_CHAIN_ID
+    # Two thirds of the idempotency key below. It is the network's, not a
+    # constant: an identical tx hash on the other network must be its own row,
+    # not swallowed as a duplicate of this one.
+    chain_id = network.chain_id
     tx_hash = transfer["transaction_id"]
     log_index = int(event["event_index"])
 
@@ -377,17 +449,17 @@ async def _record_settlement(transfer: dict, event: dict) -> str:
 #  The poller
 # ═══════════════════════════════════════════════════════════════
 
-async def _run_matching_pass() -> dict:
-    """Run slice 3's matcher and webhook redrive. Never raises.
+async def _run_matching_pass(network: TronNetwork) -> dict:
+    """Run slice 3's matcher and webhook redrive FOR THIS NETWORK. Never raises.
 
-    Imported lazily: `tron_matcher` imports `TRON_CHAIN_ID` from here, so a
-    module-level import either way round would be circular.
+    Imported lazily: `tron_matcher` imports the network descriptors from here,
+    so a module-level import either way round would be circular.
     """
     from app.services import tron_matcher
 
     try:
-        counts = await tron_matcher.match_pending_tron_settlements()
-        counts["redriven"] = await tron_matcher.redrive_tron_webhooks()
+        counts = await tron_matcher.match_pending_tron_settlements(network)
+        counts["redriven"] = await tron_matcher.redrive_tron_webhooks(network)
         return counts
     except Exception:
         logger.exception(
@@ -398,11 +470,17 @@ async def _run_matching_pass() -> dict:
 
 
 class TronPoller:
-    """Polls TronGrid for incoming USDT TRC-20 transfers, then matches them."""
+    """Polls one TRON network for incoming USDT TRC-20 transfers, then matches.
 
-    def __init__(self, node_urls: list[str]) -> None:
+    One instance per network. Every network-dependent value it uses comes from
+    `self.network`, so two instances share code and share nothing else — not a
+    cursor row, not a contract, not an intent.
+    """
+
+    def __init__(self, network: TronNetwork, node_urls: list[str]) -> None:
         if not node_urls:
             raise ValueError("TronPoller requires at least one node URL")
+        self.network = network
         self.node_urls = list(node_urls)
         self._task: Optional[asyncio.Task] = None
         self._running = False
@@ -438,7 +516,7 @@ class TronPoller:
         """
         out: list = []
         params = {
-            "contract_address": USDT_TRC20_CONTRACT,
+            "contract_address": self.network.usdt_contract,
             "only_to": "true",
             "only_confirmed": "true",
             "min_timestamp": min_timestamp,
@@ -476,20 +554,23 @@ class TronPoller:
         payment we recorded but failed to match is still on the table.
         """
         observed = await self._observe()
-        observed.update(await _run_matching_pass())
+        observed.update(await _run_matching_pass(self.network))
         return observed
 
     async def _observe(self) -> dict:
-        cursor = await _get_tron_cursor()
+        cursor = await _get_tron_cursor(self.network)
         if cursor is None:
             # Cold start: anchor at now and scan nothing, the same posture the
             # EVM indexer takes at an unknown head.
             cursor = _now_ms()
-            await _set_tron_cursor(cursor)
-            logger.info("[tron-poller] cold start; cursor anchored at %d", cursor)
+            await _set_tron_cursor(self.network, cursor)
+            logger.info(
+                "[tron-poller/%s] cold start; cursor anchored at %d",
+                self.network.key, cursor,
+            )
             return {"observed": 0, "written": 0, "blocked": 0}
 
-        recipients = await _pending_tron_recipients()
+        recipients = await _pending_tron_recipients(self.network)
         if not recipients:
             return {"observed": 0, "written": 0, "blocked": 0}
 
@@ -541,14 +622,14 @@ class TronPoller:
                 logger.error("[tron-poller] %s", exc)
                 _block(ts)
                 continue
-            if await _record_settlement(t, event) == "new":
+            if await _record_settlement(t, event, self.network) == "new":
                 written += 1
 
         # Pin TO the earliest transaction we could not enrich, never past it.
         # `min_timestamp` is inclusive, so that transaction is re-observed next
         # tick rather than skipped.
         if blocked_at is not None:
-            await _set_tron_cursor(blocked_at)
+            await _set_tron_cursor(self.network, blocked_at)
             logger.warning(
                 "[tron-poller] cursor held at %d: %d transaction(s) could not "
                 "be enriched and their payments are NOT recorded",
@@ -556,7 +637,7 @@ class TronPoller:
             )
         else:
             await _set_tron_cursor(
-                max(int(t["block_timestamp"]) for t in transfers)
+                self.network, max(int(t["block_timestamp"]) for t in transfers)
             )
 
         return {
@@ -591,46 +672,67 @@ class TronPoller:
             self._task = None
 
 
-_poller: Optional[TronPoller] = None
+_pollers: list[TronPoller] = []
 
 
-async def start_tron_poller_if_needed() -> Optional[TronPoller]:
-    """Prove every configured node, then start. No nodes → silently no poller.
+async def start_tron_poller_if_needed() -> list[TronPoller]:
+    """Prove every configured node against ITS network, then start one poller
+    per configured network. Returns the started pollers, possibly none.
 
-    The identity guard runs BEFORE the cursor is read and before any TronGrid
-    call, and its failure is fatal: a node that has not proven it serves TRON
-    mainnet could hand us a testnet's transfers, which would be recorded as
-    real payments. Starting with TRON quietly disabled is not on offer either —
-    that is the silent failure this refuses.
+    A network with no nodes is silently absent — the same shape an empty router
+    map gives the EVM indexer — and does not affect the other. That is not the
+    same as a node that FAILS its proof, which is fatal for the whole process:
+    a node that has not proven which TRON network it serves could hand us the
+    other one's transfers, and every downstream key (cursor, environment stamp,
+    payee) would be wrong while looking entirely normal. Starting with TRON
+    quietly disabled is not on offer either — that is the silent failure this
+    refuses.
+
+    Each node is proven for the network it was CONFIGURED for, so pointing the
+    mainnet variable at a Nile node (or the reverse) stops the boot instead of
+    recording testnet play money as live payments.
+
+    The guard runs before any cursor read and before any TronGrid call, for
+    every network, so a failure on the second network cannot leave the first
+    one's cursor already touched.
     """
-    global _poller
+    global _pollers
 
-    nodes = _configured_nodes()
-    if not nodes:
-        return None
+    configured = [(net, _configured_nodes(net)) for net in TRON_NETWORKS]
+    configured = [(net, nodes) for net, nodes in configured if nodes]
+    if not configured:
+        return []
 
-    for node_url in nodes:
-        try:
-            await assert_tron_chain_identity(node_url, "mainnet")
-        except TronChainIdentityError as exc:
-            logger.critical(
-                "[tron-poller] FATAL chain identity: %s. Refusing to start — a "
-                "node that has not proven it serves TRON mainnet cannot be "
-                "trusted to report payments.", exc,
-            )
-            raise SystemExit(f"[tron-poller] FATAL {exc}") from exc
+    for network, nodes in configured:
+        for node_url in nodes:
+            try:
+                await assert_tron_chain_identity(node_url, network.key)
+            except TronChainIdentityError as exc:
+                logger.critical(
+                    "[tron-poller/%s] FATAL chain identity: %s. Refusing to "
+                    "start — a node that has not proven which TRON network it "
+                    "serves cannot be trusted to report payments.",
+                    network.key, exc,
+                )
+                raise SystemExit(f"[tron-poller] FATAL {exc}") from exc
 
-    _poller = TronPoller(node_urls=nodes)
-    await _poller.start()
-    logger.info(
-        "[tron-poller] watching USDT TRC-20 on %d proven node(s), every %.0fs",
-        len(nodes), TRON_POLL_INTERVAL,
-    )
-    return _poller
+    started: list[TronPoller] = []
+    for network, nodes in configured:
+        poller = TronPoller(network=network, node_urls=nodes)
+        await poller.start()
+        started.append(poller)
+        logger.info(
+            "[tron-poller/%s] watching USDT TRC-20 (%s) on %d proven node(s), "
+            "every %.0fs",
+            network.key, network.usdt_contract, len(nodes), TRON_POLL_INTERVAL,
+        )
+
+    _pollers = started
+    return started
 
 
 async def stop_tron_poller() -> None:
-    global _poller
-    if _poller is not None:
-        await _poller.stop()
-        _poller = None
+    global _pollers
+    for poller in _pollers:
+        await poller.stop()
+    _pollers = []

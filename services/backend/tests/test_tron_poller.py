@@ -318,8 +318,10 @@ async def _intents_snapshot():
                               r.tx_hash, r.completed_at) for r in rows}
 
 
-def _poller(nodes=(NODE,)):
-    return TronPoller(node_urls=list(nodes))
+def _poller(nodes=(NODE,), network=None):
+    return TronPoller(
+        network=network or tp.TRON_MAINNET, node_urls=list(nodes)
+    )
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -338,7 +340,9 @@ async def test_identity_failure_refuses_to_start_and_never_reads_the_cursor(
         raise TronChainIdentityError(f"unproven: {node_url}")
 
     monkeypatch.setattr(tp, "assert_tron_chain_identity", _boom)
-    monkeypatch.setattr(tp, "_configured_nodes", lambda: [NODE])
+    monkeypatch.setattr(tp, "_configured_nodes", lambda net: (
+        [NODE] if net is tp.TRON_MAINNET else []
+    ))
     # Any HTTP at all would mean the guard did not run first.
     _stub_http(monkeypatch, lambda url, params: (_ for _ in ()).throw(
         AssertionError(f"guard did not run first; hit {url}")))
@@ -365,15 +369,17 @@ async def test_every_configured_node_is_proven_not_just_the_first(monkeypatch):
         proven.append(node_url)
 
     monkeypatch.setattr(tp, "assert_tron_chain_identity", _ok)
-    monkeypatch.setattr(tp, "_configured_nodes", lambda: [NODE, "https://failover"])
+    monkeypatch.setattr(tp, "_configured_nodes", lambda net: (
+        [NODE, "https://failover"] if net is tp.TRON_MAINNET else []
+    ))
     monkeypatch.setattr(TronPoller, "_loop", lambda self: _noop())
 
-    poller = await tp.start_tron_poller_if_needed()
+    pollers = await tp.start_tron_poller_if_needed()
     try:
         assert proven == [NODE, "https://failover"]
     finally:
         await tp.stop_tron_poller()
-    assert poller is not None
+    assert [p.network.key for p in pollers] == ["mainnet"]
 
 
 async def _noop():
@@ -382,13 +388,13 @@ async def _noop():
 
 @pytest.mark.asyncio
 async def test_no_tron_node_configured_is_silent_not_an_error(monkeypatch):
-    monkeypatch.setattr(tp, "_configured_nodes", lambda: [])
+    monkeypatch.setattr(tp, "_configured_nodes", lambda net: [])
 
     async def _never(node_url, network, **kw):
         raise AssertionError("must not probe when nothing is configured")
 
     monkeypatch.setattr(tp, "assert_tron_chain_identity", _never)
-    assert await tp.start_tron_poller_if_needed() is None
+    assert await tp.start_tron_poller_if_needed() == []
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -403,7 +409,7 @@ async def test_a_transfer_to_a_pending_recipient_writes_one_settlement(monkeypat
         events_by_tx={TX: REAL_TX_EVENTS},
     ))
     w = _poller()
-    await tp._set_tron_cursor(TX_TS - 1)
+    await tp._set_tron_cursor(tp.TRON_MAINNET, TX_TS - 1)
 
     await w._tick()
 
@@ -428,7 +434,7 @@ async def test_base58_addresses_round_trip_byte_identical(monkeypatch):
         transfers_by_addr={MERCH_A: [_transfer(to=MERCH_A, value=VALUE_A)]},
         events_by_tx={TX: REAL_TX_EVENTS},
     ))
-    await tp._set_tron_cursor(TX_TS - 1)
+    await tp._set_tron_cursor(tp.TRON_MAINNET, TX_TS - 1)
     await _poller()._tick()
 
     r = (await _settlements())[0]
@@ -443,13 +449,13 @@ async def test_base58_addresses_round_trip_byte_identical(monkeypatch):
 async def test_an_address_with_no_transfers_is_a_no_op(monkeypatch):
     await _make_tron_intent(recipient=MERCH_A)
     calls = _stub_http(monkeypatch, _router(transfers_by_addr={MERCH_A: []}))
-    await tp._set_tron_cursor(TX_TS - 1)
+    await tp._set_tron_cursor(tp.TRON_MAINNET, TX_TS - 1)
 
     await _poller()._tick()
 
     assert await _settlement_count() == 0
     assert not [u for u, _ in calls if "/events" in u]   # nothing to enrich
-    assert await tp._get_tron_cursor() == TX_TS - 1      # nothing seen, no move
+    assert await tp._get_tron_cursor(tp.TRON_MAINNET) == TX_TS - 1      # nothing seen, no move
 
 
 @pytest.mark.asyncio
@@ -460,11 +466,11 @@ async def test_rerunning_the_same_tick_writes_nothing(monkeypatch):
         events_by_tx={TX: REAL_TX_EVENTS},
     ))
     w = _poller()
-    await tp._set_tron_cursor(TX_TS - 1)
+    await tp._set_tron_cursor(tp.TRON_MAINNET, TX_TS - 1)
 
     await w._tick()
     assert await _settlement_count() == 1
-    await tp._set_tron_cursor(TX_TS - 1)   # replay the identical tick
+    await tp._set_tron_cursor(tp.TRON_MAINNET, TX_TS - 1)   # replay the identical tick
     await w._tick()
     assert await _settlement_count() == 1, "idempotency broken"
 
@@ -491,7 +497,7 @@ async def test_two_merchants_paid_by_one_transaction_both_land(monkeypatch):
         },
         events_by_tx={TX: REAL_TX_EVENTS},
     ))
-    await tp._set_tron_cursor(TX_TS - 1)
+    await tp._set_tron_cursor(tp.TRON_MAINNET, TX_TS - 1)
 
     await _poller()._tick()
 
@@ -525,7 +531,7 @@ async def test_event_index_is_stored_as_returned_never_renumbered(monkeypatch):
         },
         events_by_tx={TX: events},
     ))
-    await tp._set_tron_cursor(TX_TS - 1)
+    await tp._set_tron_cursor(tp.TRON_MAINNET, TX_TS - 1)
 
     await _poller()._tick()
 
@@ -545,7 +551,7 @@ async def test_enrichment_is_one_call_per_transaction_not_per_transfer(monkeypat
         },
         events_by_tx={TX: REAL_TX_EVENTS},
     ))
-    await tp._set_tron_cursor(TX_TS - 1)
+    await tp._set_tron_cursor(tp.TRON_MAINNET, TX_TS - 1)
 
     await _poller()._tick()
 
@@ -591,7 +597,7 @@ async def test_unenrichable_transfer_writes_nothing_and_pins_the_cursor(
         return base(url, params)
 
     _stub_http(monkeypatch, handler)
-    await tp._set_tron_cursor(TX_TS - 1)
+    await tp._set_tron_cursor(tp.TRON_MAINNET, TX_TS - 1)
 
     with caplog.at_level(logging.WARNING, logger=tp.logger.name):
         await _poller()._tick()
@@ -601,7 +607,7 @@ async def test_unenrichable_transfer_writes_nothing_and_pins_the_cursor(
     # is INCLUSIVE (verified against mainnet: querying with the exact
     # block_timestamp of a known transfer returns that transfer), so the next
     # tick re-observes this transaction instead of skipping it.
-    assert await tp._get_tron_cursor() == TX_TS, (
+    assert await tp._get_tron_cursor(tp.TRON_MAINNET) == TX_TS, (
         "cursor advanced past a transaction that could not be enriched — "
         "the payment is now unobservable"
     )
@@ -630,11 +636,11 @@ async def test_one_bad_transaction_does_not_advance_past_a_later_good_one(
                              txid=good_tx, ts=TX_TS + 5000)],
         },
     ))
-    await tp._set_tron_cursor(TX_TS - 1)
+    await tp._set_tron_cursor(tp.TRON_MAINNET, TX_TS - 1)
 
     await _poller()._tick()
 
-    assert await tp._get_tron_cursor() == TX_TS, (
+    assert await tp._get_tron_cursor(tp.TRON_MAINNET) == TX_TS, (
         "cursor must pin to the earliest unenrichable transaction"
     )
 
@@ -663,10 +669,10 @@ async def test_cursor_advances_and_the_next_tick_asks_from_the_last_seen(
         events_by_tx={TX: REAL_TX_EVENTS},
     ))
     w = _poller()
-    await tp._set_tron_cursor(TX_TS - 1)
+    await tp._set_tron_cursor(tp.TRON_MAINNET, TX_TS - 1)
 
     await w._tick()
-    assert await tp._get_tron_cursor() == TX_TS
+    assert await tp._get_tron_cursor(tp.TRON_MAINNET) == TX_TS
 
     await w._tick()
     trc20 = [p for u, p in calls if "/transactions/trc20" in u]
@@ -679,7 +685,7 @@ async def test_the_discovery_call_carries_the_finality_and_filter_params(
 ):
     await _make_tron_intent(recipient=MERCH_A)
     calls = _stub_http(monkeypatch, _router(transfers_by_addr={MERCH_A: []}))
-    await tp._set_tron_cursor(TX_TS - 1)
+    await tp._set_tron_cursor(tp.TRON_MAINNET, TX_TS - 1)
 
     await _poller()._tick()
 
@@ -707,7 +713,7 @@ async def test_fingerprint_pagination_is_followed(monkeypatch):
                               txid="e" * 64, ts=TX_TS + 1000)],
         },
     ))
-    await tp._set_tron_cursor(TX_TS - 1)
+    await tp._set_tron_cursor(tp.TRON_MAINNET, TX_TS - 1)
 
     await _poller()._tick()
 
@@ -735,7 +741,7 @@ async def test_no_intent_is_mutated_by_anything_in_this_slice(monkeypatch):
         },
         events_by_tx={TX: REAL_TX_EVENTS},
     ))
-    await tp._set_tron_cursor(TX_TS - 1)
+    await tp._set_tron_cursor(tp.TRON_MAINNET, TX_TS - 1)
 
     await _poller()._tick()
 
@@ -760,7 +766,7 @@ async def test_only_pending_tron_intents_contribute_addresses(monkeypatch):
         await db.commit()
 
     calls = _stub_http(monkeypatch, _router(transfers_by_addr={MERCH_A: []}))
-    await tp._set_tron_cursor(TX_TS - 1)
+    await tp._set_tron_cursor(tp.TRON_MAINNET, TX_TS - 1)
     await _poller()._tick()
 
     polled = {u.split("/v1/accounts/")[1].split("/")[0]
@@ -775,7 +781,7 @@ async def test_chain_is_matched_case_insensitively(monkeypatch):
     await _make_tron_intent(recipient=MERCH_B, chain="TRON")
     calls = _stub_http(monkeypatch, _router(
         transfers_by_addr={MERCH_A: [], MERCH_B: []}))
-    await tp._set_tron_cursor(TX_TS - 1)
+    await tp._set_tron_cursor(tp.TRON_MAINNET, TX_TS - 1)
     await _poller()._tick()
 
     polled = {u.split("/v1/accounts/")[1].split("/")[0]
