@@ -174,10 +174,10 @@
   },
   "showcase": {
     "heading": "You create the request. Your customer pays it.",
-    "subheading": "These are screenshots of the running product, not drawings of it.",
+    "subheading": "This is the running product, not a picture of it.",
     "demoDataLabel": "Demo data",
-    "dashboardAlt": "The RSends dashboard on a laptop, listing payment requests with their amount, token, chain, status and time.",
-    "payAlt": "The RSends payment page on a phone, showing a confirmed payment with its amount, its token, and a link to the transaction on the block explorer."
+    "merchantLabel": "Merchant dashboard",
+    "payerLabel": "What the payer sees"
   },
   "twoPaths": {
     "title": "Two reasons businesses choose RSends.",

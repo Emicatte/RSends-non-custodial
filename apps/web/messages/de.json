@@ -175,10 +175,10 @@
   },
   "showcase": {
     "heading": "Du erstellst die Anfrage. Dein Kunde bezahlt sie.",
-    "subheading": "Das sind Screenshots des laufenden Produkts, keine Zeichnungen.",
+    "subheading": "Das ist das laufende Produkt, kein Bild davon.",
     "demoDataLabel": "Demodaten",
-    "dashboardAlt": "Das RSends-Dashboard auf einem Laptop mit der Liste der Zahlungsanfragen samt Betrag, Token, Chain, Status und Uhrzeit.",
-    "payAlt": "Die RSends-Zahlungsseite auf einem Smartphone mit einer bestätigten Zahlung, ihrem Betrag, ihrem Token und einem Link zur Transaktion im Block-Explorer."
+    "merchantLabel": "Händler-Dashboard",
+    "payerLabel": "Was der Zahlende sieht"
   },
   "twoPaths": {
     "title": "Two reasons businesses choose RSends.",

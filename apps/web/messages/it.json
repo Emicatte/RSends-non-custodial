@@ -174,10 +174,10 @@
   },
   "showcase": {
     "heading": "Tu crei la richiesta. Il tuo cliente la paga.",
-    "subheading": "Sono screenshot del prodotto in funzione, non disegni.",
+    "subheading": "È il prodotto in funzione, non una sua immagine.",
     "demoDataLabel": "Dati dimostrativi",
-    "dashboardAlt": "La dashboard RSends su un portatile, con l’elenco delle richieste di pagamento e per ognuna importo, token, chain, stato e orario.",
-    "payAlt": "La pagina di pagamento RSends su uno smartphone, con un pagamento confermato, il suo importo, il suo token e un link alla transazione sul block explorer."
+    "merchantLabel": "Dashboard del merchant",
+    "payerLabel": "Quello che vede chi paga"
   },
   "twoPaths": {
     "title": "Due motivi per cui le aziende scelgono RSends.",

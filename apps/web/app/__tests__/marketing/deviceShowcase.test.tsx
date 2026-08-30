@@ -1,33 +1,52 @@
 /**
- * The landing page's device showcase section shows the two real surfaces —
- * the merchant dashboard in a laptop frame, the payer's /pay page in a phone
- * frame. These assertions pin the three things that can silently rot:
+ * The landing page's device showcase renders the REAL dashboard and checkout
+ * components against one fixture — not markup written for marketing, and not a
+ * screenshot of the product.
  *
- *  - the images are real, described, and dimensioned (no unsized lazy load,
- *    which is how a section like this earns a CLS regression);
- *  - the copy resolves in all five locales, not just English, which is what
- *    the previous attempt at this section shipped;
- *  - the screenshots never show a balance. RSends is non-custodial and holds
- *    no funds, so a "Saldo totale" / "Total balance" figure in the shop
- *    window would contradict the product's central claim.
+ * That is the whole point, so most of what is asserted here is that nothing in
+ * the frames was authored for the shop window:
+ *
+ *   - every action label in the payments table resolves from `app.payments`
+ *   - every metric card label resolves from `app.dashboard.metrics`
+ *   - no EURC anywhere (it is in no backend registry and create-intent 422s it)
+ *
+ * The other half is the motion and layout contract: no ScrollTrigger below
+ * 1024px or under reduced motion, and the box is reserved before the sequence
+ * initialises. A pinned section is the most CLS-damaging thing that can be put
+ * on this page, which is why it does not exist on the viewports where that
+ * would cost most.
  */
-import { render } from '@testing-library/react'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { act, render, type RenderResult } from '@testing-library/react'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
+
+import enMessages from '@/messages/en.json'
 
 let currentLocale = 'en'
+
+/** Resolve a dotted namespace ("app.payments") then a dotted key inside it. */
+function lookup(messages: Record<string, unknown>, path: string): unknown {
+  return path.split('.').reduce<unknown>(
+    (node, part) => (node == null ? undefined : (node as Record<string, unknown>)[part]),
+    messages,
+  )
+}
 
 jest.mock('next-intl', () => ({
   useTranslations: (namespace: string) => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const messages = require(`@/messages/${currentLocale}.json`)
-    return (key: string) => {
-      const value = key
-        .split('.')
-        .reduce((node: any, part: string) => node?.[part], messages[namespace])
+    const t = (key: string, values?: Record<string, unknown>) => {
+      const value = lookup(messages, `${namespace}.${key}`)
       if (typeof value !== 'string') {
         throw new Error(`Missing message ${namespace}.${key} in ${currentLocale}`)
       }
-      return value
+      return values
+        ? value.replace(/\{(\w+)\}/g, (_, k) => String(values[k] ?? `{${k}}`))
+        : value
     }
+    return t
   },
 }))
 
@@ -35,98 +54,209 @@ import DeviceShowcase from '@/components/landing/DeviceShowcase'
 
 const LOCALES = ['en', 'it', 'es', 'fr', 'de'] as const
 
-/** The label that names the screenshots as demo data, per locale. */
-function demoDataLabel(locale: string): string {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const showcase = require(`@/messages/${locale}.json`).showcase
-  if (!showcase || typeof showcase.demoDataLabel !== 'string') {
-    throw new Error(`Missing message showcase.demoDataLabel in ${locale}`)
+// ── matchMedia stand-in, same shape as motionGate.test.tsx ────────────────
+const realMatchMedia = window.matchMedia
+
+function evaluate(query: string, width: number, reduced: boolean): boolean {
+  let recognised = false
+  let matches = true
+
+  const min = /\(min-width:\s*(\d+)px\)/.exec(query)
+  if (min) {
+    recognised = true
+    matches &&= width >= Number(min[1])
   }
-  return showcase.demoDataLabel
+  const max = /\(max-width:\s*(\d+)px\)/.exec(query)
+  if (max) {
+    recognised = true
+    matches &&= width <= Number(max[1])
+  }
+  if (/prefers-reduced-motion:\s*no-preference/.test(query)) {
+    recognised = true
+    matches &&= !reduced
+  } else if (/prefers-reduced-motion/.test(query)) {
+    recognised = true
+    matches &&= reduced
+  }
+
+  if (!recognised) throw new Error(`deviceShowcase stub: unhandled media query "${query}"`)
+  return matches
 }
 
+function setViewport({ width, reduced }: { width: number; reduced: boolean }) {
+  window.matchMedia = ((query: string) => ({
+    matches: evaluate(query, width, reduced),
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia
+}
+
+const DESKTOP = { width: 1440, reduced: false }
+const MOBILE = { width: 390, reduced: false }
+const REDUCED = { width: 1440, reduced: true }
+
+// jsdom implements no window.scrollTo, and ScrollTrigger calls it while
+// refreshing a pin — which it correctly does at desktop width. Nothing here
+// asserts scroll position, so stub it rather than let every run log
+// "Not implemented: window.scrollTo".
+const realScrollTo = window.scrollTo
+beforeAll(() => {
+  window.scrollTo = (() => {}) as typeof window.scrollTo
+})
+afterAll(() => {
+  window.scrollTo = realScrollTo
+})
+
+beforeEach(() => {
+  currentLocale = 'en'
+  setViewport(DESKTOP)
+})
+
+afterEach(() => {
+  ScrollTrigger.getAll().forEach((t) => t.kill())
+  window.matchMedia = realMatchMedia
+})
+
 /**
- * True when some ancestor reserves the box before the bytes arrive. Only
- * INLINE styles are readable in jsdom — a stylesheet rule is invisible here —
- * so the component must declare the reservation inline for this to hold.
+ * WebhookCard loads its deliveries in an effect, so a bare render() leaves a
+ * pending state update and React warns. Flush it here rather than leaving the
+ * warning in every run.
  */
-function hasReservedAncestor(img: HTMLImageElement): boolean {
-  let node: HTMLElement | null = img.parentElement
-  while (node) {
-    const { aspectRatio, height } = node.style
-    if (aspectRatio && aspectRatio !== 'auto') return true
-    if (height && height !== 'auto' && height !== '') return true
-    node = node.parentElement
+async function renderShowcase(): Promise<RenderResult> {
+  let result!: RenderResult
+  await act(async () => {
+    result = render(<DeviceShowcase />)
+  })
+  return result
+}
+
+/** Every string value under a namespace, for "did this come from the product?" */
+function messageValues(path: string, locale = 'en'): Set<string> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const messages = require(`@/messages/${locale}.json`)
+  const node = lookup(messages, path)
+  const out = new Set<string>()
+  const walk = (n: unknown) => {
+    if (typeof n === 'string') out.add(n)
+    else if (n && typeof n === 'object') Object.values(n).forEach(walk)
   }
-  return false
+  walk(node)
+  return out
 }
 
 describe('DeviceShowcase', () => {
-  beforeEach(() => {
-    currentLocale = 'en'
+  it('renders both device frames', async () => {
+    const { container } = await renderShowcase()
+    expect(container.querySelector('[data-frame="browser"]')).not.toBeNull()
+    expect(container.querySelector('[data-frame="phone"]')).not.toBeNull()
   })
 
-  it('renders both device screenshots', () => {
-    const { container } = render(<DeviceShowcase />)
-    expect(container.querySelectorAll('img')).toHaveLength(2)
+  it('renders the demo-data caption', async () => {
+    const { container } = await renderShowcase()
+    expect(container.textContent).toContain(enMessages.showcase.demoDataLabel)
   })
 
-  it('describes each screenshot with its own non-empty alt text', () => {
-    const { container } = render(<DeviceShowcase />)
-    const alts = Array.from(container.querySelectorAll('img')).map(img => img.getAttribute('alt'))
-    expect(alts).toHaveLength(2)
-
-    for (const alt of alts) {
-      expect(alt).toBeTruthy()
-      expect((alt as string).trim().length).toBeGreaterThan(0)
-    }
-    expect(new Set(alts).size).toBe(alts.length)
+  it('reserves an explicit height before the sequence initialises', async () => {
+    const { container } = await renderShowcase()
+    const stage = container.querySelector<HTMLElement>('[data-showcase-stage]')
+    expect(stage).not.toBeNull()
+    // Inline, so it applies before any stylesheet or JS — and so jsdom can see
+    // it, which a stylesheet rule would not be.
+    expect(stage!.style.minHeight).toMatch(/\d/)
   })
 
-  it('gives every screenshot an explicit numeric width and height', () => {
-    const { container } = render(<DeviceShowcase />)
-    const imgs = Array.from(container.querySelectorAll('img'))
-    // Guard the loop: an empty NodeList would satisfy every assertion below.
-    expect(imgs).toHaveLength(2)
-
-    for (const img of imgs) {
-      const width = img.getAttribute('width')
-      const height = img.getAttribute('height')
-      expect(width).toMatch(/^\d+$/)
-      expect(height).toMatch(/^\d+$/)
-    }
+  it('takes its rows from the fixture module, not from inline literals', async () => {
+    const source = readFileSync(
+      resolve(__dirname, '../../../components/landing/DeviceShowcase.tsx'),
+      'utf8',
+    )
+    expect(source).toMatch(/from '@\/components\/landing\/showcaseFixture'/)
+    expect(source).not.toMatch(/intent_id\s*:/)
   })
 
-  it('labels the screenshots as demo data', () => {
-    const { container } = render(<DeviceShowcase />)
-    expect(container.textContent).toContain(demoDataLabel('en'))
+  it('shows no raster or media element of the product', async () => {
+    const { container } = await renderShowcase()
+    expect(container.querySelectorAll('img')).toHaveLength(0)
+    expect(container.querySelectorAll('video')).toHaveLength(0)
+    expect(container.querySelectorAll('canvas')).toHaveLength(0)
   })
 
-  it('never lazy loads a screenshot into an unsized container', () => {
-    const { container } = render(<DeviceShowcase />)
-    const imgs = Array.from(container.querySelectorAll('img'))
-    // Guard: with no images at all the filter below is vacuously satisfied.
-    expect(imgs).toHaveLength(2)
-    const lazy = imgs.filter(img => img.getAttribute('loading') === 'lazy')
-
-    for (const img of lazy) {
-      expect(hasReservedAncestor(img as HTMLImageElement)).toBe(true)
-    }
+  it('fills the table with enough rows to reach the frame edge', async () => {
+    const { container } = await renderShowcase()
+    expect(
+      container.querySelectorAll('table tbody tr').length,
+    ).toBeGreaterThanOrEqual(10)
   })
 
-  describe.each(LOCALES)('in %s', locale => {
+  it('invents no action label — every one resolves from app.payments', async () => {
+    const { container } = await renderShowcase()
+    const real = messageValues('app.payments')
+    const actions = Array.from(
+      container.querySelectorAll('table tbody td:last-child button, table tbody td:last-child a'),
+    ).map((el) => el.textContent?.trim() ?? '')
+
+    expect(actions.length).toBeGreaterThan(0)
+    for (const label of actions) expect(real).toContain(label)
+  })
+
+  it('invents no metric card — every label resolves from app.dashboard.metrics', async () => {
+    const { container } = await renderShowcase()
+    const real = messageValues('app.dashboard.metrics')
+    const labels = Array.from(
+      container.querySelectorAll('[data-showcase-state="dashboard"] [data-metric-label]'),
+    ).map((el) => el.textContent?.trim() ?? '')
+
+    expect(labels.length).toBeGreaterThan(0)
+    for (const label of labels) expect(real).toContain(label)
+  })
+
+  describe('motion gate', () => {
+    // The positive case first. Without it the two negatives below would pass
+    // against a section that simply never animates, which is the failure mode
+    // this whole block exists to catch.
+    it('creates the sequence at 1024px and above when motion is allowed', async () => {
+      setViewport(DESKTOP)
+      const before = ScrollTrigger.getAll().length
+      await renderShowcase()
+      expect(ScrollTrigger.getAll().length).toBe(before + 1)
+    })
+
+    it('creates no ScrollTrigger under prefers-reduced-motion: reduce', async () => {
+      setViewport(REDUCED)
+      const before = ScrollTrigger.getAll().length
+      await renderShowcase()
+      expect(ScrollTrigger.getAll().length).toBe(before)
+    })
+
+    it('creates no ScrollTrigger below 1024px', async () => {
+      setViewport(MOBILE)
+      const before = ScrollTrigger.getAll().length
+      await renderShowcase()
+      expect(ScrollTrigger.getAll().length).toBe(before)
+    })
+  })
+
+  describe.each(LOCALES)('in %s', (locale) => {
     beforeEach(() => {
       currentLocale = locale
     })
 
-    it('resolves every message key it uses', () => {
-      expect(() => render(<DeviceShowcase />)).not.toThrow()
+    it('resolves both device labels', async () => {
+      const { container } = await renderShowcase()
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const m = require(`@/messages/${locale}.json`)
+      expect(container.textContent).toContain(m.showcase.merchantLabel)
+      expect(container.textContent).toContain(m.showcase.payerLabel)
     })
 
-    it('shows no balance figure', () => {
-      const { container } = render(<DeviceShowcase />)
-      expect(container.textContent).not.toMatch(/saldo\s+totale/i)
-      expect(container.textContent).not.toMatch(/total\s+balance/i)
+    it('claims no EURC', async () => {
+      const { container } = await renderShowcase()
+      expect(container.textContent).not.toMatch(/EURC/i)
     })
   })
 })

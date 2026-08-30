@@ -46,7 +46,11 @@ export function MetricCards({ metrics, loading = false }: MetricCardsProps) {
         const deltaText = m.delta
         return (
           <div key={m.key} className={`${card} flex flex-col gap-1.5`}>
+            {/* data-metric-label is inert markup, added so the set of cards
+                actually rendered is assertable — the landing page renders these
+                same cards and must not grow one this dashboard does not have. */}
             <div
+              data-metric-label={m.key}
               style={{
                 fontFamily: 'var(--font-display)',
                 fontSize: 11,
