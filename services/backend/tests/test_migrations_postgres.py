@@ -330,3 +330,98 @@ def test_0012_downgrade_reverses_cursor_table(clean_schema):
     up = _alembic("upgrade", "head")
     assert up.returncode == 0, up.stderr
     assert _has_cursor_table()
+
+
+@_needs_pg
+def test_a_tron_testnet_chain_id_fits_after_0020(clean_schema):
+    """3448148188 (TRON Nile) does not fit a Postgres INTEGER.
+
+    This is the ONLY place the bug is reproducible. SQLite is dynamically typed,
+    so the whole SQLite suite — and CI, which runs on sqlite+aiosqlite — stores
+    the value fine whatever the column declares; the failure appears for the
+    first time in production, on the first Nile cursor write, as
+    NumericValueOutOfRange. Both columns the TRON poller writes are checked.
+
+    Values, not just types: an ALTER that widened the column but left an index
+    or the unique constraint on the old type would still pass a type inspection.
+    """
+    assert _alembic("upgrade", "head").returncode == 0
+
+    nile = 3448148188
+    assert nile > 2147483647, "premise of this test"
+
+    asyncio.run(_exec(
+        "INSERT INTO indexer_cursors (chain_id, last_block, updated_at)"
+        f" VALUES ({nile}, 1756400000000, now())",
+        "INSERT INTO payment_settlements"
+        " (invoice_id, merchant, payer, token, amount, block_timestamp,"
+        "  chain_id, tx_hash, log_index, block_number, status, created_at)"
+        " VALUES (NULL, 'TN3W4H6rK2ce4vX9YnFQHwKENnHjoxb3m9',"
+        "         'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf',"
+        "         'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf', 1000000, now(),"
+        f"         {nile}, '0xnile', 0, 1, 'pending', now())",
+    ))
+
+    # The declared type, so a test that somehow inserted into a still-INTEGER
+    # column would not read as a pass.
+    for table in ("indexer_cursors", "payment_settlements"):
+        assert asyncio.run(_fetchval(
+            "SELECT data_type FROM information_schema.columns"
+            f" WHERE table_schema = 'public' AND table_name = '{table}'"
+            " AND column_name = 'chain_id'"
+        )) == "bigint", table
+
+    assert asyncio.run(_fetchval(
+        f"SELECT chain_id FROM indexer_cursors WHERE chain_id = {nile}"
+    )) == nile
+    assert asyncio.run(_fetchval(
+        f"SELECT chain_id FROM payment_settlements WHERE chain_id = {nile}"
+    )) == nile
+
+    # And mainnet TRON still fits alongside it, in its own row.
+    asyncio.run(_exec(
+        "INSERT INTO indexer_cursors (chain_id, last_block, updated_at)"
+        " VALUES (728126428, 1756400000001, now())"
+    ))
+    assert asyncio.run(_fetchval("SELECT count(*) FROM indexer_cursors")) == 2
+
+
+@_needs_pg
+def test_0020_downgrade_refuses_to_truncate_a_tron_chain_id(clean_schema):
+    """The downgrade REFUSES while an oversized chain id is stored, and works
+    once it is gone. Bounds pinned explicitly (to 0019, not -1) for the same
+    reason the 0012 test pins them.
+
+    Narrowing is not a reversible operation for these rows: the value either
+    errors mid-ALTER or, on a backend that wraps, becomes a negative number that
+    matches no chain at all — a settlement silently reassigned to nowhere.
+    Refusing and saying which rows are in the way is the only honest option, and
+    the second half of this test is what proves the refusal is a guard rather
+    than a broken downgrade.
+    """
+    nile = 3448148188
+    assert _alembic("upgrade", "head").returncode == 0
+    asyncio.run(_exec(
+        "INSERT INTO indexer_cursors (chain_id, last_block, updated_at)"
+        f" VALUES ({nile}, 1756400000000, now())"
+    ))
+
+    blocked = _alembic("downgrade", "0019_intent_pending_unique")
+    assert blocked.returncode != 0, blocked.stdout
+    assert "refusing to narrow" in blocked.stderr, blocked.stderr
+    assert asyncio.run(_fetchval(
+        "SELECT data_type FROM information_schema.columns"
+        " WHERE table_schema = 'public' AND table_name = 'indexer_cursors'"
+        " AND column_name = 'chain_id'"
+    )) == "bigint", "the refused downgrade must leave the column alone"
+
+    asyncio.run(_exec(f"DELETE FROM indexer_cursors WHERE chain_id = {nile}"))
+    down = _alembic("downgrade", "0019_intent_pending_unique")
+    assert down.returncode == 0, down.stderr
+    assert asyncio.run(_fetchval(
+        "SELECT data_type FROM information_schema.columns"
+        " WHERE table_schema = 'public' AND table_name = 'indexer_cursors'"
+        " AND column_name = 'chain_id'"
+    )) == "integer"
+
+    assert _alembic("upgrade", "head").returncode == 0

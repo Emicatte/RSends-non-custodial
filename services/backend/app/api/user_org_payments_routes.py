@@ -126,7 +126,13 @@ async def create_org_payment_intent(
         ).scalar_one()
         try:
             check_org_chain_access(
-                org.onboarding_status, org.activation_status, chain_id
+                org.onboarding_status,
+                org.activation_status,
+                chain_id,
+                # A watch-only chain reaches here with chain_id None, which the
+                # id classifier reads as mainnet. The name is what tells a
+                # watch-only TESTNET apart from watch-only mainnet.
+                chain_name=requested_chain,
             )
         except ChainAccessError as e:
             raise HTTPException(status_code=403, detail={"code": e.code})

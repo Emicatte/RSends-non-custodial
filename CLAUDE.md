@@ -68,6 +68,24 @@ flag the divergence and update this file in the same review.
   `_get_environment(request)`), webhooks carry `MerchantWebhook.environment` (stamped at
   register, filtered on lookup AND outbound dispatch by `intent.environment`). Any new
   merchant-scoped table needs the same column + filters.
+- **A supported chain must sit in exactly one environment set.** The chain↔key gate in
+  `intent_service.create_intent` is an allowlist-of-the-OPPOSITE (`test` refuses
+  `_MAINNET_CHAINS`, `live` refuses `_TESTNET_CHAINS`), so a chain in **neither** set is
+  refused by neither branch and is creatable on test AND live keys. Adding a chain to
+  `app/token_registry.json` is what arms this: `chain_is_supported` starts returning True.
+  Registry entry and set membership therefore land in the SAME change; pinned for every
+  registry chain by `test_tron_nile.py::test_every_supported_chain_is_in_exactly_one_environment_set`.
+  Testnet-ness for a **watch-only** chain (no EVM chain id) is carried by NAME in
+  `chain_access.WATCH_ONLY_TESTNET_CHAINS` — `tron_nile` today. It must never be carried by
+  putting a TRON chain id in `TESTNET_CHAIN_IDS`: that table is read by the EVM boot guard,
+  which would `eth_chainId` a TRON node and `SystemExit` the backend. `is_testnet_chain`
+  (id-keyed) and `is_watch_only_testnet` (name-keyed) are both fail-closed to mainnet.
+  Two TRON networks are live in code: `tron` (mainnet, `live`, chain id 728126428) and
+  `tron_nile` (testnet, `test`, chain id 3448148188), each with its own pinned genesis
+  (`tron_chain_identity.TRON_GENESIS_BLOCK_IDS`), its own node-URL env var, and its own
+  cursor row. `indexer_cursors.chain_id` and `payment_settlements.chain_id` are `BIGINT`
+  since migration 0020 — Nile's id does not fit a Postgres `INTEGER`, and SQLite (which CI
+  runs on) cannot reproduce that failure.
 - **Webhook trust.** Outbound webhooks are signed HMAC-SHA256 over `"{timestamp}.{body}"` with a
   per-merchant secret, headers `X-RSend-Signature` / `X-RSend-Timestamp`, 5-minute freshness
   window (`services/backend/app/services/webhook_service.py`). Consumers must verify before
@@ -388,7 +406,9 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
   at `STALL_TICKS` consecutive failures (`payment_indexer._note_failure`), the TRON poller has
   no equivalent. The fix is that hook, in the `INDEXER_STALLED` style, keyed on consecutive
   ticks blocked at the same cursor. Deferred to slice 3 or later — do not build it as a
-  drive-by. (Slice 3 did build the **webhook** redrive this note's sibling gap needed —
+  drive-by. Unchanged by the Nile addition, which gave each network its own cursor row: the
+  stall is now per network (a poisoned Nile transaction does not stall mainnet, and vice
+  versa) but is still unalerted on both, and the hook must be keyed per network when built. (Slice 3 did build the **webhook** redrive this note's sibling gap needed —
   `tron_matcher.redrive_tron_webhooks` — because the EVM unfired-webhook sweep is
   `chain_id`-scoped inside an EVM-only watcher and would never have retried a TRON dispatch.
   The cursor-stall alert is still open.)

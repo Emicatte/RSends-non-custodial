@@ -116,8 +116,18 @@ class Settings(BaseSettings):
     # Every listed node must prove it serves TRON mainnet at boot or the
     # backend refuses to start; see app/services/tron_poller.py.
     tron_node_urls_json: str = ""
+    # The SAME thing for the Nile testnet, e.g.
+    #   TRON_NILE_NODE_URLS_JSON='["https://nile.trongrid.io"]'
+    # A SEPARATE variable, deliberately, rather than one variable plus a network
+    # flag: with a flag, pointing production at a testnet (or the reverse) is a
+    # one-character edit with no signal. With two, each is proven at boot
+    # against the network it is named for, and a swap stops the boot.
+    # Either may be set without the other; an empty one means only that this
+    # network is not watched. Nile needs no API key.
+    tron_nile_node_urls_json: str = ""
     # TronGrid API key, sent as the TRON-PRO-API-KEY header. Optional: the free
-    # tier answers keyless at a lower rate limit.
+    # tier answers keyless at a lower rate limit. Shared by both networks —
+    # same provider, and Nile answers keyless.
     trongrid_api_key: str = ""
     # Widest eth_getLogs block range a single request may span. The per-tick
     # window is scanned in chunks of at most this many blocks. Default 10 =

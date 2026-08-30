@@ -37,6 +37,7 @@ import pytest_asyncio
 from sqlalchemy import func, select
 
 from app.services import tron_matcher as tm
+from app.services import tron_poller as tp
 from app.services.tron_poller import TRON_CHAIN_ID, USDT_TRC20_CONTRACT
 from tests._source_helpers import code_without_prose
 
@@ -198,7 +199,7 @@ async def test_exact_amount_closes_the_intent_and_fires_completed(webhooks):
     iid = await _make_intent(amount=10.0)
     sid = await _make_settlement(amount_base=_base(10.0))
 
-    result = await tm.match_pending_tron_settlements()
+    result = await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
 
     assert result["matched"] == 1, result
     intent = await _intent(iid)
@@ -220,7 +221,7 @@ async def test_exact_amount_closes_the_intent_and_fires_completed(webhooks):
 async def test_matched_tx_hash_is_carried_to_the_intent(webhooks):
     iid = await _make_intent(amount=10.0)
     sid = await _make_settlement(amount_base=_base(10.0))
-    await tm.match_pending_tron_settlements()
+    await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
 
     s = await _settlement(sid)
     assert (await _intent(iid)).matched_tx_hash == s.tx_hash
@@ -237,7 +238,7 @@ async def test_overpayment_is_paid_and_records_the_excess(webhooks):
     iid = await _make_intent(amount=10.0)
     await _make_settlement(amount_base=_base(12.5))
 
-    result = await tm.match_pending_tron_settlements()
+    result = await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
 
     assert result["matched"] == 1
     intent = await _intent(iid)
@@ -256,7 +257,7 @@ async def test_underpayment_goes_partial_and_is_never_rejected(webhooks):
     iid = await _make_intent(amount=10.0)
     sid = await _make_settlement(amount_base=_base(4.25))
 
-    result = await tm.match_pending_tron_settlements()
+    result = await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
 
     assert result["partial"] == 1, result
     intent = await _intent(iid)
@@ -284,7 +285,7 @@ async def test_amount_columns_are_token_units_not_base_units(webhooks):
     """`_build_payload` emits `amount` in token units; these sit beside it."""
     iid = await _make_intent(amount=10.0)
     await _make_settlement(amount_base=_base(10.5))
-    await tm.match_pending_tron_settlements()
+    await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
 
     intent = await _intent(iid)
     assert intent.amount_received == "10.5"
@@ -302,11 +303,11 @@ async def test_a_second_underpayment_does_not_accumulate(webhooks):
 
     iid = await _make_intent(amount=10.0)
     await _make_settlement(amount_base=_base(6.0))
-    await tm.match_pending_tron_settlements()
+    await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
     assert (await _intent(iid)).status == IntentStatus.partial
 
     await _make_settlement(amount_base=_base(4.0))
-    result = await tm.match_pending_tron_settlements()
+    result = await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
 
     # The intent is no longer pending, so the second payment finds no candidate.
     assert result["matched"] == 0 and result["partial"] == 0
@@ -327,7 +328,7 @@ async def test_zero_candidates_changes_nothing(webhooks):
     before = await _intents_snapshot()
     sid = await _make_settlement(merchant=MERCH, amount_base=_base(10.0))
 
-    result = await tm.match_pending_tron_settlements()
+    result = await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
 
     assert result["matched"] == 0
     assert await _intents_snapshot() == before
@@ -346,7 +347,7 @@ async def test_recipient_matching_is_case_sensitive(webhooks):
     await _make_intent(recipient=folded, amount=10.0)
     sid = await _make_settlement(merchant=MERCH, amount_base=_base(10.0))
 
-    result = await tm.match_pending_tron_settlements()
+    result = await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
 
     assert result["matched"] == 0, "a case-folded recipient must not match"
     assert (await _settlement(sid)).intent_id is None
@@ -360,7 +361,7 @@ async def test_a_settlement_already_carrying_an_intent_id_is_not_rematched(webho
     iid = await _make_intent(amount=10.0)
     await _make_settlement(amount_base=_base(10.0), intent_id="pi_someoneelse")
 
-    result = await tm.match_pending_tron_settlements()
+    result = await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
 
     assert result["matched"] == 0
     assert (await _intent(iid)).status == IntentStatus.pending
@@ -378,7 +379,7 @@ async def test_an_evm_settlement_is_never_matched(webhooks):
         amount_base=_base(10.0),
     )
 
-    result = await tm.match_pending_tron_settlements()
+    result = await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
 
     assert result["matched"] == 0
     assert (await _intent(iid)).status == IntentStatus.pending
@@ -393,7 +394,7 @@ async def test_a_foreign_token_does_not_match(webhooks):
     await _make_intent(amount=10.0)
     sid = await _make_settlement(amount_base=_base(10.0), token="TXXXfakeTokenAddressNotUsdt000000")
 
-    result = await tm.match_pending_tron_settlements()
+    result = await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
 
     assert result["matched"] == 0
     assert (await _settlement(sid)).intent_id is None
@@ -414,7 +415,7 @@ async def test_a_settlement_outside_the_validity_window_does_not_match(
         else (now + timedelta(minutes=30))
     sid = await _make_settlement(amount_base=_base(10.0), block_timestamp=ts)
 
-    result = await tm.match_pending_tron_settlements()
+    result = await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
 
     assert result["matched"] == 0, when
     assert (await _settlement(sid)).intent_id is None
@@ -442,7 +443,7 @@ async def test_an_intent_that_expired_since_payment_is_not_matched(webhooks):
     )
     sid = await _make_settlement(amount_base=_base(10.0))
 
-    result = await tm.match_pending_tron_settlements()
+    result = await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
 
     assert result["matched"] == 0
     assert (await _intent(iid)).status == IntentStatus.expired
@@ -467,7 +468,7 @@ async def test_two_candidates_touch_no_intent_and_fire_ambiguous(webhooks, caplo
     sid = await _make_settlement(amount_base=_base(10.0))
 
     with caplog.at_level(logging.WARNING, logger=tm.logger.name):
-        result = await tm.match_pending_tron_settlements()
+        result = await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
 
     assert result["ambiguous"] == 1, result
     assert result["matched"] == 0
@@ -502,7 +503,7 @@ async def test_an_ambiguous_settlement_holds_no_intent(webhooks):
     a = await _make_intent(amount=10.0)
     b = await _make_intent(amount=11.0)
     await _make_settlement(amount_base=_base(10.0))
-    await tm.match_pending_tron_settlements()
+    await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
 
     async with async_session() as db:
         assert await has_settlement_hold(db, a) is False
@@ -515,8 +516,8 @@ async def test_an_ambiguous_settlement_is_not_reprocessed(webhooks):
     await _make_intent(amount=11.0)
     await _make_settlement(amount_base=_base(10.0))
 
-    assert (await tm.match_pending_tron_settlements())["ambiguous"] == 1
-    second = await tm.match_pending_tron_settlements()
+    assert (await tm.match_pending_tron_settlements(tp.TRON_MAINNET))["ambiguous"] == 1
+    second = await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
 
     assert second["ambiguous"] == 0
     assert [e for e, _, _ in webhooks] == ["payment.ambiguous"]
@@ -533,9 +534,9 @@ async def test_rerunning_the_matcher_fires_no_second_webhook(webhooks):
     iid = await _make_intent(amount=10.0)
     await _make_settlement(amount_base=_base(10.0))
 
-    await tm.match_pending_tron_settlements()
-    await tm.match_pending_tron_settlements()
-    await tm.match_pending_tron_settlements()
+    await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
+    await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
+    await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
 
     assert [e for e, _, _ in webhooks] == ["payment.completed"]
     assert (await _intent(iid)).status == IntentStatus.paid
@@ -546,8 +547,8 @@ async def test_rerunning_after_a_partial_fires_no_second_webhook(webhooks):
     await _make_intent(amount=10.0)
     await _make_settlement(amount_base=_base(3.0))
 
-    await tm.match_pending_tron_settlements()
-    await tm.match_pending_tron_settlements()
+    await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
+    await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
 
     assert [e for e, _, _ in webhooks] == ["payment.partial"]
 
@@ -575,7 +576,7 @@ async def test_a_failed_dispatch_is_redriven_next_pass(monkeypatch):
     iid = await _make_intent(amount=10.0)
     sid = await _make_settlement(amount_base=_base(10.0))
 
-    await tm.match_pending_tron_settlements()
+    await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
 
     # Intent is paid, settlement is final, but the claim was released.
     assert (await _intent(iid)).status == IntentStatus.paid
@@ -584,7 +585,7 @@ async def test_a_failed_dispatch_is_redriven_next_pass(monkeypatch):
     assert calls == []
 
     fail["now"] = False
-    redriven = await tm.redrive_tron_webhooks()
+    redriven = await tm.redrive_tron_webhooks(tp.TRON_MAINNET)
 
     assert redriven == 1
     assert calls == [("payment.completed", iid)]
@@ -608,10 +609,10 @@ async def test_the_redrive_reuses_the_partial_event_for_a_partial_intent(
 
     await _make_intent(amount=10.0)
     await _make_settlement(amount_base=_base(2.0))
-    await tm.match_pending_tron_settlements()
+    await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
 
     fail["now"] = False
-    assert await tm.redrive_tron_webhooks() == 1
+    assert await tm.redrive_tron_webhooks(tp.TRON_MAINNET) == 1
     assert calls == ["payment.partial"]
 
 
@@ -619,9 +620,9 @@ async def test_the_redrive_reuses_the_partial_event_for_a_partial_intent(
 async def test_the_redrive_leaves_an_already_fired_settlement_alone(webhooks):
     await _make_intent(amount=10.0)
     await _make_settlement(amount_base=_base(10.0))
-    await tm.match_pending_tron_settlements()
+    await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
 
-    assert await tm.redrive_tron_webhooks() == 0
+    assert await tm.redrive_tron_webhooks(tp.TRON_MAINNET) == 0
     assert [e for e, _, _ in webhooks] == ["payment.completed"]
 
 
@@ -645,7 +646,7 @@ async def test_the_redrive_never_touches_an_evm_settlement(webhooks):
         intent_id=iid, tx_hash="0x" + "ee" * 32,
     )
 
-    assert await tm.redrive_tron_webhooks() == 0
+    assert await tm.redrive_tron_webhooks(tp.TRON_MAINNET) == 0
     assert webhooks == []
 
 
@@ -707,15 +708,17 @@ async def test_a_matcher_failure_does_not_prevent_recording_or_move_the_cursor(
 
     monkeypatch.setattr(tp.httpx, "AsyncClient", _Client)
 
-    async def _boom():
+    async def _boom(network):
         raise RuntimeError("matcher exploded")
 
     monkeypatch.setattr(tm, "match_pending_tron_settlements", _boom)
 
     await _make_intent(amount=10.0)
-    await tp._set_tron_cursor(TS - 1)
+    await tp._set_tron_cursor(tp.TRON_MAINNET, TS - 1)
 
-    await tp.TronPoller(node_urls=["https://api.trongrid.io"])._tick()
+    await tp.TronPoller(
+        network=tp.TRON_MAINNET, node_urls=["https://api.trongrid.io"]
+    )._tick()
 
     # Recorded despite the matcher blowing up...
     async with async_session() as db:
@@ -724,20 +727,22 @@ async def test_a_matcher_failure_does_not_prevent_recording_or_move_the_cursor(
         )).scalar_one()
     assert n == 1, "a matching bug prevented a settlement from being recorded"
     # ...and the cursor still advanced.
-    assert await tp._get_tron_cursor() == TS
+    assert await tp._get_tron_cursor(tp.TRON_MAINNET) == TS
 
 
 @pytest.mark.asyncio
 async def test_the_poller_tick_reports_matching_counts(monkeypatch):
     from app.services import tron_poller as tp
 
-    async def _fake():
+    async def _fake(network):
         return {"matched": 3, "partial": 1, "ambiguous": 2, "unmatched": 0}
 
     monkeypatch.setattr(tm, "match_pending_tron_settlements", _fake)
-    await tp._set_tron_cursor(1)
+    await tp._set_tron_cursor(tp.TRON_MAINNET, 1)
 
-    result = await tp.TronPoller(node_urls=["https://x"])._tick()
+    result = await tp.TronPoller(
+        network=tp.TRON_MAINNET, node_urls=["https://x"]
+    )._tick()
 
     assert result["matched"] == 3
     assert result["partial"] == 1

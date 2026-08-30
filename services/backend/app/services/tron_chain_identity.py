@@ -11,7 +11,8 @@ This module is deliberately NOT part of `rpc_manager`. That module speaks
 `eth_*` JSON-RPC; TRON's is an HTTP API with its own request shape. The two
 share a posture, not a transport.
 
-Nothing calls this yet — the poller will, in the next slice.
+`tron_poller` calls this once per configured node, per network, before it
+reads a cursor or makes a single TronGrid call.
 """
 
 import logging
@@ -44,12 +45,34 @@ TRON_MAINNET_GENESIS_BLOCK_ID = (
     "00000000000000001ebf88508a03865c71d452e25f4d51194196a1d22b6653dc"
 )
 
-# A second network is a NEW ENTRY here, not a refactor. There is deliberately
-# no Nile or Shasta entry: an unverified testnet genesis is worse than an
-# absent one, because it would make the guard pass for the wrong reason. Add
-# one only with its own provenance block, verified the same way.
+# TRON Nile testnet genesis blockID
+#   0000000000000000d698d4192c56cb6be724a558448e2684802de4d6cd8690dc
+#
+# Verified 2026-08-29 against ONE source:
+#   - TronGrid    POST https://nile.trongrid.io/wallet/getblockbynum {"num":0}
+# Internal cross-checks: the first 8 bytes are height 0, and the last 4 bytes
+# cd8690dc = 3448148188, Nile's chain id, which derives from this hash.
+#
+# One source, where mainnet has three. That is a deliberate, bounded
+# concession, not an oversight: the only public Nile node operator IS TronGrid,
+# so a second "independent" source would be the same node behind a different
+# name. It is acceptable HERE and would not be on mainnet, because of what a
+# wrong constant costs. A wrong value makes every Nile node fail the guard and
+# the poller refuse to start — loud, immediate, and harmless. It cannot make
+# the poller index the wrong chain, which is the failure this module exists to
+# prevent. Re-verify with the curl above before trusting it further than that.
+TRON_NILE_GENESIS_BLOCK_ID = (
+    "0000000000000000d698d4192c56cb6be724a558448e2684802de4d6cd8690dc"
+)
+
+# A second network is a NEW ENTRY here, not a refactor — which is why Nile
+# appears as one more key and nothing else changed shape. Shasta is still
+# deliberately absent: an unverified testnet genesis is worse than an absent
+# one, because it would make the guard pass for the wrong reason. Add one only
+# with its own provenance block, verified the same way.
 TRON_GENESIS_BLOCK_IDS: dict[str, str] = {
     "mainnet": TRON_MAINNET_GENESIS_BLOCK_ID,
+    "nile": TRON_NILE_GENESIS_BLOCK_ID,
 }
 
 # A TRON blockID is 32 bytes: the block NUMBER big-endian in the first 8, then
@@ -73,17 +96,23 @@ class TronChainIdentityError(RuntimeError):
 
 
 async def assert_tron_chain_identity(
-    node_url: str, timeout: float = TRON_IDENTITY_TIMEOUT_SECONDS
+    node_url: str,
+    network: str,
+    timeout: float = TRON_IDENTITY_TIMEOUT_SECONDS,
 ) -> None:
-    """Prove that the TRON node at `node_url` serves mainnet, by reading its
+    """Prove that the TRON node at `node_url` serves `network`, by reading its
     genesis block. Raise `TronChainIdentityError` if it does not, or if the
     question could not be answered. Return None on success.
 
-    The node URL arrives as an ARGUMENT and no configuration is read: no
-    network flag, no environment variable, no matching on the host string. The
-    deleted `useTronWallet.ts` decided mainnet-vs-testnet by inspecting the URL
-    it was handed, which proves only what the caller already believed. This
-    asks the network instead.
+    `network` is a key of `TRON_GENESIS_BLOCK_IDS`. Both it and the node URL
+    arrive as ARGUMENTS, and no configuration is read: no environment variable,
+    and no matching on the host string. The deleted `useTronWallet.ts` decided
+    which network it was on by inspecting the URL it was handed, which proves
+    only what the caller already believed. This makes the caller state its
+    expectation and then asks the network whether it holds.
+
+    An unregistered `network` raises rather than raising `KeyError`, so a
+    caller's `except TronChainIdentityError` covers a typo too.
 
     Exactly one POST of `{"num": 0}` to `/wallet/getblockbynum` is made.
 
@@ -100,6 +129,15 @@ async def assert_tron_chain_identity(
     It has no off switch, by design — see
     `tests/test_tron_chain_identity.py::test_no_configuration_surface_can_disable_tron_chain_identity`.
     """
+    try:
+        expected = TRON_GENESIS_BLOCK_IDS[network]
+    except KeyError as exc:
+        raise TronChainIdentityError(
+            f"TRON node {node_url}: no genesis block is registered for network "
+            f"{network!r} (known: {sorted(TRON_GENESIS_BLOCK_IDS)}), so the "
+            f"network cannot be proven."
+        ) from exc
+
     endpoint = f"{node_url.rstrip('/')}/wallet/getblockbynum"
 
     try:
@@ -153,17 +191,17 @@ async def assert_tron_chain_identity(
             f"node did not answer the question that was asked."
         )
 
-    if block_id.lower() != TRON_MAINNET_GENESIS_BLOCK_ID:
+    if block_id.lower() != expected:
         raise TronChainIdentityError(
             f"TRON node {node_url}: genesis block is {block_id}, not "
-            f"{TRON_MAINNET_GENESIS_BLOCK_ID} — this node does not serve TRON "
-            f"mainnet. Watching it would key the cursor, the environment stamp "
-            f"and the payee address to the wrong network."
+            f"{expected} — this node does not serve TRON {network}. Watching "
+            f"it would key the cursor, the environment stamp and the payee "
+            f"address to the wrong network."
         )
 
     logger.info(
-        "[tron-chain-identity] node %s proven to serve TRON mainnet "
-        "(genesis %s).",
+        "[tron-chain-identity] node %s proven to serve TRON %s (genesis %s).",
         node_url,
+        network,
         block_id,
     )

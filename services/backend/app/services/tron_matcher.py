@@ -73,10 +73,10 @@ from sqlalchemy import func, select, update
 
 from app.models.merchant_models import IntentStatus, PaymentIntent
 from app.models.settlement_models import PaymentSettlement, SettlementStatus
-from app.services.chain_access import is_testnet_chain
+from app.services.chain_access import is_watch_only_testnet
 from app.services.payment_indexer import _finalize_settlement
 from app.services.router_registry import to_base_units, token_for
-from app.services.tron_poller import TRON_CHAIN_ID
+from app.services.tron_poller import TronNetwork
 
 logger = logging.getLogger("tron_matcher")
 
@@ -87,15 +87,20 @@ TRON_CURRENCY = "USDT"
 #  Helpers
 # ═══════════════════════════════════════════════════════════════
 
-def _tron_environment() -> str:
-    """"test" or "live" for a TRON settlement.
+def _tron_environment(network: TronNetwork) -> str:
+    """"test" or "live" for a settlement on `network`.
 
-    Derived, not hardcoded. `is_testnet_chain` is fail-closed — any chain id it
-    does not know is mainnet — and TRON's 728126428 is deliberately in none of
-    its tables, so this resolves to "live", which is also the only environment
-    a TRON intent can have (`intent_service._MAINNET_CHAINS`).
+    Derived, not hardcoded — but from the chain NAME, not the chain id. The
+    id-keyed `is_testnet_chain` cannot answer here: neither TRON chain id is in
+    its EVM table and it is fail-closed to mainnet, which is the right answer
+    for TRON mainnet and the wrong one for Nile. `is_watch_only_testnet` is the
+    name-keyed arm, and is fail-closed the same way: a network nobody listed
+    there stamps "live".
+
+    This stamp scopes the intent search below AND the outbound webhook, so
+    getting it wrong does not error — it just never matches anything.
     """
-    return "test" if is_testnet_chain(TRON_CHAIN_ID) else "live"
+    return "test" if is_watch_only_testnet(network.chain_name) else "live"
 
 
 def _token_units(base_units: int, decimals: int) -> str:
@@ -162,7 +167,7 @@ async def _fire_once(db, settlement, intent, event: str, extra: dict) -> bool:
 #  The matcher
 # ═══════════════════════════════════════════════════════════════
 
-async def _candidates(db, settlement, environment: str) -> list:
+async def _candidates(db, settlement, environment: str, network: TronNetwork) -> list:
     """Every pending TRON intent this settlement could be paying.
 
     `PaymentIntent.recipient == settlement.merchant` is an EXACT comparison
@@ -176,7 +181,7 @@ async def _candidates(db, settlement, environment: str) -> list:
     return (await db.execute(
         select(PaymentIntent)
         .where(
-            func.lower(PaymentIntent.chain) == "tron",
+            func.lower(PaymentIntent.chain) == network.chain_name,
             PaymentIntent.status == IntentStatus.pending,
             PaymentIntent.recipient == settlement.merchant,
             PaymentIntent.environment == environment,
@@ -257,11 +262,14 @@ async def _close_partial(db, settlement, intent, received: int, expected: int,
     )
 
 
-async def _match_one(db, settlement) -> str:
+async def _match_one(db, settlement, network: TronNetwork) -> str:
     """Match and close a single settlement. Returns the outcome bucket."""
-    token = token_for("tron", TRON_CURRENCY)
+    token = token_for(network.chain_name, TRON_CURRENCY)
     if token is None:  # registry gone — refuse rather than guess
-        logger.error("[tron-matcher] no registry entry for (tron, USDT)")
+        logger.error(
+            "[tron-matcher] no registry entry for (%s, %s)",
+            network.chain_name, TRON_CURRENCY,
+        )
         return "unmatched"
     token_address, decimals = token
 
@@ -275,7 +283,9 @@ async def _match_one(db, settlement) -> str:
         )
         return "unmatched"
 
-    candidates = await _candidates(db, settlement, _tron_environment())
+    candidates = await _candidates(
+        db, settlement, _tron_environment(network), network
+    )
     if not candidates:
         return "unmatched"
     if len(candidates) > 1:
@@ -304,16 +314,17 @@ async def _match_one(db, settlement) -> str:
     settlement.intent_id = intent.intent_id
     # Reused unchanged: it pays the intent, stamps the row final and fires
     # payment.completed through its own atomic claim. Its `chain_id` parameter
-    # is unused in its body; TRON_CHAIN_ID is passed for honesty.
-    await _finalize_settlement(db, settlement, TRON_CHAIN_ID)
+    # is unused in its body; the network's chain id is passed for honesty.
+    await _finalize_settlement(db, settlement, network.chain_id)
     return "matched"
 
 
-async def match_pending_tron_settlements() -> dict:
-    """Match every unmatched TRON settlement. One session per settlement.
+async def match_pending_tron_settlements(network: TronNetwork) -> dict:
+    """Match every unmatched settlement ON `network`. One session per settlement.
 
-    The selection — TRON chain, `intent_id IS NULL`, still `pending` — is what
-    makes three properties structural rather than checked: an EVM settlement is
+    The selection — this network's chain id, `intent_id IS NULL`, still
+    `pending` — is what makes four properties structural rather than checked: an
+    EVM settlement is never considered, the OTHER TRON network's settlements are
     never considered, an already-matched one is never re-matched, and one
     already refused as ambiguous (now `rejected`) is not retried blindly.
     """
@@ -323,7 +334,7 @@ async def match_pending_tron_settlements() -> dict:
         ids = (await db.execute(
             select(PaymentSettlement.id)
             .where(
-                PaymentSettlement.chain_id == TRON_CHAIN_ID,
+                PaymentSettlement.chain_id == network.chain_id,
                 PaymentSettlement.intent_id.is_(None),
                 PaymentSettlement.status == SettlementStatus.pending,
             )
@@ -338,7 +349,7 @@ async def match_pending_tron_settlements() -> dict:
             if settlement is None:
                 continue
             try:
-                outcome = await _match_one(db, settlement)
+                outcome = await _match_one(db, settlement, network)
                 await db.commit()
             except Exception:
                 await db.rollback()
@@ -355,7 +366,7 @@ async def match_pending_tron_settlements() -> dict:
 #  Redrive
 # ═══════════════════════════════════════════════════════════════
 
-async def redrive_tron_webhooks() -> int:
+async def redrive_tron_webhooks(network: TronNetwork) -> int:
     """Re-fire settlement webhooks whose dispatch failed. Returns how many.
 
     `_fire_once` (and `_fire_completed_webhook`) release the claim when dispatch
@@ -373,7 +384,7 @@ async def redrive_tron_webhooks() -> int:
             .join(PaymentIntent,
                   PaymentIntent.intent_id == PaymentSettlement.intent_id)
             .where(
-                PaymentSettlement.chain_id == TRON_CHAIN_ID,
+                PaymentSettlement.chain_id == network.chain_id,
                 PaymentSettlement.status == SettlementStatus.final,
                 PaymentSettlement.webhook_fired_at.is_(None),
                 PaymentSettlement.reversal_fired_at.is_(None),
@@ -395,5 +406,8 @@ async def redrive_tron_webhooks() -> int:
         await db.commit()
 
     if fired:
-        logger.info("[tron-matcher] redrove %d undelivered webhook(s)", fired)
+        logger.info(
+            "[tron-matcher/%s] redrove %d undelivered webhook(s)",
+            network.key, fired,
+        )
     return fired
