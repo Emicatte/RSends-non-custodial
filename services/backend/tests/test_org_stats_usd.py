@@ -25,7 +25,13 @@ from app.models.db_models import Base
 from app.models.auth_models import User
 from app.models.org_models import Organization, Membership
 from app.models.user_wallets_models import UserWallet
-from app.models.merchant_models import PaymentIntent, IntentStatus
+from app.models.merchant_models import (
+    DeliveryStatus,
+    IntentStatus,
+    MerchantWebhook,
+    PaymentIntent,
+    WebhookDelivery,
+)
 from app.models.settlement_models import PaymentSettlement, SettlementStatus
 from app.api.user_org_stats_routes import get_org_stats
 
@@ -321,3 +327,164 @@ async def test_pegged_recent_row_is_marked_known(session):
     row = stats.recent_transactions[0]
     assert row.amount_usd == 5.0
     assert row.amount_usd_known is True
+
+
+# ── The two tiles that replaced `total_balance` / `active_clients` ─────────
+#
+# `total_balance` was hard-coded 0.0 and always would be: RSends is
+# non-custodial, so a balance tile can only assert a custody it does not have.
+# `active_clients` is a fact about the business, not the interface. Both are
+# still sent; the /app home — and the landing page's device mockup, which
+# renders the same component — read these two instead.
+
+
+async def _seed_webhook(session, *, owner, environment="test", is_active=True):
+    hook = MerchantWebhook(
+        merchant_id=owner, environment=environment,
+        url=f"https://{secrets.token_hex(4)}.example/hook",
+        secret=secrets.token_hex(16), events=["payment.completed"],
+        is_active=is_active, created_at=FROZEN_NOW - timedelta(days=30),
+    )
+    session.add(hook)
+    await session.commit()
+    return hook
+
+
+async def _seed_delivery(session, *, hook, status, created_at=None):
+    session.add(WebhookDelivery(
+        webhook_id=hook.id, idempotency_key=secrets.token_hex(16),
+        event_type="payment.completed", payload={}, status=status, retries=0,
+        created_at=created_at or (FROZEN_NOW - timedelta(hours=1)),
+    ))
+    await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_volume_30d_sees_what_the_24h_window_cannot(session):
+    """A settlement ten days old is outside the 24h tile and inside the 30d one.
+    Without this the two tiles could both be reading the same window."""
+    org = await _make_org(session, owner_address=OWNER_A)
+    await _seed_settled_intent(
+        session, owner=OWNER_A, recipient=SETTLE_WALLET_A,
+        created_at=FROZEN_NOW - timedelta(days=10),
+    )
+
+    stats = await get_org_stats(ctx=_ctx(org), environment="test", db=session)
+
+    assert stats.volume_24h == 0.0
+    assert stats.volume_30d == 5.0
+
+
+@pytest.mark.asyncio
+async def test_volume_30d_stops_at_thirty_days(session):
+    org = await _make_org(session, owner_address=OWNER_A)
+    await _seed_settled_intent(
+        session, owner=OWNER_A, recipient=SETTLE_WALLET_A,
+        created_at=FROZEN_NOW - timedelta(days=40),
+    )
+
+    stats = await get_org_stats(ctx=_ctx(org), environment="test", db=session)
+
+    assert stats.volume_30d == 0.0
+
+
+@pytest.mark.asyncio
+async def test_volume_30d_delta_compares_against_the_previous_thirty_days(session):
+    """10 USDC this month against 5 the month before is +100%."""
+    org = await _make_org(session, owner_address=OWNER_A)
+    for _ in range(2):
+        await _seed_settled_intent(
+            session, owner=OWNER_A, recipient=SETTLE_WALLET_A,
+            created_at=FROZEN_NOW - timedelta(days=5),
+        )
+    await _seed_settled_intent(
+        session, owner=OWNER_A, recipient=SETTLE_WALLET_A,
+        created_at=FROZEN_NOW - timedelta(days=45),
+    )
+
+    stats = await get_org_stats(ctx=_ctx(org), environment="test", db=session)
+
+    assert stats.volume_30d == 10.0
+    assert stats.volume_30d_delta_pct == 100.0
+
+
+@pytest.mark.asyncio
+async def test_volume_30d_delta_is_zero_with_nothing_to_compare_against(session):
+    """A first month has no denominator. "+100%" would read as growth measured
+    against a real prior month, which is a claim the data cannot support."""
+    org = await _make_org(session, owner_address=OWNER_A)
+    await _seed_settled_intent(
+        session, owner=OWNER_A, recipient=SETTLE_WALLET_A,
+        created_at=FROZEN_NOW - timedelta(days=5),
+    )
+
+    stats = await get_org_stats(ctx=_ctx(org), environment="test", db=session)
+
+    assert stats.volume_30d == 5.0
+    assert stats.volume_30d_delta_pct == 0.0
+
+
+@pytest.mark.asyncio
+async def test_webhook_counts_separate_delivered_from_attempted(session):
+    """Two counts, not a pre-divided rate: 0/0 (no webhooks at all) and 0/N
+    (every one failed) are different facts and must stay distinguishable."""
+    org = await _make_org(session, owner_address=OWNER_A)
+    hook = await _seed_webhook(session, owner=OWNER_A)
+    await _seed_delivery(session, hook=hook, status=DeliveryStatus.delivered)
+    await _seed_delivery(session, hook=hook, status=DeliveryStatus.delivered)
+    await _seed_delivery(session, hook=hook, status=DeliveryStatus.failed)
+
+    stats = await get_org_stats(ctx=_ctx(org), environment="test", db=session)
+
+    assert stats.webhooks_attempted_24h == 3
+    assert stats.webhooks_delivered_24h == 2
+
+
+@pytest.mark.asyncio
+async def test_webhook_counts_stop_at_the_24h_window(session):
+    org = await _make_org(session, owner_address=OWNER_A)
+    hook = await _seed_webhook(session, owner=OWNER_A)
+    await _seed_delivery(
+        session, hook=hook, status=DeliveryStatus.delivered,
+        created_at=FROZEN_NOW - timedelta(hours=30),
+    )
+
+    stats = await get_org_stats(ctx=_ctx(org), environment="test", db=session)
+
+    assert stats.webhooks_attempted_24h == 0
+    assert stats.webhooks_delivered_24h == 0
+
+
+@pytest.mark.asyncio
+async def test_webhook_counts_are_env_scoped(session):
+    """WebhookDelivery has no environment column — the scope can only come from
+    the webhook it hangs off, the same way volume borrows the intent's."""
+    org = await _make_org(session, owner_address=OWNER_A)
+    test_hook = await _seed_webhook(session, owner=OWNER_A, environment="test")
+    live_hook = await _seed_webhook(session, owner=OWNER_A, environment="live")
+    await _seed_delivery(session, hook=test_hook, status=DeliveryStatus.delivered)
+    await _seed_delivery(session, hook=live_hook, status=DeliveryStatus.delivered)
+    await _seed_delivery(session, hook=live_hook, status=DeliveryStatus.delivered)
+
+    test_view = await get_org_stats(ctx=_ctx(org), environment="test", db=session)
+    live_view = await get_org_stats(ctx=_ctx(org), environment="live", db=session)
+
+    assert test_view.webhooks_delivered_24h == 1
+    assert live_view.webhooks_delivered_24h == 2
+
+
+@pytest.mark.asyncio
+async def test_webhook_counts_org_isolation_no_leak(session):
+    org_a = await _make_org(session, owner_address=OWNER_A)
+    org_b = await _make_org(session, owner_address=OWNER_B)
+    hook_a = await _seed_webhook(session, owner=OWNER_A)
+    hook_b = await _seed_webhook(session, owner=OWNER_B)
+    await _seed_delivery(session, hook=hook_a, status=DeliveryStatus.delivered)
+    for _ in range(3):
+        await _seed_delivery(session, hook=hook_b, status=DeliveryStatus.delivered)
+
+    a = await get_org_stats(ctx=_ctx(org_a), environment="test", db=session)
+    b = await get_org_stats(ctx=_ctx(org_b), environment="test", db=session)
+
+    assert a.webhooks_delivered_24h == 1
+    assert b.webhooks_delivered_24h == 3
