@@ -215,11 +215,199 @@ describe('DeviceShowcase', () => {
     for (const label of labels) expect(real).toContain(label)
   })
 
+  // ── The sidebar ────────────────────────────────────────────────────────
+  //
+  // Without a left rail the frame reads as "a page with charts" rather than as
+  // an application, and the moving active state is the only thing that makes
+  // the Dashboard → Payments advance legible. Each layer carries its own rail
+  // with its own fixed active entry, so what is asserted per-layer is exactly
+  // what a visitor sees in that state.
+
+  it('renders the whole left rail, not a subset of it', async () => {
+    const { container } = await renderShowcase()
+    const items = Array.from(
+      container.querySelectorAll('[data-showcase-state="dashboard"] [data-sidebar-item]'),
+    ).map((el) => el.getAttribute('data-sidebar-item'))
+    expect(items).toEqual(['dashboard', 'payments', 'webhooks', 'apiKeys', 'settings'])
+  })
+
+  it('invents no rail label — every one resolves from app.sidebar', async () => {
+    const { container } = await renderShowcase()
+    const real = messageValues('app.sidebar')
+    const labels = Array.from(
+      container.querySelectorAll('[data-showcase-state="dashboard"] [data-sidebar-item]'),
+    ).map((el) => el.textContent?.trim() ?? '')
+
+    expect(labels.length).toBeGreaterThan(0)
+    for (const label of labels) expect(real).toContain(label)
+  })
+
+  it('carries both group headings', async () => {
+    const { container } = await renderShowcase()
+    const rail = container.querySelector('[data-showcase-state="dashboard"] [data-sidebar]')
+    expect(rail).not.toBeNull()
+    expect(rail!.textContent).toContain(enMessages.app.sidebar.overview)
+    expect(rail!.textContent).toContain(enMessages.app.sidebar.management)
+  })
+
+  it('marks Dashboard active in the dashboard state', async () => {
+    const { container } = await renderShowcase()
+    const active = container.querySelector(
+      '[data-showcase-state="dashboard"] [data-sidebar-item][data-active="true"]',
+    )
+    expect(active?.getAttribute('data-sidebar-item')).toBe('dashboard')
+  })
+
+  it('marks Payments active in the advanced state', async () => {
+    const { container } = await renderShowcase()
+    const active = container.querySelector(
+      '[data-showcase-state="payments"] [data-sidebar-item][data-active="true"]',
+    )
+    expect(active?.getAttribute('data-sidebar-item')).toBe('payments')
+  })
+
+  // Both ends of the mapping are driven explicitly rather than read off the
+  // mount. jsdom gives every element a zero-sized rect, so the progress
+  // ScrollTrigger computes for an unscrolled document is not a meaningful
+  // stand-in for "the section has not been reached yet" — what this pins is the
+  // contract the component actually owns: early progress shows the dashboard,
+  // late progress shows payments, and the rail moves with it.
+  it('advances from the dashboard layer to the payments layer as it scrolls', async () => {
+    const { container } = await renderShowcase()
+    const trigger = ScrollTrigger.getAll().at(-1)
+    expect(trigger).toBeDefined()
+
+    const opacityOf = (state: string) =>
+      container.querySelector<HTMLElement>(`[data-showcase-state="${state}"]`)!.style.opacity
+    const advance = async (progress: number) => {
+      await act(async () => {
+        trigger!.vars.onUpdate!({ progress } as never)
+      })
+    }
+
+    await advance(0)
+    expect(opacityOf('dashboard')).toBe('1')
+    expect(opacityOf('payments')).toBe('0')
+
+    await advance(0.95)
+    expect(opacityOf('dashboard')).toBe('0')
+    expect(opacityOf('payments')).toBe('1')
+  })
+
+  // ── The four cards ─────────────────────────────────────────────────────
+  //
+  // `totalBalance` is not a slow field, it is a field this product cannot
+  // have: RSends never holds funds, so a balance tile asserts custody. And
+  // `activeClients` is a traction claim about the company, not an interface
+  // metric, on a page shown to prospective partners.
+
+  it('renders exactly the four cards the product has', async () => {
+    const { container } = await renderShowcase()
+    const keys = Array.from(
+      container.querySelectorAll('[data-showcase-state="dashboard"] [data-metric-label]'),
+    ).map((el) => el.getAttribute('data-metric-label'))
+    expect(keys).toEqual([
+      'volume24h',
+      'transactions24h',
+      'volume30d',
+      'webhooksDelivered24h',
+    ])
+  })
+
+  // ── The transactions the frame shows ───────────────────────────────────
+
+  it('shows the recent-transactions table with the product columns', async () => {
+    const { container } = await renderShowcase()
+    const heads = Array.from(
+      container.querySelectorAll('[data-showcase-state="dashboard"] table thead th'),
+    ).map((el) => el.textContent?.trim())
+    expect(heads).toEqual(
+      (['time', 'type', 'amount', 'chain', 'status'] as const).map(
+        (c) => enMessages.app.dashboard.recentTransactions[c],
+      ),
+    )
+  })
+
+  it('settles every demo payment on Base', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fixture = require('@/components/landing/showcaseFixture')
+    expect(fixture.SHOWCASE_RECENT_TX.length).toBeGreaterThan(0)
+    for (const row of fixture.SHOWCASE_RECENT_TX) expect(row.chain).toBe('Base')
+    for (const row of fixture.SHOWCASE_PAYMENTS) expect(row.chain).toBe('base')
+  })
+
+  // On the DATA and on the rendered output, not on the source text: the file
+  // is allowed to say in a comment why USDT was taken out, and a grep over the
+  // source cannot tell that apart from a row that still carries it.
+  it('claims no USDT — every demo payment is USDC', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fixture = require('@/components/landing/showcaseFixture')
+    const values = JSON.stringify([
+      fixture.SHOWCASE_PAYMENTS,
+      fixture.SHOWCASE_RECENT_TX,
+      fixture.SHOWCASE_METRICS,
+      fixture.SHOWCASE_PAY,
+    ])
+    expect(values).not.toMatch(/USDT/i)
+    for (const row of fixture.SHOWCASE_PAYMENTS) expect(row.currency).toBe('USDC')
+  })
+
+  // ── Depth, and the flat fallback ───────────────────────────────────────
+
+  it('puts both devices in one perspective space, on the shared parent', async () => {
+    const { container } = await renderShowcase()
+    const stage = container.querySelector<HTMLElement>('[data-showcase-stage]')!
+    expect(stage.style.perspective).toMatch(/\d+px/)
+    // A `perspective()` inside a device's own transform makes two independent
+    // spaces, which reads as two stickers rather than one scene.
+    for (const kind of ['browser', 'phone']) {
+      const el = container.querySelector<HTMLElement>(`[data-device="${kind}"]`)!
+      expect(el.style.transform).not.toMatch(/perspective\(/)
+    }
+  })
+
+  it('keeps both devices under the 10deg subpixel-antialiasing ceiling', async () => {
+    const { container } = await renderShowcase()
+    for (const kind of ['browser', 'phone']) {
+      const el = container.querySelector<HTMLElement>(`[data-device="${kind}"]`)!
+      const deg = /rotateY\((-?[\d.]+)deg\)/.exec(el.style.transform)
+      expect(deg).not.toBeNull()
+      expect(Math.abs(Number(deg![1]))).toBeLessThanOrEqual(10)
+      expect(Math.abs(Number(deg![1]))).toBeGreaterThan(0)
+    }
+  })
+
+  it.each([
+    ['reduced motion', REDUCED],
+    ['390px', MOBILE],
+  ])('renders both devices flat under %s', async (_label, viewport) => {
+    setViewport(viewport)
+    const { container } = await renderShowcase()
+    for (const kind of ['browser', 'phone']) {
+      const el = container.querySelector<HTMLElement>(`[data-device="${kind}"]`)!
+      expect(el.style.transform).toBe('')
+    }
+    expect(
+      container.querySelector<HTMLElement>('[data-showcase-stage]')!.style.perspective,
+    ).toBe('')
+  })
+
+  it.each([
+    ['390px', MOBILE],
+    ['768px', { width: 768, reduced: false }],
+    ['1440px', DESKTOP],
+  ])('reserves its box at %s', async (_label, viewport) => {
+    setViewport(viewport)
+    const { container } = await renderShowcase()
+    const stage = container.querySelector<HTMLElement>('[data-showcase-stage]')!
+    expect(stage.style.minHeight).toMatch(/\d/)
+  })
+
   describe('motion gate', () => {
     // The positive case first. Without it the two negatives below would pass
     // against a section that simply never animates, which is the failure mode
     // this whole block exists to catch.
-    it('creates the sequence at 1024px and above when motion is allowed', async () => {
+    it('creates the sequence at 768px and above when motion is allowed', async () => {
       setViewport(DESKTOP)
       const before = ScrollTrigger.getAll().length
       await renderShowcase()
@@ -233,11 +421,20 @@ describe('DeviceShowcase', () => {
       expect(ScrollTrigger.getAll().length).toBe(before)
     })
 
-    it('creates no ScrollTrigger below 1024px', async () => {
+    it('creates no ScrollTrigger below 768px', async () => {
       setViewport(MOBILE)
       const before = ScrollTrigger.getAll().length
       await renderShowcase()
       expect(ScrollTrigger.getAll().length).toBe(before)
+    })
+
+    // A pinned section is the most CLS-damaging thing that can go on this
+    // page, and CLS here is already 0.37 before this section does anything.
+    it('never pins', async () => {
+      setViewport(DESKTOP)
+      await renderShowcase()
+      const trigger = ScrollTrigger.getAll().at(-1)
+      expect(trigger!.vars.pin).toBeFalsy()
     })
   })
 
@@ -258,5 +455,60 @@ describe('DeviceShowcase', () => {
       const { container } = await renderShowcase()
       expect(container.textContent).not.toMatch(/EURC/i)
     })
+
+    it('shows no USDT on screen', async () => {
+      const { container } = await renderShowcase()
+      expect(container.textContent).not.toMatch(/USDT/i)
+    })
+
+    // RSends is non-custodial: it holds no funds, so a balance tile is not a
+    // slow field, it is a claim the product cannot make.
+    it('shows no balance tile', async () => {
+      const { container } = await renderShowcase()
+      expect(container.textContent).not.toMatch(/saldo\s+totale|total\s+balance/i)
+    })
+
+    it('makes no traction claim', async () => {
+      const { container } = await renderShowcase()
+      expect(container.textContent).not.toMatch(/clienti\s+attivi|active\s+clients/i)
+    })
+
+    it('leaves no English in the card labels', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const m = require(`@/messages/${locale}.json`)
+      const own = new Set<string>(Object.values(m.app.dashboard.metrics))
+      const { container } = await renderShowcase()
+      const rendered = Array.from(
+        container.querySelectorAll('[data-showcase-state="dashboard"] [data-metric-label]'),
+      ).map((el) => el.textContent?.trim() ?? '')
+
+      expect(rendered).toHaveLength(4)
+      for (const label of rendered) expect(own).toContain(label)
+    })
+  })
+
+  // A sentence, unlike "Volume 24h", cannot legitimately be identical in five
+  // languages — so it is the one that catches a catalog left at the English
+  // placeholder. `deliveryRate` is deliberately excluded: "{rate}%" is the
+  // same everywhere and pretending otherwise would be a fake assertion.
+  it.each(LOCALES.filter((l) => l !== 'en'))(
+    'translates the sub-label sentence in %s',
+    (locale) => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const en = require('@/messages/en.json').app.dashboard.metrics
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const other = require(`@/messages/${locale}.json`).app.dashboard.metrics
+      expect(typeof other.vsYesterday).toBe('string')
+      expect(other.vsYesterday).not.toBe(en.vsYesterday)
+    },
+  )
+
+  it.each(LOCALES)('carries every card label in %s', (locale) => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const metrics = require(`@/messages/${locale}.json`).app.dashboard.metrics
+    for (const key of ['volume24h', 'transactions24h', 'volume30d', 'webhooksDelivered24h', 'vsYesterday', 'deliveryRate']) {
+      expect(typeof metrics[key]).toBe('string')
+      expect(metrics[key]).not.toBe('')
+    }
   })
 })
