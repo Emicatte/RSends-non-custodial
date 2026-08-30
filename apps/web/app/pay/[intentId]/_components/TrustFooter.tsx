@@ -19,6 +19,7 @@ export function TrustFooter({
   router: string
 }) {
   const t = useTranslations('pay')
+  const contractUrl = explorerAddressUrl(chainId, router)
   const line = {
     margin: 0,
     fontFamily: C.D,
@@ -40,14 +41,18 @@ export function TrustFooter({
       <p style={line}>{t('trust.nonCustodial')}</p>
       <p style={line}>
         {t('trust.contract')}{' '}
-        <a
-          href={explorerAddressUrl(chainId, router)}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ color: C.purple, textDecoration: 'none', fontFamily: C.M, fontSize: 12 }}
-        >
-          {t('trust.viewContract')}
-        </a>
+        {/* The claim stands on its own; only the link needs an explorer we can
+            actually name. Silence beats a link to the wrong network. */}
+        {contractUrl && (
+          <a
+            href={contractUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: C.purple, textDecoration: 'none', fontFamily: C.M, fontSize: 12 }}
+          >
+            {t('trust.viewContract')}
+          </a>
+        )}
       </p>
     </div>
   )
