@@ -3,6 +3,10 @@
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { effectiveStatus } from '@/lib/intentStatus'
+// The one explorer resolver. This file used to carry its own chain->base map,
+// which meant a chain the checkout could link was still unlinked here: a TRON
+// row degraded to a bare hash because the local map had no tron key.
+import { explorerTxUrl } from '@/lib/web3/explorer'
 import type { OrgPaymentRecord } from '@/hooks/useOrgPayments'
 
 /**
@@ -67,20 +71,6 @@ const CHAIN_LABEL: Record<string, string> = {
   sepolia: 'Sepolia',
   ethereum: 'Ethereum',
   eth: 'Ethereum',
-}
-
-// Chain string → block-explorer base (testnet-first; the UI is locked to test).
-const EXPLORER_BASE: Record<string, string> = {
-  base_sepolia: 'https://sepolia.basescan.org',
-  base: 'https://basescan.org',
-  sepolia: 'https://sepolia.etherscan.io',
-  ethereum: 'https://etherscan.io',
-  eth: 'https://etherscan.io',
-}
-
-function explorerTxUrl(chain: string, hash: string): string | null {
-  const base = EXPLORER_BASE[(chain || '').toLowerCase()]
-  return base ? `${base}/tx/${hash}` : null
 }
 
 function truncAddr(addr: string): string {
@@ -225,7 +215,9 @@ export function PaymentsTable({
                 ? t(`status.${shown}`)
                 : shown
               const txHash = r.matched_tx_hash || r.tx_hash
-              const txUrl = txHash ? explorerTxUrl(r.chain, txHash) : null
+              // A payments row carries a chain NAME and never a chain id, so
+              // the name is the lookup and the id argument is null.
+              const txUrl = txHash ? explorerTxUrl(null, txHash, r.chain) : null
               return (
                 <tr key={r.intent_id}>
                   <td className="px-4 py-3" style={{ ...cellStyle, color: COLORS.muted }}>

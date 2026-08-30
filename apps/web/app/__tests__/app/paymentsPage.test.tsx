@@ -157,3 +157,70 @@ it('lists with a Bearer token and NO wallet-signature headers, never asking for 
     expect(key.toLowerCase().startsWith('x-wallet')).toBe(false)
   }
 })
+
+// ── The explorer link comes from the one resolver ────────────
+//
+// This table used to carry its own chain->base map with no tron key, so a real
+// TRON payment rendered as a bare hash while the checkout linked it fine. Both
+// now go through lib/web3/explorer.
+
+const TRON_HASH = 'cd'.repeat(32)
+
+const TRON_ROW = {
+  intent_id: 'pi_tron',
+  amount: 10.000001,
+  currency: 'USDT',
+  chain: 'TRON',
+  status: 'paid',
+  recipient: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+  tx_hash: null,
+  matched_tx_hash: TRON_HASH,
+  created_at: '2026-07-08T10:00:00Z',
+  expires_at: '2026-07-08T11:00:00Z',
+}
+
+it('links a TRON payment to tronscan, never to basescan', async () => {
+  mockFetch({ total: 1, page: 1, per_page: 20, records: [TRON_ROW] })
+
+  render(<AppPaymentsPage />)
+
+  const link = await screen.findByRole('link', { name: 'View' })
+  // Tronscan is hash-routed: /#/transaction/, not /tx/.
+  expect(link).toHaveAttribute(
+    'href',
+    `https://tronscan.org/#/transaction/${TRON_HASH}`,
+  )
+  expect(link.getAttribute('href')).not.toContain('basescan')
+})
+
+it('sends a Nile payment to the Nile explorer', async () => {
+  mockFetch({
+    total: 1,
+    page: 1,
+    per_page: 20,
+    records: [{ ...TRON_ROW, chain: 'tron_nile' }],
+  })
+
+  render(<AppPaymentsPage />)
+
+  expect(await screen.findByRole('link', { name: 'View' })).toHaveAttribute(
+    'href',
+    `https://nile.tronscan.org/#/transaction/${TRON_HASH}`,
+  )
+})
+
+it('still renders a bare hash for a chain no explorer knows', async () => {
+  // The null-URL path, unchanged: the hash is what the payer needs, it just is
+  // not a link. Better than a link to some other network.
+  mockFetch({
+    total: 1,
+    page: 1,
+    per_page: 20,
+    records: [{ ...TRON_ROW, chain: 'solana' }],
+  })
+
+  render(<AppPaymentsPage />)
+
+  expect(await screen.findByText('cdcdcd…cdcd')).toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: 'View' })).not.toBeInTheDocument()
+})
