@@ -1704,6 +1704,25 @@
     "walletSilent": "Ihre Wallet hat noch nicht geantwortet. Prüfen Sie, ob sie ein Fenster oder ein Pop-up geöffnet hat. Wenn dort steht, dass dieses Netzwerk nicht unterstützt wird, können Sie mit einer anderen Wallet zahlen.",
     "walletChainUnsupported": "Diese Wallet unterstützt {network} nicht. Es wurde nichts gesendet und nichts abgebucht. Sie können mit einer anderen Wallet zahlen.",
     "payingFrom": "Zahlung von",
-    "paidFrom": "Bezahlt von"
+    "paidFrom": "Bezahlt von",
+    "tron": {
+      "sendExactly": "Senden Sie genau",
+      "toAddress": "An diese TRON-Adresse",
+      "copy": "Kopieren",
+      "copied": "Kopiert",
+      "copyAmount": "Betrag kopieren",
+      "copyAddress": "Adresse kopieren",
+      "exactAmountNote": "Senden Sie genau diesen Betrag. Ein kleinerer Betrag wird als Teilzahlung erfasst und schließt diese Rechnung nicht ab.",
+      "qrNote": "Scannen Sie die Adresse mit Ihrer Wallet oder Ihrer Börsen-App. Der Betrag steht nicht im Code, geben Sie ihn selbst ein.",
+      "networkWarning": "Dies ist {token} auf {network}, dem TRC-20-Netzwerk. Ein Versand über ein anderes Netzwerk, auch ERC-20, führt zum Verlust der Mittel.",
+      "waiting": "Wir warten auf Ihre Überweisung. Diese Seite aktualisiert sich selbst, sobald das Netzwerk sie bestätigt.",
+      "unavailable": "Die Zahlungsdaten sind noch nicht verfügbar. Die Seite prüft weiter.",
+      "partial": {
+        "title": "Teilzahlung",
+        "body": "Wir haben {received} {token} erhalten. Das sind {missing} {token} weniger als die Rechnung.",
+        "bodyReceivedOnly": "Wir haben {received} {token} erhalten, weniger als den Rechnungsbetrag.",
+        "note": "Das Geld ist beim Händler angekommen, und eine weitere Überweisung schließt diese Rechnung nicht ab. Wenden Sie sich an den Händler."
+      }
+    }
   }
 }

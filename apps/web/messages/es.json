@@ -1704,6 +1704,25 @@
     "walletSilent": "Tu cartera aún no ha respondido. Comprueba si ha abierto una ventana o una ventana emergente. Si dice que esta red no es compatible, puedes pagar con otra cartera.",
     "walletChainUnsupported": "Esta cartera no es compatible con {network}. No se envió nada y no se cobró nada. Puedes pagar con otra cartera.",
     "payingFrom": "Pagas desde",
-    "paidFrom": "Pagado desde"
+    "paidFrom": "Pagado desde",
+    "tron": {
+      "sendExactly": "Envía exactamente",
+      "toAddress": "A esta dirección TRON",
+      "copy": "Copiar",
+      "copied": "Copiado",
+      "copyAmount": "Copiar el importe",
+      "copyAddress": "Copiar la dirección",
+      "exactAmountNote": "Envía exactamente este importe. Un importe menor se registra como pago parcial y no completa esta factura.",
+      "qrNote": "Escanea la dirección con tu monedero o con la app del exchange. El importe no está en el código, introdúcelo tú.",
+      "networkWarning": "Esto es {token} en {network}, la red TRC-20. Enviar desde cualquier otra red, incluida ERC-20, hace perder los fondos.",
+      "waiting": "Esperando tu transferencia. Esta página se actualiza sola en cuanto la red lo confirme.",
+      "unavailable": "Los datos del pago aún no están disponibles. La página sigue comprobándolo.",
+      "partial": {
+        "title": "Pago parcial",
+        "body": "Recibimos {received} {token}. Faltan {missing} {token} para la factura.",
+        "bodyReceivedOnly": "Recibimos {received} {token}, menos que el importe de la factura.",
+        "note": "El dinero llegó al comercio y otra transferencia no completará esta factura. Contacta con el comercio para resolverlo."
+      }
+    }
   }
 }
