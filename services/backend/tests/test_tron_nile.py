@@ -305,6 +305,36 @@ def test_nile_chain_id_is_in_no_evm_chain_table():
         assert str(TRON_NILE_CHAIN_ID) not in {str(k) for k in m}
 
 
+def test_the_columns_that_store_a_chain_id_can_hold_niles():
+    """3448148188 > 2147483647, so it does not fit a Postgres INTEGER.
+
+    This assertion exists in the SQLite suite because SQLite CANNOT catch the
+    bug it guards: SQLite is dynamically typed and stores the value happily
+    whatever the column says, so every test here — and all of CI, which runs on
+    sqlite+aiosqlite — would go green while production raised
+    NumericValueOutOfRange on the first Nile cursor write. The end-to-end proof
+    is the Postgres-gated round-trip in test_migrations_postgres.py; this is the
+    cheap guard that runs on every PR.
+
+    Asserted on the mapped column type rather than on the migration, because the
+    model is what create_all builds and what production ends up with."""
+    from sqlalchemy import BigInteger
+
+    from app.models.indexer_models import IndexerCursor
+    from app.models.settlement_models import PaymentSettlement
+    from app.services.tron_poller import TRON_NILE_CHAIN_ID
+
+    assert TRON_NILE_CHAIN_ID > 2_147_483_647, "premise of this test"
+    for column in (
+        IndexerCursor.__table__.c.chain_id,
+        PaymentSettlement.__table__.c.chain_id,
+    ):
+        assert isinstance(column.type, BigInteger), (
+            f"{column.table.name}.{column.name} is {column.type!r}; a TRON "
+            f"testnet chain id does not fit a 4-byte signed integer"
+        )
+
+
 def test_the_nile_chain_id_derives_from_the_pinned_genesis():
     """Derived, not invented — the same cross-check mainnet's id gets."""
     from app.services.tron_chain_identity import TRON_NILE_GENESIS_BLOCK_ID

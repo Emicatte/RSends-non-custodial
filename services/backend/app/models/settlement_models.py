@@ -83,7 +83,13 @@ class PaymentSettlement(Base):
     block_timestamp = Column(DateTime(timezone=True), nullable=True)
 
     # ── On-chain coordinates (idempotency key) ──────────────────
-    chain_id = Column(Integer, nullable=False, index=True)
+    # BigInteger, not Integer (widened in migration 0020): a TRON chain id is
+    # the low 4 bytes of that network's genesis hash read as UNSIGNED, and
+    # Nile's (3448148188) is past the 2147483647 ceiling of a Postgres INTEGER.
+    # SQLite stores it either way, so the suite cannot catch a regression here —
+    # test_migrations_postgres.py::test_a_tron_testnet_chain_id_fits_after_0020
+    # is the one that can.
+    chain_id = Column(BigInteger, nullable=False, index=True)
     tx_hash = Column(String(66), nullable=False)
     log_index = Column(Integer, nullable=False)
     block_number = Column(BigInteger, nullable=False)
