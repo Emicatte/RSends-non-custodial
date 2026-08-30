@@ -1414,12 +1414,12 @@
       "title": "Dashboard",
       "mainnetBadge": "Mainnet",
       "metrics": {
-        "volume24h": "Volume 24h",
-        "transactions24h": "Transactions 24h",
-        "totalBalance": "Total balance",
-        "activeClients": "Active clients",
-        "chainsLabel": "{count} chains",
-        "thisWeek": "+{count} this week"
+        "volume24h": "Volumen 24h",
+        "transactions24h": "Transaktionen 24h",
+        "volume30d": "Volumen 30 Tage",
+        "webhooksDelivered24h": "Webhooks zugestellt 24h",
+        "vsYesterday": "{count} gegenüber gestern",
+        "deliveryRate": "{rate}%"
       },
       "volumeTrend": {
         "title": "Volume trend (7d)",

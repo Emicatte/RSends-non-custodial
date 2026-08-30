@@ -52,6 +52,18 @@ export interface OrgStats {
   /** Distinct symbols behind that count, e.g. `['ETH']`. May be empty when the
    *  token is unknown to the registry — the count still stands. */
   volume_24h_unpriced_symbols: string[]
+  // The two tiles that replaced `total_balance` / `active_clients` on the /app
+  // home. `total_balance` is hard-coded 0.0 by the backend and always was —
+  // RSends is non-custodial, so a balance tile can only assert a custody the
+  // product does not have — and `active_clients` is a fact about the business,
+  // not the interface. Both fields are still SENT (narrowing a response is a
+  // wire change nothing forces); nothing reads them any more.
+  volume_30d: number
+  volume_30d_delta_pct: number
+  // Two counts, not a rate: 0/0 (no webhooks configured) and 0/N (every one
+  // failed) are different facts, and a pre-divided percentage loses that.
+  webhooks_delivered_24h: number
+  webhooks_attempted_24h: number
   // Get-started checklist facts (drive the /app home card). The backend
   // returns 200 with zeroed KPIs + these booleans even for an org with no
   // owner identity yet (fresh merchant) — no 409 on this route anymore.

@@ -1415,10 +1415,10 @@
       "metrics": {
         "volume24h": "Volume 24h",
         "transactions24h": "Transactions 24h",
-        "totalBalance": "Total balance",
-        "activeClients": "Active clients",
-        "chainsLabel": "{count} chains",
-        "thisWeek": "+{count} this week"
+        "volume30d": "Volume 30 days",
+        "webhooksDelivered24h": "Webhooks delivered 24h",
+        "vsYesterday": "{count} vs yesterday",
+        "deliveryRate": "{rate}%"
       },
       "volumeTrend": {
         "title": "Volume trend (7d)",

@@ -1415,10 +1415,10 @@
       "metrics": {
         "volume24h": "Volume 24h",
         "transactions24h": "Transazioni 24h",
-        "totalBalance": "Saldo totale",
-        "activeClients": "Clienti attivi",
-        "chainsLabel": "su {count} chain",
-        "thisWeek": "+{count} questa settimana"
+        "volume30d": "Volume 30 giorni",
+        "webhooksDelivered24h": "Webhook consegnati 24h",
+        "vsYesterday": "{count} rispetto a ieri",
+        "deliveryRate": "{rate}%"
       },
       "volumeTrend": {
         "title": "Andamento volume (7g)",

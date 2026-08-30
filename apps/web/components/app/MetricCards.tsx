@@ -22,10 +22,28 @@ const COLORS = {
   red: '#C03A3A',
 }
 
+export type MetricKey =
+  | 'volume24h'
+  | 'transactions24h'
+  | 'volume30d'
+  | 'webhooksDelivered24h'
+
+/**
+ * The sub-label under the value.
+ *
+ * A percentage is arithmetic — `+12.4%` is the same string in five languages,
+ * so the page formats it and passes it through. A SENTENCE is not, and the one
+ * place this went wrong is instructive: the landing page's fixture carried the
+ * literal `"+4 this week"`, which then rendered in English inside the Italian
+ * page because a translated string had been baked into data. So a sentence is
+ * passed as a KEY plus its values and resolved here, where the namespace is.
+ */
+export type MetricDelta = string | { key: string; values?: Record<string, string | number> }
+
 export type Metric = {
-  key: 'volume24h' | 'transactions24h' | 'totalBalance' | 'activeClients'
+  key: MetricKey
   value: string
-  delta: string
+  delta: MetricDelta
   deltaPositive: boolean
   deltaIsCount?: boolean
 }
@@ -43,7 +61,8 @@ export function MetricCards({ metrics, loading = false }: MetricCardsProps) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       {metrics.map((m) => {
-        const deltaText = m.delta
+        const deltaText =
+          typeof m.delta === 'string' ? m.delta : t(m.delta.key, m.delta.values)
         return (
           <div key={m.key} className={`${card} flex flex-col gap-1.5`}>
             {/* data-metric-label is inert markup, added so the set of cards
