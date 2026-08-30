@@ -599,7 +599,7 @@ async def start_tron_poller_if_needed() -> Optional[TronPoller]:
 
     for node_url in nodes:
         try:
-            await assert_tron_chain_identity(node_url)
+            await assert_tron_chain_identity(node_url, "mainnet")
         except TronChainIdentityError as exc:
             logger.critical(
                 "[tron-poller] FATAL chain identity: %s. Refusing to start — a "

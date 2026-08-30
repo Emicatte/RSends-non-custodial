@@ -334,7 +334,7 @@ async def test_identity_failure_refuses_to_start_and_never_reads_the_cursor(
     from app.models.indexer_models import IndexerCursor
     from app.services.tron_chain_identity import TronChainIdentityError
 
-    async def _boom(node_url, **kw):
+    async def _boom(node_url, network, **kw):
         raise TronChainIdentityError(f"unproven: {node_url}")
 
     monkeypatch.setattr(tp, "assert_tron_chain_identity", _boom)
@@ -361,7 +361,7 @@ async def test_identity_failure_refuses_to_start_and_never_reads_the_cursor(
 async def test_every_configured_node_is_proven_not_just_the_first(monkeypatch):
     proven = []
 
-    async def _ok(node_url, **kw):
+    async def _ok(node_url, network, **kw):
         proven.append(node_url)
 
     monkeypatch.setattr(tp, "assert_tron_chain_identity", _ok)
@@ -384,7 +384,7 @@ async def _noop():
 async def test_no_tron_node_configured_is_silent_not_an_error(monkeypatch):
     monkeypatch.setattr(tp, "_configured_nodes", lambda: [])
 
-    async def _never(node_url, **kw):
+    async def _never(node_url, network, **kw):
         raise AssertionError("must not probe when nothing is configured")
 
     monkeypatch.setattr(tp, "assert_tron_chain_identity", _never)
