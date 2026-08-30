@@ -107,6 +107,18 @@ logger = logging.getLogger("tron_poller")
 # Pinned by `test_tron_poller.py::test_tron_chain_id_is_in_no_evm_chain_table`.
 TRON_CHAIN_ID = 728126428
 
+# TRON Nile testnet's chain id: the last 4 bytes of the Nile genesis blockID
+# pinned in `tron_chain_identity`. Derived, not invented — same as mainnet's.
+#
+# The HARD GUARDRAIL above applies to this number identically, and with one
+# extra reason to be careful: Nile IS a testnet, so `chain_access.
+# TESTNET_CHAIN_IDS` looks like the natural home for it. It is not. That table
+# is read by the EVM boot guard, which would `eth_chainId` a TRON node and
+# SystemExit the backend. Nile's testnet-ness is carried by NAME instead, in
+# `chain_access.WATCH_ONLY_TESTNET_CHAINS`.
+# Pinned by `test_tron_nile.py::test_nile_chain_id_is_in_no_evm_chain_table`.
+TRON_NILE_CHAIN_ID = 3448148188
+
 USDT_TRC20_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
 
 # TronGrid's free tier is ~15 QPS, so the number of pending recipient addresses

@@ -38,5 +38,15 @@
     "tokens": {
       "USDT": {"address": "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t", "decimals": 6, "native": false, "permitType": "none", "assetType": "native", "issuer": "Tether", "flatFee": 0, "threshold": 0, "aboveFee": 0, "enabled": true, "verified": true}
     }
+  },
+  "tron_nile": {
+    "_comment": "TRON Nile testnet. Keyed by NAME like its mainnet sibling — a non-EVM chain has no EVM chain id and must not be given a synthetic one. TOKEN SELECTION: there are roughly fifty contracts on Nile calling themselves USDT and almost all of them are unobtainable, so the usual criterion (the issuer's canonical deployment) does not exist here. The only criterion that means anything on a testnet is whether a developer can actually GET the token: TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf is what the official Nile faucet at nileex.io dispenses, decimals() read as 6 from the contract. If the faucet ever changes what it hands out, this address is wrong even though it will keep validating — re-check it against the faucet, not against a block explorer's token list. Fees are 0 like mainnet TRON: watch-only settlement never touches a router, so there is no fee to configure and nothing here is fed to SetFeeConfig.s.sol.",
+    "name": "tron_nile",
+    "addressFormat": "base58check",
+    "settlement": "watch_only",
+    "symbols": ["USDT"],
+    "tokens": {
+      "USDT": {"address": "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf", "decimals": 6, "native": false, "permitType": "none", "assetType": "native", "issuer": "Tether", "flatFee": 0, "threshold": 0, "aboveFee": 0, "enabled": true, "verified": true}
+    }
   }
 }

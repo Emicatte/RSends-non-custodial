@@ -38,6 +38,7 @@ from app.services.chain_access import (
     ChainAccessError,
     check_org_chain_access,
     is_testnet_chain,
+    is_watch_only_testnet,
 )
 from app.services.key_usage_service import (
     check_monthly_limits,
@@ -303,11 +304,18 @@ async def list_org_intents(
 # `org_id` (session) makes resolve_recipient use the org's settlement_wallet
 # directly instead of the reverse wallet→org lookup.
 
-_TESTNET_CHAINS = {"base_sepolia", "sepolia"}
+_TESTNET_CHAINS = {"base_sepolia", "sepolia", "tron_nile"}
 # NOTE: the env check below is an allowlist-of-the-OPPOSITE — a chain in neither
 # set passes both branches silently. Every accepted chain name must therefore
-# appear in exactly one of these two sets. "tron" is mainnet-only (watch-only,
-# TRON mainnet); its testnets (nile/shasta) remain unsupported entirely.
+# appear in exactly one of these two sets. Adding a chain to token_registry.json
+# WITHOUT adding it here is not a no-op: `chain_is_supported` starts returning
+# True and the chain becomes creatable on test AND live keys. Pinned for every
+# registry chain by
+# test_tron_nile.py::test_every_supported_chain_is_in_exactly_one_environment_set.
+#
+# "tron" is TRON mainnet (watch-only); "tron_nile" is the Nile testnet, whose
+# testnet-ness the KYB gate below reads from `chain_access` by name. Shasta is
+# still unsupported entirely — it has no registry entry and no pinned genesis.
 _MAINNET_CHAINS = {"base", "ethereum", "eth", "tron"}
 
 
@@ -487,8 +495,14 @@ async def create_intent(
     # between an unverified org and a live payable page. `is_testnet_chain`
     # already classifies an absent or unknown id as mainnet ("deny by default"),
     # which is exactly the fail-closed answer for a chain we cannot number.
+    #
+    # A watch-only TESTNET is the one case that fail-closed answer gets wrong:
+    # it has no EVM chain id either, so the id classifier calls it mainnet and
+    # would demand business verification for play money. `is_watch_only_testnet`
+    # is the name-keyed arm that says otherwise, and it is an explicit allowlist
+    # — a chain nobody registered there still classifies mainnet.
     chain_id = chain_id_for(requested_chain)
-    if not is_testnet_chain(chain_id):
+    if not (is_testnet_chain(chain_id) or is_watch_only_testnet(requested_chain)):
         org_row = None
         if resolved_org_id is not None:
             org_row = (
@@ -509,7 +523,9 @@ async def create_intent(
             )
             raise HTTPException(403, {"code": "mainnet_activation_required"})
         try:
-            check_org_chain_access(org_row[0], org_row[1], chain_id)
+            check_org_chain_access(
+                org_row[0], org_row[1], chain_id, chain_name=requested_chain
+            )
         except ChainAccessError as e:
             raise HTTPException(403, {"code": e.code})
 

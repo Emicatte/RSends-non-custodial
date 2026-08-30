@@ -87,6 +87,37 @@ def test_every_non_evm_address_is_valid():
         )
 
 
+def test_more_than_one_base58check_chain_is_registered_and_all_validate():
+    """The non-EVM arm was written against a single chain, where "iterate every
+    base58check chain" and "check the one TRON entry" are the same code path
+    and a per-chain bug cannot show. Two entries make the loop load-bearing.
+
+    Pinned as a floor, not an equality: a third base58check chain is a fine
+    thing to add, and must arrive already validating."""
+    from app.security.input_validator import is_tron_address
+
+    base58_chains = {
+        chain_id: obj
+        for chain_id, obj in _raw().items()
+        if not chain_id.startswith("_")
+        and obj.get("addressFormat", "evm") == "base58check"
+    }
+    assert len(base58_chains) >= 2, sorted(base58_chains)
+    for chain_id, obj in base58_chains.items():
+        for sym, t in obj["tokens"].items():
+            assert is_tron_address(t["address"]), f"{chain_id}.{sym}"
+
+    # And the two addresses are genuinely different contracts: a copy-paste of
+    # the mainnet USDT into the testnet entry would validate perfectly and
+    # point the Nile poller at a contract that does not exist there.
+    addresses = {
+        t["address"]
+        for obj in base58_chains.values()
+        for t in obj["tokens"].values()
+    }
+    assert len(addresses) == sum(len(o["tokens"]) for o in base58_chains.values())
+
+
 def test_every_chain_declares_a_known_address_format():
     """A typo'd or missing family must not silently fall through to 'unchecked'."""
     known = {"evm", "base58check"}
