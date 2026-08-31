@@ -413,7 +413,15 @@ chains (TRON) only (`app/services/tron_matcher.py`):
   several open invoices), or several do (two invoices for the same amount). It therefore
   fires strictly less often than before 2026-08-31, never more. **No intent was modified**;
   the `intent_id` in the payload is one representative candidate, and the full list is in the
-  extra key `candidate_intent_ids`. Reconcile by hand. Note that overpayment does **not** produce
+  extra key `candidate_intent_ids`.
+  **It is not necessarily final.** Since 2026-08-31 the settlement stays open and is
+  re-examined; if the competing invoices expire until exactly one candidate is left, that
+  invoice is closed and you receive `payment.completed` (or `payment.partial`) for it,
+  **with no new payment on-chain** — the same transfer, attributed once it became
+  attributable. So treat `payment.ambiguous` as "held for review", not as a terminal
+  outcome, and expect at most one later closing event for one of the
+  `candidate_intent_ids`. You are notified of a given ambiguity once, not once per
+  re-examination. Note that overpayment does **not** produce
   `payment.overpaid`: an overpaid invoice is satisfied, so it fires `payment.completed` with
   `overpaid_amount` set.
 

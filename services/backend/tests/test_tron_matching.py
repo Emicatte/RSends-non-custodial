@@ -37,7 +37,7 @@ from decimal import Decimal
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from app.services import tron_matcher as tm
 from app.services import tron_poller as tp
@@ -68,7 +68,9 @@ async def _setup_db():
     import app.models.merchant_models  # noqa: F401
     import app.models.settlement_models  # noqa: F401
     from app.models.indexer_models import IndexerCursor
-    from app.models.merchant_models import PaymentIntent
+    from app.models.merchant_models import (
+        MerchantWebhook, PaymentIntent, WebhookDelivery,
+    )
     from app.models.settlement_models import PaymentSettlement
 
     async with engine.begin() as conn:
@@ -76,6 +78,10 @@ async def _setup_db():
         await conn.execute(PaymentSettlement.__table__.delete())
         await conn.execute(PaymentIntent.__table__.delete())
         await conn.execute(IndexerCursor.__table__.delete())
+        # Deliveries before webhooks: FK. Both must be empty per test, or the
+        # UNIQUE idempotency_key leaks a previous test's dedup into this one.
+        await conn.execute(WebhookDelivery.__table__.delete())
+        await conn.execute(MerchantWebhook.__table__.delete())
     yield
 
 
@@ -90,6 +96,55 @@ def webhooks(monkeypatch):
 
     monkeypatch.setattr("app.services.webhook_service.send_webhook", _fake)
     return calls
+
+
+@pytest.fixture
+def real_dispatch(monkeypatch):
+    """Run the REAL `send_webhook` — only the HTTP hop is stubbed.
+
+    The `webhooks` fixture above replaces `send_webhook` wholesale, which also
+    replaces the delivery-layer idempotency that now keeps `payment.ambiguous`
+    from re-notifying a merchant every tick. Anything asserting on THAT must
+    go through the real thing and read `webhook_deliveries`.
+    """
+    from app.services import webhook_service as ws
+
+    async def _delivered(delivery, wh):
+        return True
+
+    monkeypatch.setattr(ws, "_attempt_delivery", _delivered)
+
+
+async def _register_webhook(*, merchant_id="m_tron_match", environment="live",
+                            events=None):
+    from app.db.session import async_session
+    from app.models.merchant_models import MerchantWebhook
+
+    async with async_session() as db:
+        wh = MerchantWebhook(
+            merchant_id=merchant_id,
+            environment=environment,
+            url="https://merchant.example/hook",
+            secret="s" * 32,
+            events=events or ["payment.ambiguous", "payment.completed",
+                              "payment.partial"],
+            is_active=True,
+        )
+        db.add(wh)
+        await db.commit()
+        return wh.id
+
+
+async def _deliveries():
+    """Every delivery as (event_type, idempotency_key), creation order."""
+    from app.db.session import async_session
+    from app.models.merchant_models import WebhookDelivery
+
+    async with async_session() as db:
+        rows = (await db.execute(
+            select(WebhookDelivery).order_by(WebhookDelivery.id)
+        )).scalars().all()
+        return [(r.event_type, r.idempotency_key) for r in rows]
 
 
 # ── builders ─────────────────────────────────────────────────
@@ -484,7 +539,13 @@ async def test_two_candidates_touch_no_intent_and_fire_ambiguous(webhooks, caplo
 
     s = await _settlement(sid)
     assert s.intent_id is None, "ambiguity must not pick a winner"
-    assert s.status == SettlementStatus.rejected, "must not be retried blindly"
+    assert s.status == SettlementStatus.pending, (
+        "ambiguity is unresolved, not refused — the row must stay retryable"
+    )
+    assert s.status != SettlementStatus.rejected, (
+        "`rejected` now means the event failed validation against its intent, "
+        "and is never re-attempted"
+    )
 
     events = [e for e, _, _ in webhooks]
     assert events == ["payment.ambiguous"], events
@@ -500,10 +561,14 @@ async def test_two_candidates_touch_no_intent_and_fire_ambiguous(webhooks, caplo
 
 @pytest.mark.asyncio
 async def test_an_ambiguous_settlement_holds_no_intent(webhooks):
-    """`rejected` deliberately does not hold: an ambiguous payment must not
-    freeze N invoices out of expiry and cancellation."""
+    """The hold keys on `intent_id`, which stays NULL — so a `pending`
+    ambiguous settlement freezes nothing, and the competing invoices remain
+    free to expire and to be cancelled."""
     from app.db.session import async_session
-    from app.services.intent_service import has_settlement_hold
+    from app.models.merchant_models import IntentStatus, PaymentIntent
+    from app.services.intent_service import (
+        has_settlement_hold, settlement_hold_exists,
+    )
 
     a = await _make_intent(amount=10.0)
     b = await _make_intent(amount=11.0)
@@ -514,9 +579,20 @@ async def test_an_ambiguous_settlement_holds_no_intent(webhooks):
         assert await has_settlement_hold(db, a) is False
         assert await has_settlement_hold(db, b) is False
 
+        # The expiry beat's own predicate (`~settlement_hold_exists()`): both
+        # invoices are still expirable, which is what makes the retry converge.
+        expirable = (await db.execute(
+            select(PaymentIntent).where(
+                PaymentIntent.status == IntentStatus.pending,
+                ~settlement_hold_exists(),
+            )
+        )).scalars().all()
+        assert {i.intent_id for i in expirable} == {a, b}
+
 
 @pytest.mark.asyncio
-async def test_an_ambiguous_settlement_is_not_reprocessed(webhooks):
+async def test_an_ambiguous_settlement_is_retried_on_every_later_tick(webhooks):
+    """The retry IS the feature: the row stays in the matcher's scan."""
     await _make_intent(amount=10.0)
     await _make_intent(amount=11.0)
     await _make_settlement(amount_base=_base(9.0))    # matches neither exactly
@@ -524,8 +600,196 @@ async def test_an_ambiguous_settlement_is_not_reprocessed(webhooks):
     assert (await tm.match_pending_tron_settlements(tp.TRON_MAINNET))["ambiguous"] == 1
     second = await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
 
+    assert second["ambiguous"] == 1, (
+        "an unresolved ambiguity must be re-attempted, not abandoned"
+    )
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Ambiguity resolves itself — the retry, end to end
+# ═══════════════════════════════════════════════════════════════
+
+@pytest.mark.asyncio
+async def test_a_later_tick_matches_the_survivor_once_a_candidate_expires(
+    real_dispatch,
+):
+    """The whole point: money already at the merchant reconciles itself.
+
+    Two invoices compete, neither is chosen. One expires. The next tick has a
+    single candidate and closes it — and `payment.completed` MUST reach the
+    merchant, which is the regression the webhook-claim change exists to
+    prevent.
+    """
+    from app.db.session import async_session
+    from app.models.merchant_models import IntentStatus, PaymentIntent
+    from app.models.settlement_models import SettlementStatus
+
+    await _register_webhook()
+    a = await _make_intent(amount=10.0)
+    b = await _make_intent(amount=11.0)
+    sid = await _make_settlement(amount_base=_base(12.0))   # matches neither
+
+    first = await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
+    assert first["ambiguous"] == 1, first
+    assert [e for e, _ in await _deliveries()] == ["payment.ambiguous"]
+
+    # The expiry beat wins on b — which it is free to do, per the hold test.
+    async with async_session() as db:
+        await db.execute(
+            update(PaymentIntent)
+            .where(PaymentIntent.intent_id == b)
+            .values(status=IntentStatus.expired)
+        )
+        await db.commit()
+
+    second = await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
+
+    assert second["matched"] == 1, second
     assert second["ambiguous"] == 0
-    assert [e for e, _, _ in webhooks] == ["payment.ambiguous"]
+    winner = await _intent(a)
+    assert winner.status == IntentStatus.paid
+    assert winner.overpaid_amount == "2"
+    assert (await _intent(b)).status == IntentStatus.expired
+
+    s = await _settlement(sid)
+    assert s.intent_id == a
+    assert s.status == SettlementStatus.final
+
+    events = [e for e, _ in await _deliveries()]
+    assert "payment.completed" in events, (
+        "the payment reconciled and the merchant was never told — the "
+        "ambiguous fire consumed the completed slot"
+    )
+    assert events == ["payment.ambiguous", "payment.completed"], events
+
+
+@pytest.mark.asyncio
+async def test_payment_ambiguous_notifies_the_merchant_once_not_once_per_tick(
+    real_dispatch,
+):
+    """Retrying every 60s must not mean notifying every 60s. The delivery
+    layer's `{intent_id}:{event}:{webhook_id}` key is what dedupes it — there
+    is no `webhook_fired_at` claim on this event any more."""
+    await _register_webhook()
+    a = await _make_intent(amount=10.0)
+    await _make_intent(amount=11.0)
+    await _make_settlement(amount_base=_base(9.0))
+
+    for _ in range(3):
+        assert (await tm.match_pending_tron_settlements(
+            tp.TRON_MAINNET))["ambiguous"] == 1
+
+    rows = await _deliveries()
+    assert [e for e, _ in rows] == ["payment.ambiguous"], rows
+    assert rows[0][1].startswith(f"{a}:payment.ambiguous:"), rows
+
+
+@pytest.mark.asyncio
+async def test_the_ambiguity_webhook_leaves_the_completed_slot_unclaimed(
+    webhooks,
+):
+    """The mechanical form of the bug: `webhook_fired_at` must stay NULL, or
+    `_fire_completed_webhook`'s claim silently no-ops later and neither
+    redrive sweep can rescue it (both require it NULL)."""
+    await _make_intent(amount=10.0)
+    await _make_intent(amount=11.0)
+    sid = await _make_settlement(amount_base=_base(9.0))
+
+    await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
+
+    assert (await _settlement(sid)).webhook_fired_at is None
+
+
+@pytest.mark.asyncio
+async def test_the_ambiguity_error_is_logged_once_not_once_per_tick(
+    webhooks, caplog,
+):
+    """An unresolved ambiguity now retries forever; the operator must not get
+    an ERROR every 60s for the same unchanged candidate set."""
+    a = await _make_intent(amount=10.0)
+    b = await _make_intent(amount=11.0)
+    await _make_settlement(amount_base=_base(9.0))
+
+    with caplog.at_level(logging.DEBUG, logger=tm.logger.name):
+        await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
+        first = [r for r in caplog.records if r.levelno == logging.ERROR]
+        assert len(first) == 1, [r.getMessage() for r in caplog.records]
+        assert a in first[0].getMessage() and b in first[0].getMessage()
+
+        caplog.clear()
+        await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
+        await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
+
+    assert [r for r in caplog.records if r.levelno == logging.ERROR] == [], (
+        "the same unchanged candidate set was re-announced at ERROR"
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_settlement_rejected_for_validation_is_never_re_attempted(
+    webhooks,
+):
+    """`rejected` now carries exactly one meaning — the event did not validate
+    against its intent. That row is terminal: the matcher's scan excludes it on
+    both predicates (`status == pending`, `intent_id IS NULL`)."""
+    from app.models.merchant_models import IntentStatus
+    from app.models.settlement_models import SettlementStatus
+
+    iid = await _make_intent(amount=10.0)
+    sid = await _make_settlement(
+        amount_base=_base(10.0),
+        status=SettlementStatus.rejected,
+        intent_id=iid,          # a validation rejection always carries one
+    )
+    before = await _intents_snapshot()
+
+    result = await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
+
+    assert result == {"matched": 0, "partial": 0, "ambiguous": 0,
+                      "unmatched": 0}, result
+    s = await _settlement(sid)
+    assert s.status == SettlementStatus.rejected
+    assert await _intents_snapshot() == before
+    assert (await _intent(iid)).status == IntentStatus.pending
+    assert webhooks == []
+
+
+@pytest.mark.asyncio
+async def test_retrying_an_ambiguous_settlement_writes_no_second_row(webhooks):
+    """The row stays `pending`, so the poller re-observes it every tick (the
+    cursor is inclusive). The idempotency triple must still hold — and it does
+    not consult `status`, which is exactly why a settlement can never be reborn
+    as a fresh row to escape its own history."""
+    from app.db.session import async_session
+    from app.models.settlement_models import PaymentSettlement
+
+    await _make_intent(amount=10.0)
+    await _make_intent(amount=11.0)
+    sid = await _make_settlement(amount_base=_base(9.0))
+
+    await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
+    s = await _settlement(sid)
+
+    transfer = {
+        "transaction_id": s.tx_hash,
+        "token_info": {"address": USDT_TRC20_CONTRACT, "decimals": 6,
+                       "symbol": "USDT", "name": "Tether USD"},
+        "block_timestamp": int(s.block_timestamp.timestamp() * 1000),
+        "from": PAYER, "to": MERCH, "type": "Transfer",
+        "value": str(_base(9.0)),
+    }
+    event = {"block_number": s.block_number, "event_index": s.log_index,
+             "transaction_id": s.tx_hash}
+
+    assert await tp._record_settlement(
+        transfer, event, tp.TRON_MAINNET
+    ) == "duplicate"
+
+    async with async_session() as db:
+        n = (await db.execute(
+            select(func.count()).select_from(PaymentSettlement)
+        )).scalar_one()
+    assert n == 1, "the same transfer produced a second settlement row"
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -614,7 +878,7 @@ async def test_two_candidates_neither_matching_the_amount_stay_ambiguous(webhook
 
     s = await _settlement(sid)
     assert s.intent_id is None
-    assert s.status == SettlementStatus.rejected
+    assert s.status == SettlementStatus.pending, "must stay retryable"
     _, _, extra = webhooks[0]
     assert [e for e, _, _ in webhooks] == ["payment.ambiguous"]
     assert set(extra["candidate_intent_ids"]) == {a, b}
@@ -648,7 +912,7 @@ async def test_two_candidates_asking_the_same_amount_stay_ambiguous(webhooks):
 
     s = await _settlement(sid)
     assert s.intent_id is None, "two exact matches must not pick a winner"
-    assert s.status == SettlementStatus.rejected
+    assert s.status == SettlementStatus.pending, "must stay retryable"
     _, _, extra = webhooks[0]
     assert [e for e, _, _ in webhooks] == ["payment.ambiguous"]
     assert set(extra["candidate_intent_ids"]) == {a, b}

@@ -60,9 +60,29 @@ more than one candidate, base units are compared exactly (no tolerance):
     are indistinguishable by the only evidence a settlement carries.
 
 Zero candidates is normal: a transfer to a merchant's address that belongs to
-no invoice. Ambiguity is refused outright — this module never picks a winner it
+no invoice. Ambiguity picks nothing — this module never picks a winner it
 cannot prove, because picking wrong credits one merchant's payment to another
 merchant's invoice.
+
+AMBIGUITY IS UNRESOLVED, NOT REFUSED. The settlement is left `pending` with
+`intent_id` NULL — the state the scan below already selects — so every later
+tick tries again. Ambiguity is temporary by construction: the competing
+invoices expire on their own timers, and the tick on which exactly one remains
+closes a payment that has been in the merchant's wallet the whole time.
+Marking it `rejected` (the behaviour before this) orphaned that money for good,
+because nothing in the system re-reads a rejected settlement. Leaving it
+`pending` holds no invoice hostage either: the settlement hold correlates on
+`intent_id` (`intent_service.settlement_hold_exists`), which is NULL here.
+
+`rejected` therefore means EXACTLY ONE thing now — the event did not validate
+against its intent — and such a row must never be re-attempted. It is not: the
+scan requires `pending` AND `intent_id IS NULL`, and a validation rejection
+fails both. Ambiguity and invalidity are no longer the same state, so nothing
+on the row has to tell them apart.
+
+A settlement that stays ambiguous until every candidate expires simply stays
+`pending` forever with zero candidates — the same resting state as any TRON
+transfer that belongs to no invoice.
 
 NO PARTIAL ACCUMULATION. Two underpayments summing to the invoice do not close
 it in this slice: the first moves the intent to `partial`, and the second finds
@@ -226,37 +246,93 @@ def _sole_exact_match(candidates: list, received: int, decimals: int):
     return exact[0] if len(exact) == 1 else None
 
 
+# Which candidate set we have already ANNOUNCED at ERROR, per settlement id.
+#
+# Derived state, deliberately not a column. An unresolved ambiguity is now
+# re-attempted on every 60s tick, and an operator does not need the same
+# sentence every 60s until an invoice expires — but they DO need it again if
+# the field of candidates changes, because that is new information.
+#
+# Consequences, all accepted: it is per-process, so each worker announces once
+# and a restart announces once more; and it is memory, so entries are dropped
+# the moment a settlement stops being ambiguous (below). Nothing depends on it
+# for correctness — worst case is a duplicate log line.
+_ANNOUNCED_AMBIGUITY: dict[int, tuple] = {}
+
+
 async def _record_ambiguous(db, settlement, candidates: list) -> None:
-    """Refuse to choose, say so loudly, and tell the merchant.
+    """Choose nothing, say so once, and leave the settlement RETRYABLE.
 
     Reached only AFTER `_sole_exact_match` declined: either no candidate asks
     for the amount that arrived, or several do. What is left is not a tie the
     matcher is too timid to break — it is a tie with no evidence in it.
 
-    The settlement is marked `rejected` — the one terminal status that
-    deliberately does NOT hold an intent (`intent_service.SETTLEMENT_HOLD_STATUSES`),
-    so an ambiguous payment cannot freeze several invoices out of expiry and
-    cancellation. `intent_id` stays NULL: no intent is chosen, touched, or
-    implied.
+    THE ROW IS NOT MUTATED. It stays `pending` with `intent_id` NULL, which is
+    exactly what `match_pending_tron_settlements` scans, so the next tick tries
+    again for free. That matters because ambiguity is TEMPORARY: the competing
+    invoices expire on their own timers, and the tick on which only one is left
+    reconciles a payment that is already sitting in the merchant's wallet.
+    Marking it `rejected` — the old behaviour — orphaned that money forever,
+    because nothing anywhere re-reads a rejected settlement.
+
+    Leaving it `pending` holds no intent. The hold correlates on `intent_id`
+    (`intent_service.settlement_hold_exists`), which is NULL here, so `pending`
+    freezes nothing and the competing invoices stay free to expire and to be
+    cancelled — which is precisely the mechanism this retry depends on.
+
+    `rejected` therefore now carries EXACTLY ONE meaning on this path: the
+    event did not validate against its intent (`_finalize_settlement`). Such a
+    row must never be re-attempted, and is not — the scan excludes it on both
+    predicates. The old conflation of "unattributable" with "invalid" is gone,
+    and with it the need for anything on the row to tell them apart.
 
     The payload is built from the earliest candidate because `_build_payload`
     needs an intent to describe. That intent is REPRESENTATIVE, not selected —
     the full candidate list rides in the extras, and nothing about it changes.
     """
     ids = [c.intent_id for c in candidates]
-    settlement.status = SettlementStatus.rejected
-    logger.error(
-        "[tron-matcher] AMBIGUOUS settlement tx=%s (%s to %s) matches %d pending "
-        "intents %s and no single one of them asks for exactly that amount — "
-        "refusing to choose; no intent was touched and the settlement is "
-        "marked rejected",
-        settlement.tx_hash, settlement.amount, settlement.merchant,
-        len(ids), ids,
-    )
-    await db.flush()
-    await _fire_once(
-        db, settlement, candidates[0], "payment.ambiguous",
-        {
+
+    if _ANNOUNCED_AMBIGUITY.get(settlement.id) == tuple(ids):
+        logger.debug(
+            "[tron-matcher] settlement tx=%s still ambiguous between %s — "
+            "unchanged since the last tick, already announced",
+            settlement.tx_hash, ids,
+        )
+    else:
+        _ANNOUNCED_AMBIGUITY[settlement.id] = tuple(ids)
+        logger.error(
+            "[tron-matcher] AMBIGUOUS settlement tx=%s (%s to %s) matches %d "
+            "pending intents %s and no single one of them asks for exactly that "
+            "amount — choosing nothing; no intent was touched and the settlement "
+            "stays pending, so it is re-attempted as the field narrows",
+            settlement.tx_hash, settlement.amount, settlement.merchant,
+            len(ids), ids,
+        )
+
+    # NOT `_fire_once`. That claims `webhook_fired_at` NULL→now for the whole
+    # settlement, and releases it only when dispatch RAISES — so a merchant
+    # with no registered endpoint (send_webhook returns 0, quietly) consumed
+    # the claim too. The later, successful match then found the claim taken:
+    # `_fire_completed_webhook` saw rowcount 0 and returned SILENTLY, and
+    # neither redrive sweep could rescue it because both require
+    # `webhook_fired_at IS NULL`. Intent paid, settlement final, merchant never
+    # told. The claim belongs to the event that CLOSES the invoice; ambiguity
+    # must not spend it.
+    #
+    # Idempotency instead comes from the delivery layer, which is durable and
+    # already exists: `send_webhook` dedupes on
+    # `{intent_id}:{event}:{webhook_id}` against `webhook_deliveries` (UNIQUE),
+    # inside this same transaction. Re-firing every tick therefore notifies the
+    # merchant exactly once — and re-announces only if the representative
+    # candidate changes, which is a genuinely different ambiguity.
+    from app.services.webhook_service import send_webhook
+
+    await send_webhook(
+        db,
+        merchant_id=candidates[0].merchant_id,
+        event="payment.ambiguous",
+        intent=candidates[0],
+        extra_payload={
             "tx_hash": settlement.tx_hash,
             "settlement": "onchain",
             "candidate_intent_ids": ids,
@@ -338,6 +414,10 @@ async def _match_one(db, settlement, network: TronNetwork) -> str:
             return "ambiguous"
         candidates = [chosen]
 
+    # Resolved: the ambiguity, if there ever was one, is over. Drop the
+    # announcement memo so it cannot outlive the row it describes.
+    _ANNOUNCED_AMBIGUITY.pop(settlement.id, None)
+
     intent = candidates[0]
     expected = to_base_units(intent.amount, decimals)
 
@@ -371,7 +451,11 @@ async def match_pending_tron_settlements(network: TronNetwork) -> dict:
     `pending` — is what makes four properties structural rather than checked: an
     EVM settlement is never considered, the OTHER TRON network's settlements are
     never considered, an already-matched one is never re-matched, and one
-    already refused as ambiguous (now `rejected`) is not retried blindly.
+    `rejected` for failing validation against its intent is never re-attempted.
+
+    Deliberately UNCHANGED by the ambiguity retry: an ambiguous settlement is
+    retried because it still satisfies this scan, not because the scan was
+    widened. Widening it is what would put a terminal row back in play.
     """
     from app.db.session import async_session
 
