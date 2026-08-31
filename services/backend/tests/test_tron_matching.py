@@ -7,15 +7,18 @@ intent, closes the intent, and fires the webhook that already exists.
 Contract pinned here:
 
   - A settlement matches an intent on chain + status + recipient + token +
-    environment + validity window. **Amount is NOT a match criterion** — matching
-    on it would make an underpayment unmatchable, and an unmatched underpayment
-    is a payment that silently disappears.
+    environment + validity window. **Amount is NOT a SELECTION criterion** —
+    selecting on it would make an underpayment unmatchable, and an unmatched
+    underpayment is a payment that silently disappears. A LONE candidate is
+    never filtered by amount.
   - The recipient comparison is EXACT and CASE-SENSITIVE. Base58check has no
     `0 O I l`; folding one does not merely change it, it can produce a string
     that is not base58 at all. The dead matcher's own candidate query lowercases
     the recipient and says so (`webhook_service.py:717-720`).
-  - Zero candidates: nothing changes. One: close it. More than one: choose
-    NOTHING, mark the settlement `rejected`, fire `payment.ambiguous`.
+  - Zero candidates: nothing changes. One: close it. More than one: amount is
+    the TIEBREAK — exactly one candidate asking for exactly what arrived wins;
+    zero or several such candidates choose NOTHING, mark the settlement
+    `rejected`, fire `payment.ambiguous`.
   - Amounts compare as EXACT INTEGERS in base units, no tolerance. The written
     columns are in TOKEN units, because `_build_payload` emits `amount` in token
     units beside them.
@@ -465,7 +468,9 @@ async def test_two_candidates_touch_no_intent_and_fire_ambiguous(webhooks, caplo
     a = await _make_intent(amount=10.0)
     b = await _make_intent(amount=11.0)      # distinct amount: 0019
     before = await _intents_snapshot()
-    sid = await _make_settlement(amount_base=_base(10.0))
+    # 9.0 matches NEITHER exactly: a partial payment against two open invoices
+    # is attributable to no one, so the amount tiebreak declines to choose.
+    sid = await _make_settlement(amount_base=_base(9.0))
 
     with caplog.at_level(logging.WARNING, logger=tm.logger.name):
         result = await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
@@ -502,7 +507,7 @@ async def test_an_ambiguous_settlement_holds_no_intent(webhooks):
 
     a = await _make_intent(amount=10.0)
     b = await _make_intent(amount=11.0)
-    await _make_settlement(amount_base=_base(10.0))
+    await _make_settlement(amount_base=_base(9.0))    # matches neither exactly
     await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
 
     async with async_session() as db:
@@ -514,13 +519,184 @@ async def test_an_ambiguous_settlement_holds_no_intent(webhooks):
 async def test_an_ambiguous_settlement_is_not_reprocessed(webhooks):
     await _make_intent(amount=10.0)
     await _make_intent(amount=11.0)
-    await _make_settlement(amount_base=_base(10.0))
+    await _make_settlement(amount_base=_base(9.0))    # matches neither exactly
 
     assert (await tm.match_pending_tron_settlements(tp.TRON_MAINNET))["ambiguous"] == 1
     second = await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
 
     assert second["ambiguous"] == 0
     assert [e for e, _, _ in webhooks] == ["payment.ambiguous"]
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Disambiguation by exact amount — only among several candidates
+# ═══════════════════════════════════════════════════════════════
+
+@pytest.mark.asyncio
+async def test_two_candidates_the_one_asking_the_exact_amount_wins(webhooks, caplog):
+    """Two open invoices on one address is ordinary. Refusing to choose when
+    only ONE of them asks for what arrived leaves real money unreconciled."""
+    from app.models.merchant_models import IntentStatus
+    from app.models.settlement_models import SettlementStatus
+
+    a = await _make_intent(amount=10.0)
+    b = await _make_intent(amount=11.0)
+    before = await _intents_snapshot()
+    sid = await _make_settlement(amount_base=_base(10.0))
+
+    with caplog.at_level(logging.WARNING, logger=tm.logger.name):
+        result = await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
+
+    assert result["matched"] == 1, result
+    assert result["ambiguous"] == 0
+
+    winner = await _intent(a)
+    assert winner.status == IntentStatus.paid
+    assert winner.amount_received == "10"
+    assert winner.completed_at is not None
+
+    # The loser was not read into, not written to, not implied.
+    assert (await _intents_snapshot())[b] == before[b]
+    assert (await _intent(b)).status == IntentStatus.pending
+
+    s = await _settlement(sid)
+    assert s.intent_id == a
+    assert s.status == SettlementStatus.final
+    assert winner.matched_tx_hash == s.tx_hash
+
+    assert [(e, i) for e, i, _ in webhooks] == [("payment.completed", a)]
+    assert [r.getMessage() for r in caplog.records
+            if r.levelno == logging.ERROR] == []
+
+
+@pytest.mark.asyncio
+async def test_three_candidates_the_one_asking_the_exact_amount_wins(webhooks):
+    from app.models.merchant_models import IntentStatus
+
+    a = await _make_intent(amount=10.0)
+    b = await _make_intent(amount=11.0)
+    c = await _make_intent(amount=12.0)
+    before = await _intents_snapshot()
+    sid = await _make_settlement(amount_base=_base(11.0))
+
+    result = await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
+
+    assert result["matched"] == 1, result
+    assert result["ambiguous"] == 0
+    assert (await _intent(b)).status == IntentStatus.paid
+
+    after = await _intents_snapshot()
+    assert after[a] == before[a]
+    assert after[c] == before[c]
+    assert (await _settlement(sid)).intent_id == b
+    assert [(e, i) for e, i, _ in webhooks] == [("payment.completed", b)]
+
+
+@pytest.mark.asyncio
+async def test_two_candidates_neither_matching_the_amount_stay_ambiguous(webhooks):
+    """A partial payment with two open invoices belongs to neither, provably."""
+    from app.models.merchant_models import IntentStatus
+    from app.models.settlement_models import SettlementStatus
+
+    a = await _make_intent(amount=10.0)
+    b = await _make_intent(amount=11.0)
+    before = await _intents_snapshot()
+    sid = await _make_settlement(amount_base=_base(9.0))
+
+    result = await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
+
+    assert result["ambiguous"] == 1, result
+    assert result["matched"] == 0
+    assert result["partial"] == 0, "a partial must not be attributed by guesswork"
+    assert await _intents_snapshot() == before
+    assert (await _intent(a)).status == IntentStatus.pending
+    assert (await _intent(b)).status == IntentStatus.pending
+
+    s = await _settlement(sid)
+    assert s.intent_id is None
+    assert s.status == SettlementStatus.rejected
+    _, _, extra = webhooks[0]
+    assert [e for e, _, _ in webhooks] == ["payment.ambiguous"]
+    assert set(extra["candidate_intent_ids"]) == {a, b}
+
+
+@pytest.mark.asyncio
+async def test_two_candidates_asking_the_same_amount_stay_ambiguous(webhooks):
+    """Two invoices for the same amount are indistinguishable, and paying the
+    wrong one credits one merchant's money to another merchant's invoice.
+
+    They live under different merchant_ids because `uq_intent_pending_amount`
+    (0019) forbids two same-amount pending intents under ONE merchant — which
+    makes a shared recipient address the only way this arises, and the
+    cross-merchant misattribution the reason it must never be guessed.
+    """
+    from app.models.merchant_models import IntentStatus
+    from app.models.settlement_models import SettlementStatus
+
+    a = await _make_intent(amount=10.0, merchant_id="m_tron_a")
+    b = await _make_intent(amount=10.0, merchant_id="m_tron_b")
+    before = await _intents_snapshot()
+    sid = await _make_settlement(amount_base=_base(10.0))
+
+    result = await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
+
+    assert result["ambiguous"] == 1, result
+    assert result["matched"] == 0
+    assert await _intents_snapshot() == before
+    assert (await _intent(a)).status == IntentStatus.pending
+    assert (await _intent(b)).status == IntentStatus.pending
+
+    s = await _settlement(sid)
+    assert s.intent_id is None, "two exact matches must not pick a winner"
+    assert s.status == SettlementStatus.rejected
+    _, _, extra = webhooks[0]
+    assert [e for e, _, _ in webhooks] == ["payment.ambiguous"]
+    assert set(extra["candidate_intent_ids"]) == {a, b}
+
+
+@pytest.mark.asyncio
+async def test_a_lone_candidate_is_not_filtered_by_amount_when_overpaid(webhooks):
+    """Amount disambiguates BETWEEN candidates; it never selects them. One
+    candidate paid too much is still that candidate's payment."""
+    from app.models.merchant_models import IntentStatus
+
+    iid = await _make_intent(amount=10.0)
+    sid = await _make_settlement(amount_base=_base(12.0))
+
+    result = await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
+
+    assert result["matched"] == 1, result
+    assert result["unmatched"] == 0, "amount leaked into candidate selection"
+    intent = await _intent(iid)
+    assert intent.status == IntentStatus.paid
+    assert intent.overpaid_amount == "2"
+    assert (await _settlement(sid)).intent_id == iid
+    assert [(e, i) for e, i, _ in webhooks] == [("payment.completed", iid)]
+
+
+@pytest.mark.asyncio
+async def test_a_lone_candidate_is_not_filtered_by_amount_when_underpaid(webhooks):
+    """The failure this whole design exists to prevent: filter a lone candidate
+    by amount and an underpayment becomes unmatchable — money already at the
+    merchant, invisible to the merchant."""
+    from app.models.merchant_models import IntentStatus
+    from app.models.settlement_models import SettlementStatus
+
+    iid = await _make_intent(amount=10.0)
+    sid = await _make_settlement(amount_base=_base(8.0))
+
+    result = await tm.match_pending_tron_settlements(tp.TRON_MAINNET)
+
+    assert result["partial"] == 1, result
+    assert result["unmatched"] == 0, "amount leaked into candidate selection"
+    intent = await _intent(iid)
+    assert intent.status == IntentStatus.partial
+    assert intent.underpaid_amount == "2"
+
+    s = await _settlement(sid)
+    assert s.intent_id == iid
+    assert s.status == SettlementStatus.final
+    assert [(e, i) for e, i, _ in webhooks] == [("payment.partial", iid)]
 
 
 # ═══════════════════════════════════════════════════════════════

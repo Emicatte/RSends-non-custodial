@@ -40,15 +40,28 @@ A settlement matches an intent when ALL of these hold:
     sensitive) · token is the registry USDT · environments agree · the
     settlement's block_timestamp is inside [created_at, expires_at]
 
-**Amount is deliberately NOT a match criterion.** Matching on it would make an
-underpayment unmatchable, and an unmatched underpayment is a payment that
+**Amount is deliberately NOT a SELECTION criterion.** Selecting on it would make
+an underpayment unmatchable, and an unmatched underpayment is a payment that
 silently disappears — the money is already at the merchant on TRON, with no
-router and no escrow to bounce it. Amount is checked AFTER a unique match, and
-decides only how the intent closes.
+router and no escrow to bounce it. A LONE candidate is therefore never filtered
+by amount; amount is read afterwards and decides only how that intent closes.
+
+Amount IS the tiebreak among SEVERAL candidates, and only there. Two open
+invoices on one address is an ordinary merchant state, and refusing a
+settlement when exactly one of those invoices asks for the amount that arrived
+strands real money at the merchant that nothing will ever reconcile. So with
+more than one candidate, base units are compared exactly (no tolerance):
+
+  - exactly one candidate matches exactly → it wins, and closes as it would
+    have if it had been alone
+  - zero match exactly → AMBIGUOUS. A partial payment against several open
+    invoices belongs to none of them provably.
+  - more than one matches exactly → AMBIGUOUS. Two invoices for the same amount
+    are indistinguishable by the only evidence a settlement carries.
 
 Zero candidates is normal: a transfer to a merchant's address that belongs to
-no invoice. More than one is refused outright — this module never picks a
-winner, because picking wrong credits one merchant's payment to another
+no invoice. Ambiguity is refused outright — this module never picks a winner it
+cannot prove, because picking wrong credits one merchant's payment to another
 merchant's invoice.
 
 NO PARTIAL ACCUMULATION. Two underpayments summing to the invoice do not close
@@ -193,8 +206,32 @@ async def _candidates(db, settlement, environment: str, network: TronNetwork) ->
     )).scalars().all()
 
 
+def _sole_exact_match(candidates: list, received: int, decimals: int):
+    """The one candidate asking for EXACTLY what arrived, or None.
+
+    Consulted ONLY when there is more than one candidate — it is a tiebreak,
+    never a filter. Comparison is exact integers in base units, no tolerance,
+    the same arithmetic the close below already does.
+
+    Two outcomes decline to choose, both on purpose:
+
+      - ZERO exact matches. The transfer is a partial payment against several
+        open invoices; it belongs to none of them provably, and attributing it
+        would mark one invoice `partial` on nothing but proximity.
+      - MORE THAN ONE. Two invoices for the same amount are indistinguishable
+        by amount, which is the only evidence this settlement carries.
+    """
+    exact = [c for c in candidates
+             if to_base_units(c.amount, decimals) == received]
+    return exact[0] if len(exact) == 1 else None
+
+
 async def _record_ambiguous(db, settlement, candidates: list) -> None:
     """Refuse to choose, say so loudly, and tell the merchant.
+
+    Reached only AFTER `_sole_exact_match` declined: either no candidate asks
+    for the amount that arrived, or several do. What is left is not a tie the
+    matcher is too timid to break — it is a tie with no evidence in it.
 
     The settlement is marked `rejected` — the one terminal status that
     deliberately does NOT hold an intent (`intent_service.SETTLEMENT_HOLD_STATUSES`),
@@ -210,8 +247,9 @@ async def _record_ambiguous(db, settlement, candidates: list) -> None:
     settlement.status = SettlementStatus.rejected
     logger.error(
         "[tron-matcher] AMBIGUOUS settlement tx=%s (%s to %s) matches %d pending "
-        "intents %s — refusing to choose; no intent was touched and the "
-        "settlement is marked rejected",
+        "intents %s and no single one of them asks for exactly that amount — "
+        "refusing to choose; no intent was touched and the settlement is "
+        "marked rejected",
         settlement.tx_hash, settlement.amount, settlement.merchant,
         len(ids), ids,
     )
@@ -289,13 +327,19 @@ async def _match_one(db, settlement, network: TronNetwork) -> str:
     )
     if not candidates:
         return "unmatched"
+
+    received = int(settlement.amount)
     if len(candidates) > 1:
-        await _record_ambiguous(db, settlement, candidates)
-        return "ambiguous"
+        # Amount is a TIEBREAK here and nowhere else. A lone candidate is never
+        # filtered by it: doing that would make an underpayment unmatchable.
+        chosen = _sole_exact_match(candidates, received, decimals)
+        if chosen is None:
+            await _record_ambiguous(db, settlement, candidates)
+            return "ambiguous"
+        candidates = [chosen]
 
     intent = candidates[0]
     expected = to_base_units(intent.amount, decimals)
-    received = int(settlement.amount)
 
     # Written before finalization: `_finalize_settlement` flushes and then
     # fires, so the payload picks these up.
