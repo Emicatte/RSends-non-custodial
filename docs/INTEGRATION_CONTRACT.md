@@ -405,9 +405,15 @@ chains (TRON) only (`app/services/tron_matcher.py`):
   `paid`; `amount_received` and `underpaid_amount` are populated (both in **token** units,
   like `amount`). The money is already at the merchant.
 - **`payment.ambiguous`** — one transfer could be paying more than one of your pending
-  invoices, and we will not guess. **No intent was modified**; the `intent_id` in the payload
-  is one representative candidate, and the full list is in the extra key
-  `candidate_intent_ids`. Reconcile by hand. Note that overpayment does **not** produce
+  invoices **and the amount does not settle it**, so we will not guess. Where exactly one of
+  those invoices asks for precisely the amount that arrived, that invoice is paid and you get
+  `payment.completed` instead (`tron_matcher._sole_exact_match`, pinned by
+  `test_tron_matching.py::test_two_candidates_the_one_asking_the_exact_amount_wins`); this
+  event is what remains — no candidate matches the amount exactly (a partial payment against
+  several open invoices), or several do (two invoices for the same amount). It therefore
+  fires strictly less often than before 2026-08-31, never more. **No intent was modified**;
+  the `intent_id` in the payload is one representative candidate, and the full list is in the
+  extra key `candidate_intent_ids`. Reconcile by hand. Note that overpayment does **not** produce
   `payment.overpaid`: an overpaid invoice is satisfied, so it fires `payment.completed` with
   `overpaid_amount` set.
 
