@@ -60,18 +60,59 @@ function withinDay(iso: string, nowMs: number | null): boolean {
   return Number.isFinite(t) && nowMs - t <= 86_400_000
 }
 
+/**
+ * The copy for a `disabled_reason` CODE. The backend stores codes precisely so
+ * this mapping can change without touching rows.
+ *
+ * The `url_not_allowed:` family is worded to say the URL is unreachable BY
+ * POLICY — we declined to contact it — rather than implying the merchant's
+ * server misbehaved, because in that case it was never contacted at all.
+ */
+function disabledReasonText(code: string | null): string {
+  if (!code) return 'This endpoint was disabled.'
+  if (code.startsWith('url_not_allowed:')) {
+    return 'This URL is not an allowed destination, so we never contacted it. It must be a public HTTPS address.'
+  }
+  switch (code) {
+    case 'endpoint_not_found_404':
+      return 'The endpoint answered 404 (not found) on three consecutive deliveries.'
+    case 'endpoint_gone_410':
+      return 'The endpoint answered 410 (gone) on three consecutive deliveries.'
+    case 'dns_resolution_failed':
+      return "The URL's hostname could not be resolved on three consecutive deliveries."
+    default:
+      return 'This endpoint failed permanently on three consecutive deliveries.'
+  }
+}
+
+// Date only, UTC-pinned: the same reason useClientNow exists — a locale- or
+// timezone-derived string differs between server and client and breaks
+// hydration. See i18n/request.ts, which pins timeZone: 'UTC'.
+function disabledOnText(iso: string | null): string {
+  if (!iso) return ''
+  const t = new Date(iso)
+  if (Number.isNaN(t.getTime())) return ''
+  return ` Disabled on ${t.toISOString().slice(0, 10)}.`
+}
+
 export function WebhookCard({
   webhook,
   fetchDeliveries,
   sendTest,
+  reEnable,
 }: {
   webhook: OrgWebhook
   fetchDeliveries: (id: number) => Promise<OrgWebhookDelivery[]>
   sendTest: (id: number) => Promise<{ status: string; response_code: number | null; message: string }>
+  /** Omitted by callers with no backend (the landing-page fixture), which just
+   *  hides the button — the disabled banner still renders. */
+  reEnable?: (id: number) => Promise<unknown>
 }) {
   const [deliveries, setDeliveries] = useState<OrgWebhookDelivery[] | null>(null)
   const [testing, setTesting] = useState(false)
   const [testMsg, setTestMsg] = useState<string | null>(null)
+  const [enabling, setEnabling] = useState(false)
+  const [enableErr, setEnableErr] = useState<string | null>(null)
 
   const loadDeliveries = useCallback(async () => {
     try {
@@ -116,6 +157,19 @@ export function WebhookCard({
     }
   }
 
+  async function onReEnable() {
+    if (!reEnable) return
+    setEnabling(true)
+    setEnableErr(null)
+    try {
+      await reEnable(webhook.webhook_id)
+    } catch (e) {
+      setEnableErr(e instanceof Error ? e.message : 'Could not re-enable')
+    } finally {
+      setEnabling(false)
+    }
+  }
+
   return (
     <div className={`${card} flex flex-col gap-3`}>
       <div className="flex items-center justify-between gap-3">
@@ -126,7 +180,9 @@ export function WebhookCard({
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             <span className={badgeClass} style={badge(COLORS.blueLight, COLORS.blue)}>TEST</span>
             <span className={badgeClass} style={badge(webhook.is_active ? COLORS.greenLight : COLORS.redLight, webhook.is_active ? COLORS.green : COLORS.red)}>
-              {webhook.is_active ? 'ACTIVE' : 'INACTIVE'}
+              {/* AUTO-DISABLED reads differently from INACTIVE: one is
+                  something the system did to them, the other is just a state. */}
+              {webhook.is_active ? 'ACTIVE' : webhook.disabled_at ? 'AUTO-DISABLED' : 'INACTIVE'}
             </span>
             {webhook.events.map((e) => (
               <span key={e} className={badgeClass} style={badge(COLORS.paper, COLORS.muted)}>{e}</span>
@@ -152,6 +208,46 @@ export function WebhookCard({
           {testing ? 'Sending…' : 'Send test'}
         </button>
       </div>
+
+      {/* Why it stopped. Without this the merchant sees notifications end with
+          no date and no cause — a silent failure, which is worse than the noisy
+          one auto-disable removed. */}
+      {!webhook.is_active && webhook.disabled_at && (
+        <div
+          className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-lg"
+          style={{ background: COLORS.redLight, fontFamily: 'var(--font-display)', fontSize: 12, color: COLORS.ink }}
+        >
+          <span style={{ minWidth: 0 }}>
+            {disabledReasonText(webhook.disabled_reason)}
+            {disabledOnText(webhook.disabled_at)}
+            {' No further events are being sent to it.'}
+          </span>
+          {reEnable && (
+            <button
+              onClick={onReEnable}
+              disabled={enabling}
+              className="px-3 py-1.5 rounded-lg"
+              style={{
+                flexShrink: 0,
+                border: `1px solid ${COLORS.red}`,
+                background: 'transparent',
+                color: COLORS.red,
+                fontFamily: 'var(--font-display)',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: enabling ? 'not-allowed' : 'pointer',
+                opacity: enabling ? 0.6 : 1,
+              }}
+            >
+              {enabling ? 'Re-enabling…' : 'Re-enable'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {enableErr && (
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 12, color: COLORS.red }}>{enableErr}</div>
+      )}
 
       {/* Health row */}
       <div className="flex flex-wrap gap-5" style={{ fontFamily: 'var(--font-display)', fontSize: 12 }}>
