@@ -9,6 +9,7 @@
 
 import { isAddress } from 'viem'
 import type { OrgPaymentRecord } from '@/hooks/useOrgPayments'
+import { chainFor } from '@/lib/createChains'
 import {
   amountToBase,
   amountsToSharesBps,
@@ -16,17 +17,23 @@ import {
   onchainAmounts,
 } from '@/lib/splitShares'
 
-// The create flow is hard-locked to test: Base Sepolia is the only settleable
-// testnet (USDC + ETH are the enabled tokens there). No chain picker, no live.
-// Lives here rather than in the modal so the prefill gate and the create form
-// read ONE registry — a row is offered for repeat on exactly the terms the
-// create form can honour.
-export const CREATE_CHAIN = 'base_sepolia'
-export const CREATE_TOKENS = ['USDC', 'ETH'] as const
-// Base-unit decimals for the create tokens. The backend chain registry
-// (SUPPORTED_CHAINS → router_registry) is the SSOT; payTokens.ts covers
-// only the /pay-side ERC-20s and deliberately has no native ETH entry.
-export const CREATE_TOKEN_DECIMALS: Record<string, number> = { USDC: 6, ETH: 18 }
+// The terms a row must meet to be repeatable. DERIVED from the one chain/token
+// table in lib/createChains.ts (itself pinned against the backend registry), so
+// the prefill gate and the create form cannot disagree about which tokens exist
+// or how many decimals they carry.
+//
+// Repeat stays BASE SEPOLIA ONLY even though the create form now offers TRON
+// too. It is a deliberate refusal, not an oversight: the split branch below is
+// EVM-shaped throughout (viem `isAddress`, lowercase de-duplication, an
+// on-chain remainder rule that belongs to a router TRON does not have), and a
+// TRON row would need its own family-aware path. A TRON row therefore keeps
+// returning the existing `'chain'` refusal, which names the field honestly.
+const BASE_SEPOLIA = chainFor('base_sepolia')!
+export const CREATE_CHAIN = BASE_SEPOLIA.chain
+export const CREATE_TOKENS = BASE_SEPOLIA.tokens.map((t) => t.symbol)
+export const CREATE_TOKEN_DECIMALS: Record<string, number> = Object.fromEntries(
+  BASE_SEPOLIA.tokens.map((t) => [t.symbol, t.decimals]),
+)
 
 const SPLIT_MIN = 2
 const SPLIT_MAX = 20
