@@ -51,7 +51,19 @@ class Organization(Base):
     # Org-level settlement address: the wallet where the org receives on-chain
     # payments, shared across team members. NULL until an admin sets it in
     # Settings (never auto-derived). Stored lowercase. Migration 0008.
+    # EVM ONLY — it is validated as ^0x[a-fA-F0-9]{40}$ and lowercased, and it
+    # remains the PRIMARY payout address.
     settlement_wallet = Column(Text, nullable=True)
+
+    # TRON payout address (migration 0022). A SEPARATE column, not a second use
+    # of the one above: base58check excludes `0 O I l`, so the lowercasing that
+    # normalises an EVM address can turn a TRON one into a string that is not
+    # base58 at all and whose checksum no longer verifies. Two columns, two
+    # validators, no branching on a guess about which chain a value belongs to.
+    # NULL = this org has not set a TRON payout address. Split payments are
+    # unaffected and stay EVM-only: splits execute through the immutable fee
+    # router, and a watch-only chain has no router to carry legs.
+    settlement_wallet_tron = Column(Text, nullable=True)
 
     # Staged onboarding (migration 0009). Two INDEPENDENT status fields:
     # onboarding_status: 'created' -> 'email_verified' -> 'company_submitted'.
