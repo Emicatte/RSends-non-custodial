@@ -252,6 +252,23 @@ class MerchantWebhook(Base):
     events = Column(JSON, nullable=False, default=list)     # ["payment.completed", "payment.expired"]
     is_active = Column(Boolean, nullable=False, default=True)
 
+    # Auto-disable state (migration 0021). Counts deliveries that exhausted their
+    # retries against a PERMANENTLY failed target (404/410, DNS resolution
+    # failure, egress-blocked) — never transient ones (5xx, timeouts,
+    # connection-refused), which the existing backoff already owns. Any
+    # successful delivery resets it to 0, so an endpoint having a bad afternoon
+    # accumulates no permanent blame.
+    consecutive_permanent_failures = Column(
+        Integer, nullable=False, default=0, server_default="0",
+    )
+
+    # Why and when this endpoint was disabled — NULL while it has never been.
+    # The dashboard reads both: disabling silently would trade a noisy problem
+    # for a quiet one, and a merchant must be able to see that notifications
+    # stopped, why, and since when.
+    disabled_reason = Column(Text, nullable=True)
+    disabled_at = Column(DateTime(timezone=True), nullable=True)
+
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -579,6 +596,14 @@ class WebhookItem(BaseModel):
     events: list[str]
     is_active: bool
     created_at: str
+    # Why and when auto-disable fired; both None while the endpoint has never
+    # been disabled. Defaulted, so this stays a COMPATIBLE addition. Without
+    # them the dashboard could only show an endpoint as inactive, and a merchant
+    # would see notifications stop with no way to learn why or since when.
+    # `disabled_reason` is a stable CODE (see webhook_service.PERMANENT_HTTP_REASONS
+    # and friends) — the frontend owns the wording.
+    disabled_reason: Optional[str] = None
+    disabled_at: Optional[str] = None
 
 
 class WebhookListResponse(BaseModel):
