@@ -24,6 +24,11 @@ const NAMESPACES = [
   'pricing',
   'howItWorks',
   'auth',
+  // The authed Settings surface, added when the TRON payout address landed
+  // there. It was already key-identical across all five locales, so this only
+  // makes the existing state enforced: a new settings string that reaches only
+  // en.json now fails here instead of shipping as an English island.
+  'settings',
   'showcase',
 ] as const
 

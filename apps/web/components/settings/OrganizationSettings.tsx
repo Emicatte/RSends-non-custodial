@@ -2,6 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { isAddress } from 'viem'
+import {
+  isTronAddress,
+  looksLikeTronAddress,
+  TRON_ZERO_ADDRESS,
+} from '@/lib/web3/tronAddress'
 import { useSession } from 'next-auth/react'
 import { useTranslations } from 'next-intl'
 import { useOrganizations, type OrgRole } from '@/hooks/useOrganizations'
@@ -62,6 +67,11 @@ export function OrganizationSettings() {
   const [walletSaving, setWalletSaving] = useState(false)
   const [walletError, setWalletError] = useState<string | null>(null)
 
+  const [walletTronDraft, setWalletTronDraft] = useState('')
+  const [editingWalletTron, setEditingWalletTron] = useState(false)
+  const [walletTronSaving, setWalletTronSaving] = useState(false)
+  const [walletTronError, setWalletTronError] = useState<string | null>(null)
+
   useEffect(() => {
     setNameDraft(activeOrg?.name ?? '')
   }, [activeOrg?.id, activeOrg?.name])
@@ -71,6 +81,12 @@ export function OrganizationSettings() {
     setEditingWallet(false)
     setWalletError(null)
   }, [activeOrg?.id, activeOrg?.settlement_wallet])
+
+  useEffect(() => {
+    setWalletTronDraft(activeOrg?.settlement_wallet_tron ?? '')
+    setEditingWalletTron(false)
+    setWalletTronError(null)
+  }, [activeOrg?.id, activeOrg?.settlement_wallet_tron])
 
   const resolvedError = useMemo(() => {
     const code = orgError ?? membersError
@@ -112,6 +128,12 @@ export function OrganizationSettings() {
       setWalletError(null)
       return
     }
+    // A T-address here is a chain mix-up, not a malformed address — say which
+    // chain this field is for instead of "that isn't a valid EVM address".
+    if (looksLikeTronAddress(next)) {
+      setWalletError(t('settlement.errors.tronOnEvm'))
+      return
+    }
     // Client-side mirror of the server validator (server remains the authority):
     // valid EVM address, non-zero.
     if (!isAddress(next) || /^0x0{40}$/i.test(next)) {
@@ -127,6 +149,50 @@ export function OrganizationSettings() {
       setWalletError(t('settlement.errors.saveFailed'))
     } finally {
       setWalletSaving(false)
+    }
+  }
+
+  async function commitTronWallet() {
+    if (!activeOrg) return
+    // Trim only. Base58check is case-SENSITIVE and its alphabet excludes
+    // `0 O I l`, so the `.toLowerCase()` the EVM field uses above would not
+    // merely change a T-address — it would produce a string that is not base58.
+    // The no-op comparison is raw for the same reason.
+    const next = walletTronDraft.trim()
+    if (!next || next === (activeOrg.settlement_wallet_tron ?? '')) {
+      setEditingWalletTron(false)
+      setWalletTronDraft(activeOrg.settlement_wallet_tron ?? '')
+      setWalletTronError(null)
+      return
+    }
+    // Client-side mirror of `_validate_settlement_wallet_tron` (server remains
+    // the authority): an 0x address is refused outright rather than migrated to
+    // the other field, the address is base58check-verified, and the zero address
+    // is rejected by an explicit compare — its checksum is valid, so nothing
+    // else catches it.
+    if (next.startsWith('0x')) {
+      setWalletTronError(t('settlement.tron.errors.evmOnTron'))
+      return
+    }
+    if (!isTronAddress(next)) {
+      setWalletTronError(t('settlement.tron.errors.invalidAddress'))
+      return
+    }
+    if (next === TRON_ZERO_ADDRESS) {
+      setWalletTronError(t('settlement.tron.errors.zeroAddress'))
+      return
+    }
+    setWalletTronSaving(true)
+    setWalletTronError(null)
+    try {
+      // Only this field is sent: omitted means unchanged on the server, so
+      // setting one payout address never clears the other.
+      await updateOrganization(activeOrg.id, { settlement_wallet_tron: next })
+      setEditingWalletTron(false)
+    } catch {
+      setWalletTronError(t('settlement.tron.errors.saveFailed'))
+    } finally {
+      setWalletTronSaving(false)
     }
   }
 
@@ -330,7 +396,7 @@ export function OrganizationSettings() {
         </div>
       </section>
 
-      {/* ─── Settlement wallet ─── */}
+      {/* ─── Settlement wallets: one per address family ─── */}
       <section>
         <h2
           style={{
@@ -353,6 +419,26 @@ export function OrganizationSettings() {
             gap: 10,
           }}
         >
+          {/* Which chain this address serves has to be readable at a glance —
+              the two families are one field apart and a payout to the wrong
+              one is unrecoverable. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: INK }}>
+              {t('settlement.evmLabel')}
+            </span>
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: ORANGE,
+                background: 'rgba(200,81,44,0.08)',
+                borderRadius: 999,
+                padding: '2px 8px',
+              }}
+            >
+              {t('settlement.evmBadge')}
+            </span>
+          </div>
           <p style={{ fontSize: 13, color: MUTED, margin: 0 }}>
             {t('settlement.help')}
           </p>
@@ -483,6 +569,163 @@ export function OrganizationSettings() {
 
           {walletError ? (
             <div style={{ fontSize: 12, color: DANGER }}>{walletError}</div>
+          ) : null}
+
+          {/* ── TRON payout address ── */}
+          <div
+            style={{
+              borderTop: '1px solid rgba(200,81,44,0.12)',
+              margin: '4px 0 0',
+            }}
+          />
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: INK }}>
+              {t('settlement.tron.label')}
+            </span>
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: MUTED,
+                background: 'rgba(0,0,0,0.04)',
+                borderRadius: 999,
+                padding: '2px 8px',
+              }}
+            >
+              {t('settlement.tron.badge')}
+            </span>
+          </div>
+          <p style={{ fontSize: 13, color: MUTED, margin: 0 }}>
+            {t('settlement.tron.help')}
+          </p>
+
+          {editingWalletTron && isAdmin ? (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                type="text"
+                value={walletTronDraft}
+                onChange={(e) => setWalletTronDraft(e.target.value)}
+                placeholder={t('settlement.tron.placeholder')}
+                autoFocus
+                spellCheck={false}
+                // No autoCapitalize/autoCorrect either: base58check is
+                // case-sensitive, so a helpful keyboard would corrupt it.
+                autoCapitalize="none"
+                autoCorrect="off"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    void commitTronWallet()
+                  } else if (e.key === 'Escape') {
+                    setEditingWalletTron(false)
+                    setWalletTronDraft(activeOrg.settlement_wallet_tron ?? '')
+                    setWalletTronError(null)
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  minWidth: 320,
+                  padding: '8px 10px',
+                  fontSize: 13,
+                  fontFamily: 'monospace',
+                  border: '1px solid rgba(200,81,44,0.25)',
+                  borderRadius: 8,
+                  color: INK,
+                  outline: 'none',
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => void commitTronWallet()}
+                disabled={walletTronSaving}
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: '#FFFFFF',
+                  background: ORANGE,
+                  border: 'none',
+                  borderRadius: 8,
+                  padding: '8px 14px',
+                  cursor: walletTronSaving ? 'default' : 'pointer',
+                  opacity: walletTronSaving ? 0.6 : 1,
+                }}
+              >
+                {walletTronSaving ? '…' : t('settlement.saveCta')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingWalletTron(false)
+                  setWalletTronDraft(activeOrg.settlement_wallet_tron ?? '')
+                  setWalletTronError(null)
+                }}
+                style={{
+                  fontSize: 13,
+                  color: MUTED,
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                {t('settlement.cancelCta')}
+              </button>
+            </div>
+          ) : activeOrg.settlement_wallet_tron ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              {/* Rendered byte-identical: the casing IS the address. */}
+              <span style={{ fontSize: 13, fontFamily: 'monospace', color: INK, wordBreak: 'break-all' }}>
+                {activeOrg.settlement_wallet_tron}
+              </span>
+              {isAdmin ? (
+                <button
+                  type="button"
+                  onClick={() => setEditingWalletTron(true)}
+                  style={{
+                    fontSize: 12,
+                    color: ORANGE,
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: 0,
+                    textDecoration: 'underline',
+                  }}
+                >
+                  {t('settlement.editCta')}
+                </button>
+              ) : null}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              {/* Deliberately NOT the EVM field's red pill: TRON is an extra
+                  rail, not a prerequisite. An EVM-only merchant is fully
+                  operational, and an alarm here would be a false one. */}
+              <span style={{ fontSize: 13, color: MUTED }}>
+                {t('settlement.tron.notSet')}
+              </span>
+              {isAdmin ? (
+                <button
+                  type="button"
+                  onClick={() => setEditingWalletTron(true)}
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: ORANGE,
+                    background: 'transparent',
+                    border: `1px solid ${ORANGE}`,
+                    borderRadius: 8,
+                    padding: '7px 13px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {t('settlement.tron.setCta')}
+                </button>
+              ) : null}
+            </div>
+          )}
+
+          {walletTronError ? (
+            <div style={{ fontSize: 12, color: DANGER }}>{walletTronError}</div>
           ) : null}
         </div>
       </section>

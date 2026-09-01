@@ -14,6 +14,9 @@ export interface OrganizationListItem {
   is_personal: boolean
   plan: string
   settlement_wallet: string | null
+  // The TRON payout address, its own column server-side. base58check and
+  // case-SENSITIVE — never fold it, compare it, or store it lowercased.
+  settlement_wallet_tron: string | null
   role: OrgRole
   member_count: number
   created_at: string
@@ -31,6 +34,9 @@ export interface CreateOrgInput {
 export interface UpdateOrgInput {
   name?: string
   settlement_wallet?: string
+  // Omitted = unchanged, on the server too. Patching one wallet must never
+  // clear the other, so callers send exactly the field they are editing.
+  settlement_wallet_tron?: string
 }
 
 export function useOrganizations() {

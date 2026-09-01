@@ -507,6 +507,8 @@
       },
       "settlement": {
         "title": "Wallet di regolamento",
+        "evmLabel": "Indirizzo di incasso EVM",
+        "evmBadge": "Principale",
         "help": "Il wallet su cui la tua organizzazione riceve i pagamenti. Ogni fattura viene regolata on-chain su questo indirizzo, salvo override per singola fattura.",
         "placeholder": "0x…",
         "saveCta": "Salva",
@@ -516,7 +518,22 @@
         "notSet": "Nessun wallet di regolamento impostato — non puoi ricevere pagamenti finché non ne imposti uno.",
         "errors": {
           "invalidAddress": "Inserisci un indirizzo EVM valido (0x…).",
+          "tronOnEvm": "Questo è un indirizzo TRON. Qui va un indirizzo EVM (0x…).",
           "saveFailed": "Impossibile salvare il wallet di regolamento. Riprova."
+        },
+        "tron": {
+          "label": "Indirizzo di incasso TRON",
+          "badge": "Opzionale",
+          "help": "Dove vengono regolati i pagamenti TRON. Impostalo solo se accetti TRON — non viene mai usato per le chain EVM.",
+          "placeholder": "T…",
+          "notSet": "Non impostato",
+          "setCta": "Imposta wallet TRON",
+          "errors": {
+            "invalidAddress": "Inserisci un indirizzo TRON valido (T…).",
+            "evmOnTron": "Questo è un indirizzo EVM. Qui va un indirizzo TRON (T…).",
+            "zeroAddress": "Questo è l'indirizzo zero di TRON — i fondi inviati lì sono persi.",
+            "saveFailed": "Impossibile salvare l'indirizzo di incasso TRON. Riprova."
+          }
         }
       }
     },

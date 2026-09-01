@@ -507,7 +507,9 @@
         "unknown": "Etwas ist schiefgelaufen. Bitte versuche es erneut."
       },
       "settlement": {
-        "title": "Abrechnungs-Wallet",
+        "title": "Abrechnungs-Wallets",
+        "evmLabel": "EVM-Auszahlungsadresse",
+        "evmBadge": "Primär",
         "help": "Das Wallet, auf dem deine Organisation Zahlungen empfängt. Jede Rechnung wird on-chain an diese Adresse abgerechnet, sofern du sie nicht pro Rechnung überschreibst.",
         "placeholder": "0x…",
         "saveCta": "Speichern",
@@ -517,7 +519,22 @@
         "notSet": "Kein Abrechnungs-Wallet festgelegt — du kannst keine Zahlungen empfangen, bis du eines festlegst.",
         "errors": {
           "invalidAddress": "Gib eine gültige EVM-Adresse ein (0x…).",
+          "tronOnEvm": "Das ist eine TRON-Adresse. Dieses Feld erwartet eine EVM-Adresse (0x…).",
           "saveFailed": "Abrechnungs-Wallet konnte nicht gespeichert werden. Versuche es erneut."
+        },
+        "tron": {
+          "label": "TRON-Auszahlungsadresse",
+          "badge": "Optional",
+          "help": "Wohin TRON-Zahlungen abgerechnet werden. Lege sie nur fest, wenn du TRON akzeptierst — für EVM-Chains wird sie nie verwendet.",
+          "placeholder": "T…",
+          "notSet": "Nicht festgelegt",
+          "setCta": "TRON-Wallet festlegen",
+          "errors": {
+            "invalidAddress": "Gib eine gültige TRON-Adresse ein (T…).",
+            "evmOnTron": "Das ist eine EVM-Adresse. Dieses Feld erwartet eine TRON-Adresse (T…).",
+            "zeroAddress": "Das ist die TRON-Null-Adresse — dorthin gesendete Mittel sind verloren.",
+            "saveFailed": "TRON-Auszahlungsadresse konnte nicht gespeichert werden. Versuche es erneut."
+          }
         }
       }
     },

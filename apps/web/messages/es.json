@@ -507,7 +507,9 @@
         "unknown": "Algo salió mal. Inténtalo de nuevo."
       },
       "settlement": {
-        "title": "Cartera de liquidación",
+        "title": "Carteras de liquidación",
+        "evmLabel": "Dirección de cobro EVM",
+        "evmBadge": "Principal",
         "help": "La cartera donde tu organización recibe los pagos. Cada factura se liquida on-chain en esta dirección, salvo que la sustituyas por factura.",
         "placeholder": "0x…",
         "saveCta": "Guardar",
@@ -517,7 +519,22 @@
         "notSet": "No hay cartera de liquidación configurada — no puedes recibir pagos hasta configurar una.",
         "errors": {
           "invalidAddress": "Introduce una dirección EVM válida (0x…).",
+          "tronOnEvm": "Esa es una dirección TRON. Este campo admite una dirección EVM (0x…).",
           "saveFailed": "No se pudo guardar la cartera de liquidación. Inténtalo de nuevo."
+        },
+        "tron": {
+          "label": "Dirección de cobro TRON",
+          "badge": "Opcional",
+          "help": "Donde se liquidan los pagos en TRON. Configúrala solo si aceptas TRON — nunca se usa para cadenas EVM.",
+          "placeholder": "T…",
+          "notSet": "Sin configurar",
+          "setCta": "Configurar cartera TRON",
+          "errors": {
+            "invalidAddress": "Introduce una dirección TRON válida (T…).",
+            "evmOnTron": "Esa es una dirección EVM. Este campo admite una dirección TRON (T…).",
+            "zeroAddress": "Esa es la dirección cero de TRON — los fondos enviados ahí se pierden.",
+            "saveFailed": "No se pudo guardar la dirección de cobro TRON. Inténtalo de nuevo."
+          }
         }
       }
     },
