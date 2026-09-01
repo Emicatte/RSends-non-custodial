@@ -41,6 +41,16 @@ _B58_INDEX = {c: i for i, c in enumerate(_B58_ALPHABET)}
 _TRON_ADDR_RE = re.compile(r"^T[1-9A-HJ-NP-Za-km-z]{33}$")
 _TRON_MAINNET_PREFIX = 0x41  # the payload byte every mainnet T-address decodes to
 
+# TRON's analogue of ZERO_ADDRESS: the 0x41 prefix followed by 20 zero bytes,
+# base58check-encoded. Its checksum is VALID, so `is_tron_address` accepts it and
+# only an explicit comparison rejects it. base58check encoding is canonical —
+# exactly one string encodes that payload — so comparing the string is exact and
+# needs no second decoder. Same hazard as the EVM zero address (a payout there
+# burns funds), plus one of its own: this is also the conventional native-TRX
+# marker, mirroring how `ZERO_ADDRESS` doubles as "native asset" in
+# router_registry, so accepting it as a payee would be ambiguous as well.
+TRON_ZERO_ADDRESS = "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb"
+
 
 # ═══════════════════════════════════════════════════════════════
 #  Exception

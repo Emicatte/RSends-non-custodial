@@ -114,6 +114,7 @@ async def list_my_orgs(
                 is_personal=org.is_personal,
                 plan=org.plan,
                 settlement_wallet=org.settlement_wallet,
+                settlement_wallet_tron=org.settlement_wallet_tron,
                 role=entry["role"],
                 member_count=entry["member_count"],
                 created_at=org.created_at,
@@ -144,6 +145,7 @@ async def create_new_org(
         is_personal=org.is_personal,
         plan=org.plan,
         settlement_wallet=org.settlement_wallet,
+        settlement_wallet_tron=org.settlement_wallet_tron,
         role="admin",
         member_count=1,
         created_at=org.created_at,
@@ -201,6 +203,16 @@ async def update_org(
                 detail={"code": "company_profile_required"},
             )
         org.settlement_wallet = payload.settlement_wallet
+    # The TRON payout address: same gate, same replace-only semantics, its own
+    # column. Independent of the branch above — patching one wallet must never
+    # clear the other, which is what `is not None` (omitted = unchanged) buys.
+    if payload.settlement_wallet_tron is not None:
+        if org.onboarding_status != "company_submitted":
+            raise HTTPException(
+                status_code=403,
+                detail={"code": "company_profile_required"},
+            )
+        org.settlement_wallet_tron = payload.settlement_wallet_tron
     org.updated_at = datetime.now(timezone.utc)
 
     await db.commit()
@@ -213,6 +225,7 @@ async def update_org(
         is_personal=org.is_personal,
         plan=org.plan,
         settlement_wallet=org.settlement_wallet,
+        settlement_wallet_tron=org.settlement_wallet_tron,
         created_at=org.created_at,
     )
 

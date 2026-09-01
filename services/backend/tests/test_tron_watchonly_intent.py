@@ -295,18 +295,34 @@ async def test_tron_intent_rejects_evm_recipient(session, _quiet_audit):
 
 
 @pytest.mark.asyncio
-async def test_tron_intent_requires_explicit_recipient(session, _quiet_audit):
-    """Without an override the recipient gate falls back to the org's EVM
-    settlement wallet, which cannot receive TRC-20. Fail closed."""
+async def test_tron_intent_requires_a_tron_recipient_or_a_tron_settlement_wallet(
+    session, _quiet_audit
+):
+    """Still fails closed without an override — but on the RIGHT code now.
+
+    This test used to assert RECIPIENT_CHAIN_MISMATCH, because the recipient gate
+    fell back to the org's EVM settlement wallet on every chain and the
+    address-family gate caught it one step later. Migration 0022 gave orgs a
+    `settlement_wallet_tron` and made the fallback chain-aware, so a TRON intent
+    no longer borrows the EVM wallet at all: this org has one set and it is
+    correctly ignored. The refusal now names the actually-missing thing instead
+    of telling the merchant to pass an explicit recipient.
+
+    `test_tron_intent_rejects_evm_recipient` above still covers
+    RECIPIENT_CHAIN_MISMATCH, which remains live for an EXPLICIT override in the
+    wrong family — the one remaining way a mismatched payee can arrive.
+    """
     owner = _fresh_owner()
-    _org, key = await _org_and_key(session, owner=owner, activation_status="active")
+    org, key = await _org_and_key(session, owner=owner, activation_status="active")
+    assert org.settlement_wallet == SETTLE, "premise: an EVM wallet IS set"
+    assert org.settlement_wallet_tron is None, "premise: no TRON wallet"
 
     with pytest.raises(HTTPException) as exc:
         await create_payment_intent(
             _tron_payload(recipient=None), _req(owner=owner, key_id=key.id), db=session
         )
     assert exc.value.status_code == 422
-    assert exc.value.detail["error"] == "RECIPIENT_CHAIN_MISMATCH"
+    assert exc.value.detail["error"] == "SETTLEMENT_WALLET_TRON_MISSING"
 
 
 # ── Environment classification ───────────────────────────────

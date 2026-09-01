@@ -73,14 +73,41 @@ _AMBIGUOUS = {
         "recipient."
     ),
 }
+# Distinct from _MISSING on purpose. Falling back to the EVM wallet for a TRON
+# intent would persist a payee that cannot receive on TRON, and the downstream
+# family gate would then reject it as RECIPIENT_CHAIN_MISMATCH — telling the
+# merchant to pass an explicit recipient rather than that their TRON payout
+# address is unset. Name the missing thing instead.
+_MISSING_TRON = {
+    "error": "SETTLEMENT_WALLET_TRON_MISSING",
+    "message": (
+        "Set your organization's TRON settlement wallet in Settings to receive "
+        "payments on TRON, or pass an explicit recipient. The EVM settlement "
+        "wallet is not used for TRON."
+    ),
+}
 
 
-async def _org_settlement_wallet(db: AsyncSession, org_id) -> str | None:
+async def _org_settlement_wallet(db: AsyncSession, org_id, *, tron: bool = False) -> str | None:
+    """The org's default payout address for this chain family.
+
+    Two columns, never one: `settlement_wallet` is EVM and stored lowercase,
+    `settlement_wallet_tron` is base58check and stored byte-identical (migration
+    0022). Which one is read is decided by the chain, never guessed.
+    """
+    column = (
+        Organization.settlement_wallet_tron if tron else Organization.settlement_wallet
+    )
     return (
-        await db.execute(
-            select(Organization.settlement_wallet).where(Organization.id == org_id)
-        )
+        await db.execute(select(column).where(Organization.id == org_id))
     ).scalar_one_or_none()
+
+
+def _fold(wallet: str, *, tron: bool) -> str:
+    """EVM addresses are case-insensitive and have always been lowercased here.
+    A TRON address must be returned verbatim — base58 excludes `0 O I l`, so
+    lowercasing one produces a string that cannot be decoded at all."""
+    return wallet if tron else wallet.lower()
 
 
 async def resolve_recipient(
@@ -88,30 +115,46 @@ async def resolve_recipient(
     merchant_id: str,
     payload_recipient: str | None,
     org_id: str | None = None,
+    chain: str | None = None,
 ) -> str:
     """Resolve the on-chain recipient for a new intent, or raise 422.
 
     Precedence:
-      1. explicit per-intent override (already regex-validated + lowercased by
+      1. explicit per-intent override (already validated + family-normalised by
          Pydantic) — wins over any default;
-      2. session path (org_id known) → that org's settlement_wallet;
+      2. session path (org_id known) → that org's settlement wallet FOR THIS
+         CHAIN'S FAMILY;
       3. API-key path (org_id is None) → reverse-lookup the key owner's wallet to
-         its org, and use that org's settlement_wallet — but only when the wallet
+         its org, and use that org's settlement wallet — but only when the wallet
          maps to exactly one org (ambiguity fails closed; the owner may not be a
          linked org wallet at all).
 
-    Raises HTTPException(422, SETTLEMENT_WALLET_MISSING | SETTLEMENT_WALLET_AMBIGUOUS).
+    THE FALLBACK IS CHAIN-AWARE. A TRON intent falls back to
+    `settlement_wallet_tron` and NEVER to the EVM wallet: borrowing it would
+    persist an intent whose recipient cannot receive on TRON, which the family
+    gate in `create_intent` would then reject as RECIPIENT_CHAIN_MISMATCH —
+    a message about passing an explicit recipient, when the real problem is an
+    unset TRON payout address. `chain=None` means EVM, which keeps every
+    pre-existing caller behaving exactly as before.
+
+    Raises HTTPException(422, SETTLEMENT_WALLET_MISSING |
+    SETTLEMENT_WALLET_TRON_MISSING | SETTLEMENT_WALLET_AMBIGUOUS).
     """
     # 1. explicit override wins.
     if payload_recipient:
         return payload_recipient
 
+    # Address family for this chain — the same classifier the downstream gate
+    # uses, so the two can never disagree about what TRON means.
+    tron = chain is not None and chain_address_format(chain) == "base58check"
+    missing = _MISSING_TRON if tron else _MISSING
+
     # 2. session path: the org is known, use its default directly.
     if org_id is not None:
-        wallet = await _org_settlement_wallet(db, org_id)
+        wallet = await _org_settlement_wallet(db, org_id, tron=tron)
         if wallet:
-            return wallet.lower()
-        raise HTTPException(status_code=422, detail=_MISSING)
+            return _fold(wallet, tron=tron)
+        raise HTTPException(status_code=422, detail=missing)
 
     # 3. API-key path: reverse-lookup owner wallet → org(s).
     merchant = (merchant_id or "").lower()
@@ -132,12 +175,12 @@ async def resolve_recipient(
         # Same wallet primary in multiple orgs — never guess fund routing.
         raise HTTPException(status_code=422, detail=_AMBIGUOUS)
     if len(org_ids) == 0:
-        raise HTTPException(status_code=422, detail=_MISSING)
+        raise HTTPException(status_code=422, detail=missing)
 
-    wallet = await _org_settlement_wallet(db, org_ids[0])
+    wallet = await _org_settlement_wallet(db, org_ids[0], tron=tron)
     if wallet:
-        return wallet.lower()
-    raise HTTPException(status_code=422, detail=_MISSING)
+        return _fold(wallet, tron=tron)
+    raise HTTPException(status_code=422, detail=missing)
 
 
 # ── Settlement hold (B-1) ────────────────────────────────────────
@@ -604,13 +647,16 @@ async def create_intent(
         recipient = None
     else:
         recipient = await resolve_recipient(
-            db, merchant_id, payload.recipient, org_id=resolved_org_id
+            db, merchant_id, payload.recipient,
+            org_id=resolved_org_id, chain=requested_chain,
         )
-        # CHAIN ↔ ADDRESS-FAMILY GATE. The org's settlement_wallet is EVM-only,
-        # so on a non-EVM chain the recipient can only come from the explicit
-        # per-intent override — and omitting it silently falls back to the EVM
-        # wallet, persisting an intent whose payee cannot receive the token and
-        # which no watcher could ever match. Reject instead of storing nonsense.
+        # CHAIN ↔ ADDRESS-FAMILY GATE. The DEFAULT is now chain-aware (0022: a
+        # TRON intent falls back to settlement_wallet_tron and 422s
+        # SETTLEMENT_WALLET_TRON_MISSING rather than borrowing the EVM wallet),
+        # so this no longer fires on an omitted recipient. It still guards the
+        # remaining way a mismatched payee can arrive: an EXPLICIT per-intent
+        # override in the wrong family. Reject instead of storing an intent
+        # whose payee cannot receive the token and which no watcher could match.
         expected_format = chain_address_format(requested_chain)
         actual_format = "evm" if recipient.startswith("0x") else "base58check"
         if actual_format != expected_format:
