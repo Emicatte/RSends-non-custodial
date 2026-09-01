@@ -12,11 +12,13 @@ import {
   remainderBase,
 } from '@/lib/splitShares'
 import {
-  CREATE_CHAIN,
-  CREATE_TOKENS,
-  CREATE_TOKEN_DECIMALS,
-  type CreatePrefill,
-} from '@/lib/repeatPrefill'
+  CREATE_CHAINS,
+  DEFAULT_CREATE_CHAIN,
+  chainFor,
+  decimalsFor,
+} from '@/lib/createChains'
+import { isTronAddress } from '@/lib/web3/tronAddress'
+import { type CreatePrefill } from '@/lib/repeatPrefill'
 import type { CreateInvoiceInput, CreatedInvoice } from '@/hooks/useOrgPayments'
 
 // Phase D — create-payment-request (invoice) modal for /app/payments. Lives in a
@@ -35,9 +37,10 @@ const COLORS = {
   redLight: 'rgba(192, 58, 58, 0.08)',
 }
 
-// CREATE_CHAIN / CREATE_TOKENS / CREATE_TOKEN_DECIMALS now live in
-// lib/repeatPrefill.ts (imported above) so the repeat-prefill gate and this form
-// read ONE registry: a row is offered for repeat on exactly the terms this form
+// The offerable chains and their tokens live in lib/createChains.ts (imported
+// above), pinned against services/backend/app/token_registry.json by
+// app/__tests__/app/createChainsRegistry.test.ts. The repeat-prefill gate reads
+// the same table, so a row is offered for repeat on exactly the terms this form
 // can honour.
 const EXPIRY_OPTIONS = [
   { minutes: 30, key: 'expiry30m' },
@@ -74,13 +77,30 @@ interface SplitLegDraft {
   amount: string
 }
 
+/** The seed a split starts from: the merchant's own wallet plus one empty row.
+ * Extracted because switching to a chain without a split router must discard
+ * whatever the merchant had half-typed and go back to exactly this. */
+function defaultLegs(settlementWallet: string | null): SplitLegDraft[] {
+  return [
+    { address: settlementWallet ?? '', amount: '' },
+    { address: '', amount: '' },
+  ]
+}
+
 export function CreatePaymentModal({
   settlementWallet,
+  settlementWalletTron = null,
   initialValues,
   onCreate,
   onClose,
 }: {
+  /** The org's EVM payout address (`organizations.settlement_wallet`). */
   settlementWallet: string | null
+  /** The org's TRON payout address (`organizations.settlement_wallet_tron`) —
+   * its OWN column, never derived from the EVM one. Optional so the many
+   * EVM-only call sites and tests need no change; absent means "not set",
+   * which is exactly what blocks a TRON request with no explicit recipient. */
+  settlementWalletTron?: string | null
   /** Seed values for a "repeat" of an existing request. Already validated
    * fail-closed by `resolveRepeatPrefill` — the modal simply starts from them,
    * re-derives everything as usual, and leaves every field editable. Expiry is
@@ -91,6 +111,9 @@ export function CreatePaymentModal({
 }) {
   const t = useTranslations('app.payments')
   const [amount, setAmount] = useState(initialValues?.amount ?? '')
+  // A repeat only ever seeds a Base Sepolia row (the prefill gate refuses any
+  // other chain), so the initial chain is always the default.
+  const [chain, setChain] = useState<string>(DEFAULT_CREATE_CHAIN)
   const [token, setToken] = useState<string>(initialValues?.token ?? 'USDC')
   const [expiry, setExpiry] = useState<number>(30)
   const [recipient, setRecipient] = useState(initialValues?.recipient ?? '')
@@ -118,30 +141,45 @@ export function CreatePaymentModal({
       initialValues?.splitLegs?.map((leg) => ({
         address: leg.address,
         amount: leg.amount,
-      })) ?? [
-        { address: settlementWallet ?? '', amount: '' },
-        { address: '', amount: '' },
-      ],
+      })) ?? defaultLegs(settlementWallet),
   )
   const [submitting, setSubmitting] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [payLink, setPayLink] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
+  // The selected network decides three things: which tokens exist, which
+  // address family a recipient must belong to, and which of the org's two
+  // payout addresses the money actually lands on.
+  const chainDef = chainFor(chain) ?? CREATE_CHAINS[0]
+  const isTron = chainDef.family === 'tron'
+  // The payout address FOR THIS CHAIN. The two columns are independent — the
+  // EVM wallet is not a fallback for TRON (the server refuses that too, with
+  // SETTLEMENT_WALLET_TRON_MISSING), and showing it here would tell a merchant
+  // the money lands somewhere it cannot.
+  const activeWallet = isTron ? settlementWalletTron : settlementWallet
+
   const amountNum = Number(amount)
   const amountValid = Number.isFinite(amountNum) && amountNum > 0
   const override = recipient.trim()
-  const overrideValid = override === '' || isAddress(override)
-  const overrideResolves = override !== '' && isAddress(override)
-  // The recipient gate (server-enforced) needs EITHER an org settlement wallet
-  // OR a valid per-intent override; block the submit otherwise (no blind 422).
-  const hasRecipient = Boolean(settlementWallet) || overrideResolves
+  // Family-checked, not merely shape-checked: `isTronAddress` verifies the
+  // base58check tail, the same mirror of the server validator the Settings
+  // payout field uses. A 0x address on TRON and a T-address on EVM are both
+  // rejected here rather than at the server's RECIPIENT_CHAIN_MISMATCH.
+  const addressValidForChain = (addr: string) =>
+    isTron ? isTronAddress(addr) : isAddress(addr)
+  const overrideValid = override === '' || addressValidForChain(override)
+  const overrideResolves = override !== '' && addressValidForChain(override)
+  // The recipient gate (server-enforced) needs EITHER a settlement wallet for
+  // this chain OR a valid per-intent override; block the submit otherwise (no
+  // blind 422).
+  const hasRecipient = Boolean(activeWallet) || overrideResolves
 
   // Split validity — amounts in, bps derived. A valid split set IS the
   // recipient set: no settlement wallet needed. Manual rows are everything
   // above the last; the last row balances to the total in currency, so
   // sum(amounts) === total is an exact base-unit identity by construction.
-  const decimals = CREATE_TOKEN_DECIMALS[token] ?? 18
+  const decimals = decimalsFor(chain, token) ?? 18
   const totalBase = amountToBase(amount, decimals)
   const manualBase = legs.slice(0, -1).map((leg) => amountToBase(leg.amount, decimals))
   const balanceBase = totalBase != null ? remainderBase(totalBase, manualBase) : null
@@ -237,6 +275,34 @@ export function CreatePaymentModal({
     setLegs((prev) => prev.map((leg, i) => (i === index ? { ...leg, ...patch } : leg)))
   }
 
+  /**
+   * Change the network, and bring every dependent field with it.
+   *
+   * Two things must not survive the switch. A token the new chain does not
+   * enable would be submitted verbatim and come back 400 UNSUPPORTED_TOKEN, so
+   * a stale selection is replaced with that chain's first token. And a split —
+   * even half-filled — cannot exist on a chain with no split router, so both
+   * the toggle and the leg drafts are reset rather than left hidden behind a
+   * removed control, where they would still be in state if the merchant
+   * switched back mid-submit.
+   *
+   * The recipient is deliberately NOT cleared. An address in the wrong family
+   * is a mistake worth SHOWING — the field turns invalid and names the chain —
+   * rather than silently discarding what the merchant typed.
+   */
+  function changeChain(next: string) {
+    const def = chainFor(next)
+    if (!def) return
+    setChain(next)
+    if (!def.tokens.some((tk) => tk.symbol === token)) {
+      setToken(def.tokens[0].symbol)
+    }
+    if (!def.splitAvailable) {
+      setSplitOn(false)
+      setLegs(defaultLegs(settlementWallet))
+    }
+  }
+
   async function submit() {
     if (!canSubmit) return
     setSubmitting(true)
@@ -245,7 +311,7 @@ export function CreatePaymentModal({
       const created = await onCreate({
         amount: amountNum,
         currency: token,
-        chain: CREATE_CHAIN,
+        chain,
         expires_in_minutes: expiry,
         ...(splitOn
           ? {
@@ -389,7 +455,7 @@ export function CreatePaymentModal({
                 with no settlement wallet is the likeliest accidental
                 self-excluder, and hiding it under the split toggle left them
                 with no recipient information at all. */}
-            {settlementWallet ? (
+            {activeWallet ? (
               splitOn ? null : (
                 <div
                   style={{
@@ -402,10 +468,15 @@ export function CreatePaymentModal({
                   }}
                 >
                   {t('create.settlesTo')}{' '}
-                  <code style={{ color: COLORS.ink }}>{truncAddr(settlementWallet)}</code>
+                  <code style={{ color: COLORS.ink }}>{truncAddr(activeWallet)}</code>
                 </div>
               )
             ) : (
+              /* No payout address FOR THE SELECTED CHAIN. Said here, before
+                 submission, because the server's answer is a bare 422 the
+                 merchant would otherwise meet only after filling the form —
+                 and on TRON the remedy is a different Settings field than the
+                 EVM one, so the two prompts point at different places. */
               <div
                 role="alert"
                 style={{
@@ -417,10 +488,24 @@ export function CreatePaymentModal({
                   marginBottom: 16,
                 }}
               >
-                {t('create.noWallet')}{' '}
-                <Link href="/settings" style={{ color: COLORS.accent, fontWeight: 600 }}>
-                  {t('create.setWalletCta')}
-                </Link>
+                {isTron ? (
+                  <>
+                    {t('create.noWalletTron')}{' '}
+                    <Link
+                      href="/settings/organization"
+                      style={{ color: COLORS.accent, fontWeight: 600 }}
+                    >
+                      {t('create.setWalletTronCta')}
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    {t('create.noWallet')}{' '}
+                    <Link href="/settings" style={{ color: COLORS.accent, fontWeight: 600 }}>
+                      {t('create.setWalletCta')}
+                    </Link>
+                  </>
+                )}
               </div>
             )}
 
@@ -449,14 +534,25 @@ export function CreatePaymentModal({
               <div style={{ flex: 1 }}>
                 <label style={label} htmlFor="rp-token">{t('create.token')}</label>
                 <select id="rp-token" value={token} onChange={(e) => setToken(e.target.value)} style={field}>
-                  {CREATE_TOKENS.map((tok) => (
-                    <option key={tok} value={tok}>{tok}</option>
+                  {chainDef.tokens.map((tk) => (
+                    <option key={tk.symbol} value={tk.symbol}>{tk.symbol}</option>
                   ))}
                 </select>
               </div>
               <div style={{ flex: 1 }}>
-                <label style={label}>{t('create.network')}</label>
-                <div style={{ ...field, color: COLORS.muted }}>Base Sepolia</div>
+                <label style={label} htmlFor="rp-network">{t('create.network')}</label>
+                {/* Chain names are proper nouns — displayed, never translated,
+                    exactly as the static label this replaced was. */}
+                <select
+                  id="rp-network"
+                  value={chain}
+                  onChange={(e) => changeChain(e.target.value)}
+                  style={field}
+                >
+                  {CREATE_CHAINS.map((c) => (
+                    <option key={c.chain} value={c.chain}>{c.label}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -474,24 +570,31 @@ export function CreatePaymentModal({
               </select>
             </div>
 
-            {/* Split toggle — mutually exclusive with the single override */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-              <input
-                id="rp-split-toggle"
-                type="checkbox"
-                checked={splitOn}
-                onChange={(e) => setSplitOn(e.target.checked)}
-                style={{ accentColor: COLORS.accent, width: 15, height: 15 }}
-              />
-              <label
-                htmlFor="rp-split-toggle"
-                style={{ fontSize: 13, fontWeight: 600, color: COLORS.ink, cursor: 'pointer' }}
-              >
-                {t('create.splitToggle')}
-              </label>
-            </div>
+            {/* Split toggle — mutually exclusive with the single override.
+                HIDDEN, not disabled, on a chain with no split router: a
+                disabled control advertises a capability that does not exist
+                there and never will, and the server's answer is a flat 422
+                SPLIT_UNAVAILABLE. `changeChain` has already cleared the state
+                behind it, so nothing half-filled survives out of sight. */}
+            {chainDef.splitAvailable && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                <input
+                  id="rp-split-toggle"
+                  type="checkbox"
+                  checked={splitOn}
+                  onChange={(e) => setSplitOn(e.target.checked)}
+                  style={{ accentColor: COLORS.accent, width: 15, height: 15 }}
+                />
+                <label
+                  htmlFor="rp-split-toggle"
+                  style={{ fontSize: 13, fontWeight: 600, color: COLORS.ink, cursor: 'pointer' }}
+                >
+                  {t('create.splitToggle')}
+                </label>
+              </div>
+            )}
 
-            {splitOn ? (
+            {splitOn && chainDef.splitAvailable ? (
               <div style={{ marginBottom: 8 }}>
                 {/* Preview bar — absolute widths from the derived bps:
                     under-allocation leaves empty track, overflow tints it red */}
@@ -687,7 +790,7 @@ export function CreatePaymentModal({
                 <input
                   id="rp-recipient"
                   type="text"
-                  placeholder="0x…"
+                  placeholder={isTron ? 'T…' : '0x…'}
                   value={recipient}
                   onChange={(e) => setRecipient(e.target.value)}
                   style={field}
@@ -696,8 +799,13 @@ export function CreatePaymentModal({
                   {t('create.recipientHelp')}
                 </p>
                 {!overrideValid && (
+                  /* Names the selected network, because the commonest way to
+                     land here is having the wrong one selected — not having
+                     mistyped the address. */
                   <p style={{ fontSize: 11, color: COLORS.red, margin: '4px 0 0' }}>
-                    {t('create.invalidRecipient')}
+                    {t(isTron ? 'create.invalidRecipientTron' : 'create.invalidRecipient', {
+                      network: chainDef.label,
+                    })}
                   </p>
                 )}
               </div>

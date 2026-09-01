@@ -29,6 +29,11 @@ const NAMESPACES = [
   // makes the existing state enforced: a new settings string that reaches only
   // en.json now fails here instead of shipping as an English island.
   'settings',
+  // The authed /app dashboard, added when the create-payment modal grew a
+  // network selector and its TRON strings. Same reasoning as `settings` above:
+  // it was already key-identical across all five locales, so this only makes
+  // the existing state enforced.
+  'app',
   'showcase',
 ] as const
 

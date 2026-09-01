@@ -52,6 +52,9 @@ export default function AppPaymentsPage() {
   const [prefillError, setPrefillError] = useState<PrefillFailure | null>(null)
   const canManage = role === 'operator' || role === 'admin'
   const settlementWallet = activeOrg?.settlement_wallet ?? null
+  // The TRON payout address is its own column, not derived from the EVM one.
+  // The modal needs both because it shows the wallet for the SELECTED network.
+  const settlementWalletTron = activeOrg?.settlement_wallet_tron ?? null
 
   // Expiry clock. Deliberately NOT read during render: this file already pins
   // its Intl formats because an SSR/client divergence tears the React root, and
@@ -208,6 +211,7 @@ export default function AppPaymentsPage() {
         <CreatePaymentModal
           key={modalSeq}
           settlementWallet={settlementWallet}
+          settlementWalletTron={settlementWalletTron}
           initialValues={prefill ?? undefined}
           onCreate={createIntent}
           onClose={() => {
