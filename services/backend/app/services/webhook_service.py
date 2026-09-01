@@ -37,8 +37,8 @@ from typing import Optional
 from urllib.parse import urlparse
 
 import httpx
-from sqlalchemy import select, and_
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, and_, update
+from sqlalchemy.ext.asyncio import AsyncSession, async_object_session
 
 from app.models.merchant_models import (
     PaymentIntent, IntentStatus, LatePaymentPolicy,
@@ -57,6 +57,31 @@ MAX_RETRIES = 5
 BASE_BACKOFF_SECONDS = 30       # 30s * 4^retry → 30s, 2m, 8m, 32m, 2h
 DELIVERY_TIMEOUT = 10.0         # httpx timeout per singolo attempt
 WEBHOOK_USER_AGENT = "RSend-Webhook/1.0"
+
+# ── Auto-disable (migration 0021) ────────────────────────────────
+#
+# A merchant's dead endpoints are never pruned by hand, so an account a few
+# months old fans every payment out to URLs that have 404'd for weeks — five
+# attempts each, ~2h42m of backoff, permanent ERRORs that mean nothing.
+#
+# ONLY PERMANENT failures count toward disabling: the URL does not exist and
+# will not start existing. A 5xx, a timeout, a refused connection or a TLS
+# failure all mean the server EXISTS and is unwell — the backoff above already
+# owns those, and counting them would disable endpoints that are merely having
+# a bad afternoon.
+DISABLE_AFTER_PERMANENT_FAILURES = 3
+
+# `disabled_reason` holds a STABLE CODE, never prose: the dashboard maps it to
+# copy, so the wording can change or be translated without rewriting rows.
+PERMANENT_HTTP_REASONS = {
+    404: "endpoint_not_found_404",
+    410: "endpoint_gone_410",
+}
+DNS_FAILURE_REASON = "dns_resolution_failed"
+# Prefix for the egress-guard case. Deliberately reads as "we would not contact
+# this URL" rather than "your server misbehaved" — the endpoint was never
+# contacted at all, and the cause is the merchant's configuration.
+EGRESS_REASON_PREFIX = "url_not_allowed:"
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1164,10 +1189,140 @@ async def process_pending_deliveries(db: AsyncSession) -> int:
     return processed
 
 
+def _permanent_reason_for_status(status_code: int) -> Optional[str]:
+    """404/410 mean the URL is not there. Every other non-2xx — 5xx especially,
+    but also 401/403/422 — is a server that exists and is answering wrongly, so
+    it stays transient and the backoff handles it."""
+    return PERMANENT_HTTP_REASONS.get(status_code)
+
+
+def _permanent_reason_for_exception(exc: BaseException) -> Optional[str]:
+    """Only a name that does not resolve is permanent.
+
+    THE DISCRIMINATION IS ON `__cause__`, NOT ON THE EXCEPTION TYPE. httpx raises
+    `ConnectError` for BOTH a dead DNS name (cause: socket.gaierror) and a host
+    that refuses the connection (cause: ConnectionRefusedError). Classifying on
+    `isinstance(exc, httpx.ConnectError)` alone would disable every endpoint
+    whose server happened to be restarting. Pinned by
+    test_webhook_auto_disable.py::test_three_consecutive_connection_refused_do_not_disable.
+    """
+    if isinstance(exc, httpx.ConnectError) and isinstance(
+        exc.__cause__, socket.gaierror
+    ):
+        return DNS_FAILURE_REASON
+    return None
+
+
+async def _note_delivery_success(webhook: MerchantWebhook) -> None:
+    """Any success clears the slate. The counter measures a CONSECUTIVE run, not
+    a lifetime total — a working endpoint must never accumulate permanent blame
+    from before it recovered.
+
+    Atomic for the same reason the increment is: the reset must not be computed
+    from a value read before it. The `!= 0` in the WHERE keeps the common case
+    (a healthy endpoint delivering normally) to a no-op UPDATE that matches no
+    rows, so there is no per-delivery write amplification.
+    """
+    db = async_object_session(webhook)
+    if db is None:  # defensive: a detached instance has nothing to update
+        return
+
+    reset = await db.execute(
+        update(MerchantWebhook)
+        .where(
+            MerchantWebhook.id == webhook.id,
+            MerchantWebhook.consecutive_permanent_failures != 0,
+        )
+        .values(consecutive_permanent_failures=0)
+        .execution_options(synchronize_session=False)
+    )
+    if reset.rowcount:
+        await db.refresh(webhook)
+
+
+async def _note_permanent_failure(webhook: MerchantWebhook, reason: str) -> None:
+    """Count ONE permanently-failed delivery and disable at the threshold.
+
+    Called once per delivery that has GIVEN UP, never per attempt — one
+    permanent failure is already MAX_RETRIES attempts over hours. Incrementing
+    per attempt would disable a dead endpoint on its first delivery instead of
+    its third (pinned by
+    test_webhook_auto_disable.py::test_one_failed_delivery_counts_once_not_once_per_attempt).
+
+    THE INCREMENT IS A SINGLE ATOMIC UPDATE THAT READS THE NEW VALUE BACK, and
+    the disable decision is made from THAT value — never from one read before
+    the update. A dead endpoint fails on every event at once, so two workers
+    giving up on the same endpoint simultaneously is the normal case here, not
+    an edge case: a read-modify-write on the ORM attribute loses one of the two
+    increments, disabling then takes more failures than intended, and nobody
+    notices because the symptom is that the logs keep filling. Same
+    claim-in-the-WHERE shape as `_claim_intent_expiry`; no lock, and the poller
+    batch is not serialised. Pinned by
+    test_webhook_auto_disable.py::test_two_deliveries_exhausting_concurrently_both_count.
+    """
+    db = async_object_session(webhook)
+    if db is None:  # defensive: a detached instance has nothing to update
+        return
+
+    failures = (await db.execute(
+        update(MerchantWebhook)
+        .where(MerchantWebhook.id == webhook.id)
+        .values(
+            consecutive_permanent_failures=(
+                MerchantWebhook.consecutive_permanent_failures + 1
+            )
+        )
+        .returning(MerchantWebhook.consecutive_permanent_failures)
+        .execution_options(synchronize_session=False)
+    )).scalar_one()
+
+    if failures >= DISABLE_AFTER_PERMANENT_FAILURES:
+        # `is_active == True` in the WHERE makes the disable a CLAIM: if a
+        # racing worker crossed the threshold first, rowcount is 0 — we neither
+        # overwrite its reason/timestamp with ours nor log a second WARNING for
+        # what is one event.
+        claim = await db.execute(
+            update(MerchantWebhook)
+            .where(
+                MerchantWebhook.id == webhook.id,
+                MerchantWebhook.is_active == True,  # noqa: E712
+            )
+            .values(
+                is_active=False,
+                disabled_reason=reason,
+                disabled_at=datetime.now(timezone.utc),
+            )
+            .execution_options(synchronize_session=False)
+        )
+        if claim.rowcount == 1:
+            # WARNING, not ERROR: this is the system working. It names the
+            # endpoint AND the merchant because that is what an operator needs
+            # to answer "why did this merchant stop getting notified, and since
+            # when?".
+            logger.warning(
+                "Webhook auto-disabled after %d consecutive permanent failures: "
+                "webhook_id=%s url=%s merchant=%s reason=%s",
+                failures, webhook.id, webhook.url, webhook.merchant_id, reason,
+            )
+
+    # The UPDATEs deliberately bypassed the identity map, so this session's copy
+    # is stale — including `is_active`, which the poller re-checks on its next
+    # delivery for this same endpoint. Reload rather than assigning locally: an
+    # assignment would be flushed later and could clobber a concurrent worker's
+    # write with our older value.
+    await db.refresh(webhook)
+
+
 async def _attempt_delivery(delivery: WebhookDelivery, webhook: MerchantWebhook) -> bool:
     """
     Tenta una singola consegna HTTP POST al webhook URL.
     Aggiorna delivery.status, response_code, retries, next_retry_at.
+
+    Also maintains the endpoint's auto-disable state on `webhook`: a 2xx resets
+    the consecutive-permanent-failure counter, and a delivery that EXHAUSTS its
+    retries against a permanently-failed target increments it (see
+    `_note_permanent_failure`). `webhook` is a session-attached instance on both
+    call paths, so these mutations flush with the caller's transaction.
 
     Returns:
         True se consegnato con successo (2xx), False altrimenti.
@@ -1184,6 +1339,13 @@ async def _attempt_delivery(delivery: WebhookDelivery, webhook: MerchantWebhook)
             "Webhook delivery blocked (egress): %s → %s reason=%s",
             delivery.idempotency_key, webhook.url, reason,
         )
+        # This delivery has ALREADY given up — the branch is terminal and never
+        # enters the retry ladder, so it counts here rather than at the
+        # MAX_RETRIES exit below. Consequence, and it is intended: three
+        # egress-blocked events disable an endpoint in MINUTES where three 404s
+        # take ~8 hours. A URL we refuse to contact is a configuration error,
+        # not a temporary one.
+        await _note_permanent_failure(webhook, f"{EGRESS_REASON_PREFIX}{reason}")
         return False
 
     payload_bytes = json.dumps(delivery.payload, default=str).encode("utf-8")
@@ -1203,6 +1365,10 @@ async def _attempt_delivery(delivery: WebhookDelivery, webhook: MerchantWebhook)
         "X-RSend-Delivery-Id": delivery.idempotency_key,
     }
 
+    # Why THIS attempt failed permanently, or None if it was transient. Only the
+    # attempt that exhausts the ladder is consulted (see below).
+    permanent_reason: Optional[str] = None
+
     try:
         async with httpx.AsyncClient(timeout=DELIVERY_TIMEOUT) as client:
             resp = await client.post(
@@ -1217,6 +1383,7 @@ async def _attempt_delivery(delivery: WebhookDelivery, webhook: MerchantWebhook)
         if 200 <= resp.status_code < 300:
             delivery.status = DeliveryStatus.delivered
             delivery.delivered_at = datetime.now(timezone.utc)
+            await _note_delivery_success(webhook)
             logger.info(
                 "Webhook delivered: %s → %s (HTTP %d)",
                 delivery.idempotency_key, webhook.url, resp.status_code,
@@ -1224,6 +1391,7 @@ async def _attempt_delivery(delivery: WebhookDelivery, webhook: MerchantWebhook)
             return True
 
         # Non-2xx → schedule retry
+        permanent_reason = _permanent_reason_for_status(resp.status_code)
         logger.warning(
             "Webhook failed: %s → %s (HTTP %d, retry %d/%d)",
             delivery.idempotency_key, webhook.url,
@@ -1231,6 +1399,7 @@ async def _attempt_delivery(delivery: WebhookDelivery, webhook: MerchantWebhook)
         )
 
     except httpx.TimeoutException:
+        # Transient by definition — a slow endpoint is a working endpoint.
         delivery.response_code = None
         delivery.response_body = "Timeout"
         logger.warning(
@@ -1238,6 +1407,7 @@ async def _attempt_delivery(delivery: WebhookDelivery, webhook: MerchantWebhook)
             delivery.idempotency_key, webhook.url, delivery.retries, MAX_RETRIES,
         )
     except Exception as exc:
+        permanent_reason = _permanent_reason_for_exception(exc)
         delivery.response_code = None
         delivery.response_body = str(exc)[:500]
         logger.error(
@@ -1255,6 +1425,12 @@ async def _attempt_delivery(delivery: WebhookDelivery, webhook: MerchantWebhook)
             "Webhook permanently failed after %d retries: %s → %s",
             MAX_RETRIES, delivery.idempotency_key, webhook.url,
         )
+        # ONE increment per delivery that gave up — this is the give-up point,
+        # reached once per delivery after MAX_RETRIES attempts. The FINAL
+        # attempt decides: 500,500,500,500,404 counts; 404,500,500,500,500 does
+        # not, because by the end the server was answering.
+        if permanent_reason is not None:
+            await _note_permanent_failure(webhook, permanent_reason)
         return False
 
     # Exponential backoff: 30s * 4^retry

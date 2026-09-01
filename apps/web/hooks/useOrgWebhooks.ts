@@ -20,6 +20,17 @@ export interface OrgWebhook {
   events: string[]
   is_active: boolean
   created_at: string
+  /**
+   * Set when auto-disable switched this endpoint off after three consecutive
+   * PERMANENT delivery failures; both null while it has never been disabled.
+   *
+   * `disabled_reason` is a STABLE CODE, not a sentence — the copy lives in
+   * `disabledReasonText` (WebhookCard) so it can be reworded or translated
+   * without a data migration. Known codes: `endpoint_not_found_404`,
+   * `endpoint_gone_410`, `dns_resolution_failed`, `url_not_allowed:<why>`.
+   */
+  disabled_reason: string | null
+  disabled_at: string | null
 }
 
 export interface OrgWebhookDelivery {
@@ -146,6 +157,26 @@ export function useOrgWebhooks() {
     [],
   )
 
+  const reEnable = useCallback(
+    async (webhookId: number): Promise<OrgWebhook> => {
+      const token = await waitForToken(tokenRef)
+      const result = await apiCall<OrgWebhook>(
+        `/api/v1/user/org/webhooks/${webhookId}/enable`,
+        token,
+        { method: 'POST' },
+      )
+      // Same manual revalidation as `register` — the list must stop showing the
+      // disabled banner, and a failed reload must not mask a successful enable.
+      try {
+        await reload()
+      } catch (e) {
+        console.warn('[useOrgWebhooks] reload after re-enable failed', e)
+      }
+      return result
+    },
+    [reload],
+  )
+
   return {
     webhooks,
     loading,
@@ -155,5 +186,6 @@ export function useOrgWebhooks() {
     fetchDeliveries,
     register,
     sendTest,
+    reEnable,
   }
 }

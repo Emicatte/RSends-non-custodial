@@ -75,7 +75,12 @@ ENDPOINT_LIMITS: list[tuple[str, str, int, int, str]] = [
     ("GET",    "/api/v1/user/org/payment-intents",  120,    60,  "ip"),
     # Session-authed org webhooks (Phase E) — per-IP. Trailing-slash prefix
     # (test-fire under /webhooks/{id}/test) MUST precede the bare register entry.
-    ("POST",   "/api/v1/user/org/webhooks/",         10,    60,  "ip"),  # {id}/test
+    # This entry also covers POST /webhooks/{id}/enable (auto-disable remedy):
+    # `_match_endpoint` is first-matching-prefix-wins and `{id}` is variable, so
+    # any /webhooks/{id}/... POST lands here. Sharing is deliberate — 10/min per
+    # IP is generous for re-enabling, and isolating it would mean reshaping the
+    # URL rather than fixing a problem. See user_org_webhooks_routes.enable_org_webhook.
+    ("POST",   "/api/v1/user/org/webhooks/",         10,    60,  "ip"),  # {id}/test, {id}/enable
     ("POST",   "/api/v1/user/org/webhooks",           5,  3600,  "ip"),  # register
     ("GET",    "/api/v1/user/org/webhooks",          120,    60,  "ip"),  # list + deliveries
     # Session-minted rsend_ merchant keys (Option B, 2026-07-15) — per-IP.

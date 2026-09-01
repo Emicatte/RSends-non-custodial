@@ -41,7 +41,7 @@ const EVENT_OPTIONS = [
 ] as const
 
 export default function WebhooksPage() {
-  const { webhooks, loading, error, isAuthed, register, fetchDeliveries, sendTest } = useOrgWebhooks()
+  const { webhooks, loading, error, isAuthed, register, fetchDeliveries, sendTest, reEnable } = useOrgWebhooks()
 
   const [url, setUrl] = useState('')
   const [events, setEvents] = useState<string[]>(['payment.completed'])
@@ -156,7 +156,7 @@ export default function WebhooksPage() {
       ) : (
         <div className="flex flex-col gap-4">
           {webhooks.map((w) => (
-            <WebhookCard key={w.webhook_id} webhook={w} fetchDeliveries={fetchDeliveries} sendTest={sendTest} />
+            <WebhookCard key={w.webhook_id} webhook={w} fetchDeliveries={fetchDeliveries} sendTest={sendTest} reEnable={reEnable} />
           ))}
         </div>
       )}
