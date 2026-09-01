@@ -506,7 +506,9 @@
         "unknown": "Something went wrong. Please try again."
       },
       "settlement": {
-        "title": "Settlement wallet",
+        "title": "Settlement wallets",
+        "evmLabel": "EVM payout address",
+        "evmBadge": "Primary",
         "help": "The wallet where your organization receives payments. Every invoice settles on-chain to this address unless you override it per invoice.",
         "placeholder": "0x…",
         "saveCta": "Save",
@@ -516,7 +518,22 @@
         "notSet": "No settlement wallet set — you can’t receive payments until you set one.",
         "errors": {
           "invalidAddress": "Enter a valid EVM address (0x…).",
+          "tronOnEvm": "That’s a TRON address. This field takes an EVM address (0x…).",
           "saveFailed": "Couldn’t save the settlement wallet. Try again."
+        },
+        "tron": {
+          "label": "TRON payout address",
+          "badge": "Optional",
+          "help": "Where TRON payments settle. Set this only if you accept TRON — it is never used for EVM chains.",
+          "placeholder": "T…",
+          "notSet": "Not set",
+          "setCta": "Set TRON wallet",
+          "errors": {
+            "invalidAddress": "Enter a valid TRON address (T…).",
+            "evmOnTron": "That’s an EVM address. This field takes a TRON address (T…).",
+            "zeroAddress": "That’s the TRON zero address — funds sent there are lost.",
+            "saveFailed": "Couldn’t save the TRON payout address. Try again."
+          }
         }
       }
     },

@@ -507,7 +507,9 @@
         "unknown": "Une erreur s'est produite. Veuillez réessayer."
       },
       "settlement": {
-        "title": "Portefeuille de règlement",
+        "title": "Portefeuilles de règlement",
+        "evmLabel": "Adresse de versement EVM",
+        "evmBadge": "Principale",
         "help": "Le portefeuille sur lequel votre organisation reçoit les paiements. Chaque facture est réglée on-chain vers cette adresse, sauf remplacement par facture.",
         "placeholder": "0x…",
         "saveCta": "Enregistrer",
@@ -517,7 +519,22 @@
         "notSet": "Aucun portefeuille de règlement défini — vous ne pouvez pas recevoir de paiements tant que vous n’en définissez pas un.",
         "errors": {
           "invalidAddress": "Saisissez une adresse EVM valide (0x…).",
+          "tronOnEvm": "Ceci est une adresse TRON. Ce champ attend une adresse EVM (0x…).",
           "saveFailed": "Impossible d’enregistrer le portefeuille de règlement. Réessayez."
+        },
+        "tron": {
+          "label": "Adresse de versement TRON",
+          "badge": "Facultatif",
+          "help": "Où les paiements TRON sont réglés. À définir uniquement si vous acceptez TRON — cette adresse n’est jamais utilisée pour les chaînes EVM.",
+          "placeholder": "T…",
+          "notSet": "Non définie",
+          "setCta": "Définir le portefeuille TRON",
+          "errors": {
+            "invalidAddress": "Saisissez une adresse TRON valide (T…).",
+            "evmOnTron": "Ceci est une adresse EVM. Ce champ attend une adresse TRON (T…).",
+            "zeroAddress": "Ceci est l’adresse zéro de TRON — les fonds qui y sont envoyés sont perdus.",
+            "saveFailed": "Impossible d’enregistrer l’adresse de versement TRON. Réessayez."
+          }
         }
       }
     },
