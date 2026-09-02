@@ -14,7 +14,20 @@ class RecentTransaction(BaseModel):
     type: str
     amount_usd: float
     currency: str
+    # Human label. Superseded by `chain_key` and read by nothing once the
+    # frontend switches over; it is carried through this commit only so the
+    # wire does not change shape and behaviour in the same step.
     chain: str
+    # Machine-stable snake chain name — `base`, `base_sepolia`, `ethereum`,
+    # `arbitrum`, `tron`, `tron_nile` — or the honest `chain:{id}` for a chain
+    # id we cannot name. This is what clients key badges and explorer links on;
+    # `chain` was doing both jobs and could do neither well.
+    #
+    # REQUIRED, deliberately. `amount_usd_known` below is defaulted because the
+    # frozen legacy route had to keep constructing unedited; that route now
+    # calls the same shared helper, so the reason is gone and a construction
+    # that forgets this must fail loudly rather than invent a chain.
+    chain_key: str
     status: str
     recipient: str
     timestamp_iso: str
