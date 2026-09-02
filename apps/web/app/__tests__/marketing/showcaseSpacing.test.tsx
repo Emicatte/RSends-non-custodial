@@ -155,6 +155,33 @@ describe('the gap between the hero and this section', () => {
     expect(mainStyle).toMatch(/paddingBottom/)
   })
 
+  const showcase = fs.readFileSync(
+    path.resolve(__dirname, '../../../components/landing/DeviceShowcase.tsx'),
+    'utf8',
+  )
+
+  it('is owned by the section that follows, not split three ways', () => {
+    // The 264px was three declarations stacked: the hero divider's own 80px
+    // bottom margin, `main`'s 80px bottom padding, and the section's 104px top
+    // padding — none of them individually wrong-looking, which is why it
+    // survived. `main` holds only the hero, whose divider already carries its
+    // trailing space, so its bottom padding was double-counting.
+    const divider = /className="rs-hero-line"[\s\S]*?style=\{\{([\s\S]*?)\}\}/.exec(page)?.[1] ?? ''
+    expect(divider).toMatch(/marginBottom:\s*isMobile \? 16 : 24/)
+    expect(mainStyle).toMatch(/paddingBottom:\s*isMobileHome \? '0px' : '0px'|paddingBottom:\s*'0px'/)
+    expect(showcase).toMatch(/\.rs-showcase \{ width: 100%; padding: 88px 24px/)
+  })
+
+  it('keeps the phone value in step with the override that beats it', () => {
+    // globals.css:1000-1005 overrides `main`'s padding-bottom below 480px with
+    // `!important`, so the inline mobile value never applied there — which is
+    // why the measured mobile gap was 136px against a computed 152px. Both are
+    // 0 now, so there is nothing for the override to beat.
+    const globals = fs.readFileSync(path.resolve(__dirname, '../../globals.css'), 'utf8')
+    const small = /@media \(max-width: 480px\) \{([\s\S]*?)\n\}/.exec(globals)?.[1] ?? ''
+    expect(small).toMatch(/padding-bottom:\s*calc\(0px \+ var\(--sab\)\)/)
+  })
+
   it('puts no viewport-height floor on a box that holds only the hero', () => {
     // A floor here does not make the hero fill the screen — the hero is a fixed
     // height — it pads dead background underneath it, one pixel per pixel of

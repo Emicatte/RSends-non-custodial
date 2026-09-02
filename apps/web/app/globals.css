@@ -1001,7 +1001,9 @@ html, body {
     padding-top: 80px !important;
     padding-left: 8px !important;
     padding-right: 8px !important;
-    padding-bottom: calc(24px + var(--sab)) !important;
+    /* Kept in step with the inline value it overrides: main holds only the
+       hero and the section below owns the gap. The safe-area inset stays. */
+    padding-bottom: calc(0px + var(--sab)) !important;
   }
 
   /* Hero title: scala font per schermi piccoli */

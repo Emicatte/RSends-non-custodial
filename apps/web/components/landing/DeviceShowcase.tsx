@@ -175,7 +175,7 @@ export default function DeviceShowcase() {
   return (
     <section className="rs-showcase" aria-labelledby="rs-showcase-heading">
       <style>{`
-        .rs-showcase { width: 100%; padding: 104px 24px 48px; }
+        .rs-showcase { width: 100%; padding: 88px 24px 48px; }
         .rs-showcase-head { max-width: 760px; margin: 0 auto 64px; text-align: center; }
         /* ── The one piece of arithmetic this section rests on
 
@@ -288,7 +288,7 @@ export default function DeviceShowcase() {
            TS constant, so the two are kept in step by convention, exactly as
            globals.css already does. Below it the section is flat and static. */
         @media (max-width: 767px) {
-          .rs-showcase { padding: 72px 20px 40px; }
+          .rs-showcase { padding: 56px 20px 40px; }
           /* The header and the frame are one section, so this is intra-section
              space, not the gap between two sections: 40px on a phone, 64px on a
              desktop. */

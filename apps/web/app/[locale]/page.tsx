@@ -667,7 +667,11 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
           background: C.border,
           maxWidth: 1600,
           marginTop: 20,
-          marginBottom: isMobile ? 40 : 80,
+          // The hero's own trailing space. The gap to the next section is that
+          // section's to own — this used to carry 80px of it, `main` another
+          // 80px below, and the section 104px on top of that: 264px split three
+          // ways, none of them individually wrong-looking.
+          marginBottom: isMobile ? 16 : 24,
           '--rs-hero-delay': '1.35s',
         } as React.CSSProperties}
       />
@@ -810,7 +814,9 @@ export default function Home() {
           padding. */}
       <main className="main-content" style={{
         paddingTop: isMobileHome ? '72px' : 'clamp(64px, 5vh, 76px)',
-        paddingBottom: isMobileHome ? '40px' : '80px',
+        // Zero, not a value: the only child is the hero, whose divider carries
+        // the trailing space above, and the section below carries the gap.
+        paddingBottom: '0px',
         display: 'flex', flexDirection: 'column', alignItems: 'stretch',
       }}>
 
