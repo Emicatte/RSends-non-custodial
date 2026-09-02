@@ -272,7 +272,10 @@ export default function DeviceShowcase() {
            globals.css already does. Below it the section is flat and static. */
         @media (max-width: 767px) {
           .rs-showcase { padding: 72px 20px 40px; }
-          .rs-showcase-head { margin-bottom: 44px; }
+          /* The header and the frame are one section, so this is intra-section
+             space, not the gap between two sections: 40px on a phone, 64px on a
+             desktop. */
+          .rs-showcase-head { margin-bottom: 40px; }
           /* A dashboard is a desktop surface. Reflowing it into a phone-width
              column would show a truthful-but-useless two-column stub of the
              table — which is what /app/payments really does at 390px, inside
