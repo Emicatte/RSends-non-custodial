@@ -34,6 +34,7 @@ type BuilderCall = {
   selector: string
   options: unknown
   params: unknown
+  issuer: string | undefined
 }
 
 function fakeTronWeb() {
@@ -54,8 +55,9 @@ function fakeTronWeb() {
         selector: string,
         options: unknown,
         params: unknown,
+        issuer: string | undefined,
       ) => {
-        builderCalls.push({ contract, selector, options, params })
+        builderCalls.push({ contract, selector, options, params, issuer })
         return { result: { result: true }, transaction: unsigned }
       },
     },
@@ -80,8 +82,11 @@ function fakeWallet(name: string): Adapter {
   } as unknown as Adapter
 }
 
+const PAYER = 'TWd4WrZ9wn84f5x1hZhL4DHvk738ns5jwb'
+
 const request = (over: Partial<Parameters<typeof buildTransfer>[1]> = {}) => ({
   network: NILE,
+  payer: PAYER,
   recipient: MERCHANT,
   intentRecipient: MERCHANT,
   amountBaseUnits: '10000000',
@@ -172,6 +177,17 @@ describe('the call it builds', () => {
       { type: 'address', value: MERCHANT },
       { type: 'uint256', value: '10000000' },
     ])
+  })
+
+  it('names the payer as the transaction owner', async () => {
+    // Without an explicit issuerAddress tronweb falls back to
+    // `defaultAddress.hex`, which is `false` on a client built with no private
+    // key — so the transaction would carry no valid owner_address and die at
+    // the node. Invisible to a fake builder that ignores the argument, and
+    // fatal on the first real payment.
+    const { client, builderCalls } = fakeTronWeb()
+    await buildTransfer(client as never, request())
+    expect(builderCalls[0].issuer).toBe(PAYER)
   })
 })
 

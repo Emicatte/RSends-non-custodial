@@ -214,6 +214,7 @@ export function useTronPayment(
       // nothing — the signature is the irreversible step, and it is still ahead.
       const unsigned = await buildTransfer(tronWeb, {
         network,
+        payer,
         recipient: intent.recipient,
         intentRecipient: intent.recipient,
         amountBaseUnits,

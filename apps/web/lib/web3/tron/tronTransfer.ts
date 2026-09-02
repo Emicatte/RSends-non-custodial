@@ -43,6 +43,15 @@ export const TRANSFER_SELECTOR = 'transfer(address,uint256)'
 
 export interface TransferRequest {
   network: TronNetworkConfig
+  /**
+   * The connected wallet, which becomes the transaction's `owner_address`.
+   *
+   * Required, and passed explicitly, because tronweb otherwise defaults
+   * `issuerAddress` to `this.tronWeb.defaultAddress.hex` — and our client is
+   * built with a host and no private key, so that value is `false`. The
+   * transaction would carry no valid owner and be rejected by the node.
+   */
+  payer: string
   /** The address the transfer will credit. Must equal `intentRecipient`. */
   recipient: string
   /**
@@ -111,6 +120,7 @@ export async function buildTransfer(tronWeb: TronWeb, req: TransferRequest) {
       { type: 'address', value: req.recipient },
       { type: 'uint256', value: req.amountBaseUnits },
     ],
+    req.payer,
   )
 
   if (!built?.result?.result || !built.transaction) {
