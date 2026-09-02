@@ -30,17 +30,10 @@ from app.models.dashboard_schemas import DashboardStats, RecentTransaction
 from app.models.settlement_models import PaymentSettlement
 from app.security.auth import require_wallet_auth
 from app.security.input_validator import display_payment_address
+from app.services.chain_display import chain_key_for
 
 
 router = APIRouter(prefix="/api/v1/dashboard", tags=["dashboard"])
-
-_CHAIN_LABEL = {8453: "Base", 84532: "Base Sepolia", 1: "Ethereum", 42161: "Arbitrum"}
-
-
-def _chain_label(chain_id: Optional[int]) -> str:
-    if chain_id is None:
-        return "Base"
-    return _CHAIN_LABEL.get(int(chain_id), f"chain:{chain_id}")
 
 
 @router.get("/stats", response_model=DashboardStats)
@@ -131,7 +124,7 @@ async def get_dashboard_stats(
             type="transfer",
             amount_usd=0.0,  # TODO: convert base-unit amount via price service
             currency="ETH" if s.token == "0x" + "0" * 40 else "TOKEN",
-            chain=_chain_label(s.chain_id),
+            chain_key=chain_key_for(s.chain_id),
             status="confirmed",
             recipient=display_payment_address(s.merchant),
             timestamp_iso=s.created_at.isoformat() if s.created_at else "",

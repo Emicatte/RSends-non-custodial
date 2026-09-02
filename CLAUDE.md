@@ -318,6 +318,47 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
 - **Error envelope inconsistency.** Middleware errors are flat `{error, message}` but route
   `HTTPException(detail={...})` responses get FastAPI-wrapped as `{detail: {...}}` — align in a
   dedicated docs/handler change.
+- **Asset identity is still inferred, not recorded (chain-identity branch, 2026-09-02).** The
+  chain half is fixed — a settlement row now serialises a machine-stable `chain_key` assembled in
+  `app/services/chain_display.py`, and no display surface guesses a chain. The TOKEN half is not,
+  and these are the pieces left, deliberately deferred rather than forgotten:
+  - **The display path cannot identify a TRON token.** `app/tokens/registry.py` registers chain
+    ids 8453/84532/1/42161 only, so `_token_info(3448148188, "TXYZ…")` misses and the row reports
+    `currency="TOKEN"` with the *pricing* copy "not valued" — an IDENTIFICATION failure wearing a
+    VALUATION failure's words. `_usd_value` short-circuits before `get_usd_peg` ever runs. The
+    agreed fix is an ADDITIVE adapter (money registry first — it already knows both TRON USDT
+    contracts with decimals 6 — display registry second, supplying `peg_usd` plus the Arbitrum,
+    WETH and cbBTC identities the money registry has never held). A straight swap would regress
+    those six token/chain combinations from "identified, unpriced" to "unidentified". Own branch,
+    not a drive-by; it also owes an invariant test that the two registries never disagree on
+    decimals for a token both know.
+  - **Neither poller records what the chain told it.** `tron_poller.py` reads TronGrid's
+    `token_info` in exactly two places and takes only `address` from it — `symbol`, `decimals`
+    and `name` are dropped at the boundary and survive nowhere: no column, no JSON blob, no log
+    line. `payment_indexer.py:765` does the identical thing on the EVM side. So token identity is
+    always RE-DERIVED from a policy table rather than recorded from observation, and a token no
+    registry knows can never be named. Fixing it needs a migration, which Emilio writes.
+- **`admin/transactions/page.tsx:52` sends unknown networks to Etherscan.** A ternary whose `else`
+  branch is `https://etherscan.io`, so a TRON tx hash links to an Ethereum explorer. Admin-only,
+  so it is not a merchant-facing lie, but it is the same class of defect the merchant surfaces
+  just had removed — `lib/web3/explorer.ts` is name-keyed with no fallback and returns null on a
+  miss, which is the shape to copy. Its own change.
+- **`.claude/settings.json` allowlists `-p no:logging`, which `conftest.py:16-23` forbids.** Six
+  pre-approved Bash entries (`:277,278,279,282,283,339`) carry the flag that kills `caplog` and
+  fabricates phantom ERRORs in the depth-finality/indexer-cursor/reorg-evidence modules. They also
+  reference `./venv/bin/python`, a path the Makefile no longer creates (it builds
+  `services/backend/.venv`). Stale on both counts.
+- **`docs/INTEGRATION_CONTRACT.md:667-669` quotes 8 keys for the public checkout view; the code
+  has 12.** `public_routes.py:40-79` and its pinned test `test_public_intent_view.py:40-46` were
+  extended and the document was not. Code is the source of truth, so this is a doc fix.
+- **The `dashboard_routes` retirement batch is gated on "post-Manimama", an engagement that ended
+  in July 2026.** The gate as written can never fire, so the batch cannot be scheduled. It should
+  be re-gated on the `org_id` re-key alone, which is the real technical precondition — but that is
+  a scheduling decision, so the rewording is left to Emilio rather than done in passing. Note also
+  that the route is NOT dead in the meantime: it is mounted (`main.py:386`), its prefix is in
+  `GET_PUBLIC_PREFIXES` so a GET bypasses the API-key middleware and reaches
+  `@require_wallet_auth`, and it is absent from the web proxy's deny-list. It has no known caller,
+  which is not the same thing.
 - **Render provisioning before go-live:** Redis must be provisioned and `DEBUG=false` set —
   fail-closed rate limiting depends on both. Also set **`ADMIN_API_TOKEN`** (≥32 chars,
   distinct from `HMAC_SECRET`) — the admin surface is fully denied without it. Log hygiene

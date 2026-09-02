@@ -332,7 +332,7 @@ describe('DeviceShowcase', () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const fixture = require('@/components/landing/showcaseFixture')
     expect(fixture.SHOWCASE_RECENT_TX.length).toBeGreaterThan(0)
-    for (const row of fixture.SHOWCASE_RECENT_TX) expect(row.chain).toBe('Base')
+    for (const row of fixture.SHOWCASE_RECENT_TX) expect(row.chainKey).toBe('base')
     for (const row of fixture.SHOWCASE_PAYMENTS) expect(row.chain).toBe('base')
   })
 

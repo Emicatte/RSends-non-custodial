@@ -56,6 +56,7 @@ from app.models.merchant_models import (
 from app.models.org_models import Organization
 from app.models.settlement_models import PaymentSettlement, SettlementStatus
 from app.security.input_validator import display_payment_address
+from app.services.chain_display import chain_key_for
 
 # The route reads user_api_keys via count_active_keys_for_org, whose model
 # import is lazy — import it here so Base.metadata registers the table for
@@ -67,13 +68,6 @@ from app.tokens.registry import get_token, get_usd_peg
 router = APIRouter(prefix="/api/v1/user/org", tags=["user-org-stats"])
 
 _NATIVE = "0x" + "0" * 40
-_CHAIN_LABEL = {8453: "Base", 84532: "Base Sepolia", 1: "Ethereum", 42161: "Arbitrum"}
-
-
-def _chain_label(chain_id: Optional[int]) -> str:
-    if chain_id is None:
-        return "Base"
-    return _CHAIN_LABEL.get(int(chain_id), f"chain:{chain_id}")
 
 
 def _token_info(chain_id, token_addr):
@@ -354,7 +348,7 @@ async def get_org_stats(
                 # must render the symbol instead of "$0.00" when this is False.
                 amount_usd_known=usd is not None,
                 currency=info.symbol if info else "TOKEN",
-                chain=_chain_label(s.chain_id),
+                chain_key=chain_key_for(s.chain_id),
                 status="confirmed",
                 recipient=display_payment_address(s.merchant),
                 timestamp_iso=s.created_at.isoformat() if s.created_at else "",

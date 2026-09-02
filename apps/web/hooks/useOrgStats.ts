@@ -21,7 +21,19 @@ export interface RecentTransactionDTO {
   type: string
   amount_usd: number
   currency: string
-  chain: string
+  /**
+   * Machine-stable snake chain name (`base`, `base_sepolia`, `ethereum`,
+   * `arbitrum`, `tron`, `tron_nile`), or `chain:{id}` for a chain the backend
+   * cannot name. Badges and explorer links key on THIS, never on the label —
+   * keying on display text is what let a badge map and an explorer map speak
+   * two different vocabularies about the same row.
+   *
+   * Optional ONLY for deploy skew — the backend field is required and always
+   * sent. Web and the backend deploy independently, so a build that reads this
+   * can briefly meet an API that does not send it; the page resolves the gap to
+   * the neutral badge rather than to a guessed chain.
+   */
+  chain_key?: string
   status: string
   recipient: string
   timestamp_iso: string

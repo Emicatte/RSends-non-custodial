@@ -146,6 +146,29 @@ export const CHAIN_LABELS: Record<string, string> = {
   POLYGON: 'Polygon', BSC: 'BNB Chain', AVALANCHE: 'Avalanche',
   BASE_SEPOLIA: 'Base Sepolia', SEPOLIA: 'Sepolia',
   TRON: 'TRON', TRON_NILE: 'TRON Nile',
+  // Alias of ETH, added alongside it rather than replacing it. This map is
+  // keyed on the merchant-supplied intent string uppercased, where "ETH" is
+  // what arrives; the dashboard keys it on the backend's `chain_key`, where the
+  // canonical name for chain 1 is "ethereum". `router_registry.CHAIN_IDS`
+  // already carries both spellings for the same reason.
+  ETHEREUM: 'Ethereum',
+}
+
+/**
+ * The ONE place a chain key becomes display text.
+ *
+ * Scattering `CHAIN_LABELS[x.toUpperCase()]` across call sites is how the
+ * codebase ended up with a badge map keyed on labels and an explorer map keyed
+ * on snake names: two vocabularies over one value, drifting with nothing able
+ * to notice. Every display surface goes through here.
+ *
+ * A key with no label — the backend's `chain:{id}` fallback for a chain id it
+ * cannot name — is returned VERBATIM. That is deliberate: showing the raw
+ * reference is honest, and there is no branch here that can answer with a
+ * chain we merely support.
+ */
+export function chainLabelForKey(chainKey: string): string {
+  return CHAIN_LABELS[chainKey.toUpperCase()] ?? chainKey
 }
 
 export const PAID_STATES = new Set(['completed', 'paid'])
