@@ -144,6 +144,28 @@ describe('the group contains what it displays', () => {
   })
 })
 
+describe('the gap between this section and the next', () => {
+  it('is owned by this section, so the next one is untouched', async () => {
+    const css = await showcaseStyles()
+    // 48px here plus WhySignInSection's own 120px top padding measured 168px,
+    // against a 96-128 target. Taken out of this section's bottom padding
+    // rather than the next section's top: the gap belongs to whichever section
+    // is being changed, and restyling a section that is not part of this work
+    // would move spacing nobody asked about.
+    expect(css).toMatch(/\.rs-showcase \{ width: 100%; padding: 88px 24px 8px; \}/)
+    const phone = /@media \(max-width: 767px\) \{([\s\S]*?)\n\s{8}\}/.exec(css)?.[1] ?? ''
+    expect(phone).toMatch(/\.rs-showcase \{ padding: 56px 20px 8px; \}/)
+  })
+
+  it('leaves the next section byte-identical', () => {
+    const why = fs.readFileSync(
+      path.resolve(__dirname, '../../../components/landing/WhySignInSection.tsx'),
+      'utf8',
+    )
+    expect(why).toMatch(/padding: isMobile \? "72px 24px" : "120px 96px"/)
+  })
+})
+
 describe('the gap between the hero and this section', () => {
   const page = fs.readFileSync(
     path.resolve(__dirname, '../../[locale]/page.tsx'),
