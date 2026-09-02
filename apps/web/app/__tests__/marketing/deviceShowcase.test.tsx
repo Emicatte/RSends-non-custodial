@@ -200,6 +200,20 @@ describe('DeviceShowcase', () => {
       ).toBeNull()
     })
 
+    it('does not announce the phone\'s decorative clock either', async () => {
+      const { container } = await renderShowcase()
+      const clock = Array.from(container.querySelectorAll('span')).find(
+        (el) => el.textContent === '9:41',
+      )
+      expect(clock).toBeDefined()
+      // Same defect as the address bar: a mock status time is scenery, and a
+      // reader who cannot see it gains nothing from hearing "9:41" announced
+      // between the merchant dashboard and the payer's receipt.
+      expect(clock!.closest('[aria-hidden="true"]')).not.toBeNull()
+      // The checkout inside the frame is the real product and stays readable.
+      expect(container.querySelector('[data-frame="phone"]')!.getAttribute('aria-hidden')).toBeNull()
+    })
+
     it('leaves no `app.rsends.io` anywhere in the web app or its message files', () => {
       // The four remaining hits repo-wide are backend config docstrings, a
       // validate_settings error string and two pytest fixtures — real
