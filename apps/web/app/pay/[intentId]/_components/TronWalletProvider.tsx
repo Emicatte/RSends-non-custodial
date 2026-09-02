@@ -51,6 +51,13 @@ import type {
   TronWalletSession,
 } from '@/lib/web3/tron/tronWallet'
 
+/**
+ * How long the TronLink adapter waits for the extension to inject before it
+ * reports NotFound. 5s rather than the adapter's 30s default — a payer without
+ * the extension should reach the WalletConnect path quickly.
+ */
+const TRONLINK_PROBE_TIMEOUT_MS = 5_000
+
 /** Built lazily so the adapter packages stay out of the EVM route's graph. */
 export interface TronAdapterSet {
   tronlink: Adapter
@@ -69,7 +76,17 @@ const defaultCreateAdapters: CreateAdapters = async (network) => {
 
   const projectId = process.env.NEXT_PUBLIC_WC_PROJECT_ID
   return {
-    tronlink: new TronLinkAdapter(),
+    tronlink: new TronLinkAdapter({
+      // Bounds the readyState probe, so "is TronLink here?" always gets an
+      // answer instead of sitting in `checking` forever on a browser where the
+      // extension will never inject. Shorter than the adapter's 30s default:
+      // this is a checkout, and a payer without the extension needs to be shown
+      // the WalletConnect path quickly rather than watching a disabled button.
+      checkTimeout: TRONLINK_PROBE_TIMEOUT_MS,
+      // The page renders its own picker and its own install guidance, so the
+      // adapter must not navigate away on its own when the wallet is missing.
+      openUrlWhenWalletNotFound: false,
+    }),
     // WalletConnect is offered only when a projectId is configured. Building
     // the adapter without one throws inside its own constructor, which would
     // take TronLink down with it — so it is omitted instead, and the picker
@@ -110,6 +127,23 @@ function useIsTouchDevice(): boolean | undefined {
     )
   }, [])
   return coarse
+}
+
+/**
+ * The adapter's own probe result, mapped to what the picker shows.
+ *
+ * `Loading` MUST NOT collapse into "absent". The adapter starts in `Loading`
+ * and resolves asynchronously — TronLink injects its provider after page load
+ * and the adapter waits `checkTimeout` for it — so reading the state once at
+ * construction and treating anything-but-Found as missing told a payer who has
+ * the extension that they do not. `checking` renders as a disabled control; only
+ * `NotFound`, which the adapter reports once its own timeout elapses, is
+ * allowed to say the wallet is not there.
+ */
+function mapReadyState(state: string): 'installed' | 'absent' | 'checking' {
+  if (state === 'Found') return 'installed'
+  if (state === 'NotFound') return 'absent'
+  return 'checking'
 }
 
 /** Only TronLink implements `network()`; the base Adapter type does not declare it. */
@@ -166,24 +200,30 @@ export function TronWalletProvider({
   // produced the mismatch errors this route has seen before.
   useEffect(() => {
     let cancelled = false
+    // Held so the cleanup can actually detach. Setting a `cancelled` flag
+    // silences the setState but leaves the subscription attached for the life
+    // of the adapter, which leaks one listener per mount.
+    let detach: (() => void) | null = null
+
     createAdapters(network)
       .then((built) => {
         if (cancelled) return
         setAdapters(built)
-        setTronlinkReady(
-          built.tronlink.readyState === 'Found' ? 'installed' : 'absent',
-        )
-        built.tronlink.on('readyStateChanged', (state) => {
-          if (!cancelled) {
-            setTronlinkReady(state === 'Found' ? 'installed' : 'absent')
-          }
-        })
+        setTronlinkReady(mapReadyState(built.tronlink.readyState))
+
+        const onReadyState = (state: string) => {
+          if (!cancelled) setTronlinkReady(mapReadyState(state))
+        }
+        built.tronlink.on('readyStateChanged', onReadyState)
+        detach = () => built.tronlink.off('readyStateChanged', onReadyState)
       })
       .catch((err) => {
         if (!cancelled) setError(toCheckoutError(err))
       })
+
     return () => {
       cancelled = true
+      detach?.()
     }
   }, [network, createAdapters])
 

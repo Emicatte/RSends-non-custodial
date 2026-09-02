@@ -53,6 +53,9 @@ function makeAdapter(
     off: (event: string, fn: Listener) => listeners.get(event)?.delete(fn),
     emit: (event: string, ...args: never[]) =>
       listeners.get(event)?.forEach((fn) => fn(...args)),
+    /** Total live subscribers, for the unmount-leak assertion. */
+    listenerCount: () =>
+      [...listeners.values()].reduce((n, set) => n + set.size, 0),
   }
   if (opts.network) adapter.network = opts.network
   if (opts.switchChain) adapter.switchChain = opts.switchChain
@@ -268,6 +271,107 @@ it('drops the session when the wallet disconnects underneath us', async () => {
 
   await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('idle'))
   expect(screen.getByTestId('address')).toHaveTextContent('-')
+})
+
+describe('readiness comes from the adapter probe, never from a snap judgement', () => {
+  it('reports checking while the probe is still running, never absent', async () => {
+    // The bug this pins: readyState is `Loading` at construction, so reading it
+    // once and mapping it to installed/absent told a payer who HAS TronLink
+    // that it is not installed, until some later event happened to correct it.
+    const tronlink = makeAdapter('TronLink', { readyState: 'Loading' })
+    renderProvider(async () => ({ tronlink: tronlink as never, walletconnect: null }))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('options')).toHaveTextContent('tronlink:checking'),
+    )
+    expect(screen.getByTestId('options')).not.toHaveTextContent('tronlink:absent')
+  })
+
+  it('moves to installed when the probe finds the wallet', async () => {
+    const tronlink = makeAdapter('TronLink', { readyState: 'Loading' })
+    renderProvider(async () => ({ tronlink: tronlink as never, walletconnect: null }))
+    await waitFor(() =>
+      expect(screen.getByTestId('options')).toHaveTextContent('tronlink:checking'),
+    )
+
+    act(() => {
+      ;(tronlink.emit as (e: string, ...a: unknown[]) => void)(
+        'readyStateChanged',
+        'Found',
+      )
+    })
+
+    await waitFor(() =>
+      expect(screen.getByTestId('options')).toHaveTextContent('tronlink:installed'),
+    )
+  })
+
+  it('only calls the wallet absent once the probe says NotFound', async () => {
+    // NotFound is what the adapter reports after its own checkTimeout elapses.
+    const tronlink = makeAdapter('TronLink', { readyState: 'Loading' })
+    renderProvider(async () => ({ tronlink: tronlink as never, walletconnect: null }))
+    // Adapters are built in an async effect, so the subscription does not exist
+    // on the first paint — emit before it does and the event goes nowhere.
+    await waitFor(() =>
+      expect(screen.getByTestId('options')).toHaveTextContent('tronlink:checking'),
+    )
+
+    act(() => {
+      ;(tronlink.emit as (e: string, ...a: unknown[]) => void)(
+        'readyStateChanged',
+        'NotFound',
+      )
+    })
+
+    await waitFor(() =>
+      expect(screen.getByTestId('options')).toHaveTextContent('tronlink:absent'),
+    )
+  })
+})
+
+it('surfaces a chain change while connected', async () => {
+  const tronlink = makeAdapter('TronLink', {
+    network: async () => ({ chainId: NILE.chainId }),
+  })
+  renderProvider(async () => ({ tronlink: tronlink as never, walletconnect: null }))
+
+  await userEvent.click(await screen.findByText('tronlink'))
+  await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('connected'))
+
+  act(() => {
+    ;(tronlink.emit as (e: string, ...a: unknown[]) => void)('chainChanged', {
+      chainId: '0x2b6653dc',
+    })
+  })
+
+  // The payer switched to mainnet mid-flow. The preflight keys off this, so it
+  // must not be absorbed silently.
+  await waitFor(() =>
+    expect(screen.getByTestId('chainId')).toHaveTextContent('0x2b6653dc'),
+  )
+})
+
+it('removes every listener on unmount', async () => {
+  // The leak this pins: the readyStateChanged subscription was registered in
+  // the adapter-construction effect whose cleanup only set a `cancelled` flag.
+  // That silenced the setState but left the listener attached for the life of
+  // the adapter, so a payer navigating between intents accumulated them.
+  const tronlink = makeAdapter('TronLink', {
+    network: async () => ({ chainId: NILE.chainId }),
+  })
+  const count = () => (tronlink.listenerCount as () => number)()
+
+  const view = renderProvider(async () => ({
+    tronlink: tronlink as never,
+    walletconnect: null,
+  }))
+  await userEvent.click(await screen.findByText('tronlink'))
+  await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('connected'))
+  expect(count()).toBeGreaterThan(0)
+
+  view.unmount()
+
+  await waitFor(() => expect(count()).toBe(0))
 })
 
 it('offers WalletConnect even when TronLink is absent', async () => {
