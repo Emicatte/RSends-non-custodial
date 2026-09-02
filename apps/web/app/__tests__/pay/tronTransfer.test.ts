@@ -57,6 +57,14 @@ function fakeTronWeb() {
         params: unknown,
         issuer: string | undefined,
       ) => {
+        // The fake refuses the omission on purpose. tronweb would silently
+        // fall back to `defaultAddress.hex` — `false` on a client with no
+        // private key — and build a transaction with no valid owner_address.
+        // That bug shipped once precisely because a lenient fake ignored an
+        // argument it was never given.
+        if (!issuer) {
+          throw new Error('triggerSmartContract called without an issuerAddress')
+        }
         builderCalls.push({ contract, selector, options, params, issuer })
         return { result: { result: true }, transaction: unsigned }
       },
@@ -208,6 +216,10 @@ describe('one path for every wallet', () => {
 
     expect(tronlink.builderCalls).toEqual(walletconnect.builderCalls)
     expect(a).toBe(b)
+    // And both name the connected account as the owner. Whichever wallet is in
+    // use, the transaction belongs to the payer.
+    expect(tronlink.builderCalls[0].issuer).toBe(PAYER)
+    expect(walletconnect.builderCalls[0].issuer).toBe(PAYER)
   })
 
   it('broadcasts exactly what the wallet signed', async () => {
