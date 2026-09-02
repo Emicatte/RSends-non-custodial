@@ -30,7 +30,7 @@ from app.models.dashboard_schemas import DashboardStats, RecentTransaction
 from app.models.settlement_models import PaymentSettlement
 from app.security.auth import require_wallet_auth
 from app.security.input_validator import display_payment_address
-from app.services.chain_display import chain_key_for, legacy_chain_label
+from app.services.chain_display import chain_key_for
 
 
 router = APIRouter(prefix="/api/v1/dashboard", tags=["dashboard"])
@@ -124,7 +124,6 @@ async def get_dashboard_stats(
             type="transfer",
             amount_usd=0.0,  # TODO: convert base-unit amount via price service
             currency="ETH" if s.token == "0x" + "0" * 40 else "TOKEN",
-            chain=legacy_chain_label(s.chain_id),
             chain_key=chain_key_for(s.chain_id),
             status="confirmed",
             recipient=display_payment_address(s.merchant),

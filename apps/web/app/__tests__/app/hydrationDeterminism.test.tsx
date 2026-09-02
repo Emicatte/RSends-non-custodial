@@ -118,7 +118,6 @@ jest.mock('@/hooks/useOrgStats', () => ({
           amount_usd: 10,
           amount_usd_known: true,
           currency: 'USDC',
-          chain: 'Base',
           chain_key: 'base',
           status: 'confirmed',
           recipient: '0x1111111111111111111111111111111111111111',

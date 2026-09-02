@@ -21,8 +21,6 @@ export interface RecentTransactionDTO {
   type: string
   amount_usd: number
   currency: string
-  /** Human label. Superseded by `chain_key`; nothing on /app reads it. */
-  chain: string
   /**
    * Machine-stable snake chain name (`base`, `base_sepolia`, `ethereum`,
    * `arbitrum`, `tron`, `tron_nile`), or `chain:{id}` for a chain the backend

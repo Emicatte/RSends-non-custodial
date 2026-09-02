@@ -14,14 +14,16 @@ class RecentTransaction(BaseModel):
     type: str
     amount_usd: float
     currency: str
-    # Human label. Superseded by `chain_key` and read by nothing once the
-    # frontend switches over; it is carried through this commit only so the
-    # wire does not change shape and behaviour in the same step.
-    chain: str
     # Machine-stable snake chain name — `base`, `base_sepolia`, `ethereum`,
     # `arbitrum`, `tron`, `tron_nile` — or the honest `chain:{id}` for a chain
-    # id we cannot name. This is what clients key badges and explorer links on;
-    # `chain` was doing both jobs and could do neither well.
+    # id we cannot name. Clients key badges and explorer links on this and
+    # derive display text from it.
+    #
+    # It replaced a `chain` field that carried a HUMAN LABEL and was also the
+    # only thing a client could key on. That double duty is what let a badge map
+    # keyed on labels and an explorer map keyed on snake names disagree about
+    # the same row; keeping the label as well would have kept the second source
+    # of truth, free to drift with nothing able to catch it.
     #
     # REQUIRED, deliberately. `amount_usd_known` below is defaulted because the
     # frozen legacy route had to keep constructing unedited; that route now

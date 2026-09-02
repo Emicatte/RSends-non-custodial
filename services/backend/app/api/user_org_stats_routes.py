@@ -56,7 +56,7 @@ from app.models.merchant_models import (
 from app.models.org_models import Organization
 from app.models.settlement_models import PaymentSettlement, SettlementStatus
 from app.security.input_validator import display_payment_address
-from app.services.chain_display import chain_key_for, legacy_chain_label
+from app.services.chain_display import chain_key_for
 
 # The route reads user_api_keys via count_active_keys_for_org, whose model
 # import is lazy — import it here so Base.metadata registers the table for
@@ -348,7 +348,6 @@ async def get_org_stats(
                 # must render the symbol instead of "$0.00" when this is False.
                 amount_usd_known=usd is not None,
                 currency=info.symbol if info else "TOKEN",
-                chain=legacy_chain_label(s.chain_id),
                 chain_key=chain_key_for(s.chain_id),
                 status="confirmed",
                 recipient=display_payment_address(s.merchant),

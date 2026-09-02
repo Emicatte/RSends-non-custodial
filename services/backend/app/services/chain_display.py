@@ -110,19 +110,11 @@ def chain_key_for(chain_id: int) -> str:
     return CHAIN_KEY_BY_ID.get(int(chain_id), f"chain:{int(chain_id)}")
 
 
-# ── Legacy display label ──────────────────────────────────────────────
+# There is deliberately NO display-label map here.
 #
-# `RecentTransaction.chain` carries a human label and predates `chain_key`. It
-# is kept, unchanged in value, only until the frontend stops reading it; the
-# commit that removes that read removes this too. Deduplicated here because the
-# identical dict and function existed in BOTH `user_org_stats_routes` and the
-# frozen `dashboard_routes`, mislabelling identically in both.
-_CHAIN_LABEL = {8453: "Base", 84532: "Base Sepolia", 1: "Ethereum", 42161: "Arbitrum"}
-
-
-def legacy_chain_label(chain_id: int) -> str:
-    """The pre-`chain_key` display label. Values are unchanged from the two
-    copies this replaces, so no wire value moves in the commit that introduces
-    it. Its `None` arm is not carried over: it returned "Base" for a column that
-    cannot be null."""
-    return _CHAIN_LABEL.get(int(chain_id), f"chain:{int(chain_id)}")
+# One lived in this module briefly, holding `RecentTransaction.chain` steady
+# while the frontend moved onto `chain_key`. It is gone with its last reader:
+# a backend-side label would be a second source of truth for text the client
+# already derives from the key, free to drift from the client's own labels with
+# nothing able to notice — which is the exact shape of the bug this module was
+# written to remove, one layer up.

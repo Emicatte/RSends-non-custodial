@@ -176,6 +176,26 @@ async def test_an_unknown_chain_id_keeps_the_honest_fallback(session):
     assert stats.recent_transactions[0].chain_key == "chain:999999"
 
 
+@pytest.mark.asyncio
+async def test_the_row_no_longer_carries_a_display_label(session):
+    """`chain` was a human label that was also the only thing a client could key
+    on, and that double duty is the whole defect. `chain_key` replaced it; the
+    label is now derived on the client from the key, through one helper.
+
+    Leaving the field behind would leave the second source of truth in place —
+    free to drift from the frontend's labels with nothing able to catch it.
+    """
+    org = await _make_org(session, owner_address=OWNER_A)
+    await _seed(session, owner=OWNER_A, chain_id=84532)
+
+    stats = await get_org_stats(ctx=_ctx(org), environment="test", db=session)
+    row = stats.recent_transactions[0]
+
+    assert not hasattr(row, "chain")
+    assert "chain" not in row.model_dump()
+    assert row.chain_key == "base_sepolia"
+
+
 def test_every_chain_the_backend_can_emit_has_a_key():
     """Including TRON mainnet, which is implemented and deliberately unconfigured."""
     assert chain_key_for(8453) == "base"

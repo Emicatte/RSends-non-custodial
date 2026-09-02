@@ -65,10 +65,6 @@ const tx = (chain_key: string, id = 1) => ({
   type: 'transfer',
   amount_usd: 1240,
   currency: 'USDC',
-  // The legacy label field is still on the wire at this commit and is
-  // deliberately given a WRONG value here: if the page still reads it, these
-  // tests fail. That is the point — `chain` is dead to this surface now.
-  chain: 'Base',
   chain_key,
   status: 'confirmed',
   recipient: '0x1234…abcd',
