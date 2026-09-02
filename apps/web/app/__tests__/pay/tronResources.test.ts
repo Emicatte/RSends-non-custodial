@@ -12,6 +12,7 @@
 import {
   FEE_LIMIT_CEILING_SUN,
   FEE_LIMIT_MARGIN,
+  MAX_RESULT_SIZE_IN_TX,
   SIGNATURE_OVERHEAD_BYTES,
   bandwidthFor,
   estimateTransferEnergy,
@@ -113,9 +114,16 @@ describe('shortfalls are priced across both budgets', () => {
     expect(quote.bandwidthAvailable).toBe(60 + 400)
   })
 
-  it('measures bandwidth on the signed size, not the unsigned bytes', () => {
+  it('bandwidth includes the 64-byte result allowance', () => {
+    // java-tron's BandwidthProcessor charges the serialized transaction PLUS
+    // Constant.MAX_RESULT_SIZE_IN_TX per contract whenever the VM is supported,
+    // which it is on both mainnet and Nile. Omitting it under-counts every
+    // TRC-20 transfer by 64 bytes.
     const hex = 'ab'.repeat(200)
-    expect(bandwidthFor(hex)).toBe(200 + SIGNATURE_OVERHEAD_BYTES)
+    expect(bandwidthFor(hex)).toBe(
+      200 + SIGNATURE_OVERHEAD_BYTES + MAX_RESULT_SIZE_IN_TX,
+    )
+    expect(MAX_RESULT_SIZE_IN_TX).toBe(64)
   })
 })
 

@@ -50,6 +50,22 @@ export const FEE_LIMIT_CEILING_SUN = 100_000_000
  */
 export const SIGNATURE_OVERHEAD_BYTES = 67
 
+/**
+ * java-tron charges a flat allowance for the execution result on top of the
+ * serialized transaction:
+ *
+ *   bytesSize = trx.toBuilder().clearRet().build().getSerializedSize()
+ *   if (dynamicPropertiesStore.supportVM()) bytesSize += Constant.MAX_RESULT_SIZE_IN_TX
+ *
+ * — `chainbase/src/main/java/org/tron/core/db/BandwidthProcessor.java`, added
+ * once per contract (only shielded transfers are exempt) whenever the VM is
+ * supported, which it is on both mainnet and Nile. A TRC-20 transfer carries
+ * one contract, so it is a flat 64 bytes. Omitting it under-prices every
+ * payment by 0.064 TRX at the current bandwidth fee — small, but it is the
+ * surprise-burn this module exists to prevent.
+ */
+export const MAX_RESULT_SIZE_IN_TX = 64
+
 /** Sun per TRX, for display. */
 export const SUN_PER_TRX = 1_000_000
 
@@ -159,7 +175,11 @@ export async function readResourcePrices(tronWeb: TronWeb): Promise<ResourcePric
 
 /** Bandwidth the signed transaction will consume, in bytes. */
 export function bandwidthFor(rawDataHex: string): number {
-  return Math.ceil(rawDataHex.length / 2) + SIGNATURE_OVERHEAD_BYTES
+  return (
+    Math.ceil(rawDataHex.length / 2) +
+    SIGNATURE_OVERHEAD_BYTES +
+    MAX_RESULT_SIZE_IN_TX
+  )
 }
 
 /** feeLimit from an energy estimate: margin applied, ceiling enforced. */
