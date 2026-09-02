@@ -35,6 +35,30 @@ export const CHAIN_BADGE: Record<string, { bg: string; text: string }> = {
   Sol: { bg: 'rgba(153, 69, 255, 0.08)', text: '#7c2dc7' },
 }
 
+/**
+ * The badge for a chain `CHAIN_BADGE` has no entry for.
+ *
+ * Grey on purpose. An unidentified chain must not borrow a known network's
+ * colour: a row painted Base blue asserts a network we never identified, which
+ * is the same lie as labelling it "Base" — just told in a channel the reader
+ * cannot quote back. Neutral says "this is what we were told, verbatim".
+ */
+export const CHAIN_BADGE_UNKNOWN = {
+  bg: 'rgba(26, 26, 26, 0.06)',
+  text: COLORS.muted,
+}
+
+/**
+ * Total over every string. The lookup it replaces was partial — an unknown
+ * chain read back `undefined` and the next line dereferenced `.bg` on it — and
+ * survived only because the page coerced every unrecognised chain to `'Base'`
+ * before a row could reach here. That coercion is the defect being removed, so
+ * this stops being a latent crash and becomes the rendering path.
+ */
+export function chainBadgeFor(chain: string): { bg: string; text: string } {
+  return CHAIN_BADGE[chain] ?? CHAIN_BADGE_UNKNOWN
+}
+
 export type TxStatus = 'confirmed' | 'pending' | 'failed'
 
 export const STATUS_BADGE: Record<
@@ -53,7 +77,13 @@ export type TxRow = {
   type: string
   /** Already formatted, in USD, or the token symbol when there is no peg. */
   amount: string
-  chain: keyof typeof CHAIN_BADGE
+  /**
+   * Any chain string, including one no badge is defined for — `chainBadgeFor`
+   * is total over it. `keyof typeof CHAIN_BADGE` used to sit here and promised
+   * nothing anyway (`keyof Record<string, …>` widens to `string | number`),
+   * which is precisely how the partial lookup read as safe.
+   */
+  chain: string
   status: TxStatus
 }
 
@@ -95,7 +125,7 @@ export function RecentTransactionsTable({ rows }: { rows: ReadonlyArray<TxRow> }
         </thead>
         <tbody>
           {rows.map((tx) => {
-            const chainBadge = CHAIN_BADGE[tx.chain]
+            const chainBadge = chainBadgeFor(tx.chain)
             const statusBadge = STATUS_BADGE[tx.status]
             return (
               <tr key={tx.id}>
