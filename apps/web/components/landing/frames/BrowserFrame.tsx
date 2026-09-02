@@ -33,8 +33,13 @@ export function BrowserFrame({
         boxShadow: '0 32px 64px -16px rgba(10,10,10,0.22), 0 2px 6px rgba(10,10,10,0.06)',
       }}
     >
-      {/* Chrome */}
+      {/* Chrome. Hidden from assistive technology as a whole: the traffic
+          lights and the spacer already were, but the address bar was not, so a
+          screen reader announced a host name that is decoration — not a link,
+          not navigable, and nothing a listener can act on. The frame's contents
+          are the real product and stay in the tree. */}
       <div
+        aria-hidden="true"
         style={{
           display: 'flex',
           alignItems: 'center',

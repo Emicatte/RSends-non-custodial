@@ -335,7 +335,11 @@ export default function DeviceShowcase() {
           }}
         >
           <div className="rs-showcase-screen">
-            <BrowserFrame url="app.rsends.io">
+            {/* The deployed path. This used to name an `app.` subdomain that
+                exists in no deploy config, no CORS allowlist and no redirect —
+                a screenshot of a product is allowed to be a mock-up, but the
+                address bar is the one part of it a reader may try to type. */}
+            <BrowserFrame url="rsends.io/app">
               <div style={{ position: 'relative', height: SCREEN_HEIGHT }}>
                 <ShowcaseScreen
                   state="dashboard"

@@ -16,8 +16,8 @@
  * on this page, which is why it does not exist on the viewports where that
  * would cost most.
  */
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { readFileSync, readdirSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import { act, render, type RenderResult } from '@testing-library/react'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 
@@ -159,6 +159,77 @@ describe('DeviceShowcase', () => {
   it('renders the demo-data caption', async () => {
     const { container } = await renderShowcase()
     expect(container.textContent).toContain(enMessages.showcase.demoDataLabel)
+  })
+
+  describe('the address bar', () => {
+    it('shows where the dashboard actually lives', async () => {
+      const { container } = await renderShowcase()
+      const chrome = container.querySelector('[data-frame="browser"]')
+      expect(chrome!.textContent).toContain('rsends.io/app')
+    })
+
+    it('does not invent a host', async () => {
+      const { container } = await renderShowcase()
+      // `app.rsends.io` is a fiction: it is in no deploy config, no CORS
+      // allowlist and no redirect. The deployed path is rsends.io/app.
+      expect(container.textContent).not.toContain('app.rsends.io')
+    })
+
+    it('names the same host in every locale — chrome, not copy', async () => {
+      for (const locale of LOCALES) {
+        currentLocale = locale
+        const { container, unmount } = await renderShowcase()
+        expect(container.textContent).toContain('rsends.io/app')
+        unmount()
+      }
+      currentLocale = 'en'
+    })
+
+    it('is not announced to a screen reader', async () => {
+      const { container } = await renderShowcase()
+      const url = Array.from(container.querySelectorAll('span')).find(
+        (el) => el.textContent === 'rsends.io/app',
+      )
+      expect(url).toBeDefined()
+      // A decorative address bar that is not a link and cannot be navigated has
+      // nothing to say to somebody who cannot see it — but the frame's contents
+      // are the real product and stay in the tree.
+      expect(url!.closest('[aria-hidden="true"]')).not.toBeNull()
+      expect(
+        container.querySelector('[data-frame="browser"]')!.getAttribute('aria-hidden'),
+      ).toBeNull()
+    })
+
+    it('leaves no `app.rsends.io` anywhere in the web app or its message files', () => {
+      // The four remaining hits repo-wide are backend config docstrings, a
+      // validate_settings error string and two pytest fixtures — real
+      // references to a host this frontend does not serve, and not ours to
+      // rewrite. This sweep is scoped to apps/web for that reason.
+      const root = resolve(__dirname, '../../..')
+      const offenders: string[] = []
+      const walk = (dir: string) => {
+        for (const entry of readdirSync(dir, { withFileTypes: true })) {
+          // `__tests__` is excluded because this file has to name the string it
+          // is banning; `_archive` because a retired page is not shipped.
+          if (
+            entry.name === 'node_modules' ||
+            entry.name === '.next' ||
+            entry.name === '_archive' ||
+            entry.name === '__tests__'
+          )
+            continue
+          const full = join(dir, entry.name)
+          if (entry.isDirectory()) walk(full)
+          else if (/\.(tsx?|jsx?|json|mdx?|css)$/.test(entry.name)) {
+            if (readFileSync(full, 'utf8').includes('app.rsends.io')) {
+              offenders.push(full.slice(root.length + 1))
+            }
+          }
+        }
+      }
+      walk(root)
+      expect(offenders).toEqual([])
+    })
   })
 
   it('reserves an explicit height before the sequence initialises', async () => {
