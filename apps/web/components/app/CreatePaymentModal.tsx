@@ -111,9 +111,11 @@ export function CreatePaymentModal({
 }) {
   const t = useTranslations('app.payments')
   const [amount, setAmount] = useState(initialValues?.amount ?? '')
-  // A repeat only ever seeds a Base Sepolia row (the prefill gate refuses any
-  // other chain), so the initial chain is always the default.
-  const [chain, setChain] = useState<string>(DEFAULT_CREATE_CHAIN)
+  // A repeat opens on the SOURCE row's network — the prefill gate only resolves
+  // chains this form offers, and it carries which one. Anything else would open
+  // a TRON repeat on Base Sepolia holding a T-address the form then rejects,
+  // blaming the merchant for a network the modal chose.
+  const [chain, setChain] = useState<string>(initialValues?.chain ?? DEFAULT_CREATE_CHAIN)
   const [token, setToken] = useState<string>(initialValues?.token ?? 'USDC')
   const [expiry, setExpiry] = useState<number>(30)
   const [recipient, setRecipient] = useState(initialValues?.recipient ?? '')

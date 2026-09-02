@@ -61,10 +61,16 @@ const A = '0x1111111111111111111111111111111111111111'
 const B = '0x2222222222222222222222222222222222222222'
 const C = '0x3333333333333333333333333333333333333333'
 
+// A real base58check TRON address and the org's TRON payout column. Its own
+// column, never derived from the EVM one — and case-sensitive, which is why
+// every assertion below compares it whole.
+const T_RECIPIENT = 'TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8'
+const T_WALLET = 'TPYmHEhy5n8TCEfYGqW2rPxsghSfzghPDn'
+
 const FUTURE = '2099-01-01T00:00:00Z'
 const PAST = '2020-01-01T00:00:00Z'
 
-function orgPayload(role = 'admin') {
+function orgPayload(role = 'admin', tronWallet: string | null = T_WALLET) {
   return {
     organizations: [
       {
@@ -75,6 +81,7 @@ function orgPayload(role = 'admin') {
         is_personal: false,
         plan: 'free',
         settlement_wallet: WALLET,
+        settlement_wallet_tron: tronWallet,
         role,
         member_count: 1,
         created_at: '2026-07-01T00:00:00Z',
@@ -94,11 +101,19 @@ const CREATED = {
 }
 
 /** Route by URL (org lookup vs payments list) and by method (list vs create). */
-function mockFetch(records: unknown[], role = 'admin') {
+function mockFetch(
+  records: unknown[],
+  role = 'admin',
+  tronWallet: string | null = T_WALLET,
+) {
   const fn = jest.fn().mockImplementation((url: unknown, opts?: any) => {
     const u = String(url)
     if (u.includes('/organizations')) {
-      return Promise.resolve({ ok: true, status: 200, json: async () => orgPayload(role) })
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => orgPayload(role, tronWallet),
+      })
     }
     if (opts?.method === 'POST') {
       return Promise.resolve({ ok: true, status: 200, json: async () => CREATED })
@@ -229,6 +244,54 @@ it('opens the creation modal prefilled with the source amount, token and recipie
   // The create form is chain-locked; the source row's chain is the same one.
   // Scoped to the dialog — the row's own network cell reads the same string.
   expect(within(dialog).getByText('Base Sepolia')).toBeInTheDocument()
+})
+
+it('opens the modal on TRON Nile for a tron_nile row, with USDT and the base58 recipient', async () => {
+  // The mirror of the Base Sepolia assertion above. The network selector has
+  // known tron_nile since PR #103; this is Repeat catching up to it, so the
+  // form opens on the SOURCE row's network rather than the default one.
+  mockFetch([row({ chain: 'tron_nile', currency: 'USDT', recipient: T_RECIPIENT })])
+
+  render(<AppPaymentsPage />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Repeat' }))
+
+  const dialog = await screen.findByRole('dialog')
+  expect(within(dialog).getByLabelText('Network')).toHaveValue('tron_nile')
+  expect(within(dialog).getByText('TRON Nile')).toBeInTheDocument()
+  expect(within(dialog).getByLabelText('Token')).toHaveValue('USDT')
+  // Whole and case-intact: a lowercased T-address is not a TRON address.
+  expect(within(dialog).getByLabelText('Recipient (optional)')).toHaveValue(T_RECIPIENT)
+})
+
+it('refuses a TRON row that settles to an unset TRON payout address, and fires no request', async () => {
+  // Client-side, one screen before the server's SETTLEMENT_WALLET_TRON_MISSING:
+  // the row has no stored recipient, so it settles to the org's TRON payout
+  // column — which is not set. The EVM wallet is set and is NOT a fallback.
+  const fn = mockFetch(
+    [row({ chain: 'tron_nile', currency: 'USDT', recipient: null })],
+    'admin',
+    null,
+  )
+
+  render(<AppPaymentsPage />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Repeat' }))
+
+  // The reason named is the TRON payout address, not "network unavailable".
+  expect(await screen.findByRole('alert')).toHaveTextContent(/TRON payout address/i)
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(createBody(fn)).toBeUndefined()
+})
+
+it('tells a mainnet row it is the network, without claiming it disappeared', async () => {
+  mockFetch([row({ chain: 'base' })])
+
+  render(<AppPaymentsPage />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Repeat' }))
+
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent(/network/i)
+  expect(alert).not.toHaveTextContent(/no longer available/i)
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 })
 
 it('prefills every recipient and every share of a split source row', async () => {

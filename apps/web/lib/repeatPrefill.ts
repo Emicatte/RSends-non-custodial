@@ -9,7 +9,8 @@
 
 import { isAddress } from 'viem'
 import type { OrgPaymentRecord } from '@/hooks/useOrgPayments'
-import { chainFor } from '@/lib/createChains'
+import { type ChainFamily, chainFor, decimalsFor } from '@/lib/createChains'
+import { isTronAddress } from '@/lib/web3/tronAddress'
 import {
   amountToBase,
   amountsToSharesBps,
@@ -17,41 +18,61 @@ import {
   onchainAmounts,
 } from '@/lib/splitShares'
 
-// The terms a row must meet to be repeatable. DERIVED from the one chain/token
-// table in lib/createChains.ts (itself pinned against the backend registry), so
-// the prefill gate and the create form cannot disagree about which tokens exist
-// or how many decimals they carry.
+// The terms a row must meet to be repeatable are READ OFF the one chain/token
+// table in lib/createChains.ts — the whole of it, not one entry — so the prefill
+// gate and the create form cannot disagree about which networks are offerable,
+// which tokens each enables, or how many decimals they carry. That table is
+// itself pinned against the backend registry by createChainsRegistry.test.ts,
+// which is what keeps this a mirror rather than a second source of truth.
 //
-// Repeat stays BASE SEPOLIA ONLY even though the create form now offers TRON
-// too. It is a deliberate refusal, not an oversight: the split branch below is
-// EVM-shaped throughout (viem `isAddress`, lowercase de-duplication, an
-// on-chain remainder rule that belongs to a router TRON does not have), and a
-// TRON row would need its own family-aware path. A TRON row therefore keeps
-// returning the existing `'chain'` refusal, which names the field honestly.
-const BASE_SEPOLIA = chainFor('base_sepolia')!
-export const CREATE_CHAIN = BASE_SEPOLIA.chain
-export const CREATE_TOKENS = BASE_SEPOLIA.tokens.map((t) => t.symbol)
-export const CREATE_TOKEN_DECIMALS: Record<string, number> = Object.fromEntries(
-  BASE_SEPOLIA.tokens.map((t) => [t.symbol, t.decimals]),
-)
+// Repeat was Base Sepolia only until the network selector's chains reached it
+// (PR #103 offered TRON in the create form and left Repeat behind). The
+// consequence was a merchant reading "this network is no longer available" on a
+// tron_nile row whose network works perfectly well — a refusal that named the
+// wrong thing. Everything family-dependent below now routes on
+// `chainFor(row.chain).family`.
 
 const SPLIT_MIN = 2
 const SPLIT_MAX = 20
+
+/** The org's payout address per address family: `settlement_wallet` (EVM) and
+ * `settlement_wallet_tron`. A record, not a single string, because the family
+ * of the ROW decides which column is the implicit recipient — and the two are
+ * never fallbacks for each other (the server refuses that with
+ * SETTLEMENT_WALLET_TRON_MISSING). Total over `ChainFamily` on purpose: a third
+ * family cannot be added without every caller being made to answer for it. */
+export type SettlementWallets = Record<ChainFamily, string | null>
 
 /** Initial values for CreatePaymentModal. Amounts are decimal strings in the
  * token's units — the form's own input format — never base units. */
 export interface CreatePrefill {
   amount: string
+  /** The network to open the form on — the source row's own, now that more than
+   * one is offerable. Without it a TRON repeat would open on the default chain
+   * carrying a T-address the form then (correctly) rejects. */
+  chain: string
   token: string
-  /** Single-payee override. '' means "use the org settlement wallet", which is
-   * how the source intent itself resolved when it stored no recipient. */
+  /** Single-payee override. '' means "use the org's payout address for this
+   * chain" — the EVM settlement wallet or the TRON one, whichever the chain's
+   * family points at — which is how the source intent itself resolved when it
+   * stored no recipient. */
   recipient?: string
   /** Split legs in position order. The modal's last row auto-balances, so the
    * final amount is advisory there — it is supplied for completeness. */
   splitLegs?: { address: string; amount: string }[]
 }
 
-export type PrefillFailure = 'chain' | 'token' | 'amount' | 'recipient' | 'split'
+export type PrefillFailure =
+  | 'chain'
+  | 'token'
+  | 'amount'
+  | 'recipient'
+  /** The row settles implicitly to a TRON payout address the org has not set.
+   * Its own failure rather than a flavour of `recipient`, because the remedy is
+   * a specific Settings field the merchant may not know exists — and creating
+   * the request by hand would fail in exactly the same way. */
+  | 'recipientTron'
+  | 'split'
 
 export type PrefillResult =
   | { ok: true; values: CreatePrefill }
@@ -73,16 +94,19 @@ const fail = (field: PrefillFailure): PrefillResult => ({ ok: false, field })
  */
 export function resolveRepeatPrefill(
   row: OrgPaymentRecord,
-  settlementWallet: string | null,
+  wallets: SettlementWallets,
 ): PrefillResult {
-  // 1. Chain. /app is test-locked; a row from any other chain has no router
-  //    the create form could target.
-  if ((row.chain ?? '').toLowerCase() !== CREATE_CHAIN) return fail('chain')
+  // 1. Chain. Offerable at all? /app is test-locked, so a mainnet row (or a
+  //    chain the registry has dropped) has no network the form can target. The
+  //    definition found here decides every family-dependent branch below.
+  const chainDef = chainFor((row.chain ?? '').toLowerCase())
+  if (!chainDef) return fail('chain')
 
-  // 2. Token — must still be one the form offers.
+  // 2. Token — must be enabled ON THIS CHAIN. Keyed by (chain, token), never a
+  //    union across chains: USDT is a real create token on TRON Nile and still
+  //    not offerable on Base Sepolia, and a union would quietly accept it.
   const token = row.currency
-  if (!(CREATE_TOKENS as readonly string[]).includes(token)) return fail('token')
-  const decimals = CREATE_TOKEN_DECIMALS[token]
+  const decimals = decimalsFor(chainDef.chain, token)
   if (decimals == null) return fail('token')
 
   // 3. Amount. Rejects float-repr artifacts, exponent notation and any
@@ -94,6 +118,11 @@ export function resolveRepeatPrefill(
   // 4. Split, when the source had one.
   const legs = row.split
   if (legs && legs.length > 0) {
+    // Gated, not assumed empty. A chain with no split router cannot have a
+    // legitimate split row, and everything below this line is EVM-shaped —
+    // viem `isAddress`, lowercase de-duplication, and the contract remainder
+    // rule of a router TRON does not have. It must never run on base58.
+    if (!chainDef.splitAvailable) return fail('split')
     if (legs.length < SPLIT_MIN || legs.length > SPLIT_MAX) return fail('split')
 
     // Position is the on-chain leg order and leg 0 carries the contract's
@@ -123,6 +152,7 @@ export function resolveRepeatPrefill(
       ok: true,
       values: {
         amount,
+        chain: chainDef.chain,
         token,
         splitLegs: ordered.map((leg, i) => ({
           address: leg.address,
@@ -133,12 +163,24 @@ export function resolveRepeatPrefill(
   }
 
   // 5. Single payee. A stored recipient is an explicit override and must be a
-  //    valid address. No stored recipient means the source settled implicitly to
-  //    the org wallet — reproducible only if the org still has one.
+  //    valid address IN THIS CHAIN'S FAMILY — `isTronAddress` is the same
+  //    base58check mirror the create form and the Settings payout field use, so
+  //    there is one validator per family and not a fourth written here. The
+  //    address is carried through verbatim: a T-address that lost its case
+  //    would no longer be an address at all.
+  const addressValidForChain = (addr: string) =>
+    chainDef.family === 'tron' ? isTronAddress(addr) : isAddress(addr)
   if (row.recipient != null) {
-    if (!isAddress(row.recipient)) return fail('recipient')
-    return { ok: true, values: { amount, token, recipient: row.recipient } }
+    if (!addressValidForChain(row.recipient)) return fail('recipient')
+    return {
+      ok: true,
+      values: { amount, chain: chainDef.chain, token, recipient: row.recipient },
+    }
   }
-  if (!settlementWallet) return fail('recipient')
-  return { ok: true, values: { amount, token, recipient: '' } }
+  // No stored recipient: the source settled implicitly to the org's payout
+  // address FOR THIS FAMILY, and is reproducible only while that column is set.
+  if (!wallets[chainDef.family]) {
+    return fail(chainDef.family === 'tron' ? 'recipientTron' : 'recipient')
+  }
+  return { ok: true, values: { amount, chain: chainDef.chain, token, recipient: '' } }
 }
