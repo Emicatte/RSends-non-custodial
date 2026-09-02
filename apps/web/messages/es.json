@@ -146,7 +146,7 @@
       },
       "history": {
         "title": "Customer pays in stablecoin",
-        "description": "They pay in USDC or USDT on Base or Ethereum."
+        "description": "USDC on Base and Ethereum, USDT on Ethereum and TRON. Base Sepolia only while we are on testnet."
       },
       "contacts": {
         "title": "Funds settle on-chain",
@@ -1266,7 +1266,7 @@
         },
         {
           "q": "¿Qué chains y tokens están soportados?",
-          "a": "USDC y USDT en Base y Ethereum. El producto es actualmente una demo en la testnet Base Sepolia."
+          "a": "USDC en Base y Ethereum, USDT en Ethereum y TRON. Solo Base Sepolia mientras estamos en testnet."
         },
         {
           "q": "¿Puedo probarlo antes de pagar?",
