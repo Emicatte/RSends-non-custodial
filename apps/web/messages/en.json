@@ -1510,10 +1510,11 @@
         "split": "Split",
         "repeat": "Repeat",
         "repeatError": {
-          "chain": "This request's network is no longer available. Create the request manually.",
+          "chain": "This request's network isn't one this dashboard can create on.",
           "token": "This request's token is no longer available. Create the request manually.",
           "amount": "This request's amount can't be reused. Create the request manually.",
           "recipient": "This request's recipient can't be resolved. Create the request manually.",
+          "recipientTron": "This request settles to your TRON payout address, which isn't set. Set it in Settings, then repeat.",
           "split": "This request's split can't be reused. Create the request manually."
         }
       },

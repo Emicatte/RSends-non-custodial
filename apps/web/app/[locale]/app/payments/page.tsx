@@ -77,7 +77,13 @@ export default function AppPaymentsPage() {
   // which field failed. NEVER creates an intent — it only opens the same modal a
   // manual create opens, prefilled; the merchant still confirms.
   function onRepeat(r: OrgPaymentRecord) {
-    const result = resolveRepeatPrefill(r, settlementWallet)
+    // BOTH payout addresses, keyed by family: the source row's network decides
+    // which one it settles to implicitly, and passing only the EVM column made
+    // a TRON repeat resolve against an address it can never land on.
+    const result = resolveRepeatPrefill(r, {
+      evm: settlementWallet,
+      tron: settlementWalletTron,
+    })
     if (!result.ok) {
       setPrefillError(result.field)
       setModalOpen(false)

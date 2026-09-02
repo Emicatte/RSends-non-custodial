@@ -1510,10 +1510,11 @@
         "split": "Suddiviso",
         "repeat": "Ripeti",
         "repeatError": {
-          "chain": "La rete di questa richiesta non è più disponibile. Crea la richiesta manualmente.",
+          "chain": "La rete di questa richiesta non è tra quelle su cui questa dashboard può creare.",
           "token": "Il token di questa richiesta non è più disponibile. Crea la richiesta manualmente.",
           "amount": "L'importo di questa richiesta non può essere riutilizzato. Crea la richiesta manualmente.",
           "recipient": "Il destinatario di questa richiesta non può essere risolto. Crea la richiesta manualmente.",
+          "recipientTron": "Questa richiesta viene regolata sul tuo indirizzo di incasso TRON, che non è impostato. Impostalo in Impostazioni, poi ripeti.",
           "split": "La suddivisione di questa richiesta non può essere riutilizzata. Crea la richiesta manualmente."
         }
       },
