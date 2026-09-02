@@ -202,20 +202,22 @@ export default function DeviceShowcase() {
            NOTE: no backticks anywhere in this block. It is a template literal,
            and one inside a CSS comment silently terminates the string — the
            parse error lands on the JSX below it and reads as unrelated. */
-        /* The reservation. The phone and its caption are absolute and anchored
-           BELOW this box (bottom: -50px and -86px), so nothing in the layout
-           accounts for the ~64px they occupy under it. Everything downstream
-           then measured from a box that ends above what the reader sees, and
-           the only way to clear the overhang was a fixed 128px margin on the
-           DEMO DATA line — a constant standing in for a relationship, which is
-           why the real clearance drifted 64 / 75 / 86 / 128 across the zoom
-           bands instead of holding. Reserved here it scales with the overhang,
-           because both live inside the same zoomed element. */
-        .rs-showcase-stage { position: relative; margin: 0 auto; max-width: 1356px; padding-bottom: 88px; }
-        .rs-showcase-browser { width: fit-content; position: relative; }
+        .rs-showcase-stage { position: relative; margin: 0 auto; max-width: 1356px; }
+        /* The reservation, on the element the phone and its caption are
+           positioned against. They are absolute and used to be anchored BELOW
+           this box, so nothing in the layout accounted for the ~64px they
+           occupy under it; anything downstream then measured from a box ending
+           above what the reader sees, and the only way to clear them was a
+           fixed 128px margin on the note — a constant standing in for a
+           relationship, which is why the real clearance drifted 64 / 75 / 86 /
+           128 across the zoom bands. The 88px below is offset back out of both
+           anchors (38px and 2px, from -50px and -86px), so the devices sit
+           exactly where they did and the box now ends underneath them. */
+        .rs-showcase-browser { width: fit-content; position: relative; padding-bottom: 88px; }
         .rs-showcase-screen { width: 1186px; }
-        .rs-showcase-phone { width: 250px; position: absolute; right: -170px; bottom: -50px; z-index: 2; }
-        .rs-showcase-label--phone { position: absolute; right: -170px; bottom: -86px; width: 250px; text-align: center; }
+        .rs-showcase-phone { width: 250px; position: absolute; right: -170px; bottom: 38px; z-index: 2; }
+        .rs-showcase-label--phone { position: absolute; right: -170px; bottom: 2px; width: 250px; text-align: center; }
+        .rs-showcase-note { margin: 24px 0 0; text-align: center; }
         .rs-showcase-body { padding: 20px 96px 20px 20px; }
         .rs-showcase-body--flat { padding: 20px; }
         /* Responsive scale bands. The zoom goes on the STAGE, so the window,
@@ -270,11 +272,12 @@ export default function DeviceShowcase() {
            beside a shrunken desktop is a picture of two small things, not a
            phone beside a small screen. */
         @media (max-width: 1023px) {
-          /* In flow down here, so the box already contains it. */
-          .rs-showcase-stage { max-width: none; zoom: 1; padding-bottom: 0; }
+          .rs-showcase-stage { max-width: none; zoom: 1; }
           .rs-showcase-screen { zoom: 0.60; }
           .rs-showcase-phone { position: static; width: 280px; margin: 60px auto 0; }
-          .rs-showcase-browser { margin: 0 auto; }
+          /* In flow down here, so the box already contains the phone and there
+             is nothing to reserve. */
+          .rs-showcase-browser { margin: 0 auto; padding-bottom: 0; }
           .rs-showcase-label--phone { position: static; width: auto; margin-top: 10px; }
           /* Nothing to cast onto once the phone is not over the window. */
           .rs-showcase-castshadow { display: none; }
@@ -290,6 +293,7 @@ export default function DeviceShowcase() {
              space, not the gap between two sections: 40px on a phone, 64px on a
              desktop. */
           .rs-showcase-head { margin-bottom: 40px; }
+          .rs-showcase-note { margin-top: 16px; }
           /* A dashboard is a desktop surface. Reflowing it into a phone-width
              column would show a truthful-but-useless two-column stub of the
              table — which is what /app/payments really does at 390px, inside
@@ -446,21 +450,28 @@ export default function DeviceShowcase() {
           <DeviceLabel className="rs-showcase-label--phone">{t('payerLabel')}</DeviceLabel>
         </div>
 
+        {/* Inside the group, not between two sections. It is a note about these
+            two devices, and the two device captions read as attached to what
+            they label precisely because they sit in the group's own box; this
+            line did not, so it read as a stray element. Its old `128px 0 0` was
+            never spacing either — it was clearance for the phone's unreserved
+            overhang, which is why the real gap drifted 64 / 75 / 86 / 128 across
+            the zoom bands. The overhang is reserved on the stage now, so this
+            is a spacing token measured from a box that contains what it shows. */}
+        <p
+          className="rs-showcase-note"
+          style={{
+            fontFamily: C.M,
+            fontSize: 11,
+            lineHeight: '14px',
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            color: C.sub,
+          }}
+        >
+          {t('demoDataLabel')}
+        </p>
       </div>
-
-      <p
-        style={{
-          margin: '128px 0 0',
-          textAlign: 'center',
-          fontFamily: C.M,
-          fontSize: 11,
-          letterSpacing: '0.14em',
-          textTransform: 'uppercase',
-          color: C.sub,
-        }}
-      >
-        {t('demoDataLabel')}
-      </p>
     </section>
   )
 }
