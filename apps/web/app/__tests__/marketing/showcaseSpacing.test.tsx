@@ -57,13 +57,56 @@ describe('the gap between the section header and the frame', () => {
     expect(phone).toMatch(/\.rs-showcase-head\s*\{\s*margin-bottom:\s*40px;\s*\}/)
   })
 
-  it('adds nothing else between the subheading and the frame', async () => {
+  it('adds no top padding or margin of its own to the stage', async () => {
     const css = await showcaseStyles()
-    // The stage is the frame's own box: no top padding or margin of its own, so
-    // the 64px above is the whole gap and there is one number to change.
-    expect(css).toMatch(
-      /\.rs-showcase-stage\s*\{\s*position:\s*relative;\s*margin:\s*0 auto;\s*max-width:\s*1356px;\s*\}/,
+    const stage = /\.rs-showcase-stage\s*\{([^}]*)\}/.exec(css)?.[1] ?? ''
+    expect(stage).not.toMatch(/padding-top|margin-top/)
+    expect(stage).toMatch(/margin:\s*0 auto;/)
+  })
+})
+
+describe('the group contains what it displays', () => {
+  it('reserves the phone caption instead of leaving it hanging outside the box', async () => {
+    const css = await showcaseStyles()
+    const stage = /\.rs-showcase-stage\s*\{([^}]*)\}/.exec(css)?.[1] ?? ''
+    // The phone and its caption are `position: absolute` and anchored BELOW the
+    // stage's content box (`bottom: -50px` and `bottom: -86px`), so the stage's
+    // height accounts for neither. Everything downstream then measures from a
+    // box that ends above what the reader can see, and the only way to clear the
+    // overhang was a fixed number that could not scale with it. Reserve it here
+    // and the relationship holds in every zoom band by construction.
+    expect(stage).toMatch(/padding-bottom:\s*\d+px/)
+  })
+
+  it('drops the reservation where the phone is in flow and needs none', async () => {
+    const css = await showcaseStyles()
+    const stacked = /@media \(max-width: 1023px\) \{([\s\S]*?)\n\s{8}\}/.exec(css)?.[1] ?? ''
+    expect(stacked).toMatch(/\.rs-showcase-stage\s*\{[^}]*padding-bottom:\s*0/)
+  })
+
+  it('carries no dead height floor on the stage', async () => {
+    // `minHeight: 620` never bound: the in-flow content measures 631px at 1440
+    // and 782px at 390, at every viewport height. A floor that is never reached
+    // reserves nothing and only reads as if it does.
+    let container: HTMLElement
+    await act(async () => {
+      ;({ container } = render(<DeviceShowcase />))
+    })
+    const stage = container!.querySelector<HTMLElement>('[data-showcase-stage]')
+    expect(stage).not.toBeNull()
+    expect(stage!.style.minHeight).toBe('')
+  })
+
+  it('gives both captions an explicit line box', async () => {
+    // Without one, the caption's height is whatever the font metrics say, and
+    // the phone caption's `bottom` anchor is computed against it. The arithmetic
+    // that positions a caption should not move when a font loads.
+    const source = fs.readFileSync(
+      path.resolve(__dirname, '../../../components/landing/DeviceShowcase.tsx'),
+      'utf8',
     )
+    const label = /function DeviceLabel[\s\S]*?\}\)\s*\{[\s\S]*?style=\{\{([\s\S]*?)\}\}/.exec(source)?.[1] ?? ''
+    expect(label).toMatch(/lineHeight/)
   })
 })
 

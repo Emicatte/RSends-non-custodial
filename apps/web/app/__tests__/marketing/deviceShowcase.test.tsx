@@ -236,9 +236,16 @@ describe('DeviceShowcase', () => {
     const { container } = await renderShowcase()
     const stage = container.querySelector<HTMLElement>('[data-showcase-stage]')
     expect(stage).not.toBeNull()
-    // Inline, so it applies before any stylesheet or JS — and so jsdom can see
-    // it, which a stylesheet rule would not be.
-    expect(stage!.style.minHeight).toMatch(/\d/)
+    // The reservation is the window's own inline height, not a floor on the
+    // stage. Inline, so it applies before any stylesheet or JS — and so jsdom
+    // can see it, which a stylesheet rule would not be. This used to assert
+    // `stage.style.minHeight`, a 620px floor that never bound: the stage's
+    // in-flow content measures 631px at 1440 and 782px at 390, at every
+    // viewport height, so the floor reserved nothing while reading as though it
+    // did. What actually holds the box open is below.
+    const screen = stage!.querySelector<HTMLElement>('[data-frame="browser"] > div:last-child > div')
+    expect(screen).not.toBeNull()
+    expect(screen!.style.height).toMatch(/\d/)
   })
 
   it('takes its rows from the fixture module, not from inline literals', async () => {
@@ -471,7 +478,11 @@ describe('DeviceShowcase', () => {
     setViewport(viewport)
     const { container } = await renderShowcase()
     const stage = container.querySelector<HTMLElement>('[data-showcase-stage]')!
-    expect(stage.style.minHeight).toMatch(/\d/)
+    // Same reservation at every width — the window's inline height, not a floor
+    // on the stage that no width ever reached.
+    const screen = stage.querySelector<HTMLElement>('[data-frame="browser"] > div:last-child > div')!
+    expect(screen.style.height).toMatch(/\d/)
+    expect(stage.style.minHeight).toBe('')
   })
 
   describe('motion gate', () => {

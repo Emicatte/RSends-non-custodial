@@ -85,14 +85,18 @@ type State = 'dashboard' | 'payments'
 const ADVANCE_AT = 0.5
 
 /**
- * The stack's box, reserved before anything initialises and never derived from
- * content. Inline rather than in a stylesheet: it has to apply before any CSS
- * has loaded, and it is what the jsdom test can see. 560px shows the rail, the
- * cards, the chart and the first transactions, then clips — which is what a
- * dashboard does inside a viewport, and which is why the last row is cut by the
- * window edge rather than sitting above empty grey.
+ * The window's screen height, reserved before anything initialises and never
+ * derived from content. Inline rather than in a stylesheet: it has to apply
+ * before any CSS has loaded, and it is what the jsdom test can see. 560px shows
+ * the rail, the cards, the chart and the first transactions, then clips — which
+ * is what a dashboard does inside a viewport, and which is why the last row is
+ * cut by the window edge rather than sitting above empty grey.
+ *
+ * There was a `STAGE_MIN_HEIGHT = 620` floor on the stage as well. It never
+ * bound — the stage's in-flow content measures 631px at 1440 and 782px at 390,
+ * at every viewport height — so it reserved nothing while reading as though it
+ * did. This constant is the one that actually holds the box open.
  */
-const STAGE_MIN_HEIGHT = 620
 const SCREEN_HEIGHT = 560
 
 /** The crossfade. Outgoing blurs and shrinks a touch; incoming reverses it. */
@@ -198,7 +202,16 @@ export default function DeviceShowcase() {
            NOTE: no backticks anywhere in this block. It is a template literal,
            and one inside a CSS comment silently terminates the string — the
            parse error lands on the JSX below it and reads as unrelated. */
-        .rs-showcase-stage { position: relative; margin: 0 auto; max-width: 1356px; }
+        /* The reservation. The phone and its caption are absolute and anchored
+           BELOW this box (bottom: -50px and -86px), so nothing in the layout
+           accounts for the ~64px they occupy under it. Everything downstream
+           then measured from a box that ends above what the reader sees, and
+           the only way to clear the overhang was a fixed 128px margin on the
+           DEMO DATA line — a constant standing in for a relationship, which is
+           why the real clearance drifted 64 / 75 / 86 / 128 across the zoom
+           bands instead of holding. Reserved here it scales with the overhang,
+           because both live inside the same zoomed element. */
+        .rs-showcase-stage { position: relative; margin: 0 auto; max-width: 1356px; padding-bottom: 88px; }
         .rs-showcase-browser { width: fit-content; position: relative; }
         .rs-showcase-screen { width: 1186px; }
         .rs-showcase-phone { width: 250px; position: absolute; right: -170px; bottom: -50px; z-index: 2; }
@@ -257,7 +270,8 @@ export default function DeviceShowcase() {
            beside a shrunken desktop is a picture of two small things, not a
            phone beside a small screen. */
         @media (max-width: 1023px) {
-          .rs-showcase-stage { max-width: none; zoom: 1; }
+          /* In flow down here, so the box already contains it. */
+          .rs-showcase-stage { max-width: none; zoom: 1; padding-bottom: 0; }
           .rs-showcase-screen { zoom: 0.60; }
           .rs-showcase-phone { position: static; width: 280px; margin: 60px auto 0; }
           .rs-showcase-browser { margin: 0 auto; }
@@ -321,7 +335,6 @@ export default function DeviceShowcase() {
         className="rs-showcase-stage"
         data-showcase-stage=""
         style={{
-          minHeight: STAGE_MIN_HEIGHT,
           // One space for both devices, so their vanishing lines converge.
           perspective: sequence ? PERSPECTIVE : undefined,
         }}
@@ -494,6 +507,9 @@ function DeviceLabel({ className, children }: { className?: string; children: Re
         margin: '14px 0 0',
         fontFamily: C.M,
         fontSize: 11,
+        // Explicit, because the phone caption's `bottom` anchor is computed
+        // against this height: without it the arithmetic moves when a font loads.
+        lineHeight: '14px',
         letterSpacing: '0.14em',
         textTransform: 'uppercase',
         color: C.sub,
