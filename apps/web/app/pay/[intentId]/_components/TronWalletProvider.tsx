@@ -69,12 +69,18 @@ export type CreateAdapters = (
 ) => Promise<TronAdapterSet>
 
 const defaultCreateAdapters: CreateAdapters = async (network) => {
-  const [{ TronLinkAdapter }, wc] = await Promise.all([
-    import('@tronweb3/tronwallet-adapter-tronlink'),
-    import('@tronweb3/tronwallet-adapter-walletconnect'),
-  ])
-
   const projectId = process.env.NEXT_PUBLIC_WC_PROJECT_ID
+
+  const { TronLinkAdapter } = await import('@tronweb3/tronwallet-adapter-tronlink')
+  // Imported only when it can actually be built. The WalletConnect adapter
+  // pulls AppKit and a WalletConnect core; loading that into a deployment with
+  // no projectId — or into a test run — buys nothing and costs a great deal.
+  // TronLink's own chain is `abstract-adapter -> eventemitter3`, and nothing
+  // heavier, so the common path stays light.
+  const wc = projectId
+    ? await import('@tronweb3/tronwallet-adapter-walletconnect')
+    : null
+
   return {
     tronlink: new TronLinkAdapter({
       // Bounds the readyState probe, so "is TronLink here?" always gets an
@@ -91,7 +97,7 @@ const defaultCreateAdapters: CreateAdapters = async (network) => {
     // the adapter without one throws inside its own constructor, which would
     // take TronLink down with it — so it is omitted instead, and the picker
     // simply does not list it.
-    walletconnect: projectId
+    walletconnect: wc
       ? new wc.WalletConnectAdapter({
           // The chain id derived from the intent, never a display name and
           // never a default. WalletConnect will not establish a session that
