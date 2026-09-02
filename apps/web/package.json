@@ -21,7 +21,6 @@
     "@solana/web3.js": "^1.98.4",
     "@tanstack/react-query": "^5.45.1",
     "@tronweb3/tronwallet-abstract-adapter": "1.2.0",
-    "@tronweb3/tronwallet-adapter-react-hooks": "1.1.13",
     "@tronweb3/tronwallet-adapter-tronlink": "1.2.0",
     "@tronweb3/tronwallet-adapter-walletconnect": "3.0.5",
     "date-fns": "^4.1.0",
