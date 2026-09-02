@@ -30,12 +30,12 @@ import {
   type TxRow,
 } from '@/components/app/RecentTransactionsTable'
 
-const row = (chain: string): TxRow => ({
+const row = (chainKey: string): TxRow => ({
   id: 1,
   time: '18:08',
   type: 'transfer',
   amount: '$1,240',
-  chain,
+  chainKey,
   status: 'confirmed',
 })
 
@@ -73,17 +73,19 @@ describe('the chain badge is a total function', () => {
 
     // Base's blue is the specific lie this guards against: it is what the
     // deleted coercion produced for every unidentified chain.
-    expect(color).not.toBe(asDom('color', CHAIN_BADGE.Base.text))
-    expect(background).not.toBe(asDom('background', CHAIN_BADGE.Base.bg))
+    expect(color).not.toBe(asDom('color', CHAIN_BADGE.base.text))
+    expect(background).not.toBe(asDom('background', CHAIN_BADGE.base.bg))
     // A colour is still required — an unstyled badge would be a rendering bug
     // of its own, not a neutral one.
     expect(color).toBeTruthy()
   })
 
   it('leaves a recognised chain exactly as it was', () => {
-    const { getByText } = render(<RecentTransactionsTable rows={[row('Base')]} />)
+    // Keyed on `base`, LABELLED "Base" — the key/label split this branch
+    // introduced. The badge colour is unchanged from before it.
+    const { getByText } = render(<RecentTransactionsTable rows={[row('base')]} />)
     const badge = getByText('Base') as HTMLElement
-    expect(badge.style.color).toBe(asDom('color', CHAIN_BADGE.Base.text))
-    expect(badge.style.background).toBe(asDom('background', CHAIN_BADGE.Base.bg))
+    expect(badge.style.color).toBe(asDom('color', CHAIN_BADGE.base.text))
+    expect(badge.style.background).toBe(asDom('background', CHAIN_BADGE.base.bg))
   })
 })

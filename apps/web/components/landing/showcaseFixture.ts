@@ -119,12 +119,12 @@ export const SHOWCASE_METRICS: ReadonlyArray<Metric> = [
  * real gap, filed separately; they are not fixed by making this fixture lie.
  */
 export const SHOWCASE_RECENT_TX: ReadonlyArray<TxRow> = [
-  { id: 1, time: '18:08', type: 'transfer', amount: '$1,240', chain: 'Base', status: 'confirmed' },
-  { id: 2, time: '17:22', type: 'transfer', amount: '$875', chain: 'Base', status: 'confirmed' },
-  { id: 3, time: '15:47', type: 'transfer', amount: '$640', chain: 'Base', status: 'pending' },
-  { id: 4, time: '11:31', type: 'transfer', amount: '$1,075', chain: 'Base', status: 'confirmed' },
-  { id: 5, time: '09:58', type: 'transfer', amount: '$395', chain: 'Base', status: 'failed' },
-  { id: 6, time: '06:40', type: 'transfer', amount: '$210', chain: 'Base', status: 'confirmed' },
+  { id: 1, time: '18:08', type: 'transfer', amount: '$1,240', chainKey: 'base', status: 'confirmed' },
+  { id: 2, time: '17:22', type: 'transfer', amount: '$875', chainKey: 'base', status: 'confirmed' },
+  { id: 3, time: '15:47', type: 'transfer', amount: '$640', chainKey: 'base', status: 'pending' },
+  { id: 4, time: '11:31', type: 'transfer', amount: '$1,075', chainKey: 'base', status: 'confirmed' },
+  { id: 5, time: '09:58', type: 'transfer', amount: '$395', chainKey: 'base', status: 'failed' },
+  { id: 6, time: '06:40', type: 'transfer', amount: '$210', chainKey: 'base', status: 'confirmed' },
 ]
 
 /**

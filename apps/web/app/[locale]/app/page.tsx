@@ -49,7 +49,6 @@ const noticeStyle: CSSProperties = {
 
 
 const USD_FMT = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
-const FE_CHAINS: ReadonlyArray<string> = ['Base', 'Tron', 'Sol']
 const FE_STATUS_MAP: Record<string, TxStatus> = {
   confirmed: 'confirmed',
   pending: 'pending',
@@ -148,7 +147,17 @@ export default function AppDashboardPage() {
     amount: r.amount_usd_known
       ? USD_FMT.format(r.amount_usd)
       : t('recentTransactions.amountUnpriced', { symbol: r.currency }),
-    chain: FE_CHAINS.includes(r.chain) ? r.chain : 'Base',
+    // Passed through, not filtered. The whitelist that used to sit here
+    // rewrote every chain it did not recognise to the literal 'Base' — which
+    // was six of the seven values the backend can send, including every Base
+    // Sepolia settlement on a dashboard that only ever shows testnet.
+    //
+    // `?? ''` covers deploy skew, not a missing contract: web (Vercel) and the
+    // backend (Render) ship independently, so a browser can hold a build that
+    // reads `chain_key` while the API it is talking to does not yet send one.
+    // Empty resolves to the neutral badge and no label — the dashboard says
+    // nothing about the network rather than crashing or guessing 'Base'.
+    chainKey: r.chain_key ?? '',
     status: FE_STATUS_MAP[r.status] ?? 'pending',
   }))
 
