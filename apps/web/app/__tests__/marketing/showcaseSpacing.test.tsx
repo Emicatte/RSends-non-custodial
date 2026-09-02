@@ -131,6 +131,31 @@ describe('the group contains what it displays', () => {
     expect(css + source).toMatch(/rs-showcase-note|demoData/i)
   })
 
+  it('clears the frame the caption labels, rotation included', async () => {
+    const css = await showcaseStyles()
+    // The browser caption measured 0px of clearance on a desktop while the
+    // phone's measured 17px, because `rotateY(6deg)` on the frame pushes its
+    // rendered box below its layout box and swallowed the 14px margin. The
+    // caption is inside that same transform, so the margin has to be set in the
+    // pre-transform space and is therefore larger than the gap it produces.
+    const browserCap = /\.rs-showcase-label--browser\s*\{([^}]*)\}/.exec(css)?.[1] ?? ''
+    expect(browserCap).toMatch(/margin-top:\s*32px/)
+    // Below 768px nothing is rotated, so the same gap needs the honest value.
+    const phone = /@media \(max-width: 767px\) \{([\s\S]*?)\n\s{8}\}/.exec(css)?.[1] ?? ''
+    expect(phone).toMatch(/\.rs-showcase-label--browser\s*\{[^}]*margin-top:\s*14px/)
+  })
+
+  it('sets caption spacing where a media query can reach it', async () => {
+    const source = fs.readFileSync(
+      path.resolve(__dirname, '../../../components/landing/DeviceShowcase.tsx'),
+      'utf8',
+    )
+    // An inline margin outranks every stylesheet rule, so the value could not
+    // differ between the rotated and unrotated cases while it lived there.
+    const label = /function DeviceLabel[\s\S]*?style=\{\{([\s\S]*?)\}\}/.exec(source)?.[1] ?? ''
+    expect(label).not.toMatch(/margin/)
+  })
+
   it('gives both captions an explicit line box', async () => {
     // Without one, the caption's height is whatever the font metrics say, and
     // the phone caption's `bottom` anchor is computed against it. The arithmetic

@@ -218,6 +218,11 @@ export default function DeviceShowcase() {
         .rs-showcase-phone { width: 250px; position: absolute; right: -170px; bottom: 38px; z-index: 2; }
         .rs-showcase-label--phone { position: absolute; right: -170px; bottom: 2px; width: 250px; text-align: center; }
         .rs-showcase-note { margin: 24px 0 0; text-align: center; }
+        /* 32px of margin renders as ~18px of gap: the caption sits inside the
+           frame's rotateY(6deg), which pushes the frame's rendered box below its
+           layout box and eats the difference. Measured 0px of clearance at 14px
+           of margin, against 17px under the phone. */
+        .rs-showcase-label--browser { margin-top: 32px; }
         .rs-showcase-body { padding: 20px 96px 20px 20px; }
         .rs-showcase-body--flat { padding: 20px; }
         /* Responsive scale bands. The zoom goes on the STAGE, so the window,
@@ -278,7 +283,7 @@ export default function DeviceShowcase() {
           /* In flow down here, so the box already contains the phone and there
              is nothing to reserve. */
           .rs-showcase-browser { margin: 0 auto; padding-bottom: 0; }
-          .rs-showcase-label--phone { position: static; width: auto; margin-top: 10px; }
+          .rs-showcase-label--phone { position: static; width: auto; margin-top: 14px; }
           /* Nothing to cast onto once the phone is not over the window. */
           .rs-showcase-castshadow { display: none; }
           /* And nothing to keep clear on the right. */
@@ -294,6 +299,8 @@ export default function DeviceShowcase() {
              desktop. */
           .rs-showcase-head { margin-bottom: 40px; }
           .rs-showcase-note { margin-top: 16px; }
+          /* No rotation down here, so the margin IS the gap. */
+          .rs-showcase-label--browser { margin-top: 14px; }
           /* A dashboard is a desktop surface. Reflowing it into a phone-width
              column would show a truthful-but-useless two-column stub of the
              table — which is what /app/payments really does at 390px, inside
@@ -515,7 +522,6 @@ function DeviceLabel({ className, children }: { className?: string; children: Re
     <p
       className={className}
       style={{
-        margin: '14px 0 0',
         fontFamily: C.M,
         fontSize: 11,
         // Explicit, because the phone caption's `bottom` anchor is computed
