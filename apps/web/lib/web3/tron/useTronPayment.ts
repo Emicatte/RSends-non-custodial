@@ -14,6 +14,22 @@
  * the energy estimate, because an insufficient balance makes the estimate
  * revert — and a revert read as an energy problem would tell a payer to buy TRX
  * when what they are short of is USDT.
+ *
+ * TWO THINGS THAT LOOK LIKE DETAILS AND ARE NOT:
+ *
+ * A TRON transaction expires. The node stamps `expiration` about 60s out and
+ * ties the transaction to a recent block via `ref_block`, so the object built
+ * during preflight — before the payer has even seen the Pay button — is stale
+ * by the time anyone taps it. It is therefore used ONLY to measure bandwidth,
+ * and the transaction that gets signed is rebuilt immediately beforehand and
+ * extended to a five-minute window.
+ *
+ * And the payer can change underneath the flow. An `accountsChanged` or
+ * `chainChanged` invalidates the preflight and the built transaction, because
+ * signing a transaction whose `owner_address` names an account the wallet has
+ * since switched away from produces a confusing failure at best. A generation
+ * counter, captured at the start and re-checked after every await, makes an
+ * in-flight attempt abandon itself rather than finish against a stale payer.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -45,6 +61,17 @@ export const INCLUSION_TIMEOUT_MS = 90_000
 /** Cadence for the on-chain receipt poll. One TRON block. */
 const RECEIPT_POLL_MS = 3_000
 
+/**
+ * How long the payer has to approve, in SECONDS — `extendExpiration` multiplies
+ * by 1000 internally, so passing milliseconds here would ask for 5000 minutes
+ * and be rejected. Five minutes covers reading a wallet prompt, unlocking a
+ * device, and reconsidering once.
+ */
+const SIGNATURE_WINDOW_SECONDS = 300
+
+/** A stale attempt aborts rather than finishing against a payer who has changed. */
+class StaleAttempt extends Error {}
+
 export type TronPayFailure =
   | 'wrong_network'
   | 'insufficient_usdt'
@@ -55,14 +82,20 @@ export type TronPayFailure =
   | 'connection_failed'
   | 'tx_reverted'
   | 'out_of_energy'
+  | 'tx_expired'
   | 'tx_failed'
   | 'network_error'
   | 'unknown'
 
 export type TronPayStatus =
+  /** No wallet. */
   | { kind: 'idle' }
+  /** Wallet present, nothing in flight. Where an invalidated attempt lands. */
+  | { kind: 'connected' }
   | { kind: 'preflight' }
   | { kind: 'awaiting_signature' }
+  /** The signing window closed; rebuilding and asking once more. */
+  | { kind: 'signature_expired' }
   | { kind: 'broadcasting' }
   | {
       kind: 'processing'
@@ -75,6 +108,15 @@ export type TronPayStatus =
   | { kind: 'expired' }
   | { kind: 'already_paid' }
 
+/** States an identity change is allowed to tear down — all pre-broadcast. */
+const INVALIDATES: ReadonlySet<TronPayStatus['kind']> = new Set([
+  'idle',
+  'connected',
+  'preflight',
+  'awaiting_signature',
+  'signature_expired',
+])
+
 /** Adapter/transport error kinds, mapped to what the payer is shown. */
 const FAILURE_FOR: Record<TronErrorKind, TronPayFailure> = {
   user_rejected: 'user_rejected',
@@ -83,6 +125,10 @@ const FAILURE_FOR: Record<TronErrorKind, TronPayFailure> = {
   wrong_network: 'wrong_network',
   connection_failed: 'connection_failed',
   sign_failed: 'tx_failed',
+  // Reached only once the bounded rebuild has been spent; until then the hook
+  // intercepts `tx_expired` and retries rather than failing.
+  tx_expired: 'tx_expired',
+  broadcast_failed: 'tx_failed',
   network_error: 'network_error',
   unknown: 'unknown',
 }
@@ -132,6 +178,8 @@ export function useTronPayment(
     }
   }, [])
 
+  /** Bumped whenever the connected identity changes. */
+  const generation = useRef(0)
   /** The hash is submitted at most once per payment, ever. */
   const hintSent = useRef<string | null>(null)
 
@@ -139,11 +187,51 @@ export function useTronPayment(
     if (alive.current) setStatus({ kind: 'failed', reason, detail, ...(txid ? { txid } : {}) })
   }, [])
 
+  // Resting state follows the wallet: connected when there is one, idle when
+  // there is not. Only the resting states move, so a payment in flight is never
+  // disturbed by a re-render.
+  useEffect(() => {
+    setStatus((prev) => {
+      if (prev.kind === 'idle' && wallet.address) return { kind: 'connected' }
+      if (prev.kind === 'connected' && !wallet.address) return { kind: 'idle' }
+      return prev
+    })
+  }, [wallet.address])
+
+  // Read synchronously by the invalidation effect. A `setStatus` updater cannot
+  // serve that purpose: React defers it to render time, so an in-flight attempt
+  // would sail past its guards before the generation bump landed.
+  const statusRef = useRef(status)
+  statusRef.current = status
+
+  // Identity change: discard the preflight and the built transaction.
+  const identity = `${wallet.address ?? ''}|${wallet.chainId ?? ''}`
+  const lastIdentity = useRef(identity)
+  useEffect(() => {
+    if (lastIdentity.current === identity) return
+    lastIdentity.current = identity
+
+    // Anything already signed or broadcast is left alone: that transaction is
+    // valid and on its way, and an account switch does not unmake it.
+    if (!INVALIDATES.has(statusRef.current.kind)) return
+
+    generation.current += 1
+    setQuote(null)
+    setStatus(wallet.address ? { kind: 'connected' } : { kind: 'idle' })
+  }, [identity, wallet.address])
+
   const pay = useCallback(async () => {
     const payer = wallet.address
     const adapter = wallet.adapter
     if (!payer || !adapter) return
     if (!intent.recipient || !intent.amountExact) return
+
+    const recipient = intent.recipient
+    const gen = generation.current
+    /** Abandon rather than finish against a payer who has changed. */
+    const guard = () => {
+      if (!alive.current || gen !== generation.current) throw new StaleAttempt()
+    }
 
     setStatus({ kind: 'preflight' })
     setQuote(null)
@@ -157,7 +245,7 @@ export function useTronPayment(
         cache: 'no-store',
       })
       const fresh = (await res.json()) as { status?: string; expires_at?: string }
-      if (!alive.current) return
+      guard()
       if (fresh.status && fresh.status !== 'pending') {
         setStatus(
           fresh.status === 'expired' || fresh.status === 'cancelled'
@@ -184,17 +272,15 @@ export function useTronPayment(
       }
 
       const tronWeb = await getClient(network)
+      guard()
       const amountBaseUnits = toBaseUnits(intent.amountExact, network.usdt.decimals)
 
       // 3. Balance BEFORE the estimate. Reversing these makes an insufficient
       //    balance surface as an estimation failure.
       const balance = await usdtBalanceOf(tronWeb, network, payer)
-      if (!alive.current) return
+      guard()
       if (balance < BigInt(amountBaseUnits)) {
-        fail(
-          'insufficient_usdt',
-          `needs ${intent.amountExact} ${network.usdt.symbol}`,
-        )
+        fail('insufficient_usdt', `needs ${intent.amountExact} ${network.usdt.symbol}`)
         return
       }
 
@@ -203,33 +289,36 @@ export function useTronPayment(
         tronWeb,
         network,
         payer,
-        intent.recipient,
+        recipient,
         amountBaseUnits,
       )
       const prices = await readResourcePrices(tronWeb)
-      if (!alive.current) return
+      guard()
+      const feeLimit = feeLimitFor(energyNeeded, prices)
 
-      // Built before the resource check so bandwidth is measured on the real
-      // transaction rather than guessed. Building costs nothing and commits to
-      // nothing — the signature is the irreversible step, and it is still ahead.
-      const unsigned = await buildTransfer(tronWeb, {
-        network,
-        payer,
-        recipient: intent.recipient,
-        intentRecipient: intent.recipient,
-        amountBaseUnits,
-        feeLimit: feeLimitFor(energyNeeded, prices),
-      })
+      const buildFresh = () =>
+        buildTransfer(tronWeb, {
+          network,
+          payer,
+          recipient,
+          intentRecipient: recipient,
+          amountBaseUnits,
+          feeLimit,
+        })
 
+      // Built here ONLY to measure bandwidth on the real transaction rather
+      // than guess it. This object is deliberately never signed — by the time
+      // the payer taps Pay its expiration and ref_block are stale.
+      const forMeasurement = await buildFresh()
       const [resources, balanceSun] = await Promise.all([
         tronWeb.trx.getAccountResources(payer),
         tronWeb.trx.getBalance(payer),
       ])
-      if (!alive.current) return
+      guard()
 
       const computed = quoteResources({
         energyNeeded,
-        rawDataHex: unsigned.raw_data_hex,
+        rawDataHex: forMeasurement.raw_data_hex,
         // Typed as full by tronweb, delivered partial by TronGrid — which omits
         // zero-valued fields. The double cast is the honest one: the declared
         // type and the wire shape genuinely do not overlap, and pretending the
@@ -247,33 +336,64 @@ export function useTronPayment(
         return
       }
 
-      // 5. Only now is a signature worth asking for.
-      setStatus({ kind: 'awaiting_signature' })
-      const signed = await adapter.signTransaction(unsigned)
-      if (!alive.current) return
+      /** Rebuild, extend, sign, broadcast. One path, both wallets. */
+      const attempt = async (): Promise<string> => {
+        const unsigned = await buildFresh()
+        guard()
 
-      setStatus({ kind: 'broadcasting' })
-      const txid = await broadcast(tronWeb, signed)
-      if (!alive.current) return
+        // Five minutes instead of the node's ~60s. Guarded because a tronweb
+        // that ever dropped this method should cost a shorter window, not a
+        // crash — the transaction is still valid, just briefer.
+        const builder = tronWeb.transactionBuilder as {
+          extendExpiration?: (tx: unknown, seconds: number) => Promise<unknown>
+        }
+        const toSign =
+          typeof builder.extendExpiration === 'function'
+            ? ((await builder.extendExpiration(
+                unsigned,
+                SIGNATURE_WINDOW_SECONDS,
+              )) as typeof unsigned)
+            : unsigned
+        guard()
+
+        setStatus({ kind: 'awaiting_signature' })
+        const signed = await adapter.signTransaction(toSign)
+        guard()
+
+        setStatus({ kind: 'broadcasting' })
+        return broadcast(tronWeb, signed)
+      }
+
+      let txid: string
+      try {
+        txid = await attempt()
+      } catch (err) {
+        if (err instanceof StaleAttempt) throw err
+        if (toCheckoutError(err).kind !== 'tx_expired') throw err
+        // The window closed between building and broadcasting. Rebuild and ask
+        // once more — bounded to a single retry, so this can never loop.
+        guard()
+        setStatus({ kind: 'signature_expired' })
+        txid = await attempt()
+      }
+      guard()
 
       setStatus({ kind: 'processing', txid, inclusion: 'pending' })
       onBroadcast()
 
-      // The hint, exactly once, and never awaited for a verdict. If it fails —
-      // including because the backend route does not exist yet — the payer is
-      // unaffected: the transfer is on chain and the poller finds it by
-      // scanning the merchant's address, as it does today.
       if (hintSent.current !== txid) {
         hintSent.current = txid
-        void doFetch(`/api/pay/${encodeURIComponent(intent.intentId)}/tx-hint`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ tx_hash: txid, payer_address: payer }),
-        }).catch(() => {
-          /* advisory: a failed hint changes nothing about the payment */
-        })
+        void submitHint(doFetch, intent.intentId, txid, payer)
       }
     } catch (err) {
+      if (err instanceof StaleAttempt) {
+        // The payer changed underneath us. Not a failure — just start over.
+        if (alive.current) {
+          setQuote(null)
+          setStatus(wallet.address ? { kind: 'connected' } : { kind: 'idle' })
+        }
+        return
+      }
       const normalised = toCheckoutError(err)
       fail(FAILURE_FOR[normalised.kind], normalised.detail)
     }
@@ -342,11 +462,58 @@ export function useTronPayment(
     if (!backendPaid) return
     setStatus((prev) => ({
       kind: 'paid',
-      txid: prev.kind === 'processing' ? prev.txid : (prev.kind === 'paid' ? prev.txid : null),
+      txid:
+        prev.kind === 'processing'
+          ? prev.txid
+          : prev.kind === 'paid'
+            ? prev.txid
+            : null,
     }))
   }, [backendPaid])
 
-  const reset = useCallback(() => setStatus({ kind: 'idle' }), [])
+  const reset = useCallback(
+    () => setStatus(wallet.address ? { kind: 'connected' } : { kind: 'idle' }),
+    [wallet.address],
+  )
 
   return { status, quote, pay, reset }
+}
+
+/** Attempts per hint submission, and the backoff between them. */
+export const HINT_ATTEMPTS = 3
+const HINT_BACKOFF_MS = [400, 1_600]
+
+/**
+ * Tell the backend which transaction to look at.
+ *
+ * Retried because the write is idempotent by construction — the hint table has
+ * UNIQUE(intent_id, tx_hash) — so a repeat is free, while a lost hint costs the
+ * payer a minute of poller latency for no reason.
+ *
+ * It remains advisory throughout: when the attempts are exhausted the payment
+ * is exactly as it was, because the transfer is already on chain and the poller
+ * finds it by scanning the merchant's address.
+ */
+async function submitHint(
+  doFetch: typeof fetch,
+  intentId: string,
+  txid: string,
+  payer: string,
+): Promise<void> {
+  for (let attempt = 0; attempt < HINT_ATTEMPTS; attempt++) {
+    try {
+      const res = await doFetch(`/api/pay/${encodeURIComponent(intentId)}/tx-hint`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ tx_hash: txid, payer_address: payer }),
+      })
+      // A 4xx is the backend declining this hint on its merits; repeating it
+      // would only ask the same question again.
+      if (res.ok || (res.status >= 400 && res.status < 500)) return
+    } catch {
+      // Transport failure. Fall through to the backoff and try again.
+    }
+    const wait = HINT_BACKOFF_MS[attempt]
+    if (wait !== undefined) await new Promise((r) => setTimeout(r, wait))
+  }
 }

@@ -42,10 +42,19 @@ const PRICES = [
 const BALANCE_10_USDT =
   '0000000000000000000000000000000000000000000000000000000000989680'
 
-type Calls = { order: string[]; broadcast: unknown[] }
+type Built = { txID: string; raw_data_hex: string; raw_data: { expiration: number }; buildSeq: number }
+type Calls = {
+  order: string[]
+  broadcast: unknown[]
+  builds: Built[]
+  extended: number[]
+  signed: unknown[]
+}
 
 function fakeClient(over: Record<string, unknown> = {}) {
-  const calls: Calls = { order: [], broadcast: [] }
+  const calls: Calls = { order: [], broadcast: [], builds: [], extended: [], signed: [] }
+  let buildSeq = 0
+  const broadcastQueue = [...((over.broadcastQueue as unknown[]) ?? [])]
   const client = {
     isAddress: (a: unknown) =>
       typeof a === 'string' && /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(a),
@@ -60,15 +69,28 @@ function fakeClient(over: Record<string, unknown> = {}) {
         }
         return { result: { result: true }, energy_required: 31_895 }
       },
-      triggerSmartContract: async () => ({
-        result: { result: true },
-        transaction: {
+      // Each build is a NEW object with a later expiration, the way a node
+      // stamps one — so a test can tell the measurement build apart from the
+      // one that actually gets signed. txID is held constant because a fake
+      // need not be realistic about hashing.
+      triggerSmartContract: async () => {
+        buildSeq += 1
+        const transaction: Built = {
           txID: TXID,
           raw_data_hex: 'ab'.repeat(180),
-          raw_data: {},
-          visible: false,
-        },
-      }),
+          raw_data: { expiration: 1_700_000_000_000 + buildSeq * 60_000 },
+          buildSeq,
+        }
+        calls.builds.push(transaction)
+        return { result: { result: true }, transaction }
+      },
+      extendExpiration: async (tx: Built, seconds: number) => {
+        calls.extended.push(seconds)
+        return {
+          ...tx,
+          raw_data: { ...tx.raw_data, expiration: tx.raw_data.expiration + seconds * 1000 },
+        }
+      },
     },
     trx: {
       getChainParameters: async () => PRICES,
@@ -76,6 +98,8 @@ function fakeClient(over: Record<string, unknown> = {}) {
       getBalance: async () => (over.balanceSun as number) ?? 10 ** 9,
       sendRawTransaction: async (signed: unknown) => {
         calls.broadcast.push(signed)
+        const queued = broadcastQueue.shift()
+        if (queued) return queued
         return { result: true, txid: TXID, code: 0, message: '', transaction: signed }
       },
       getTransactionInfo: async () => (over.txInfo as object) ?? {},
@@ -112,6 +136,7 @@ function setup(opts: {
   wallet?: TronWalletSession
   intentBody?: Record<string, unknown>
   hintFails?: boolean
+  hintStatus?: number
   backendPaid?: boolean
 } = {}) {
   const client = opts.client ?? fakeClient()
@@ -125,7 +150,8 @@ function setup(opts: {
     })
     if (String(url).endsWith('/tx-hint')) {
       if (opts.hintFails) throw new Error('backend route does not exist yet')
-      return { ok: true, json: async () => ({}) }
+      const status = opts.hintStatus ?? 200
+      return { ok: status < 400, status, json: async () => ({}) }
     }
     return {
       ok: true,
@@ -138,17 +164,26 @@ function setup(opts: {
   }) as unknown as typeof fetch
 
   const onBroadcast = jest.fn()
+  const props = {
+    paid: opts.backendPaid ?? false,
+    wallet: opts.wallet ?? walletSession(),
+  }
   const view = renderHook(
-    ({ paid }: { paid: boolean }) =>
-      useTronPayment(INTENT, NILE, opts.wallet ?? walletSession(), {
+    ({ paid, wallet }: { paid: boolean; wallet: TronWalletSession }) =>
+      useTronPayment(INTENT, NILE, wallet, {
         backendPaid: paid,
         onBroadcast,
         getClient: (async () => client.client) as never,
         fetchImpl,
       }),
-    { initialProps: { paid: opts.backendPaid ?? false } },
+    { initialProps: props },
   )
-  return { view, client, fetches, onBroadcast }
+  /** Rerender changing only what is named, so the rest of the props survive. */
+  const update = (next: Partial<typeof props>) => {
+    Object.assign(props, next)
+    view.rerender({ ...props })
+  }
+  return { view, client, fetches, onBroadcast, update }
 }
 
 describe('preflight', () => {
@@ -301,7 +336,9 @@ describe('signing and broadcast', () => {
     expect(fetches.filter((f) => f.url.endsWith('/tx-hint'))).toHaveLength(0)
 
     act(() => view.result.current.reset())
-    expect(view.result.current.status.kind).toBe('idle')
+    // `connected`, not `idle`: the wallet is still there, only the attempt is
+    // gone. `idle` means no wallet at all.
+    expect(view.result.current.status.kind).toBe('connected')
   })
 
   it('wallet_disconnect_during_signing_is_its_own_state', async () => {
@@ -343,10 +380,10 @@ describe('signing and broadcast', () => {
     })
   })
 
-  it('hash_is_posted_exactly_once_and_a_failed_post_changes_nothing', async () => {
-    // The backend route does not exist yet; the payer must not be able to tell.
-    const { view, fetches, onBroadcast } = setup({ hintFails: true })
+  it('hash_is_posted_once_per_broadcast', async () => {
+    const { view, fetches, onBroadcast } = setup()
     await act(async () => void (await view.result.current.pay()))
+    // A second pay() for the same transaction must not re-announce it.
     await act(async () => void (await view.result.current.pay()))
 
     const hints = fetches.filter((f) => f.url.endsWith('/tx-hint'))
@@ -356,9 +393,82 @@ describe('signing and broadcast', () => {
       tx_hash: TXID,
       payer_address: PAYER,
     })
-    // Still processing, and the intent poll was still accelerated.
     expect(view.result.current.status.kind).toBe('processing')
     expect(onBroadcast).toHaveBeenCalled()
+  })
+
+  it('a failing hint is retried three times with backoff', async () => {
+    // The write is idempotent by construction — UNIQUE(intent_id, tx_hash) —
+    // so a repeat is free, while a lost hint costs the payer a minute of
+    // poller latency for nothing.
+    jest.useFakeTimers()
+    try {
+      const { view, fetches } = setup({ hintFails: true })
+      await act(async () => void (await view.result.current.pay()))
+
+      const hints = () => fetches.filter((f) => f.url.endsWith('/tx-hint'))
+      expect(hints()).toHaveLength(1)
+
+      await act(async () => {
+        jest.advanceTimersByTime(400)
+        await Promise.resolve()
+      })
+      expect(hints()).toHaveLength(2)
+
+      await act(async () => {
+        jest.advanceTimersByTime(1_600)
+        await Promise.resolve()
+      })
+      expect(hints()).toHaveLength(3)
+
+      // Bounded: no fourth attempt, however long we wait.
+      await act(async () => {
+        jest.advanceTimersByTime(60_000)
+        await Promise.resolve()
+      })
+      expect(hints()).toHaveLength(3)
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
+  it('a_failed_post_changes_nothing_once_retries_are_exhausted', async () => {
+    // The backend route does not exist yet; the payer must not be able to tell,
+    // even after every attempt has failed.
+    jest.useFakeTimers()
+    try {
+      const { view, onBroadcast } = setup({ hintFails: true })
+      await act(async () => void (await view.result.current.pay()))
+      await act(async () => {
+        jest.advanceTimersByTime(60_000)
+        await Promise.resolve()
+      })
+
+      expect(view.result.current.status).toMatchObject({
+        kind: 'processing',
+        txid: TXID,
+      })
+      expect(onBroadcast).toHaveBeenCalled()
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
+  it('does not retry a hint the backend declined on its merits', async () => {
+    // A 4xx is an answer. Repeating it only asks the same question again.
+    jest.useFakeTimers()
+    try {
+      const { view, fetches } = setup({ hintStatus: 409 })
+      await act(async () => void (await view.result.current.pay()))
+      await act(async () => {
+        jest.advanceTimersByTime(60_000)
+        await Promise.resolve()
+      })
+      expect(fetches.filter((f) => f.url.endsWith('/tx-hint'))).toHaveLength(1)
+      expect(view.result.current.status.kind).toBe('processing')
+    } finally {
+      jest.useRealTimers()
+    }
   })
 
   it('never sends recipient, amount or chain in the hint body', async () => {
@@ -369,6 +479,247 @@ describe('signing and broadcast', () => {
     )
     // A hash and who sent it. Nothing a caller could use to redirect a payment.
     expect(Object.keys(body).sort()).toEqual(['payer_address', 'tx_hash'])
+  })
+})
+
+describe('the signed transaction is always fresh', () => {
+  it('a transaction built during preflight is never the one signed', async () => {
+    // The preflight build happens before the payer has even seen the Pay
+    // button, and a node stamps expiration ~60s out. Signing that object is
+    // signing something already stale.
+    const signedTxs: { buildSeq: number }[] = []
+    const client = fakeClient()
+    const wallet = walletSession({
+      adapter: {
+        signTransaction: async (tx: { buildSeq: number }) => {
+          signedTxs.push(tx)
+          return { ...tx, signature: ['sig'] }
+        },
+      } as never,
+    })
+    const { view } = setup({ client, wallet })
+    await act(async () => void (await view.result.current.pay()))
+
+    expect(client.calls.builds.length).toBeGreaterThanOrEqual(2)
+    // The measurement build is the first; what got signed is a later one.
+    expect(signedTxs[0].buildSeq).not.toBe(client.calls.builds[0].buildSeq)
+  })
+
+  it('the signed transaction carries a fresh expiration', async () => {
+    const signedTxs: { raw_data: { expiration: number } }[] = []
+    const client = fakeClient()
+    const wallet = walletSession({
+      adapter: {
+        signTransaction: async (tx: { raw_data: { expiration: number } }) => {
+          signedTxs.push(tx)
+          return { ...tx, signature: ['sig'] }
+        },
+      } as never,
+    })
+    const { view } = setup({ client, wallet })
+    await act(async () => void (await view.result.current.pay()))
+
+    expect(signedTxs[0].raw_data.expiration).toBeGreaterThan(
+      client.calls.builds[0].raw_data.expiration,
+    )
+  })
+
+  it('expiration is extended in seconds not milliseconds', async () => {
+    // extendExpiration multiplies by 1000 internally, so passing ms would ask
+    // for 5000 minutes and be rejected outright.
+    const { view, client } = setup()
+    await act(async () => void (await view.result.current.pay()))
+    expect(client.calls.extended).toEqual([300])
+  })
+
+  it('an expiration error rebuilds and re-signs rather than failing', async () => {
+    const client = fakeClient({
+      broadcastQueue: [
+        { result: false, code: 'TRANSACTION_EXPIRATION_ERROR', message: '', txid: '' },
+      ],
+    })
+    const { view } = setup({ client })
+    await act(async () => void (await view.result.current.pay()))
+
+    // Recovered, not failed: two broadcasts, and the payer ends up processing.
+    expect(client.calls.broadcast).toHaveLength(2)
+    expect(view.result.current.status).toMatchObject({ kind: 'processing' })
+  })
+
+  it('a tapos error takes the same retry path', async () => {
+    // Same class of staleness — the referenced block is no longer canonical —
+    // and cured by the same rebuild.
+    const client = fakeClient({
+      broadcastQueue: [{ result: false, code: 'TAPOS_ERROR', message: '', txid: '' }],
+    })
+    const { view } = setup({ client })
+    await act(async () => void (await view.result.current.pay()))
+
+    expect(client.calls.broadcast).toHaveLength(2)
+    expect(view.result.current.status).toMatchObject({ kind: 'processing' })
+  })
+
+  it('the retry is bounded to one attempt', async () => {
+    // A node stuck returning expiration errors must not spin the payer's wallet
+    // forever.
+    const client = fakeClient({
+      broadcastQueue: [
+        { result: false, code: 'TRANSACTION_EXPIRATION_ERROR', message: '', txid: '' },
+        { result: false, code: 'TRANSACTION_EXPIRATION_ERROR', message: '', txid: '' },
+        { result: false, code: 'TRANSACTION_EXPIRATION_ERROR', message: '', txid: '' },
+      ],
+    })
+    const { view } = setup({ client })
+    await act(async () => void (await view.result.current.pay()))
+
+    expect(client.calls.broadcast).toHaveLength(2)
+    expect(view.result.current.status).toMatchObject({
+      kind: 'failed',
+      reason: 'tx_expired',
+    })
+  })
+})
+
+describe('broadcast results', () => {
+  it('DUP_TRANSACTION_ERROR is treated as a successful broadcast', async () => {
+    // Not a refusal: this exact transaction is already in the network, so the
+    // payment is happening and the id is known.
+    const client = fakeClient({
+      broadcastQueue: [
+        { result: false, code: 'DUP_TRANSACTION_ERROR', message: '', txid: TXID },
+      ],
+    })
+    const { view } = setup({ client })
+    await act(async () => void (await view.result.current.pay()))
+
+    expect(view.result.current.status).toMatchObject({
+      kind: 'processing',
+      txid: TXID,
+    })
+    expect(client.calls.broadcast).toHaveLength(1)
+  })
+
+  it('every other broadcast code fails with its decoded message', async () => {
+    // "contract validate error", hex-encoded the way java-tron sends it.
+    const hex = Buffer.from('contract validate error', 'utf8').toString('hex')
+    const client = fakeClient({
+      broadcastQueue: [
+        { result: false, code: 'CONTRACT_VALIDATE_ERROR', message: hex, txid: '' },
+      ],
+    })
+    const { view } = setup({ client })
+    await act(async () => void (await view.result.current.pay()))
+
+    const status = view.result.current.status
+    expect(status).toMatchObject({ kind: 'failed', reason: 'tx_failed' })
+    expect((status as { detail: string }).detail).toContain('contract validate error')
+    expect((status as { detail: string }).detail).toContain('CONTRACT_VALIDATE_ERROR')
+    // Not retried — this is an answer, not staleness.
+    expect(client.calls.broadcast).toHaveLength(1)
+  })
+
+  it('maps a numeric code as well as a name', async () => {
+    // tronweb types code as a numeric enum while the HTTP API sends the name.
+    // 5 is DUP_TRANSACTION_ERROR.
+    const client = fakeClient({
+      broadcastQueue: [{ result: false, code: 5, message: '', txid: TXID }],
+    })
+    const { view } = setup({ client })
+    await act(async () => void (await view.result.current.pay()))
+    expect(view.result.current.status).toMatchObject({ kind: 'processing' })
+  })
+})
+
+describe('an identity change invalidates the attempt', () => {
+  it('an account switch during preflight returns to connected', async () => {
+    // A gate inside preflight, so the switch really interleaves. Without one,
+    // React batches the whole attempt into a single commit and nothing can
+    // happen "during" it — the test would pass or fail for reasons that have
+    // nothing to do with the behaviour under test.
+    let release!: () => void
+    const gate = new Promise<void>((r) => (release = r))
+    const client = fakeClient()
+    const balances = client.client.trx.getBalance
+    client.client.trx.getBalance = (async () => {
+      await gate
+      return balances()
+    }) as never
+
+    const { view, update } = setup({ client })
+    const running = view.result.current.pay()
+    await waitFor(() => expect(view.result.current.status.kind).toBe('preflight'))
+
+    const OTHER = 'TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE'
+    await act(async () => {
+      update({ wallet: walletSession({ address: OTHER }) })
+    })
+    await act(async () => {
+      release()
+      await running
+    })
+
+    expect(view.result.current.status.kind).toBe('connected')
+    expect(view.result.current.quote).toBeNull()
+    // Nothing was broadcast on behalf of the account that went away.
+    expect(client.calls.broadcast).toHaveLength(0)
+  })
+
+  it('the transaction signed after an account switch names the new owner', async () => {
+    const OTHER = 'TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE'
+    const owners: (string | undefined)[] = []
+    const client = fakeClient()
+    // Capture the owner the builder was told about on every build.
+    const original = client.client.transactionBuilder.triggerSmartContract as (
+      ...a: unknown[]
+    ) => Promise<unknown>
+    client.client.transactionBuilder.triggerSmartContract = (async (
+      ...args: unknown[]
+    ) => {
+      owners.push(args[4] as string)
+      return original(...args)
+    }) as never
+
+    const { view, update } = setup({ client })
+    update({ wallet: walletSession({ address: OTHER }) })
+    await act(async () => void (await view.result.current.pay()))
+
+    expect(view.result.current.status).toMatchObject({ kind: 'processing' })
+    // Every build after the switch belongs to the new payer. Without an
+    // explicit issuerAddress these would all be undefined.
+    expect(owners.length).toBeGreaterThan(0)
+    expect(new Set(owners)).toEqual(new Set([OTHER]))
+  })
+
+  it('a chain change during awaiting_signature abandons the attempt', async () => {
+    const client = fakeClient()
+    let release!: () => void
+    const held = new Promise<void>((r) => (release = r))
+    const wallet = walletSession({
+      adapter: {
+        signTransaction: async (tx: unknown) => {
+          await held
+          return { ...(tx as object), signature: ['sig'] }
+        },
+      } as never,
+    })
+    const { view, update } = setup({ client, wallet })
+
+    const running = view.result.current.pay()
+    await waitFor(() =>
+      expect(view.result.current.status.kind).toBe('awaiting_signature'),
+    )
+    await act(async () => {
+      update({ wallet: walletSession({ chainId: '0x2b6653dc', adapter: wallet.adapter }) })
+    })
+    await act(async () => {
+      release()
+      await running
+    })
+
+    // The signature came back for a chain the wallet has left. Nothing is
+    // broadcast, and the payer starts over rather than being told it failed.
+    expect(client.calls.broadcast).toHaveLength(0)
+    expect(view.result.current.status.kind).toBe('connected')
   })
 })
 
@@ -435,7 +786,7 @@ describe('the receipt watch explains failure, never success', () => {
 
 describe('the backend is the only route to paid', () => {
   it('paid_is_shown_only_when_the_backend_says_paid', async () => {
-    const { view } = setup({
+    const { view, update } = setup({
       client: fakeClient({ txInfo: { blockNumber: 1, receipt: { result: 'SUCCESS' } } }),
     })
     await act(async () => void (await view.result.current.pay()))
@@ -443,7 +794,7 @@ describe('the backend is the only route to paid', () => {
       expect(view.result.current.status).toMatchObject({ inclusion: 'included' }),
     )
 
-    act(() => view.rerender({ paid: true }))
+    act(() => update({ paid: true }))
 
     await waitFor(() =>
       expect(view.result.current.status).toMatchObject({ kind: 'paid', txid: TXID }),
@@ -453,7 +804,7 @@ describe('the backend is the only route to paid', () => {
   it('inclusion_timeout_is_informational_and_a_later_paid_status_wins', async () => {
     jest.useFakeTimers()
     try {
-      const { view } = setup({ client: fakeClient({ txInfo: {} }) })
+      const { view, update } = setup({ client: fakeClient({ txInfo: {} }) })
       await act(async () => void (await view.result.current.pay()))
 
       // Push past the inclusion window with the transaction still unseen.
@@ -469,7 +820,7 @@ describe('the backend is the only route to paid', () => {
         inclusion: 'timeout',
       })
 
-      act(() => view.rerender({ paid: true }))
+      act(() => update({ paid: true }))
       // The timeout never became a failure, and the backend overrides it.
       expect(view.result.current.status.kind).toBe('paid')
     } finally {
