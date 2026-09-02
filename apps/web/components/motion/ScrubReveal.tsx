@@ -1,93 +1,29 @@
 'use client'
 
-import { ReactNode, useRef, useLayoutEffect, useEffect } from 'react'
-import { gsap } from 'gsap'
-import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { MOTION_QUERY } from '@/lib/motion'
-
-gsap.registerPlugin(ScrollTrigger)
-
-// useLayoutEffect on the client, useEffect on the server (avoids the SSR warning
-// since "use client" components still render once on the server in the App Router).
-const useIsoLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect
+import { ReactNode } from 'react'
+import { useReveal } from './useReveal'
 
 type Props = {
   children: ReactNode
   className?: string
   style?: React.CSSProperties
-  /** rise distance (px) for the fade-up */
-  y?: number
-  /** ScrollTrigger start, per element (enters from the bottom) */
-  start?: string
-  /** ScrollTrigger end, per element (fully revealed in the lower-middle of the viewport) */
-  end?: string
-  /** ScrollTrigger scrub smoothing (seconds). Lower = tighter tracking. */
-  scrub?: number
-  /** motion-blur amount (px) while the element is in flight; sharpens to 0 as it lands */
-  blur?: number
 }
 
 /**
- * Section-scoped, scroll-scrubbed reveal. Gives every `.rs-reveal` descendant
- * its OWN ScrollTrigger keyed to that element's position, so each one finishes
- * as soon as it's comfortably in view (top 88% -> top 68%) while progress still
- * tracks the wheel/trackpad (stop -> hold, scroll up -> reverse). The cascade
- * comes naturally from elements entering at different scroll points.
+ * Reveals every `.rs-reveal` descendant on the shared timing in `lib/motion.ts`.
  *
- * Gated on `MOTION_QUERY`: below 768px, and under prefers-reduced-motion, the
- * triggers are never created (gsap.matchMedia scopes them and reverts them
- * itself if the viewport crosses the breakpoint). The base CSS
- * `.rs-reveal { opacity: 1 }` keeps content visible whenever the animation does
- * not run — nothing here is responsible for making content appear.
+ * There are deliberately NO timing props. Trigger point, duration, easing, rise,
+ * blur and stagger are one set of values for the whole marketing site — the
+ * landing page used to sit on a slower default than every other page, and
+ * sixteen call sites carried a `scrub={0.5}` to pull themselves back. Nothing to
+ * override means nothing to drift. `revealTiming.test.tsx` enforces it.
+ *
+ * (The name predates the rewrite: this no longer scrubs, it plays once on a
+ * fixed duration. Renaming it touches two dozen call sites across five pages and
+ * was kept out of the behaviour fix.)
  */
-export default function ScrubReveal({
-  children,
-  className,
-  style,
-  y = 40,
-  start = 'top 92%',
-  end = 'top 40%',
-  scrub = 0.9,
-  blur = 8,
-}: Props) {
-  const ref = useRef<HTMLDivElement>(null)
-
-  useIsoLayoutEffect(() => {
-    const mm = gsap.matchMedia()
-    mm.add(MOTION_QUERY, () => {
-      const ctx = gsap.context(() => {
-        // Scope to THIS section's own .rs-reveal so multiple ScrubReveals don't cross-target.
-        const q = gsap.utils.selector(ref)
-        const items = q('.rs-reveal')
-        if (!items.length) return
-        // One trigger per element, keyed to its own position, so each finishes
-        // in the lower-middle of the viewport instead of all riding the wrapper.
-        items.forEach((el) => {
-          gsap.fromTo(
-            el,
-            // Motion blur rides the same scrub: max while the element is in
-            // flight, 0 when it lands — reverses with the scroll like y/alpha.
-            // Only the tween ever sets `filter`, so reduced-motion and no-JS
-            // render stay sharp via the `.rs-reveal { opacity: 1 }` base CSS.
-            { autoAlpha: 0, y, filter: `blur(${blur}px)` },
-            {
-              autoAlpha: 1,
-              y: 0,
-              filter: 'blur(0px)',
-              ease: 'none',
-              scrollTrigger: { trigger: el, start, end, scrub },
-            },
-          )
-        })
-      }, ref)
-      // Recompute start/end once webfonts settle (layout shift), then clean up.
-      if (typeof document !== 'undefined' && document.fonts?.ready) {
-        document.fonts.ready.then(() => ScrollTrigger.refresh())
-      }
-      return () => ctx.revert()
-    })
-    return () => mm.revert()
-  }, [y, start, end, scrub, blur])
+export default function ScrubReveal({ children, className, style }: Props) {
+  const ref = useReveal<HTMLDivElement>('.rs-reveal')
 
   return (
     <div ref={ref} className={className} style={style}>

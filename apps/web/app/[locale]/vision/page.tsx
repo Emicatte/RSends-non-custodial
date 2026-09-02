@@ -83,7 +83,7 @@ export default async function VisionPage({ params }: PageProps) {
 
       {/* ── Editorial — the three paragraphs, on paper ─────────────────── */}
       <section style={{ ...container, padding: `clamp(72px, 12vh, 128px) ${HPAD} clamp(24px, 4vh, 48px)` }}>
-        <ScrubReveal scrub={0.5}>
+        <ScrubReveal>
           <p className="rs-reveal" style={body}>{t('body1')}</p>
           <p className="rs-reveal" style={body}>{t('body2')}</p>
           <p className="rs-reveal" style={{ ...body, margin: 0 }}>{t('body3')}</p>
@@ -92,7 +92,7 @@ export default async function VisionPage({ params }: PageProps) {
 
       {/* ── Terracotta rule + pull line, display scale ─────────────────── */}
       <section style={{ ...container, padding: `clamp(40px, 7vh, 80px) ${HPAD} clamp(28px, 5vh, 56px)` }}>
-        <ScrubReveal scrub={0.5}>
+        <ScrubReveal>
           <div className="rs-reveal">
             <div style={{ width: 26, height: 2, background: C.purple, marginBottom: 18 }} />
             <p
@@ -225,7 +225,7 @@ export default async function VisionPage({ params }: PageProps) {
 
       {/* ── Closing band — pricing CTA + quiet team link ───────────────── */}
       <section style={{ ...container, padding: `clamp(32px, 5vh, 56px) ${HPAD} clamp(56px, 9vh, 96px)` }}>
-        <ScrubReveal scrub={0.5}>
+        <ScrubReveal>
           <div
             className="rs-reveal"
             style={{

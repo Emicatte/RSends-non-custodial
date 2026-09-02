@@ -106,7 +106,7 @@ export default async function TeamPage({ params }: PageProps) {
 
       {/* ── Editorial — the remaining paragraphs, on paper ─────────────── */}
       <section style={{ ...container, padding: `clamp(72px, 12vh, 128px) ${HPAD} clamp(24px, 4vh, 48px)` }}>
-        <ScrubReveal scrub={0.5}>
+        <ScrubReveal>
           <p className="rs-reveal" style={body}>{linkifyBaseScan(t('body2'))}</p>
           <p className="rs-reveal" style={{ ...body, margin: 0 }}>{t('body3')}</p>
         </ScrubReveal>
@@ -115,7 +115,7 @@ export default async function TeamPage({ params }: PageProps) {
       {/* ── Contract band — terracotta rule, then the emphasis moment on
              ink: the address is the argument. Maps to /vision's pull line. ── */}
       <section style={{ ...container, padding: `clamp(40px, 7vh, 80px) ${HPAD} clamp(28px, 5vh, 56px)` }}>
-        <ScrubReveal scrub={0.5}>
+        <ScrubReveal>
           <div className="rs-reveal">
             <div style={{ width: 26, height: 2, background: C.purple, marginBottom: 18 }} />
             <div
@@ -239,7 +239,7 @@ export default async function TeamPage({ params }: PageProps) {
 
       {/* ── Philosophy — label + 2×2 card grid ────────────────────────── */}
       <section style={{ ...container, padding: `clamp(28px, 5vh, 56px) ${HPAD} clamp(12px, 2vh, 24px)` }}>
-        <ScrubReveal scrub={0.5}>
+        <ScrubReveal>
           <div className="rs-reveal" style={eyebrow}>
             {t('philosophyLabel')}
           </div>
@@ -289,7 +289,7 @@ export default async function TeamPage({ params }: PageProps) {
 
       {/* ── Closing band — primary cross-link to /vision, on paper ───────── */}
       <section style={{ ...container, padding: `clamp(32px, 5vh, 56px) ${HPAD} clamp(56px, 9vh, 96px)` }}>
-        <ScrubReveal scrub={0.5}>
+        <ScrubReveal>
           <div
             className="rs-reveal"
             style={{

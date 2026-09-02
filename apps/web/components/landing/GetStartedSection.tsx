@@ -1,19 +1,12 @@
 'use client'
 
-import { useState, useEffect, useRef, useLayoutEffect } from 'react'
+import { useState, useEffect } from 'react'
 import Image from 'next/image'
-import { gsap } from 'gsap'
-import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { ShieldCheck, Code2, type LucideIcon } from 'lucide-react'
 import { C } from '@/app/designTokens'
-import { MOTION_QUERY } from '@/lib/motion'
 import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
-
-gsap.registerPlugin(ScrollTrigger)
-
-// useLayoutEffect on the client, useEffect on the server (avoids the SSR warning).
-const useIsoLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect
+import ScrubReveal from '@/components/motion/ScrubReveal'
 
 function useIsMobile(bp = 768) {
   const [m, setM] = useState(false)
@@ -38,41 +31,15 @@ const FEATURES: { key: 'noncustodial' | 'developers'; Icon: LucideIcon }[] = [
 export default function GetStartedSection() {
   const isMobile = useIsMobile()
   const t = useTranslations('getStarted')
-  const secRef = useRef<HTMLElement>(null)
 
-  // Single scrubbed timeline anchored to the block's CENTER hitting viewport CENTER:
-  // because this block is ~full-viewport tall, "centered on screen" === progress 1, so
-  // the staggered text reveal finishes exactly when the block is centered (never near the
-  // footer). The photo is static; reverses on scroll-up; nothing is hover-triggered.
-  useIsoLayoutEffect(() => {
-    const mm = gsap.matchMedia()
-    // Gated on MOTION_QUERY: no timeline below 768px or under reduced motion.
-    // `.rs-gs-text` has no hidden base state, so it simply stays visible there.
-    mm.add(MOTION_QUERY, () => {
-      const ctx = gsap.context(() => {
-        const items = gsap.utils.toArray<HTMLElement>('.rs-gs-text')
-        if (!items.length) return
-        const tl = gsap.timeline({
-          scrollTrigger: {
-            trigger: secRef.current,
-            start: 'top 75%', // begins shortly after the block starts entering
-            end: 'center center', // fully done when the block's center hits viewport center
-            scrub: 0.5,
-          },
-        })
-        tl.from(items, { autoAlpha: 0, y: 28, ease: 'none', stagger: 0.12 })
-      }, secRef)
-      if (typeof document !== 'undefined' && document.fonts?.ready) {
-        document.fonts.ready.then(() => ScrollTrigger.refresh())
-      }
-      return () => ctx.revert()
-    })
-    return () => mm.revert()
-  }, [])
-
+  // The copy in the dark panel reveals through the shared `ScrubReveal`; the
+  // photo is static. This used to be a single scrubbed timeline anchored to the
+  // section's centre hitting the viewport centre, which meant the whole block
+  // was one unit on its own schedule — the closing block finished later than
+  // anything above it, and its items had no blur while the rest of the page
+  // did.
   return (
     <section
-      ref={secRef}
       id="get-started"
       style={{
         padding: isMobile ? '72px 24px' : '120px 96px',
@@ -110,8 +77,8 @@ export default function GetStartedSection() {
           <div style={{ position: 'absolute', inset: 0, background: 'rgba(10,10,10,0.25)' }} />
         </div>
 
-        {/* Right: dark panel — animated text (not clipped, so y is safe). */}
-        <div
+        {/* Right: dark panel — revealed text (not clipped, so y is safe). */}
+        <ScrubReveal
           style={{
             background: C.text,
             padding: isMobile ? '40px 28px' : 56,
@@ -119,7 +86,7 @@ export default function GetStartedSection() {
           }}
         >
           <h2
-            className="rs-gs-text"
+            className="rs-reveal"
             style={{
               fontFamily: C.D,
               fontSize: isMobile ? 32 : 40,
@@ -134,7 +101,7 @@ export default function GetStartedSection() {
           </h2>
 
           <p
-            className="rs-gs-text"
+            className="rs-reveal"
             style={{
               fontFamily: C.D,
               fontSize: 16,
@@ -152,7 +119,7 @@ export default function GetStartedSection() {
           {FEATURES.map(({ key, Icon }) => (
             <div
               key={key}
-              className="rs-gs-text"
+              className="rs-reveal"
               style={{ display: 'flex', gap: 14, alignItems: 'flex-start', marginBottom: 20 }}
             >
               <Icon size={20} color="#fff" strokeWidth={2} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />
@@ -168,7 +135,7 @@ export default function GetStartedSection() {
           ))}
 
           <Link
-            className="rs-gs-text"
+            className="rs-reveal"
             href="/login"
             style={{
               display: 'block',
@@ -201,7 +168,7 @@ export default function GetStartedSection() {
           >
             {t('secondary')}
           </a>
-        </div>
+        </ScrubReveal>
       </div>
     </section>
   )

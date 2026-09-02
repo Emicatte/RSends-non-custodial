@@ -1,8 +1,17 @@
 /**
- * The motion gate: animations run on desktop only, and only when the user has
- * not asked for reduced motion. Below 768px, or under
- * `prefers-reduced-motion: reduce`, NO ScrollTrigger instance is created at all
- * — not created-and-killed, not created with a no-op tween.
+ * The motion gate: the animations that cost layout run on desktop only, and
+ * only when the user has not asked for reduced motion. Below 768px, or under
+ * `prefers-reduced-motion: reduce`, they are not created at all — not
+ * created-and-killed, not created with a no-op tween. That covers the hero
+ * entrance (the CSS half, mirrored in globals.css), the device showcase's 3D
+ * sequence and Lenis' smooth scrolling.
+ *
+ * Scroll REVEALS deliberately no longer sit behind this query — they are gated
+ * on `REVEAL_QUERY`, which drops the width floor and keeps only the
+ * reduced-motion half, because a reveal moves opacity/transform/filter and so
+ * cannot shift a box. Their timing, their gating and their reduced-motion
+ * behaviour are asserted in `marketing/revealTiming.test.tsx`; what this file
+ * still owns is the relationship between the two queries, and the hero.
  *
  * The second, larger promise this file guards: content is never hidden by
  * JavaScript. Every element rests visible; the hidden starting state exists only
@@ -23,7 +32,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import ScrubReveal from '@/components/motion/ScrubReveal'
 import ScrubCascade from '@/components/motion/ScrubCascade'
 import SplitText from '@/components/motion/SplitText'
-import { MOTION_BP_PX, MOTION_QUERY } from '@/lib/motion'
+import { MOTION_BP_PX, MOTION_QUERY, REVEAL_QUERY } from '@/lib/motion'
 
 // ── matchMedia stand-in ───────────────────────────────────────────────────
 // jest.setup.ts installs a permanently-false matchMedia; these tests need a
@@ -124,8 +133,8 @@ function Cascade() {
   )
 }
 
-describe('the query itself', () => {
-  it('is a CSS media query gating on both width and reduced motion', () => {
+describe('the two queries', () => {
+  it('gates layout-costing motion on both width and reduced motion', () => {
     // Decided deliberately: the gate is a media query, not a JS width check, so
     // the first paint is correct before any JS has run.
     expect(MOTION_QUERY).toBe(
@@ -133,33 +142,12 @@ describe('the query itself', () => {
     )
     expect(MOTION_BP_PX).toBe(768) // Tailwind `md`, and hooks/useIsMobile.ts
   })
-})
 
-describe('mobile viewport', () => {
-  it('creates no ScrollTrigger instance for ScrubReveal', () => {
-    setViewport(MOBILE)
-    render(<Reveal />)
-
-    expect(scrubbedTargets()).toHaveLength(0)
-    expect(ScrollTrigger.getAll()).toHaveLength(0)
-  })
-
-  it('creates no ScrollTrigger instance for ScrubCascade', () => {
-    setViewport(MOBILE)
-    render(<Cascade />)
-
-    expect(scrubbedTargets()).toHaveLength(0)
-    expect(ScrollTrigger.getAll()).toHaveLength(0)
-  })
-
-  it('leaves the content rendered and visible', () => {
-    setViewport(MOBILE)
-    render(<Reveal />)
-
-    const first = screen.getByText('first')
-    expect(first).toBeVisible()
-    expect(first.style.opacity).toBe('')
-    expect(first.style.visibility).toBe('')
+  it('gates reveals on reduced motion alone — the same query minus the floor', () => {
+    // The difference between the two is exactly the width clause, and that is
+    // the whole intent: a reveal cannot shift a box, so a phone gets one.
+    expect(REVEAL_QUERY).toBe('(prefers-reduced-motion: no-preference)')
+    expect(MOTION_QUERY).toBe(`(min-width: ${MOTION_BP_PX}px) and ${REVEAL_QUERY}`)
   })
 })
 
@@ -179,41 +167,46 @@ describe('prefers-reduced-motion: reduce', () => {
     expect(scrubbedTargets()).toHaveLength(0)
     expect(ScrollTrigger.getAll()).toHaveLength(0)
   })
+
+  it('leaves the content rendered and visible', () => {
+    setViewport({ width: 375, reduced: true })
+    render(<Reveal />)
+
+    const first = screen.getByText('first')
+    expect(first).toBeVisible()
+    expect(first.style.opacity).toBe('')
+    expect(first.style.visibility).toBe('')
+  })
 })
 
-describe('desktop viewport, no reduced-motion preference', () => {
-  it('creates one ScrollTrigger per .rs-reveal, on the elements themselves', () => {
-    setViewport(DESKTOP)
+describe('no reduced-motion preference', () => {
+  // Both widths, because reveals are no longer desktop-only. The instance count
+  // is not assertable here: `once: true` kills a trigger the moment it reaches
+  // its end, and every jsdom rect is zero, so start and end coincide. See
+  // marketing/revealTiming.test.tsx, which asserts the tween and its trigger
+  // element instead.
+  it.each([
+    ['desktop', DESKTOP],
+    ['mobile', MOBILE],
+  ])('reveals each .rs-reveal on the element itself, on %s', (_label, vp) => {
+    setViewport(vp)
     const { container } = render(<Reveal />)
     const items = Array.from(container.querySelectorAll('.rs-reveal'))
 
     expect(items).toHaveLength(3)
     expect(scrubbedTargets()).toEqual(items)
-    expect(ScrollTrigger.getAll()).toHaveLength(3)
   })
 
-  it('creates one ScrollTrigger per .rs-card, on the cards themselves', () => {
-    setViewport(DESKTOP)
+  it.each([
+    ['desktop', DESKTOP],
+    ['mobile', MOBILE],
+  ])('reveals each .rs-card on the card itself, on %s', (_label, vp) => {
+    setViewport(vp)
     const { container } = render(<Cascade />)
     const cards = Array.from(container.querySelectorAll('.rs-card'))
 
     expect(cards).toHaveLength(2)
     expect(scrubbedTargets()).toEqual(cards)
-    expect(ScrollTrigger.getAll()).toHaveLength(2)
-  })
-
-  it('keeps the tween shape it has always had', () => {
-    setViewport(DESKTOP)
-    render(<Reveal />)
-
-    const [, from, to] = fromTo.mock.calls[0]
-    expect(from).toMatchObject({ autoAlpha: 0, y: 40, filter: 'blur(8px)' })
-    expect(to).toMatchObject({ autoAlpha: 1, y: 0, filter: 'blur(0px)', ease: 'none' })
-    expect(to.scrollTrigger).toMatchObject({
-      start: 'top 92%',
-      end: 'top 40%',
-      scrub: 0.9,
-    })
   })
 })
 
@@ -256,10 +249,15 @@ describe('rendered markup never depends on JS to become visible', () => {
     expect(delays).toEqual(['0.15s', '0.19s', '0.23s', '0.27s'])
   })
 
-  it.each([
-    ['mobile', MOBILE],
-    ['reduced motion', { width: 1440, reduced: true }],
-  ])('scrubbed sections render with no inline hidden state on %s', (_label, vp) => {
+  // Mobile is deliberately NOT in this list any more: reveals run there now, so
+  // a running tween legitimately parks a block at `autoAlpha: 0` for 450ms. The
+  // promise that survives is the one that matters — no JavaScript, or a request
+  // for reduced motion, and the content is simply there. (The no-JS half is the
+  // `.rs-reveal { opacity: 1 }` base rule in globals.css, which jsdom cannot
+  // evaluate; it is on the manual-verification list.)
+  it.each([['reduced motion', { width: 1440, reduced: true }]])(
+    'revealed sections render with no inline hidden state on %s',
+    (_label, vp) => {
     setViewport(vp)
     const { container } = render(
       <>
@@ -273,5 +271,6 @@ describe('rendered markup never depends on JS to become visible', () => {
       expect(el.style.visibility).not.toBe('hidden')
       expect(el.style.transform).toBe('')
     })
-  })
+    },
+  )
 })
