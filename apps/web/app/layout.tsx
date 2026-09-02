@@ -3,6 +3,7 @@ import { DM_Mono } from 'next/font/google'
 import './globals.css'
 import { Providers } from './providers'
 import { AuthSessionProvider } from '@/components/auth/AuthSessionProvider'
+import { HYDRATION_RECOVERY_SCRIPT } from '@/lib/hydrationRecovery'
 
 const dmMono = DM_Mono({
   subsets:  ['latin'],
@@ -37,6 +38,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning className={dmMono.variable}>
       <head>
+        {/* Blank-screen recovery. Must be the first script in the document: a wedged React
+            root (#329, uncatchable by any error boundary — see lib/hydrationRecovery.ts)
+            leaves the server HTML on screen forever, and on /pay that HTML is an empty
+            <body>. This installs a plain-DOM fallback before the failure can happen.
+
+            CSP: this is an inline script, allowed today by `script-src 'self' 'unsafe-inline'`
+            (next.config.mjs:121, confirmed on the deployed response). next.config.mjs:114-118
+            tracks moving to `'nonce-…' 'strict-dynamic'` — at that point this script DIES
+            SILENTLY unless it is given the per-request nonce. Whoever does that migration has
+            to carry this tag with it; nothing will fail loudly if they don't. */}
+        <script dangerouslySetInnerHTML={{ __html: HYDRATION_RECOVERY_SCRIPT }} />
         <link
           rel="stylesheet"
           href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap"
