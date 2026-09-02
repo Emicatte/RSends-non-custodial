@@ -35,6 +35,25 @@ inconsistencies). Its item 1 — the idempotency cache key is not tenant-scoped
 (`app/middleware/idempotency.py:56`) — is a live cross-merchant data-leak path, not just a
 missing test.
 
+## Build invariants (apps/web)
+
+- **`"skipLibCheck": true` in `apps/web/tsconfig.json:11` is load-bearing — do not remove it.**
+  It reads like a default someone left on; it is not. The TRON wallet adapters do not typecheck
+  without it, and every resulting error is a third-party declaration defect that no change to our
+  code can fix. The load-bearing one:
+  `Cannot find module 'tronweb/lib/esm/types/Transaction'` — `@tronweb3/tronwallet-abstract-adapter`
+  re-exports its `Transaction` / `SignedTransaction` types from a **deep path that is not in
+  tronweb's `exports` map**, so the module resolver cannot follow it. That re-export is also
+  precisely what makes one shared build/sign/broadcast path possible
+  (`apps/web/lib/web3/tron/tronTransfer.ts`), so it cannot be worked around by importing
+  differently. The other five are two broken `@walletconnect/modal` type paths and three
+  `Type 'Uint8Array' is not generic` errors inside tronweb's own `.d.ts`. Removing the flag breaks
+  `next build`.
+- **No TronGrid API key in the browser.** The checkout's TronWeb instance
+  (`apps/web/lib/web3/tron/tronClient.ts`) calls TronGrid keyless, deliberately. A key in a
+  `NEXT_PUBLIC_*` variable is not a secret — it ships to every payer. If keyless rate limits ever
+  bite on mainnet, the answer is a backend proxy as its own task, never a key in the bundle.
+
 ## Security
 
 These rules reflect the verified state of the backend security audit (2026-07). Apply them to
