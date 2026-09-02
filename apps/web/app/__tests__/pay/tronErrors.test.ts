@@ -19,7 +19,11 @@ import {
   WalletSwitchChainError,
 } from '@tronweb3/tronwallet-abstract-adapter'
 
-import { toCheckoutError } from '@/lib/web3/tron/tronErrors'
+import {
+  TronBroadcastError,
+  decodeTronMessage,
+  toCheckoutError,
+} from '@/lib/web3/tron/tronErrors'
 
 describe('typed WalletError subclasses are classified by class', () => {
   it('a rejected signature is the payer cancelling, not a failure', () => {
@@ -123,6 +127,53 @@ describe('transport faults are told apart from answers', () => {
     expect(toCheckoutError(new Error('OUT_OF_ENERGY')).kind).not.toBe(
       'network_error',
     )
+  })
+})
+
+describe('node refusals are classified by code, and the hex decoded once', () => {
+  const hex = (s: string) => Buffer.from(s, 'utf8').toString('hex')
+
+  it('the hex message is decoded exactly once', () => {
+    // TRON returns error text hex-encoded. Decoding lives here and nowhere
+    // else, so there is one place that knows that.
+    const raw = hex('contract validate error')
+    expect(decodeTronMessage(raw)).toBe('contract validate error')
+
+    const result = toCheckoutError(
+      new TronBroadcastError('CONTRACT_VALIDATE_ERROR', raw),
+    )
+    expect(result.detail).toContain('contract validate error')
+    // Not double-decoded, and the raw hex never reaches the payer.
+    expect(result.detail).not.toContain(raw)
+  })
+
+  it('leaves text alone when it is not hex', () => {
+    // Some nodes answer in plain text. Re-decoding that would mangle it.
+    expect(decodeTronMessage('already exists')).toBe('already exists')
+    expect(decodeTronMessage('')).toBe('')
+    // Odd length is not decodable hex.
+    expect(decodeTronMessage('abc')).toBe('abc')
+  })
+
+  it('keeps the raw value when the decode is not plausibly text', () => {
+    // Hex-shaped but binary: showing mojibake would be worse than the hex.
+    expect(decodeTronMessage('00010203')).toBe('00010203')
+  })
+
+  it('routes both staleness codes to the recoverable kind', () => {
+    for (const code of ['TRANSACTION_EXPIRATION_ERROR', 'TAPOS_ERROR']) {
+      expect(toCheckoutError(new TronBroadcastError(code, hex('stale'))).kind).toBe(
+        'tx_expired',
+      )
+    }
+  })
+
+  it('routes every other code to broadcast_failed', () => {
+    for (const code of ['SIGERROR', 'CONTRACT_VALIDATE_ERROR', 'BANDWITH_ERROR']) {
+      expect(toCheckoutError(new TronBroadcastError(code, hex('no'))).kind).toBe(
+        'broadcast_failed',
+      )
+    }
   })
 })
 

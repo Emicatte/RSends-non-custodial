@@ -51,8 +51,57 @@ export type TronErrorKind =
   | 'wrong_network'
   | 'connection_failed'
   | 'sign_failed'
+  /** The transaction went stale before it reached a block. Recoverable. */
+  | 'tx_expired'
+  | 'broadcast_failed'
   | 'network_error'
   | 'unknown'
+
+/**
+ * A node refusing a signed transaction, carrying the RAW response.
+ *
+ * The hex message is kept undecoded here on purpose: decoding belongs to the
+ * normaliser, once, so there is exactly one place that knows TRON answers in
+ * hex. Thrown by `broadcast`, understood by `toCheckoutError`.
+ */
+export class TronBroadcastError extends Error {
+  constructor(
+    readonly code: string,
+    readonly hexMessage: string,
+  ) {
+    super(`broadcast refused: ${code}`)
+    this.name = 'TronBroadcastError'
+  }
+}
+
+/**
+ * Broadcast codes that mean "this transaction referenced a block that has since
+ * gone stale". Both are cured by rebuilding with a fresh `ref_block`, so both
+ * take the retry path rather than being shown to a payer as a failure.
+ */
+const STALE_CODES = new Set(['TRANSACTION_EXPIRATION_ERROR', 'TAPOS_ERROR'])
+
+/**
+ * TRON returns error text hex-encoded. Decoded here and nowhere else.
+ *
+ * Falls back to the raw string whenever the result is not plausibly text —
+ * odd length, non-hex characters, or control bytes in the output — because a
+ * mangled decode would be worse than showing the original.
+ */
+export function decodeTronMessage(raw: string): string {
+  if (!raw || raw.length % 2 !== 0 || !/^[0-9a-fA-F]+$/.test(raw)) return raw
+  try {
+    const bytes = new Uint8Array(raw.length / 2)
+    for (let i = 0; i < bytes.length; i++) {
+      bytes[i] = parseInt(raw.slice(i * 2, i * 2 + 2), 16)
+    }
+    const text = new TextDecoder('utf-8', { fatal: false }).decode(bytes)
+    // eslint-disable-next-line no-control-regex
+    return /^[\x20-\x7e\s]+$/.test(text) ? text : raw
+  } catch {
+    return raw
+  }
+}
 
 export interface TronCheckoutError {
   kind: TronErrorKind
@@ -134,6 +183,16 @@ function toDetail(message: string): string {
 }
 
 export function toCheckoutError(err: unknown): TronCheckoutError {
+  // A node refusal is classified by its code, never by its text — the text is
+  // hex, and this is the one place that knows it.
+  if (err instanceof TronBroadcastError) {
+    const decoded = toDetail(decodeTronMessage(err.hexMessage))
+    return {
+      kind: STALE_CODES.has(err.code) ? 'tx_expired' : 'broadcast_failed',
+      detail: decoded ? `${err.code}: ${decoded}` : err.code,
+    }
+  }
+
   const message = rawMessage(err)
   const detail = toDetail(message)
 

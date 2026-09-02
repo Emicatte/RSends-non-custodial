@@ -32,6 +32,7 @@ import type { TronWeb } from 'tronweb'
 import { parseUnits } from 'viem'
 
 import { isTronAddress } from '../tronAddress'
+import { TronBroadcastError } from './tronErrors'
 import type { TronNetworkConfig } from './tronNetwork'
 
 /**
@@ -135,23 +136,58 @@ export async function buildTransfer(tronWeb: TronWeb, req: TransferRequest) {
 }
 
 /**
+ * java-tron's response codes. tronweb types `code` as a numeric enum on
+ * `BroadcastReturn` and as a string on `BroadcastHexReturn`, while the HTTP API
+ * sends the name — so both shapes are normalised to the name rather than
+ * trusting the declared type.
+ */
+const BROADCAST_CODES = [
+  'SUCCESS',
+  'SIGERROR',
+  'CONTRACT_VALIDATE_ERROR',
+  'CONTRACT_EXE_ERROR',
+  'BANDWITH_ERROR', // java-tron's own spelling
+  'DUP_TRANSACTION_ERROR',
+  'TAPOS_ERROR',
+  'TOO_BIG_TRANSACTION_ERROR',
+  'TRANSACTION_EXPIRATION_ERROR',
+  'SERVER_BUSY',
+  'NO_CONNECTION',
+  'NOT_ENOUGH_EFFECTIVE_CONNECTION',
+] as const
+
+function codeName(code: unknown): string {
+  if (typeof code === 'string' && code) return code
+  if (typeof code === 'number') return BROADCAST_CODES[code] ?? `CODE_${code}`
+  return 'OTHER_ERROR'
+}
+
+/**
  * Hand the signed transaction to the node and return its id.
  *
- * A refusal throws. It must never resolve with something hash-shaped, because
- * the checkout treats a returned id as "the payer's money is in flight" and
- * moves to the processing screen — saying that when the node rejected the
- * transaction would be the worst lie this flow can tell.
+ * A refusal throws, and it must never resolve with something hash-shaped: the
+ * checkout reads a returned id as "the payer's money is in flight" and moves to
+ * the processing screen. Saying that when the node refused would be the worst
+ * lie this flow can tell.
+ *
+ * The one exception is DUP_TRANSACTION_ERROR, which is not a refusal at all —
+ * it means this exact transaction is already in the network. The payment is
+ * happening, so the id is returned as success.
  */
-export async function broadcast(tronWeb: TronWeb, signed: Awaited<ReturnType<Adapter['signTransaction']>>) {
+export async function broadcast(
+  tronWeb: TronWeb,
+  signed: Awaited<ReturnType<Adapter['signTransaction']>>,
+) {
   const receipt = await tronWeb.trx.sendRawTransaction(signed)
-  if (!receipt?.result) {
-    throw new Error(
-      `the node rejected the transfer: ${receipt?.code ?? 'unknown'}${
-        receipt?.message ? ` ${receipt.message}` : ''
-      }`,
-    )
+  if (receipt?.result) return receipt.txid
+
+  const code = codeName(receipt?.code)
+  if (code === 'DUP_TRANSACTION_ERROR') {
+    // The node may not echo a txid on a duplicate; the signed transaction knows
+    // its own id, and it is the same transaction by definition.
+    return receipt?.txid || signed.txID
   }
-  return receipt.txid
+  throw new TronBroadcastError(code, receipt?.message ?? '')
 }
 
 /**
