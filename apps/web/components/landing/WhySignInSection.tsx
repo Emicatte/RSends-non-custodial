@@ -1,21 +1,12 @@
 "use client";
 
 import Image from "next/image";
-import { useRef, useLayoutEffect, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { FileText, Wallet, Link2, Webhook, type LucideIcon } from "lucide-react";
-import { gsap } from "gsap";
-import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { C } from "@/app/designTokens";
 import { useIsMobile } from "@/hooks/useIsMobile";
-import { MOTION_QUERY } from "@/lib/motion";
 import ScrubCascade from "@/components/motion/ScrubCascade";
-
-gsap.registerPlugin(ScrollTrigger);
-
-// useLayoutEffect on the client, useEffect on the server (avoids the SSR warning
-// since "use client" components still render once on the server in the App Router).
-const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
+import ScrubReveal from "@/components/motion/ScrubReveal";
 
 const SKYSCRAPER = "/grattacieli/skyscraper.jpg";
 
@@ -29,47 +20,13 @@ const STEPS: { key: string; Icon: LucideIcon }[] = [
 export function WhySignInSection() {
   const t = useTranslations("auth.whySignIn");
   const isMobile = useIsMobile();
-  const textRef = useRef<HTMLDivElement>(null);
 
-  useIsoLayoutEffect(() => {
-    const mm = gsap.matchMedia();
-    // Gated on MOTION_QUERY: no triggers below 768px or under reduced motion.
-    // The copy has no hidden base state, so it simply stays visible there.
-    mm.add(MOTION_QUERY, () => {
-      const root = textRef.current;
-      if (!root) return;
-      const ctx = gsap.context(() => {
-        // The building image + frame stay STATIC (fully visible, no tween). Only the
-        // copy overlaid on the photo animates: eyebrow -> heading -> subcopy fade-up
-        // in a small index cascade, scrubbed by scroll.
-        const txt = gsap.utils.selector(root)(".rs-hiw-text");
-        txt.forEach((el, i) => {
-          gsap.fromTo(
-            el,
-            { autoAlpha: 0, y: 28 },
-            {
-              autoAlpha: 1,
-              y: 0,
-              ease: "none",
-              scrollTrigger: {
-                trigger: el,
-                start: `top ${86 - i * 4}%`,
-                end: `top ${66 - i * 4}%`,
-                scrub: 0.5,
-              },
-            },
-          );
-        });
-      }, root);
-      // Recompute start/end once webfonts settle (layout shift), then clean up.
-      if (typeof document !== "undefined" && document.fonts?.ready) {
-        document.fonts.ready.then(() => ScrollTrigger.refresh());
-      }
-      return () => ctx.revert();
-    });
-    return () => mm.revert();
-  }, []);
-
+  // The building image + frame stay STATIC (fully visible, no tween). Only the
+  // copy overlaid on the photo reveals — through the shared `ScrubReveal`, on
+  // the shared timing, exactly like every other block on the site. This section
+  // used to carry its own ScrollTrigger loop on `.rs-hiw-text` with its own
+  // trigger points and no blur, which is one of the reasons the page had four
+  // different reveal rhythms.
   return (
     <section
       style={{
@@ -116,8 +73,7 @@ export function WhySignInSection() {
               background: "rgba(10,10,10,0.38)",
             }}
           />
-          <div
-            ref={textRef}
+          <ScrubReveal
             style={{
               position: "relative",
               display: "flex",
@@ -126,7 +82,7 @@ export function WhySignInSection() {
             }}
           >
             <div
-              className="rs-hiw-text"
+              className="rs-reveal"
               style={{
                 fontFamily: C.M,
                 fontSize: 12,
@@ -140,7 +96,7 @@ export function WhySignInSection() {
               {t("eyebrow")}
             </div>
             <h2
-              className="rs-hiw-text"
+              className="rs-reveal"
               style={{
                 fontFamily: C.D,
                 fontSize: isMobile ? 28 : 32,
@@ -155,7 +111,7 @@ export function WhySignInSection() {
               {t("heading")}
             </h2>
             <p
-              className="rs-hiw-text"
+              className="rs-reveal"
               style={{
                 fontFamily: C.D,
                 fontSize: 14,
@@ -167,7 +123,7 @@ export function WhySignInSection() {
             >
               {t("subheading")}
             </p>
-          </div>
+          </ScrubReveal>
         </div>
 
         {/* Right: 2×2 grid of step cards */}

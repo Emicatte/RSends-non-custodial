@@ -111,7 +111,7 @@ export default async function PricingPage({ params }: PageProps) {
 
       {/* ── Flat vs percentage — qualitative, no figures ───────── */}
       <section style={{ ...container, padding: `clamp(64px, 11vh, 120px) ${HPAD} clamp(40px, 7vh, 72px)` }}>
-        <ScrubReveal scrub={0.5}>
+        <ScrubReveal>
           <h2
             className="rs-reveal"
             style={{
@@ -170,7 +170,7 @@ export default async function PricingPage({ params }: PageProps) {
 
       {/* ── What the subscription includes ─────────────────────── */}
       <section style={{ ...container, padding: `clamp(24px, 4vh, 48px) ${HPAD}` }}>
-        <ScrubReveal scrub={0.5}>
+        <ScrubReveal>
           <h2 className="rs-reveal" style={sectionLabel}>
             {t('includes.title')}
           </h2>
@@ -209,7 +209,7 @@ export default async function PricingPage({ params }: PageProps) {
 
       {/* ── Talk to us — the one offer, priced at onboarding ───── */}
       <section style={{ ...container, padding: `clamp(40px, 7vh, 72px) ${HPAD}` }}>
-        <ScrubReveal scrub={0.5}>
+        <ScrubReveal>
           <div
             className="rs-reveal"
             style={{
@@ -262,7 +262,7 @@ export default async function PricingPage({ params }: PageProps) {
 
       {/* ── Split illustration ─────────────────────────────────── */}
       <section style={{ ...container, padding: `clamp(40px, 7vh, 72px) ${HPAD}` }}>
-        <ScrubReveal scrub={0.5}>
+        <ScrubReveal>
           <div
             style={{
               display: 'grid',
@@ -381,7 +381,7 @@ export default async function PricingPage({ params }: PageProps) {
 
       {/* ── FAQ — always-open, left-aligned 2-col grid ─────────── */}
       <section style={{ ...container, padding: `clamp(40px, 7vh, 80px) ${HPAD}` }}>
-        <ScrubReveal scrub={0.5}>
+        <ScrubReveal>
           <h2 className="rs-reveal" style={{ ...sectionLabel, marginBottom: 'clamp(24px, 4vh, 40px)' }}>
             {t('faq.title')}
           </h2>

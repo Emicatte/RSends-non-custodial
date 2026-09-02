@@ -133,7 +133,7 @@ export default async function HowItWorksPage({ params }: PageProps) {
 
       {/* ── The flow — three steps, copy + rebuilt card ─────────────── */}
       <section style={{ ...container, padding: `clamp(64px, 11vh, 120px) ${HPAD} clamp(24px, 4vh, 48px)` }}>
-        <ScrubReveal scrub={0.5}>
+        <ScrubReveal>
           <div
             className="rs-reveal"
             style={{
@@ -155,7 +155,7 @@ export default async function HowItWorksPage({ params }: PageProps) {
           key={s.key}
           style={{ ...container, padding: `clamp(28px, 5vh, 56px) ${HPAD}` }}
         >
-          <ScrubReveal scrub={0.5}>
+          <ScrubReveal>
             <div
               style={{
                 display: 'grid',
@@ -195,7 +195,7 @@ export default async function HowItWorksPage({ params }: PageProps) {
 
       {/* ── Real settlement proof — the differentiator ──────────────── */}
       <section style={{ ...container, padding: `clamp(40px, 7vh, 80px) ${HPAD}` }}>
-        <ScrubReveal scrub={0.5}>
+        <ScrubReveal>
           <div
             className="rs-reveal"
             style={{
@@ -277,7 +277,7 @@ export default async function HowItWorksPage({ params }: PageProps) {
 
       {/* ── Closing CTA — to pricing + open the app ─────────────────── */}
       <section style={{ ...container, padding: `clamp(32px, 5vh, 56px) ${HPAD} clamp(56px, 9vh, 96px)` }}>
-        <ScrubReveal scrub={0.5}>
+        <ScrubReveal>
           <div className="rs-reveal" style={{ borderTop: `1px solid ${C.border}`, paddingTop: 'clamp(28px, 4vh, 44px)' }}>
             <h2
               style={{
