@@ -306,13 +306,22 @@ async def test_an_ambiguous_enrichment_is_rejected_not_guessed():
 
 
 def test_every_rejection_reason_is_reachable_and_closed():
-    """The set is closed, and each member is exercised by a test above."""
+    """Every reason `verify_transfer` can produce is exercised above.
+
+    `not_found` is deliberately not in that set: it is the give-up verdict the
+    hint pass writes for an intent nobody can pay any more, and no amount of
+    reading the chain produces it. It shares the closed set because it shares
+    the column, and a column with two vocabularies is one nobody can query. It
+    is exercised in `test_tron_hints.py`.
+    """
     exercised = {
         "wrong_network", "reverted", "out_of_energy", "failed_other",
         "no_transfer_log", "wrong_contract", "wrong_recipient",
         "wrong_amount", "sender_mismatch", "unenrichable",
     }
-    assert exercised == tv.REJECTION_REASONS
+    assert exercised == tv.REJECTION_REASONS - {"not_found"}
+    # Still a legal verdict, just not one this module reaches.
+    assert Rejected("not_found").reason == "not_found"
     with pytest.raises(ValueError):
         Rejected("something_new")
 

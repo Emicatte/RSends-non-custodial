@@ -81,6 +81,12 @@ REJECTION_REASONS = frozenset({
     "wrong_amount",
     "sender_mismatch",
     "unenrichable",
+    # Not produced by `verify_transfer` — this is the give-up verdict the hint
+    # pass writes when an intent has been expired for longer than any late
+    # payment could plausibly arrive. It lives in the same closed set because it
+    # ends up in the same column, and a column with two vocabularies is a column
+    # nobody can query.
+    "not_found",
 })
 
 #: Receipt results that are not SUCCESS, mapped to their reason.

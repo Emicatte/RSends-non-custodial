@@ -469,6 +469,24 @@ async def _run_matching_pass(network: TronNetwork) -> dict:
         return {}
 
 
+async def _run_hint_pass(network: TronNetwork) -> dict:
+    """Work through this network's submitted transaction hashes. Never raises.
+
+    Lazily imported for the same reason as the matcher: `tron_hints` imports the
+    network descriptors from here.
+    """
+    from app.services import tron_hints
+
+    try:
+        return await tron_hints.run_hint_pass(network)
+    except Exception:
+        logger.exception(
+            "[tron-poller] hint pass failed — settlements ARE recorded and the "
+            "cursor is unaffected; hints stay pending and are retried"
+        )
+        return {}
+
+
 class TronPoller:
     """Polls one TRON network for incoming USDT TRC-20 transfers, then matches.
 
@@ -582,6 +600,9 @@ class TronPoller:
         payment we recorded but failed to match is still on the table.
         """
         observed = await self._observe()
+        # Hints before matching: a hash verified now records its settlement in
+        # time for this same tick's matcher to close the invoice.
+        observed.update(await _run_hint_pass(self.network))
         observed.update(await _run_matching_pass(self.network))
         return observed
 
