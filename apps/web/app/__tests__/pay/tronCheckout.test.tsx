@@ -11,7 +11,7 @@
  * what it copies, and what it encodes into the QR are the same bytes as what
  * the API sent, with nothing in between having touched them.
  */
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 jest.mock('next-intl', () => require('@/test-utils/intlMock').intlModuleMock())
@@ -58,20 +58,45 @@ beforeEach(() => {
   })
 })
 
+/**
+ * The manual instructions, now collapsed beneath the wallet flow. Scoping the
+ * amount queries to this block is what keeps them unambiguous: the CTA names
+ * the amount too, and that is the point rather than an accident.
+ */
+function instructionBlock(): HTMLDetailsElement {
+  const summary = screen.getByText('Pay from another wallet or exchange')
+  const details = summary.closest('details')
+  if (!details) throw new Error('the instruction block is not inside a <details>')
+  return details as HTMLDetailsElement
+}
+
 describe('the instruction screen', () => {
-  it('renders the payment instruction, not the wallet flow', async () => {
+  it('renders the wallet flow with the instruction block collapsed beneath it', async () => {
     renderTron()
 
     expect(screen.getByText(TRON_PAYEE)).toBeInTheDocument()
-    expect(screen.getByText(/10\.000001/)).toBeInTheDocument()
+    expect(within(instructionBlock()).getByText(/10\.000001/)).toBeInTheDocument()
     expect(screen.getByText('Caffe Emi')).toBeInTheDocument()
 
-    // Nothing connects a wallet here: there is no transaction for us to build.
-    expect(screen.queryByText('Connect wallet')).not.toBeInTheDocument()
-    expect(screen.queryByText('Switch network')).not.toBeInTheDocument()
+    // A wallet CAN be connected here now, and that is the primary path: once
+    // the page knows the payer's address it builds the exact transfer itself,
+    // so nothing is retyped and no deeplink is guessed. Awaited because the
+    // wallet stack is loaded client-only, to keep it out of the EVM bundle.
     expect(
-      screen.queryByRole('button', { name: /connect/i }),
-    ).not.toBeInTheDocument()
+      await screen.findByRole('button', { name: /connect wallet/i }),
+    ).toBeInTheDocument()
+
+    // The instructions are kept and collapsed, never removed: an exchange
+    // cannot connect a wallet, and that is how a good share of these invoices
+    // get paid. Closed by default, content still in the DOM.
+    expect(instructionBlock().open).toBe(false)
+
+    // The CTA names the amount, and those are the only two places it appears:
+    // once to read, once to authorise.
+    expect(
+      screen.getByRole('button', { name: /pay 10\.000001 USDT/i }),
+    ).toBeInTheDocument()
+    expect(screen.getAllByText(/10\.000001/)).toHaveLength(2)
   })
 
   it('warns that this is the TRC-20 network and no other', async () => {
@@ -137,7 +162,7 @@ describe('the amount is the backend value, unmodified', () => {
   it('renders amount_exact rather than re-deriving it from the float', () => {
     // The float would print "10.0"; amount_exact carries the token's scale.
     renderTron({ amount: 10, amount_exact: '10.000000' })
-    expect(screen.getByText(/10\.000000/)).toBeInTheDocument()
+    expect(within(instructionBlock()).getByText(/10\.000000/)).toBeInTheDocument()
   })
 
   it('shows no instruction at all when the backend named no amount', () => {

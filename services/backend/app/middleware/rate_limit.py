@@ -55,6 +55,7 @@ ENDPOINT_LIMITS: list[tuple[str, str, int, int, str]] = [
     ("POST", "/api/v1/merchant/webhook/test",        10,    60,  "api_key"),
     ("GET",  "/api/v1/merchant/payment-intent/",     60,    60,  "api_key"),  # get by id
     ("GET",  "/api/v1/merchant/transactions",        60,    60,  "api_key"),
+    ("POST", "/api/v1/public/payment-intent",        5,     60,  "ip"),  # tx hint (unauthenticated → per-IP)
     ("GET",  "/api/v1/public/payment-intent",        20,    60,  "ip"),  # hosted checkout polling (unauthenticated → per-IP)
     ("POST", "/api/v1/tx/callback",                  10,    60,  "ip"),
     ("GET",  "/api/v1/audit/log",                    30,    60,  "ip"),

@@ -65,7 +65,16 @@ export default function HostedCheckout() {
   // intent is unpayable — branching on the null would render a valid TRON
   // invoice as a broken EVM one, and vice versa.
   if (payFlowFor(intent) === 'tron_instructions') {
-    return <TronCheckout intent={intent} onLocalExpiry={refresh} />
+    return (
+      <TronCheckout
+        intent={intent}
+        onLocalExpiry={refresh}
+        // The backend stays the only authority on "paid", exactly as on the
+        // EVM branch; the broadcast callback just accelerates the same poll.
+        backendPaid={backendPaid}
+        onBroadcast={startSyncPolling}
+      />
+    )
   }
 
   // An intent that is terminal on arrival never mounts wallet UI. Status
