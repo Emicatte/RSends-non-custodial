@@ -30,6 +30,10 @@
 #               implementation of the keeper's eth_call preflight: decide
 #               locally from (policy, allowance, balance) whether a split would
 #               fire, then assert previewSplit agrees.
+#   --self-check  no network, no sends: encode known-good fixtures with the
+#               local cast and run them through this script's own parsers.
+#               Run this first on any new machine/foundry version — the parsing
+#               bug it guards against was a cast pretty-printer format drift.
 #
 # Idempotent: a policy or MAX allowance that is already in place is detected and
 # skipped, not re-sent. Safe to re-run; a re-run needs the merchant funded with
@@ -58,16 +62,115 @@ expect_revert() {
   fi
 }
 
-# Strip cast's scientific-notation suffix ("123456 [1.234e5]" -> "123456").
-num() { awk '{print $1}'; }
+# First whitespace-separated field of stdin, validated as a decimal number
+# (strips cast's "123456 [1.234e5]" annotation). FAILs printing the raw input
+# so a format drift is diagnosable without a live round trip.
+num_checked() { # $1 = label; stdin = raw cast output
+  local raw parsed
+  raw=$(cat)
+  parsed=$(awk '{print $1; exit}' <<<"$raw")
+  case "$parsed" in
+    ''|*[!0-9]*) fail "$1 — unparseable numeric (raw: [$raw], parsed: [$parsed])" ;;
+  esac
+  printf '%s\n' "$parsed"
+}
 
-# Normalize a cast-printed array line ("[0xA, 0xB]" -> "0xa 0xb").
-arr() { tr -d '[] ' | tr ',' ' ' | tr '[:upper:]' '[:lower:]'; }
+# Decode raw ABI return data with python3. Multi-value reads deliberately do
+# NOT use cast's decoded pretty-printer: its output format drifts across
+# versions (a live run parsed empty where this machine parsed fine), while raw
+# hex from an annotation-free `cast call` is stable everywhere.
+# Shapes:
+#   policy  -> line1 recipients (lowercase, space-joined; empty line if none),
+#              line2 bps (space-joined), line3 minAmount
+#   preview -> line1 total, line2 amounts (space-joined)
+abi_decode() { # $1 = shape, $2 = 0x-hex return data
+  python3 - "$1" "$2" <<'PY'
+import sys
+shape, hexdata = sys.argv[1], sys.argv[2].strip()
+if not hexdata.startswith("0x"):
+    sys.exit(f"abi_decode: expected 0x-prefixed hex, got: {hexdata[:120]!r}")
+try:
+    data = bytes.fromhex(hexdata[2:])
+except ValueError:
+    sys.exit(f"abi_decode: invalid hex: {hexdata[:120]!r}")
+
+def word(i):
+    chunk = data[i * 32:(i + 1) * 32]
+    if len(chunk) != 32:
+        sys.exit(f"abi_decode: truncated data at word {i} (total {len(data)} bytes, raw: {hexdata[:120]!r})")
+    return int.from_bytes(chunk, "big")
+
+def uint_array(byte_off):
+    base = byte_off // 32
+    n = word(base)
+    return [word(base + 1 + i) for i in range(n)]
+
+if shape == "policy":  # (address[], uint16[], uint256)
+    addrs = ["0x%040x" % v for v in uint_array(word(0))]
+    bps = uint_array(word(1))
+    print(" ".join(addrs))
+    print(" ".join(str(b) for b in bps))
+    print(word(2))
+elif shape == "preview":  # (uint256, uint256[])
+    print(word(0))
+    print(" ".join(str(v) for v in uint_array(word(1))))
+else:
+    sys.exit(f"abi_decode: unknown shape {shape!r}")
+PY
+}
 
 # ── inputs ──────────────────────────────────────────────────────────────────
 
 DRY_RUN=0
 if [ "${1:-}" = "--dry-run" ]; then DRY_RUN=1; fi
+
+# ── --self-check: parser fixtures, no network, no env vars, no sends ────────
+# Encodes known-good values with the LOCAL cast and asserts this script's own
+# parsers reproduce them. Run on any new machine/foundry version first.
+if [ "${1:-}" = "--self-check" ]; then
+  echo "== self-check: parser fixtures (no network, no sends) =="
+  command -v cast >/dev/null    || fail "cast (Foundry) not found in PATH"
+  command -v python3 >/dev/null || fail "python3 not found in PATH"
+
+  # the policy actually registered on Base Sepolia (mixed-case on purpose:
+  # proves the decode is case-normalized)
+  fx_a=0x316B07c37F586dBcd7adE8646c64D3df4A990f06
+  fx_b=0xC52897aA5F24D00d23B57eb61124F82D44Ae1eAE
+  fx_c=0x66bd2aB5F7182bAE71182A0371B1c893D099070F
+
+  enc=$(run cast abi-encode "r(address[],uint16[],uint256)" \
+    "[$fx_a,$fx_b,$fx_c]" "[3333,3333,3334]" 100000)
+  decoded=$(abi_decode policy "$enc")
+  got=$(sed -n '1p' <<<"$decoded")
+  want="0x316b07c37f586dbcd7ade8646c64d3df4a990f06 0xc52897aa5f24d00d23b57eb61124f82d44ae1eae 0x66bd2ab5f7182bae71182a0371b1c893d099070f"
+  [ "$got" = "$want" ] || fail "policy recipients decode (got: [$got], raw: $enc)"
+  [ "$(sed -n '2p' <<<"$decoded")" = "3333 3333 3334" ] \
+    || fail "policy bps decode (got: [$(sed -n '2p' <<<"$decoded")], raw: $enc)"
+  [ "$(sed -n '3p' <<<"$decoded")" = "100000" ] \
+    || fail "policy minAmount decode (got: [$(sed -n '3p' <<<"$decoded")], raw: $enc)"
+  pass "policy decode matches the known-good fixture (lowercased)"
+
+  enc=$(run cast abi-encode "r(address[],uint16[],uint256)" "[]" "[]" 0)
+  decoded=$(abi_decode policy "$enc")
+  [ -z "$(sed -n '1p' <<<"$decoded")" ] \
+    || fail "empty policy should decode to an empty recipients line (raw: $enc)"
+  pass "empty policy decodes to empty recipients (NoPolicy path intact)"
+
+  enc=$(run cast abi-encode "r(uint256,uint256[])" 101 "[50,30,21]")
+  decoded=$(abi_decode preview "$enc")
+  [ "$(sed -n '1p' <<<"$decoded")" = "101" ] \
+    || fail "preview total decode (got: [$(sed -n '1p' <<<"$decoded")], raw: $enc)"
+  [ "$(sed -n '2p' <<<"$decoded")" = "50 30 21" ] \
+    || fail "preview amounts decode (got: [$(sed -n '2p' <<<"$decoded")], raw: $enc)"
+  pass "preview decode matches fixture"
+
+  parsed=$(printf '100000 [1e5]\n' | num_checked "scalar fixture")
+  [ "$parsed" = "100000" ] || fail "scalar parse (got: [$parsed])"
+  pass "scalar parse strips the [1e5]-style annotation"
+
+  echo "== self-check complete: all parsers OK =="
+  exit 0
+fi
 
 for var in BASE_SEPOLIA_RPC_URL AUTO_SPLIT_ADDRESS MERCHANT_KEYSTORE \
            MERCHANT_ADDRESS RECIPIENT_A RECIPIENT_B RECIPIENT_C; do
@@ -102,7 +205,8 @@ info "USDC (from registry): $USDC_ADDRESS"
 info "minAmount: $MIN_AMOUNT base units"
 
 usdc_balance() {
-  run cast call "$USDC_ADDRESS" "balanceOf(address)(uint256)" "$1" "${RPC[@]}" | num
+  run cast call "$USDC_ADDRESS" "balanceOf(address)(uint256)" "$1" "${RPC[@]}" \
+    | num_checked "USDC balanceOf($1)"
 }
 
 # ── phase 0: preflight (read-only) ──────────────────────────────────────────
@@ -121,7 +225,7 @@ code=$(run cast code "$USDC_ADDRESS" "${RPC[@]}")
 [ "$code" != "0x" ] || fail "no code at USDC address $USDC_ADDRESS"
 pass "code present at USDC address"
 
-eth_bal=$(run cast balance "$MERCHANT_ADDRESS" "${RPC[@]}" | num)
+eth_bal=$(run cast balance "$MERCHANT_ADDRESS" "${RPC[@]}" | num_checked "ETH balance")
 [ "$eth_bal" != "0" ] || fail "MERCHANT_ADDRESS has no ETH for gas" # string compare: wei can exceed bash's 2^63
 pass "merchant has ETH for gas ($eth_bal wei)"
 
@@ -139,19 +243,21 @@ fi
 
 # ── shared reads: policy / allowance ────────────────────────────────────────
 
-read_policy() { # sets policy_recipients, policy_bps, policy_min
-  local raw
-  raw=$(run cast call "$AUTO_SPLIT_ADDRESS" \
-    "getPolicy(address,address)(address[],uint16[],uint256)" \
+# Annotation-free call -> raw ABI hex -> python decode. policy_raw is kept for
+# diagnostics: every FAIL involving these values prints it.
+read_policy() { # sets policy_raw, policy_recipients, policy_bps, policy_min
+  local decoded
+  policy_raw=$(run cast call "$AUTO_SPLIT_ADDRESS" "getPolicy(address,address)" \
     "$MERCHANT_ADDRESS" "$USDC_ADDRESS" "${RPC[@]}")
-  policy_recipients=$(sed -n '1p' <<<"$raw" | arr)
-  policy_bps=$(sed -n '2p' <<<"$raw" | arr)
-  policy_min=$(sed -n '3p' <<<"$raw" | num)
+  decoded=$(abi_decode policy "$policy_raw")
+  policy_recipients=$(sed -n '1p' <<<"$decoded")
+  policy_bps=$(sed -n '2p' <<<"$decoded")
+  policy_min=$(sed -n '3p' <<<"$decoded")
 }
 
 read_allowance() {
   run cast call "$USDC_ADDRESS" "allowance(address,address)(uint256)" \
-    "$MERCHANT_ADDRESS" "$AUTO_SPLIT_ADDRESS" "${RPC[@]}" | num
+    "$MERCHANT_ADDRESS" "$AUTO_SPLIT_ADDRESS" "${RPC[@]}" | num_checked "allowance"
 }
 
 # Expected distribution under the RSendsAutoSplit convention: floor per leg,
@@ -172,17 +278,17 @@ check_preview() {
   compute_expected "$total"
   info "distributable amount: $total | legs: A=$exp_a B=$exp_b C=$exp_c | dust(->last): $dust"
 
-  local raw preview_total preview_amounts
-  raw=$(run cast call "$AUTO_SPLIT_ADDRESS" \
-    "previewSplit(address,address)(uint256,uint256[])" \
+  local raw decoded preview_total preview_amounts
+  raw=$(run cast call "$AUTO_SPLIT_ADDRESS" "previewSplit(address,address)" \
     "$MERCHANT_ADDRESS" "$USDC_ADDRESS" "${RPC[@]}")
-  preview_total=$(sed -n '1p' <<<"$raw" | num)
-  preview_amounts=$(sed -n '2p' <<<"$raw" | arr)
+  decoded=$(abi_decode preview "$raw")
+  preview_total=$(sed -n '1p' <<<"$decoded")
+  preview_amounts=$(sed -n '2p' <<<"$decoded")
 
   [ "$preview_total" = "$total" ] \
-    || fail "previewSplit total $preview_total != expected $total"
+    || fail "previewSplit total $preview_total != expected $total (raw: $raw)"
   [ "$preview_amounts" = "$exp_a $exp_b $exp_c" ] \
-    || fail "previewSplit amounts [$preview_amounts] != expected [$exp_a $exp_b $exp_c]"
+    || fail "previewSplit amounts [$preview_amounts] != expected [$exp_a $exp_b $exp_c] (raw: $raw)"
   pass "previewSplit matches the locally computed distribution exactly"
 }
 
@@ -211,7 +317,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
   if [ -n "$skip_reason" ]; then
     info "keeper would SKIP: $skip_reason"
     expect_revert "previewSplit agrees with the local skip decision" \
-      cast call "$AUTO_SPLIT_ADDRESS" "previewSplit(address,address)(uint256,uint256[])" \
+      cast call "$AUTO_SPLIT_ADDRESS" "previewSplit(address,address)" \
       "$MERCHANT_ADDRESS" "$USDC_ADDRESS" "${RPC[@]}"
     echo "== dry run complete: keeper would skip =="
     exit 0
@@ -240,11 +346,11 @@ else
     "${SIGN[@]}" "${RPC[@]}"
   read_policy
   [ "$policy_recipients" = "$want_recipients" ] \
-    || fail "getPolicy recipients [$policy_recipients] != [$want_recipients]"
+    || fail "getPolicy recipients [$policy_recipients] != [$want_recipients] (raw: $policy_raw)"
   [ "$policy_bps" = "$BPS_A $BPS_B $BPS_C" ] \
-    || fail "getPolicy bps [$policy_bps] != [$BPS_A $BPS_B $BPS_C]"
+    || fail "getPolicy bps [$policy_bps] != [$BPS_A $BPS_B $BPS_C] (raw: $policy_raw)"
   [ "$policy_min" = "$MIN_AMOUNT" ] \
-    || fail "getPolicy minAmount $policy_min != $MIN_AMOUNT"
+    || fail "getPolicy minAmount $policy_min != $MIN_AMOUNT (raw: $policy_raw)"
   pass "policy stored and read back correctly"
 fi
 
@@ -252,7 +358,7 @@ fi
 
 echo "== phase 2: approve =="
 
-MAX_UINT=$(cast max-uint)
+MAX_UINT=$(cast max-uint | num_checked "cast max-uint") # awk-stripped: defensive vs suffix drift
 allowance=$(read_allowance)
 if [ "$allowance" = "$MAX_UINT" ]; then
   pass "allowance already MAX — skipping approve"
