@@ -11,7 +11,7 @@
  * what it copies, and what it encodes into the QR are the same bytes as what
  * the API sent, with nothing in between having touched them.
  */
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 jest.mock('next-intl', () => require('@/test-utils/intlMock').intlModuleMock())
@@ -68,6 +68,26 @@ function instructionBlock(): HTMLDetailsElement {
   const details = summary.closest('details')
   if (!details) throw new Error('the instruction block is not inside a <details>')
   return details as HTMLDetailsElement
+}
+
+/**
+ * Terminal states must drop the WHOLE payment surface, wallet flow included —
+ * not just the address. Today this holds because TronCheckout early-returns
+ * the status views before the wallet block; this pins it. The wallet panel
+ * mounts through next/dynamic, so a wrongly-rendered panel appears a beat
+ * AFTER render — settle async chunks before asserting absence, or the pin
+ * would pass against a panel still loading.
+ */
+async function expectNoWalletUi() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  })
+  expect(
+    screen.queryByRole('button', { name: /connect wallet/i }),
+  ).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole('button', { name: /pay .* USDT/i }),
+  ).not.toBeInTheDocument()
 }
 
 describe('the instruction screen', () => {
@@ -183,7 +203,7 @@ describe('the amount is the backend value, unmodified', () => {
 })
 
 describe('status', () => {
-  it('shows what arrived and what is missing on a partial payment', () => {
+  it('shows what arrived and what is missing on a partial payment', async () => {
     renderTron({
       status: 'partial',
       amount_received: '4.5',
@@ -200,6 +220,7 @@ describe('status', () => {
     // transfer would not close this invoice either.
     expect(screen.queryByText(TRON_PAYEE)).not.toBeInTheDocument()
     expect(document.querySelector('[data-qr-value]')).toBeNull()
+    await expectNoWalletUi()
     expect(screen.getByText(/Contact the merchant/i)).toBeInTheDocument()
   })
 
@@ -232,20 +253,23 @@ describe('status', () => {
     )
   })
 
-  it('shows the paid card once the transfer is matched', () => {
+  it('shows the paid card once the transfer is matched', async () => {
     renderTron({ status: 'paid', matched_tx_hash: TRON_HASH })
     expect(screen.getByText(/already completed/i)).toBeInTheDocument()
     expect(screen.queryByText(TRON_PAYEE)).not.toBeInTheDocument()
+    await expectNoWalletUi()
   })
 
-  it('shows the expired card, with no address left on screen to pay', () => {
+  it('shows the expired card, with no address left on screen to pay', async () => {
     renderTron({ status: 'expired' })
     expect(screen.getByText(/has expired/i)).toBeInTheDocument()
     expect(screen.queryByText(TRON_PAYEE)).not.toBeInTheDocument()
+    await expectNoWalletUi()
   })
 
-  it('treats a cancelled intent the same way', () => {
+  it('treats a cancelled intent the same way', async () => {
     renderTron({ status: 'cancelled' })
     expect(screen.queryByText(TRON_PAYEE)).not.toBeInTheDocument()
+    await expectNoWalletUi()
   })
 })
