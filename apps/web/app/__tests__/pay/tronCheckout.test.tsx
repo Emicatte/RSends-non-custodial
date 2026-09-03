@@ -76,13 +76,18 @@ function instructionBlock(): HTMLDetailsElement {
  * not just the address. Today this holds because TronCheckout early-returns
  * the status views before the wallet block; this pins it. The wallet panel
  * mounts through next/dynamic, so a wrongly-rendered panel appears a beat
- * AFTER render — settle async chunks before asserting absence, or the pin
- * would pass against a panel still loading.
+ * AFTER render — settle it before asserting absence, or the pin would pass
+ * against a panel still loading. The empty async act() is that settle, and it
+ * is deterministic, not timed: under jest a dynamic chunk resolves in
+ * microtasks (the CJS transform makes import() a resolved-promise .then), and
+ * act drains the whole microtask queue, chained promises included — verified
+ * by the bite check in this test's history (a panel wrongly rendered in the
+ * expired state IS caught through the dynamic mount). If next/dynamic ever
+ * starts scheduling a real timer here, this pin goes vacuous rather than
+ * flaky — re-verify the bite before trusting it after upgrading Next.
  */
 async function expectNoWalletUi() {
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 50))
-  })
+  await act(async () => {})
   expect(
     screen.queryByRole('button', { name: /connect wallet/i }),
   ).not.toBeInTheDocument()
