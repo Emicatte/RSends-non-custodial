@@ -507,6 +507,34 @@ class TronPoller:
                 continue
         raise TronEnrichmentError(f"no TRON node answered {path}: {last!r}")
 
+    async def _post_json(self, path: str, body: dict) -> dict:
+        """POST `body` to `path` on the first node that answers.
+
+        The solidity endpoints the verifier reads are POST-only, and this is a
+        sibling of `_get_json` rather than a second client on purpose: same
+        node list, same proven nodes, same headers, same timeout, same error
+        type. A verifier that dialled its own nodes could read a chain the boot
+        guard never proved.
+        """
+        last: Optional[Exception] = None
+        for base in self.node_urls:
+            url = f"{base}{path}"
+            try:
+                async with httpx.AsyncClient(timeout=TRON_HTTP_TIMEOUT) as client:
+                    resp = await client.post(
+                        url, json=body, headers=_auth_headers()
+                    )
+                if resp.status_code != 200:
+                    last = TronEnrichmentError(
+                        f"{url} answered HTTP {resp.status_code}"
+                    )
+                    continue
+                return resp.json()
+            except Exception as exc:  # transport, timeout, unparseable body
+                last = exc
+                continue
+        raise TronEnrichmentError(f"no TRON node answered {path}: {last!r}")
+
     async def _fetch_transfers(self, address: str, min_timestamp: int) -> list:
         """Every incoming USDT transfer at/after `min_timestamp`, all pages.
 
@@ -729,6 +757,22 @@ async def start_tron_poller_if_needed() -> list[TronPoller]:
 
     _pollers = started
     return started
+
+
+def poller_for_chain(chain_name: str) -> Optional[TronPoller]:
+    """The running poller for a registry chain name, or None.
+
+    Borrowing a started poller is how the verifier inherits the boot-time
+    chain-identity proof: every node in its list answered with the pinned
+    genesis blockID or the process would not be up. Returning None when nothing
+    is running is deliberate, and callers must treat it as "cannot verify right
+    now" rather than "not this chain".
+    """
+    folded = (chain_name or "").lower()
+    for poller in _pollers:
+        if poller.network.chain_name == folded:
+            return poller
+    return None
 
 
 async def stop_tron_poller() -> None:
