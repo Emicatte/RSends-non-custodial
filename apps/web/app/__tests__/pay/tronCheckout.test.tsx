@@ -345,4 +345,52 @@ describe('the connected wallet flow', () => {
       screen.getByRole('button', { name: /pay 10\.000001 USDT/i }),
     ).toBeEnabled()
   })
+
+  it('offers Switch network when the wallet sits on the wrong chain', async () => {
+    const nile = tronNetworkFor('tron_nile')
+    if (!nile) throw new Error('no Nile network config')
+    // Wallet on Nile, invoice on mainnet: chainReadable and mismatching, the
+    // one combination the preflight refuses as wrong_network. switchChain is
+    // what makes canSwitchChain true — without it the button must not render.
+    const adapter = connectedAdapter(nile.chainId)
+    adapter.switchChain = async () => {}
+
+    // Preflight step 1 re-fetches the intent through global fetch before the
+    // network check can run; answer it with the still-pending fixture.
+    const originalFetch = global.fetch
+    global.fetch = jest.fn(async () => ({
+      json: async () => ({ status: 'pending', expires_at: EXPIRES }),
+    })) as unknown as typeof fetch
+
+    try {
+      render(
+        <TronCheckout
+          intent={tronIntent()}
+          onLocalExpiry={() => {}}
+          createAdapters={async () => ({
+            tronlink: adapter as never,
+            walletconnect: null,
+          })}
+        />,
+      )
+
+      const user = userEvent.setup()
+      await user.click(
+        await screen.findByRole('button', { name: /connect wallet/i }),
+      )
+      await user.click(await screen.findByRole('button', { name: /^TronLink$/ }))
+      await user.click(
+        await screen.findByRole('button', { name: /pay 10\.000001 USDT/i }),
+      )
+
+      // failed:wrong_network — the copy names the problem and the button
+      // offers the way out, on the invoice's own network.
+      expect(await screen.findByText(/different network/i)).toBeInTheDocument()
+      expect(
+        await screen.findByRole('button', { name: 'Switch network' }),
+      ).toBeInTheDocument()
+    } finally {
+      global.fetch = originalFetch
+    }
+  })
 })
