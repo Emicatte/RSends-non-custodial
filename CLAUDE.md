@@ -493,6 +493,22 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
   `test_tron_matching.py::test_an_intent_that_expired_since_payment_is_not_matched`. Fixing it
   means either adding `expired` to the matcher's candidate statuses (EVM parity) or holding on
   `(chain, recipient, window)` before an `intent_id` exists — a decision, not a bug fix.
+- **The tx-hint pipeline narrowed that gap without closing it, and the remainder is now the
+  worst-shaped half.** The hint (`tron_verifier` / `tron_hints`, `tron_payment_hints`) means a
+  transfer whose intent expires between broadcast and solidification **does** get its
+  `PaymentSettlement` row recorded, from the hash the payer's browser submitted, without waiting
+  for the address scan. So the money is no longer invisible. But `tron_matcher` still requires
+  `status == pending`, so the intent is still never closed: **the settlement exists, the merchant
+  holds the funds, and no `payment.completed` webhook ever fires.** That is arguably worse than
+  before to operate, because the row now sits in the database looking settled while the merchant's
+  own systems were never told — a silent discrepancy rather than a silent absence.
+  The EVM path already models exactly this situation and has for a long time:
+  `late_payment_policy` (`auto_complete` | `reject` | `review`), `completed_late` and
+  `late_minutes` on `PaymentIntent`, with the handling in `webhook_service._handle_late_payment`.
+  TRON reads none of it. The shape of the fix is therefore probably not new machinery but
+  teaching the TRON matcher the late-payment vocabulary the EVM side already speaks, together
+  with whichever of the two options in the note above is chosen. **Own branch, after the TRON
+  checkout branch merges** — it changes when a merchant gets paid, which is not a drive-by.
 
 Closed (2026-07-05): **CI backend job now has a Redis service** (`redis:7`, health-checked,
 `REDIS_URL=redis://localhost:6379/0` — plain scheme is CI/test-scoped, the `rediss://` guard
