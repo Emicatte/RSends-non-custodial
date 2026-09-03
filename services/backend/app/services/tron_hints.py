@@ -133,7 +133,7 @@ async def _give_up_on_stale_hints(network: tp.TronNetwork, now: datetime) -> int
     async with async_session() as db:
         rows = (await db.execute(
             select(TronPaymentHint)
-            .join(PaymentIntent, PaymentIntent.id == TronPaymentHint.intent_id)
+            .join(PaymentIntent, PaymentIntent.id == TronPaymentHint.intent_pk)
             .where(
                 TronPaymentHint.state == HintState.pending,
                 func.lower(PaymentIntent.chain) == network.chain_name,
@@ -169,7 +169,7 @@ async def run_hint_pass(
     async with async_session() as db:
         rows = (await db.execute(
             select(TronPaymentHint, PaymentIntent)
-            .join(PaymentIntent, PaymentIntent.id == TronPaymentHint.intent_id)
+            .join(PaymentIntent, PaymentIntent.id == TronPaymentHint.intent_pk)
             .where(
                 TronPaymentHint.state == HintState.pending,
                 # The intent state belongs IN the query. Checking it after a

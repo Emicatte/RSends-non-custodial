@@ -410,7 +410,7 @@ async def test_the_pass_verifies_a_pending_hint_and_closes_the_intent(webhooks):
 
     pk, intent_id = await _intent()
     async with async_session() as db:
-        db.add(TronPaymentHint(intent_id=pk, tx_hash=TX_2_5, payer_address=PAYER))
+        db.add(TronPaymentHint(intent_pk=pk, tx_hash=TX_2_5, payer_address=PAYER))
         await db.commit()
 
     source = CountingSource(TX_2_5)
@@ -432,7 +432,7 @@ async def test_a_rejected_hint_is_never_fetched_again():
     # 3.0 invoice, 2.5 transfer: rejected on amount.
     pk, _ = await _intent(amount=3.0)
     async with async_session() as db:
-        db.add(TronPaymentHint(intent_id=pk, tx_hash=TX_2_5, payer_address=PAYER))
+        db.add(TronPaymentHint(intent_pk=pk, tx_hash=TX_2_5, payer_address=PAYER))
         await db.commit()
 
     source = CountingSource(TX_2_5)
@@ -457,7 +457,7 @@ async def test_a_hint_whose_intent_is_no_longer_payable_is_skipped_without_a_nod
 
     pk, _ = await _intent(status=IntentStatus.cancelled)
     async with async_session() as db:
-        db.add(TronPaymentHint(intent_id=pk, tx_hash=TX_2_5, payer_address=PAYER))
+        db.add(TronPaymentHint(intent_pk=pk, tx_hash=TX_2_5, payer_address=PAYER))
         await db.commit()
 
     source = CountingSource(TX_2_5)
@@ -474,7 +474,7 @@ async def test_the_give_up_rule_fires_only_past_the_late_window():
     # Expired, but inside the 24h window: still retried.
     pk, _ = await _intent(intent_id="pi_recent", expires_delta=timedelta(hours=-1))
     async with async_session() as db:
-        db.add(TronPaymentHint(intent_id=pk, tx_hash=TX_2_5, payer_address=PAYER))
+        db.add(TronPaymentHint(intent_pk=pk, tx_hash=TX_2_5, payer_address=PAYER))
         await db.commit()
 
     source = CountingSource(TX_2_5, present=False)
@@ -492,7 +492,7 @@ async def test_a_hint_past_the_late_window_is_given_up_on():
 
     pk, _ = await _intent(expires_delta=timedelta(hours=-30))
     async with async_session() as db:
-        db.add(TronPaymentHint(intent_id=pk, tx_hash=TX_2_5, payer_address=PAYER))
+        db.add(TronPaymentHint(intent_pk=pk, tx_hash=TX_2_5, payer_address=PAYER))
         await db.commit()
 
     source = CountingSource(TX_2_5, present=False)
@@ -548,7 +548,7 @@ async def test_a_rejected_hint_does_not_stop_the_ordinary_poller_match(webhooks)
     # Invoice for 3.0; the payer submits the hash of their 2.5 transfer.
     pk, intent_id = await _intent(amount=3.0)
     async with async_session() as db:
-        db.add(TronPaymentHint(intent_id=pk, tx_hash=TX_2_5, payer_address=PAYER))
+        db.add(TronPaymentHint(intent_pk=pk, tx_hash=TX_2_5, payer_address=PAYER))
         await db.commit()
 
     await tron_hints.run_hint_pass(NILE, source_for=lambda h: CountingSource(TX_2_5))

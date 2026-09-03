@@ -9,9 +9,17 @@ production config (no RSEND_DEV_AUTH_BYPASS). Rules for anything added here:
   enables enumeration.
 - Serialize an EXPLICIT allowlisted response model, never the ORM object:
   a future column must not leak by default.
-- Read-only: no DB writes from a public handler.
-- Per-IP rate limited (see ENDPOINT_LIMITS in app/middleware/rate_limit.py)
-  and allowlisted in GET_PUBLIC_PREFIXES (app/security/api_keys.py).
+- Read-only, with ONE named exception: the TRON transaction hint POST at the
+  bottom of this file. It writes a row recording which transaction the payer
+  says they broadcast. It is allowed here because a caller can influence only
+  two values — a transaction hash and their own address — and both are checked
+  against the chain before anything follows from them. Recipient, amount, token
+  and network are never accepted; they are re-derived from the intent. The row
+  is a claim, not a credit. Any further write needs the same argument made
+  again, in writing, or it does not belong on this surface.
+- Per-IP rate limited (see ENDPOINT_LIMITS in app/middleware/rate_limit.py) and
+  allowlisted in GET_PUBLIC_PREFIXES / POST_PUBLIC_PREFIXES
+  (app/security/api_keys.py).
 """
 
 import logging
@@ -174,10 +182,9 @@ async def get_public_payment_intent(
 #  The TRON transaction hint (B1)
 # ═══════════════════════════════════════════════════════════════
 #
-# This is the one WRITE on an otherwise read-only public surface, and the
-# module docstring's "no DB writes from a public handler" rule is amended here
-# rather than quietly broken. What makes it acceptable is what the payer can
-# influence: a transaction hash and their own address, both of which are
+# The one WRITE on an otherwise read-only public surface. The module docstring
+# names it as the single exception rather than leaving the rule quietly false.
+# What makes it acceptable is what the payer can influence: a transaction hash and their own address, both of which are
 # checked against the chain before anything follows from them. There is no
 # recipient, amount, token or network on the schema, so there is no field a
 # caller could use to redirect a payment. The row it writes is a claim, not a
@@ -305,7 +312,7 @@ async def submit_tron_tx_hint(
     fresh = True
     async with async_session() as writer:
         writer.add(TronPaymentHint(
-            intent_id=intent.id,
+            intent_pk=intent.id,
             tx_hash=body.tx_hash,
             payer_address=body.payer_address,
         ))
@@ -317,7 +324,7 @@ async def submit_tron_tx_hint(
 
     hint = (await db.execute(
         select(TronPaymentHint).where(
-            TronPaymentHint.intent_id == intent.id,
+            TronPaymentHint.intent_pk == intent.id,
             TronPaymentHint.tx_hash == body.tx_hash,
         )
     )).scalar_one()

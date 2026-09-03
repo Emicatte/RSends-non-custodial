@@ -17,20 +17,22 @@ Three states, and the middle one is the whole reason the table exists:
 a node call every sixty seconds, forever.
 
 ────────────────────────────────────────────────────────────────────────
-A NAMING COLLISION, CARRIED ON PURPOSE. READ THIS BEFORE WRITING A JOIN.
+WHY THIS COLUMN IS CALLED intent_pk. READ THIS BEFORE WRITING A JOIN.
 ────────────────────────────────────────────────────────────────────────
 
-`TronPaymentHint.intent_id` is the **integer primary key** of `payment_intents`.
+`TronPaymentHint.intent_pk` is the **integer primary key** of `payment_intents`.
 
 `PaymentIntent.intent_id` and `PaymentSettlement.intent_id` are the **string**
 `"pi_…"` business id.
 
-Three columns, one name, two meanings, in one subsystem. That is a trap and it
-is named here rather than papered over: a join written from muscle memory
-(`TronPaymentHint.intent_id == PaymentSettlement.intent_id`) compares an integer
-to a string and silently matches nothing, which on SQLite and Postgres alike is
-an empty result rather than an error. Every join in this codebase goes through
-`PaymentIntent.id` for this column, and says so at the call site.
+The column is called `intent_pk` precisely so those two can never be confused.
+An earlier draft named it `intent_id`, which put three columns of the same name
+and two different meanings in one subsystem: a join written from muscle memory
+(`TronPaymentHint.intent_id == PaymentSettlement.intent_id`) would have compared
+an integer to a string and silently matched nothing, which on SQLite and
+Postgres alike is an empty result rather than an error. The name carries the
+type now, so the mistake does not typecheck as prose either. Every join goes
+through `PaymentIntent.id`.
 """
 
 import enum
@@ -67,9 +69,9 @@ class TronPaymentHint(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
 
-    # The intent's INTERNAL integer PK — not the "pi_…" string. See the module
-    # docstring; this is the one column in the subsystem whose name lies.
-    intent_id = Column(
+    # The intent's INTERNAL integer PK — not the "pi_…" string. The `_pk`
+    # suffix is load-bearing: see the module docstring.
+    intent_pk = Column(
         Integer,
         ForeignKey("payment_intents.id", ondelete="CASCADE"),
         nullable=False,
@@ -113,7 +115,7 @@ class TronPaymentHint(Base):
         # client retrying, and two replicas racing all collapse into one row —
         # which is why the endpoint inserts and catches the IntegrityError
         # rather than looking first. A select-then-insert loses that race.
-        UniqueConstraint("intent_id", "tx_hash", name="uq_tron_hint_intent_tx"),
+        UniqueConstraint("intent_pk", "tx_hash", name="uq_tron_hint_intent_tx"),
         # Lowercase, enforced by the database rather than by whoever writes
         # next. `lower(tx_hash) = tx_hash` is true for a hash with no letters
         # too, which is correct.
@@ -123,7 +125,7 @@ class TronPaymentHint(Base):
         # same way `uq_intent_pending_amount` is.
         Index(
             "ix_tron_hint_pending",
-            "intent_id",
+            "intent_pk",
             postgresql_where=text("state = 'pending'"),
             sqlite_where=text("state = 'pending'"),
         ),
@@ -132,5 +134,5 @@ class TronPaymentHint(Base):
     def __repr__(self) -> str:  # pragma: no cover - debugging aid
         return (
             f"<TronPaymentHint {self.tx_hash[:12]}… "
-            f"intent={self.intent_id} state={self.state}>"
+            f"intent_pk={self.intent_pk} state={self.state}>"
         )
