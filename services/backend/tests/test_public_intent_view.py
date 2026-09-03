@@ -305,15 +305,28 @@ async def test_unknown_id_404(session):
 
 
 def test_no_list_or_enumeration_route():
-    """The public router exposes exactly one single-object GET."""
+    """The public router exposes exactly two single-object routes, and no list.
+
+    The POST is the TRON transaction hint. It is on this router deliberately —
+    one public surface, one set of trust-boundary rules — and it is the single
+    write the module's read-only rule now excepts. What keeps that safe is the
+    body: a transaction hash and the payer's own address, both verified against
+    the chain, and no recipient, amount, token or network to lie about.
+
+    This assertion is an inventory, not a shape check: it is extended when a
+    route is added on purpose, and it fails when one appears by accident.
+    """
     app = FastAPI()
     app.include_router(public_router)
-    routes = [
+    routes = sorted(
         (r.path, sorted(r.methods))
         for r in app.routes
         if r.path.startswith("/api/v1/public")
+    )
+    assert routes == [
+        ("/api/v1/public/payment-intent/{intent_id}", ["GET"]),
+        ("/api/v1/public/payment-intent/{intent_id}/tx-hint", ["POST"]),
     ]
-    assert routes == [("/api/v1/public/payment-intent/{intent_id}", ["GET"])]
 
 
 # ── read-only: expiry reported, never persisted ──────────────

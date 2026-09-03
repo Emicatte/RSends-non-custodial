@@ -4,7 +4,9 @@ import os
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
-from app.security.api_keys import verify_api_key, is_exempt, is_get_public
+from app.security.api_keys import (
+    verify_api_key, is_exempt, is_get_public, is_post_public,
+)
 from app.config import get_settings
 
 ADMIN_PATHS = ("/api/v1/keys/generate", "/api/v1/keys/revoke")
@@ -25,6 +27,7 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         client = await verify_api_key(request)
+        path_ = request.url.path
 
         # GET requests (M8): deny-by-default. A valid API key always passes; a
         # GET without one passes only if the path is public / self-authenticating
@@ -40,6 +43,12 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
                 status_code=401,
                 content={"error": "INVALID_API_KEY", "message": "Valid API key required"},
             )
+
+        # Non-GET: auth is mandatory, with one method-scoped exception — the
+        # payer-facing tx hint, which has no key to present. Narrower than an
+        # EXEMPT_PATHS entry on purpose: POST only, and only these prefixes.
+        if client is None and request.method == "POST" and is_post_public(path_):
+            return await call_next(request)
 
         # Non-GET: auth is mandatory
         if client is None:
