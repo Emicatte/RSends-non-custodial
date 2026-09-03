@@ -30,6 +30,16 @@ error BelowMinAmount(uint256 amount, uint256 minAmount);
 /// (amount - somma dei floor precedenti), NON al primo come in
 /// RSendsSplitRouter/_computeAmounts. Questa matematica NON va replicata via
 /// split_math.py — quel modulo rispecchia il SOLO SplitRouter.
+///
+/// NOTA token: setPolicy accetta QUALUNQUE address ERC-20 e il contratto non
+/// può difendersi da un token non standard. Con un token fee-on-transfer o
+/// rebasing l'invariante saldo-a-zero NON regge: balanceOf scende più di
+/// quanto trasferito e il resto sull'ultima leg non chiude. L'invariante vale
+/// solo per ERC-20 standard senza fee-on-transfer/rebasing; l'unico token
+/// supportato è USDC su Base. L'enforcement è responsabilità del CHIAMANTE:
+/// il backend deve rifiutare setPolicy per token assenti dal registry
+/// (token_registry.json) e la UI non deve mai esporre un campo token address
+/// libero.
 contract RSendsAutoSplit is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
