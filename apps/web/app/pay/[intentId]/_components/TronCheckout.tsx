@@ -53,6 +53,7 @@ import {
 } from '@/lib/web3/paymentIntent'
 import { tronNetworkFor } from '@/lib/web3/tron/tronNetwork'
 import { AlreadyPaidView, ExpiredView } from './StatusViews'
+import type { CreateAdapters } from './TronWalletProvider'
 
 // Only the instruction screen needs the QR encoder, and only a TRON intent
 // reaches the instruction screen — keep `qrcode` out of the shared /pay chunk.
@@ -235,11 +236,15 @@ export function TronCheckout({
   // screen does not have to fabricate a poller.
   backendPaid = false,
   onBroadcast = () => {},
+  // Forwarded to TronWalletProvider so tests can reach the connected branch;
+  // left undefined, the provider builds the real adapters.
+  createAdapters,
 }: {
   intent: PaymentIntent
   onLocalExpiry: () => void
   backendPaid?: boolean
   onBroadcast?: () => void
+  createAdapters?: CreateAdapters
 }) {
   const t = useTranslations('pay')
 
@@ -346,7 +351,7 @@ export function TronCheckout({
           {/* Connect and pay. The primary path now: the page can know the
               payer's address, so it can build the transfer for them. */}
           {network && (
-            <TronWalletProvider network={network}>
+            <TronWalletProvider network={network} createAdapters={createAdapters}>
               <TronPayPanel
                 intent={intent}
                 network={network}
