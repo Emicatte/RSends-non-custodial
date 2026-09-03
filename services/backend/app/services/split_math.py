@@ -7,6 +7,13 @@ MUST stay bit-identical to the contract
 (packages/contracts/src/RSendsSplitRouter.sol): the indexer recomputes the
 per-leg amounts from the on-chain totalAmount and the stored BPS, and REJECTS a
 settlement whose event amounts differ. Don't change one side without the other.
+
+NOT the same rule as RSendsAutoSplit.executeSplit, which assigns the remainder
+to the LAST recipient so the merchant wallet lands at exactly zero. That
+divergence is deliberate and pinned by
+tests/test_split_math.py::test_split_math_diverges_from_autosplit_remainder_rule
+— do NOT "deduplicate" the two, and never run AutoSplit amounts through this
+function.
 """
 
 MAX_RECIPIENTS = 20
