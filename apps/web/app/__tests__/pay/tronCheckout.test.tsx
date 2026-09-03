@@ -18,6 +18,7 @@ jest.mock('next-intl', () => require('@/test-utils/intlMock').intlModuleMock())
 
 import { TronCheckout } from '@/app/pay/[intentId]/_components/TronCheckout'
 import { normalizeIntent, type RawPaymentIntent } from '@/lib/web3/paymentIntent'
+import { tronNetworkFor } from '@/lib/web3/tron/tronNetwork'
 
 // A real TRON mainnet address. The mixed case is the point of the fixture.
 const TRON_PAYEE = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t'
@@ -271,5 +272,72 @@ describe('status', () => {
     renderTron({ status: 'cancelled' })
     expect(screen.queryByText(TRON_PAYEE)).not.toBeInTheDocument()
     await expectNoWalletUi()
+  })
+})
+
+describe('the connected wallet flow', () => {
+  // A payer address distinct from the payee, so "Paying from" can never match
+  // the destination row by accident.
+  const TRON_PAYER = 'TWd4WrZ9wn84f5x1hZhL4DHvk738ns5jwb'
+
+  /**
+   * Minimal working adapter, in the shape tronWalletProvider.test.tsx uses:
+   * live listeners (the provider subscribes to adapter events), a connect that
+   * lands on a real address, and a network() that agrees with the intent's
+   * chain so the connected branch renders without the wrong-network note.
+   */
+  function connectedAdapter(chainId: string) {
+    const listeners = new Map<string, Set<(...args: never[]) => void>>()
+    const adapter: Record<string, unknown> = {
+      name: 'TronLink',
+      address: null as string | null,
+      readyState: 'Found',
+      network: async () => ({ chainId }),
+      connect: async () => {
+        adapter.address = TRON_PAYER
+      },
+      disconnect: async () => {
+        adapter.address = null
+      },
+      signTransaction: async (tx: unknown) => tx,
+      on: (event: string, fn: (...args: never[]) => void) => {
+        if (!listeners.has(event)) listeners.set(event, new Set())
+        listeners.get(event)!.add(fn)
+      },
+      off: (event: string, fn: (...args: never[]) => void) =>
+        listeners.get(event)?.delete(fn),
+    }
+    return adapter
+  }
+
+  it('reaches the connected branch through an injected adapter', async () => {
+    const network = tronNetworkFor(tronIntent().raw.chain)
+    if (!network) throw new Error('fixture chain resolved no TRON network')
+    const adapter = connectedAdapter(network.chainId)
+
+    render(
+      <TronCheckout
+        intent={tronIntent()}
+        onLocalExpiry={() => {}}
+        createAdapters={async () => ({
+          tronlink: adapter as never,
+          walletconnect: null,
+        })}
+      />,
+    )
+
+    const user = userEvent.setup()
+    await user.click(
+      await screen.findByRole('button', { name: /connect wallet/i }),
+    )
+    await user.click(await screen.findByRole('button', { name: /^TronLink$/ }))
+
+    // Connected branch: the summary names the payer's own wallet and the pay
+    // CTA is live — the whole point of connecting.
+    expect(await screen.findByText('Paying from')).toBeInTheDocument()
+    expect(screen.getByText(/TWd4Wr/)).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /pay 10\.000001 USDT/i }),
+    ).toBeEnabled()
   })
 })
