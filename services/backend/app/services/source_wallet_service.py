@@ -10,14 +10,22 @@ lives, as three gates run in a fixed order:
     auto_split_address_for(chain)      -> 422 AUTO_SPLIT_UNAVAILABLE
     token_is_enabled(chain, symbol)    -> 400 UNSUPPORTED_TOKEN
 
-The order is not cosmetic. The token gate alone cannot hold this surface:
-`token_is_enabled("tron", "USDT")` is True — TRON USDT is a real, enabled,
-chargeable token — but TRON is `settlement: watch_only`, its addresses are
-base58check, and AutoSplit is an EVM contract that was never deployed there. A
-registration passing only the token gate would put the keeper to work on a
-chain where the policy cannot exist. So the AutoSplit gate runs first and
-answers a different question: not "is this token real?" but "is there a
-contract here at all?".
+The order is not cosmetic. The token gate alone cannot hold this surface: it
+answers "is this token real?", and a registration that passes only it would put
+the keeper to work on a chain where no AutoSplit contract exists. The AutoSplit
+gate runs first and answers the different question, "is there a contract here
+at all?" — which is a fact about deployment, so the operator's address map is
+what decides it.
+
+AutoSplit is NOT EVM-only. It compiles under the tronprotocol solc fork and
+executes on TRON (proved on Nile against real USDT), so `tron` and `tron_nile`
+are eligible chains exactly as `base` and `base_sepolia` are, and which of them
+is actually live is decided by `AUTO_SPLIT_ADDRESSES_JSON` alone. Do NOT
+re-add a `is_watch_only_chain` refusal here: that field is about settlement
+ROUTING for the payment path — the payer sends TRC-20 straight to the merchant,
+with no router — and it says nothing about whether a merchant can point a
+keeper at their own wallet on the same chain. Those are different capabilities
+on the same chain.
 
 Error-code convention follows the intent path: 400 for "shape was fine, the
 registry says no" and 422 for "the feature is not configured on this chain",
@@ -29,7 +37,7 @@ from typing import Optional
 
 from fastapi import HTTPException
 
-from app.services.chain_access import is_testnet_chain
+from app.services.chain_access import is_testnet_chain, is_watch_only_testnet
 from app.services.router_registry import (
     _enc_addr,
     _selector,
@@ -51,11 +59,16 @@ def auto_split_address_for(chain: str) -> Optional[str]:
     contract is deployed on exactly one testnet — "not configured" and "not
     deployed" should be indistinguishable from the API's side.
 
-    The map itself (`AUTO_SPLIT_ADDRESSES_JSON`, `{chain_id: address}`,
+    The map itself (`AUTO_SPLIT_ADDRESSES_JSON`, `{chain_name: address}`,
     following the `SPLIT_ROUTER_ADDRESSES_JSON` three-layer pattern: raw
     settings field -> parsed property -> resolver) is NOT wired here yet; that
     is a separate, operator-facing change. When it lands, only this function
     body changes.
+
+    Keyed by chain NAME, not by chain id, unlike the three router maps: TRON is
+    a supported AutoSplit chain and has no EVM chain id to key by. Same
+    vocabulary as `token_registry.json`, which already keys `tron`/`tron_nile`
+    by name.
 
     One hard constraint for whoever wires it: the AutoSplit address must NEVER
     be added to any `RSENDS_ROUTER_*_ADDRESSES_JSON` map. The indexer builds
@@ -102,7 +115,6 @@ def resolve_registration_context(chain: str, token_symbol: str) -> dict:
             },
         )
 
-    chain_id = chain_id_for(chain)
     # In production the gate above guarantees this resolves: TOKEN_REGISTRY and
     # FEE_POLICY are built in the same loader pass, so an enabled token always
     # has an address. The None guard is still explicit — the same shape
@@ -113,9 +125,22 @@ def resolve_registration_context(chain: str, token_symbol: str) -> dict:
     # registry at each use site, so the row never carries it.
     token = token_for(chain, token_symbol)
 
+    # Testnet-ness is asked TWICE because a chain can carry it two ways, and
+    # neither question answers the other. `is_testnet_chain` is keyed by EVM
+    # chain id, which a watch-only chain does not have (it classifies None as
+    # mainnet); `is_watch_only_testnet` is keyed by NAME, which is the only
+    # identifier such a chain has. `tron_nile` is a testnet and would otherwise
+    # be stamped `live` — putting a TRON chain id in TESTNET_CHAIN_IDS to fix
+    # that is forbidden: the EVM boot guard reads that table and would
+    # eth_chainId a TRON node. Both helpers fail closed to mainnet, so the
+    # `or` can only ever widen to `test` on a chain that explicitly claims it.
+    is_test = is_testnet_chain(chain_id_for(chain)) or is_watch_only_testnet(chain)
+
     return {
-        "chain_id": chain_id,
-        "environment": "test" if is_testnet_chain(chain_id) else "live",
+        # The chain NAME. The EVM id is derived at the call sites that need one
+        # (SIWE), because not every supported chain has one.
+        "chain": chain,
+        "environment": "test" if is_test else "live",
         "auto_split_address": auto_split,
         "token_address": token[0] if token else None,
         "token_decimals": token[1] if token else None,

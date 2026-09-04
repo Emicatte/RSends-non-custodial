@@ -25,7 +25,6 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional, Tuple
 
-from eth_utils import to_checksum_address
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -40,6 +39,7 @@ from app.models.source_wallet_schemas import (
     SourceWalletListResponse,
     SourceWalletResponse,
     SourceWalletVerifyRequest,
+    display_address_for_chain,
 )
 from app.services.auth_audit import record_auth_event
 from app.services.siwe_service import (
@@ -64,7 +64,7 @@ MAX_SOURCE_WALLETS_PER_ORG = 10
 
 #: The partial unique index (model `__table_args__` + migration 0024) and the
 #: columns it covers — Postgres reports the name, SQLite reports the columns.
-IDX_ACTIVE = ("uq_source_wallets_active", ("chain_id", "address", "token_symbol"))
+IDX_ACTIVE = ("uq_source_wallets_active", ("chain", "address", "token_symbol"))
 
 
 def _constraint_name(exc: IntegrityError) -> Optional[str]:
@@ -118,6 +118,26 @@ def _sanitize_label(raw: Optional[str]) -> str:
     return "" if raw is None else raw.strip()[:64]
 
 
+def _siwe_chain_id(chain: str) -> Optional[int]:
+    """The EVM chain id SIWE must bind the signature to, or None.
+
+    SIWE is EIP-4361: its message carries a mandatory numeric `Chain ID` line
+    and recovery yields an 0x address, so it can only speak for EVM chains.
+    A watch-only chain has no id, and `create_challenge` refuses `None` with
+    `chain_not_supported` — a 400, fail-closed.
+
+    That refusal is CORRECT and deliberate for now: registering a TRON source
+    wallet needs a TRON ownership proof (TIP-191 recovery re-encoded to
+    base58check), which is its own change. Until it lands, a TRON registration
+    is refused at the proof step rather than accepted without one — which
+    matters because `uq_source_wallets_active` is GLOBAL, so an unproven
+    registration could lock the real owner out of their own address.
+    """
+    from app.services.router_registry import chain_id_for
+
+    return chain_id_for(chain)
+
+
 def _siwe_error_to_http(e: SIWEError) -> HTTPException:
     return HTTPException(status_code=400, detail={"code": e.code, "detail": e.detail})
 
@@ -135,7 +155,7 @@ async def _count_active_for_org(db: AsyncSession, org_id: str) -> int:
 
 
 async def _active_holder(
-    db: AsyncSession, *, chain_id: int, address_lc: str, token_symbol: str
+    db: AsyncSession, *, chain: str, address: str, token_symbol: str
 ) -> Optional[SourceWallet]:
     """The ACTIVE registration of this (chain, wallet, token), in ANY org.
 
@@ -145,8 +165,8 @@ async def _active_holder(
     """
     result = await db.execute(
         select(SourceWallet).where(
-            SourceWallet.chain_id == chain_id,
-            SourceWallet.address == address_lc,
+            SourceWallet.chain == chain,
+            SourceWallet.address == address,
             SourceWallet.token_symbol == token_symbol,
             SourceWallet.disabled_at.is_(None),
         )
@@ -205,15 +225,18 @@ async def post_challenge(
     user_id, org_id, _role = ctx
 
     context = resolve_registration_context(payload.chain, payload.token_symbol)
-    address_lc = payload.address  # schema lowercases
+    # Already in its chain's canonical form: the request schema normalised it
+    # per address family (EVM folded, base58check untouched). Nothing here may
+    # normalise it a second time.
+    address = payload.address
 
     if await _count_active_for_org(db, org_id) >= MAX_SOURCE_WALLETS_PER_ORG:
         raise HTTPException(409, {"code": "max_source_wallets_reached"})
 
     holder = await _active_holder(
         db,
-        chain_id=context["chain_id"],
-        address_lc=address_lc,
+        chain=context["chain"],
+        address=address,
         token_symbol=payload.token_symbol,
     )
     if holder is not None:
@@ -224,8 +247,8 @@ async def post_challenge(
     try:
         message, nonce, expires_at = await create_challenge(
             user_id=user_id,
-            address=address_lc,
-            chain_id=context["chain_id"],
+            address=address,
+            chain_id=_siwe_chain_id(context["chain"]),
         )
     except SIWEUnavailable:
         raise HTTPException(status_code=503, detail={"code": "siwe_unavailable"})
@@ -251,21 +274,21 @@ async def post_verify(
 
     Gate order is fixed and load-bearing (see source_wallet_service): chain,
     then AutoSplit availability, then token. Everything the row is stamped with
-    — chain id, environment, the token's on-chain address — is derived here,
+    — chain, environment, the token's on-chain address — is derived here,
     never taken from the request.
     """
     user_id, org_id, _role = ctx
 
     context = resolve_registration_context(payload.chain, payload.token_symbol)
-    address_lc = payload.address  # schema lowercases
+    address = payload.address  # already canonical for its address family
 
     if await _count_active_for_org(db, org_id) >= MAX_SOURCE_WALLETS_PER_ORG:
         raise HTTPException(409, {"code": "max_source_wallets_reached"})
 
     holder = await _active_holder(
         db,
-        chain_id=context["chain_id"],
-        address_lc=address_lc,
+        chain=context["chain"],
+        address=address,
         token_symbol=payload.token_symbol,
     )
     if holder is not None:
@@ -275,8 +298,8 @@ async def post_verify(
         verified_message = await verify_challenge(
             user_id=user_id,
             nonce=payload.nonce,
-            address=address_lc,
-            chain_id=context["chain_id"],
+            address=address,
+            chain_id=_siwe_chain_id(context["chain"]),
             signature=payload.signature,
         )
     except SIWEUnavailable:
@@ -288,8 +311,8 @@ async def post_verify(
             details={
                 "code": e.code,
                 "detail": e.detail,
-                "address_prefix": address_lc[:10],
-                "chain_id": context["chain_id"],
+                "address_prefix": address[:10],
+                "chain": context["chain"],
                 "org_id": str(org_id),
             },
         )
@@ -299,10 +322,10 @@ async def post_verify(
         id=str(uuid.uuid4()),
         org_id=org_id,
         created_by_user_id=user_id,
-        chain_id=context["chain_id"],
+        chain=context["chain"],
         environment=context["environment"],
-        address=address_lc,
-        display_address=to_checksum_address(address_lc),
+        address=address,
+        display_address=display_address_for_chain(context["chain"], address),
         token_symbol=payload.token_symbol,
         label=_sanitize_label(payload.label),
     )
@@ -324,7 +347,7 @@ async def post_verify(
         details={
             "source_wallet_id": str(row.id),
             "address": row.address,
-            "chain_id": row.chain_id,
+            "chain": row.chain,
             "token_symbol": row.token_symbol,
             "message_len": len(verified_message),
             "org_id": str(org_id),
@@ -366,7 +389,7 @@ async def post_disable(
             details={
                 "source_wallet_id": str(row.id),
                 "address": row.address,
-                "chain_id": row.chain_id,
+                "chain": row.chain,
                 "org_id": str(org_id),
             },
         )
@@ -386,6 +409,13 @@ async def get_onchain(
     key, who can rewrite it on chain without telling us, so a stored copy would
     be silently stale. Tenant scope resolves first, so a foreign id 404s before
     any RPC work is done on its behalf.
+
+    EVM only, and it says so rather than failing obscurely. `read_onchain_state`
+    is `eth_call` plus ABI encoding over `rpc_manager`, which is keyed by EVM
+    chain id; TRON's equivalent is TronGrid `triggerconstantcontract` with
+    hex21 addresses — a different transport, not a different parameter. So a
+    watch-only chain gets a named 422 here while registration, listing and
+    disabling all work normally on it.
     """
     _user_id, org_id, _role = ctx
 
@@ -393,7 +423,7 @@ async def get_onchain(
     if row is None:
         raise HTTPException(404, {"code": "source_wallet_not_found"})
 
-    auto_split = auto_split_address_for_chain_id(row.chain_id)
+    auto_split = auto_split_address_for(row.chain)
     if auto_split is None:
         raise HTTPException(
             422,
@@ -403,11 +433,22 @@ async def get_onchain(
             },
         )
 
-    from app.services.router_registry import token_for
-    from app.services.router_registry import _CHAIN_NAME_BY_ID
+    from app.services.router_registry import chain_id_for, token_for
 
-    chain = _CHAIN_NAME_BY_ID.get(row.chain_id)
-    token = token_for(chain, row.token_symbol) if chain else None
+    chain_id = chain_id_for(row.chain)
+    if chain_id is None:
+        raise HTTPException(
+            422,
+            {
+                "error": "ONCHAIN_READ_UNAVAILABLE",
+                "message": (
+                    f"Live on-chain reads are not available on {row.chain}. "
+                    "The registration itself is active."
+                ),
+            },
+        )
+
+    token = token_for(row.chain, row.token_symbol)
     if token is None:
         # The registry stopped offering this token since registration — say so
         # rather than guessing an address.
@@ -422,19 +463,10 @@ async def get_onchain(
         )
 
     state = await read_onchain_state(
-        chain=chain,
-        chain_id=row.chain_id,
+        chain=row.chain,
+        chain_id=chain_id,
         auto_split=auto_split,
         token_address=token[0],
         wallet=row.address,
     )
     return {"source_wallet_id": str(row.id), **state}
-
-
-def auto_split_address_for_chain_id(chain_id: int) -> Optional[str]:
-    """Chain-id flavour of the availability gate, for rows that already carry
-    an id rather than a registry name."""
-    from app.services.router_registry import _CHAIN_NAME_BY_ID
-
-    chain = _CHAIN_NAME_BY_ID.get(chain_id)
-    return auto_split_address_for(chain) if chain else None

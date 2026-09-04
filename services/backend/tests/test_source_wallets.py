@@ -6,17 +6,29 @@ policy itself (recipients/bps/minAmount) lives ON CHAIN and is never
 mirrored. Registration is SIWE challenge/verify (Pair A: only the wallet's
 key-holder can register — the merchant necessarily holds it, having to sign
 setPolicy/approve on chain anyway), which is what makes the uniqueness index
-GLOBAL-active safe: `uq_source_wallets_active` UNIQUE (chain_id, address,
+GLOBAL-active safe: `uq_source_wallets_active` UNIQUE (chain, address,
 token_symbol) WHERE disabled_at IS NULL, cross-org.
 
-Pins here: registration row shape (org_id tenant key, lowercase address,
-checksummed display, environment stamped from chain), global-active
+Pins here: registration row shape (org_id tenant key, address stored in its
+chain's canonical form, environment stamped from chain), global-active
 uniqueness with disable->re-register (fresh-row semantics), org isolation in
 the SQL (cross-tenant disable -> 404, never 403), env scoping, the per-org
 cap, require_org_approved wiring on every route (the GATED-list pattern from
 test_approval_gate.py), and the ENDPOINT_LIMITS entries via _match_endpoint
 (the test_rate_limit_matching discipline — first-startswith-wins, so the
 subpath rows must sit ABOVE the bare GET).
+
+CASE NORMALISATION IS PINNED HERE BECAUSE THE DATABASE NO LONGER PINS IT.
+0024 dropped `ck_source_wallets_address_lower`: the table now holds base58check
+addresses too, which that predicate would reject outright, and SQL cannot
+verify a base58 checksum. Normalisation therefore lives entirely in the request
+schemas, and `uq_source_wallets_active` is a PLAIN index over raw columns —
+unlike `uq_users_email_lower`, which is FUNCTIONAL on lower(email) and so is
+case-insensitive in the database itself. The consequence is specific: if the
+schema ever stops folding, a case difference produces TWO ACCEPTED ROWS
+SILENTLY, not an IntegrityError. So the tests below pin the PAIR (normalise ->
+index) and assert the active-row count stays 1, and `_provoke_duplicate`
+refuses to pass at all if the index has gone missing.
 
 Imports of the not-yet-built modules happen INSIDE fixtures/tests so each
 test fails RED with its own ModuleNotFoundError; the wiring and rate-limit
@@ -37,6 +49,13 @@ from app.models.auth_models import User
 from app.models.db_models import Base
 from app.models.org_models import Membership, Organization
 
+# Registers source_wallets in Base.metadata BEFORE the autouse create_all.
+# Without it the table is absent until some other import pulls the model in,
+# so the FIRST test in the module runs against a database that has no
+# source_wallets table — an ordering-dependent failure that looks like a bug
+# in whatever test happens to run first. Imported for the side effect only.
+import app.models.source_wallet_models  # noqa: F401,E402
+
 ADDR = "0x" + "a" * 40
 ADDR_2 = "0x" + "b" * 40
 ADDR_3 = "0x" + "c" * 40
@@ -45,6 +64,20 @@ ADDR_3 = "0x" + "c" * 40
 AUTOSPLIT_ADDR = "0x" + "5" * 40
 CHAIN = "base_sepolia"
 BASE_PREFIX = "/api/v1/user/org/source-wallets"
+
+# The mixed-case wire form of ADDR. Not merely "a different string": every
+# EVM address arrives from a wallet in EIP-55 form, so this IS the normal
+# input, and ADDR is what must reach the index.
+ADDR_MIXED = "0x" + "Aa" * 20
+
+# TRON. `tron_nile` is the watch-only TESTNET (environment "test", like
+# base_sepolia), so the env assertions in this module stay uniform. The address
+# is a real base58check wallet already used elsewhere in the suite — NOT a
+# token contract, and NOT TRON_ZERO_ADDRESS (whose checksum is valid, so only
+# an explicit comparison rejects it).
+TRON_CHAIN = "tron_nile"
+TRON_ADDR = "TUxpshC4JxPWPP7pFmpF84Co87nguRMudb"
+TRON_TOKEN = "USDT"
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -156,12 +189,12 @@ async def test_verify_creates_row_with_org_tenancy_and_env(
     session, stub_siwe, open_autosplit
 ):
     """Happy path: the row is org_id-keyed (NEVER owner_address — the org_id
-    re-key lesson), address stored lowercase with a checksummed display twin,
-    environment stamped server-side from the chain (base_sepolia -> test)."""
+    re-key lesson), EVM address folded to lowercase with a checksummed display
+    twin, environment stamped server-side from the chain (base_sepolia -> test),
+    and the chain stored by NAME (0024 — TRON has no EVM chain id to key by)."""
     user_id, org_id = await _make_org(session)
-    checksummed = "0x" + "Aa" * 20  # mixed-case wire form of ADDR
 
-    await _verify(session, (user_id, org_id, "admin"), address=checksummed)
+    await _verify(session, (user_id, org_id, "admin"), address=ADDR_MIXED)
 
     rows = await _rows(session)
     assert len(rows) == 1
@@ -172,7 +205,7 @@ async def test_verify_creates_row_with_org_tenancy_and_env(
     assert row.display_address != ADDR  # and actually checksummed, not copied
     assert row.environment == "test"
     assert row.token_symbol == "USDC"
-    assert row.chain_id == 84532
+    assert row.chain == CHAIN  # the NAME, not 84532
     assert row.disabled_at is None
 
 
@@ -183,7 +216,7 @@ async def test_verify_creates_row_with_org_tenancy_and_env(
 async def test_second_org_same_tuple_409_then_free_after_disable(
     session, stub_siwe, open_autosplit
 ):
-    """GLOBAL-active unique on (chain_id, address, token_symbol): a second
+    """GLOBAL-active unique on (chain, address, token_symbol): a second
     org registering the same tuple gets 409 source_wallet_taken; after the
     holder disables, the tuple is registrable again (the partial
     `WHERE disabled_at IS NULL` predicate doing its job — fresh-row
@@ -215,6 +248,268 @@ async def test_same_wallet_different_token_is_a_separate_registration(
     await _verify(session, (user_id, org_id, "admin"), token_symbol="USDC")
     await _verify(session, (user_id, org_id, "admin"), token_symbol="ETH")
     assert len(await _rows(session)) == 2
+
+
+# ── Case normalisation: the invariant the dropped CHECK used to hold ──────
+#
+# 0024 removed ck_source_wallets_address_lower. Everything below is what pays
+# for that removal. Read the module docstring first if this section looks
+# redundant with the uniqueness tests above — it is not: those pin that the
+# INDEX rejects an identical tuple, these pin that two DIFFERENT input strings
+# for the same wallet are folded into one tuple before the index ever sees them.
+
+
+async def _provoke_duplicate(session, org_ctx, *, chain, address, token_symbol):
+    """Insert the same (chain, address, token_symbol) twice, ORM-direct, and
+    hand back the IntegrityError the index raises.
+
+    Deliberately NOT through the route: the route's pre-check SELECT would
+    reject the second row first, so a green result would say nothing about
+    whether the index exists. This writes straight at the table, which is the
+    only way to put `uq_source_wallets_active` itself under test.
+
+    The fall-through is the whole point, and it is copied from
+    `test_user_wallets_violated_asyncpg.py:201-225`: if no IntegrityError
+    arrives, the index is gone and every duplicate assertion in this module has
+    silently become vacuous. The module says so rather than passing.
+    """
+    from sqlalchemy.exc import IntegrityError
+
+    from app.models.source_wallet_models import SourceWallet
+
+    user_id, org_id = org_ctx
+
+    def _row():
+        return SourceWallet(
+            id=str(uuid4()),
+            org_id=org_id,
+            created_by_user_id=user_id,
+            chain=chain,
+            environment="test",
+            address=address,
+            display_address=address,
+            token_symbol=token_symbol,
+        )
+
+    session.add(_row())
+    await session.commit()
+    session.add(_row())
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        await session.rollback()
+        return exc
+
+    await session.rollback()
+    raise AssertionError(
+        "no IntegrityError — uq_source_wallets_active is missing on this "
+        "database, so this module cannot test what it claims to"
+    )
+
+
+@pytest.mark.asyncio
+async def test_the_active_index_exists_and_bites(session):
+    """The premise every duplicate assertion in this module rests on.
+
+    Trivial-looking on purpose: its value is that `_provoke_duplicate` raises
+    a NAMED failure when the index is absent, instead of this suite going
+    green against a table with no duplicate protection at all.
+    """
+    ctx = await _make_org(session)
+
+    exc = await _provoke_duplicate(
+        session, ctx, chain=CHAIN, address=ADDR, token_symbol="USDC"
+    )
+
+    assert exc is not None
+
+
+@pytest.mark.asyncio
+async def test_the_active_index_survives_with_its_partial_predicate(session):
+    """0024 removed a CheckConstraint; this pins that it removed nothing else.
+
+    Dialect-aware because SQLAlchemy silently DROPS a mismatched `*_where`: a
+    `postgresql_where`-only index degrades to a FULL unique index on the SQLite
+    engine CI runs, which would forbid legitimate disable->re-register rather
+    than merely under-enforce — a failure invisible on Postgres.
+    """
+    from sqlalchemy import text
+
+    dialect = session.bind.dialect.name
+    if dialect == "sqlite":
+        rows = (await session.execute(text(
+            "SELECT name, sql FROM sqlite_master "
+            "WHERE type='index' AND tbl_name='source_wallets'"))).fetchall()
+        ddl = {r[0]: (r[1] or "") for r in rows}
+    else:
+        rows = (await session.execute(text(
+            "SELECT indexname, indexdef FROM pg_indexes "
+            "WHERE tablename = 'source_wallets'"))).fetchall()
+        ddl = {r[0]: r[1] for r in rows}
+
+    assert "uq_source_wallets_active" in ddl, f"missing; have {sorted(ddl)}"
+    definition = ddl["uq_source_wallets_active"].lower()
+    assert "unique" in definition
+    for col in ("chain", "address", "token_symbol"):
+        assert col in definition
+    assert "where" in definition and "disabled_at is null" in definition
+    assert "chain_id" not in definition, "the numeric key survived the re-key"
+
+
+@pytest.mark.asyncio
+async def test_same_evm_wallet_in_different_case_cannot_enter_twice(
+    session, stub_siwe, open_autosplit
+):
+    """EIP-55 in, lowercase at rest — so the second form collides with the first.
+
+    The common path: the route's pre-check SELECT sees the already-folded
+    address and 409s. What it proves is that folding happens BEFORE the
+    comparison. Without it the two forms are different strings, both are
+    accepted, and the same wallet is registered twice.
+    """
+    user_a, org_a = await _make_org(session)
+    user_b, org_b = await _make_org(session)
+
+    await _verify(session, (user_a, org_a, "admin"), address=ADDR_MIXED)
+    with pytest.raises(HTTPException) as exc:
+        await _verify(session, (user_b, org_b, "admin"), address=ADDR)
+
+    assert exc.value.status_code == 409
+    assert exc.value.detail["code"] == "source_wallet_taken"
+    active = [r for r in await _rows(session) if r.disabled_at is None]
+    assert len(active) == 1, "a case difference created a second active row"
+
+
+@pytest.mark.asyncio
+async def test_evm_case_collision_still_caught_when_the_pre_check_misses(
+    session, stub_siwe, open_autosplit, monkeypatch
+):
+    """With the pre-check blinded, the INDEX rejects the case variant.
+
+    The pre-check and the index state the same rule twice, and two concurrent
+    registrations both see an empty pre-check. Blinding it reproduces that race
+    for the case-difference input specifically — which is the half the dropped
+    CheckConstraint used to backstop. Note what failure looks like here: not an
+    unhandled IntegrityError but a SECOND ACCEPTED ROW, because
+    `uq_source_wallets_active` is a plain index over raw columns and cannot see
+    two spellings as one address on its own.
+    """
+    import app.api.source_wallet_routes as swr
+
+    user_a, org_a = await _make_org(session)
+    user_b, org_b = await _make_org(session)
+    await _verify(session, (user_a, org_a, "admin"), address=ADDR_MIXED)
+
+    async def _blind(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(swr, "_active_holder", _blind)
+
+    with pytest.raises(HTTPException) as exc:
+        await _verify(session, (user_b, org_b, "admin"), address=ADDR)
+
+    assert exc.value.status_code == 409
+    assert exc.value.detail["code"] == "source_wallet_taken"
+    active = [r for r in await _rows(session) if r.disabled_at is None]
+    assert len(active) == 1, "a case difference survived the unique index"
+
+
+@pytest.mark.asyncio
+async def test_tron_address_round_trips_byte_identical(
+    session, stub_siwe, open_autosplit
+):
+    """base58check is case-SENSITIVE, so the stored value must be untouched.
+
+    Byte-identical, not "equal ignoring case". base58 excludes 0 O I l, so
+    folding a T-address does not show a different address — it shows a string
+    that no longer decodes and whose checksum no longer verifies. The
+    `!= .lower()` assertion is what catches a future writer who "helpfully"
+    adds a fold; `== TRON_ADDR` alone would not, if the fold were added to a
+    path this test does not cover.
+    """
+    user_id, org_id = await _make_org(session)
+
+    await _verify(
+        session,
+        (user_id, org_id, "admin"),
+        address=TRON_ADDR,
+        chain=TRON_CHAIN,
+        token_symbol=TRON_TOKEN,
+    )
+
+    row = (await _rows(session))[0]
+    assert row.address == TRON_ADDR, "case must survive the round trip"
+    assert row.address != TRON_ADDR.lower(), "a fold would have destroyed it"
+    assert row.display_address == TRON_ADDR, "no EIP-55 twin exists on base58"
+    assert row.chain == TRON_CHAIN
+    assert row.environment == "test", "tron_nile is the TESTNET"
+
+
+def test_lowercasing_a_tron_address_destroys_it():
+    """The premise the validator rests on, stated independently of any route."""
+    from app.security.input_validator import is_tron_address
+
+    assert is_tron_address(TRON_ADDR) is True
+    assert is_tron_address(TRON_ADDR.lower()) is False
+
+
+@pytest.mark.asyncio
+async def test_case_mangled_tron_address_is_rejected_at_parse(session):
+    """…so it can never reach the index as a second row.
+
+    This is why the base58 half needs no duplicate test to mirror the EVM one:
+    a case variant of a T-address is not the same address in another form, it
+    is an INVALID string, and the schema refuses it before any row exists. The
+    EVM fold and this rejection are the two halves of one guarantee.
+
+    The positive control is load-bearing. Without it this test passes even when
+    the schema is EVM-only and rejects EVERY T-address — proving nothing about
+    case at all. Accepting the correctly-cased form in the same breath is what
+    makes the rejection attributable to the case difference.
+    """
+    from pydantic import ValidationError
+
+    from app.models.source_wallet_schemas import SourceWalletVerifyRequest
+
+    def _build(address):
+        return SourceWalletVerifyRequest(
+            chain=TRON_CHAIN,
+            token_symbol=TRON_TOKEN,
+            address=address,
+            nonce=secrets.token_hex(8),
+            signature="0x" + "1" * 130,
+        )
+
+    # Control: the correctly-cased address parses, and parses UNCHANGED.
+    assert _build(TRON_ADDR).address == TRON_ADDR
+
+    with pytest.raises(ValidationError):
+        _build(TRON_ADDR.lower())
+
+    assert await _rows(session) == []
+
+
+def test_the_route_never_folds_an_address():
+    """The schema is the SINGLE normalisation point; the route must not add one.
+
+    Reads code, not prose (`code_without_prose`), so the docstrings that warn
+    about folding are not themselves flagged as the violation.
+    """
+    import app.api.source_wallet_routes as swr
+    from tests._source_helpers import code_without_prose
+
+    code = code_without_prose(swr)
+
+    assert ".lower()" not in code, (
+        "the route folded an address; base58check is case-SENSITIVE and the "
+        "request schema is the only place normalisation belongs"
+    )
+    assert "to_checksum_address" not in code, (
+        "to_checksum_address raises on a base58check address — use "
+        "display_address_for_chain, which dispatches on the address family "
+        "(NOT input_validator.display_payment_address: that one lowercases an "
+        "EVM address, which would collapse display_address onto address)"
+    )
 
 
 # ── Org isolation + environment scoping (in the SQL, 404 not 403) ─────────
@@ -393,7 +688,19 @@ async def test_unrelated_integrity_error_is_not_mislabelled_as_409(
     for a foreign-key violation would tell the merchant their address is
     taken when the real fault is elsewhere. Here the org_id is a well-formed
     uuid that no organization row owns, so the insert trips the FK.
+
+    SQLite needs `PRAGMA foreign_keys=ON` said explicitly — it is OFF by
+    default, per connection, so without this the orphan insert SUCCEEDS and
+    this test passes while proving nothing. (It did exactly that until the
+    chain re-key made the route reach the database at all: the assertion was
+    satisfied by an AttributeError raised long before any SQL ran.) Postgres
+    enforces the FK unconditionally, so the pragma is a no-op there.
     """
+    from sqlalchemy import text
+
+    if session.bind.dialect.name == "sqlite":
+        await session.execute(text("PRAGMA foreign_keys=ON"))
+
     user_id, _org_id = await _make_org(session)
     orphan_org = str(uuid4())
 

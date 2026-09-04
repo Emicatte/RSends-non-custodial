@@ -46,6 +46,10 @@ from app.models.org_models import Membership, Organization
 ADDR = "0x" + "a" * 40
 AUTOSPLIT_ADDR = "0x" + "5" * 40
 CHAIN = "base_sepolia"
+# A real base58check wallet (checksum-valid, not a token contract, not the TRON
+# zero address). Needed because the address family is now validated against the
+# chain: an 0x address on a TRON chain no longer reaches the AutoSplit gate.
+TRON_ADDR = "TUxpshC4JxPWPP7pFmpF84Co87nguRMudb"
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -217,11 +221,25 @@ async def test_unknown_chain_rejected_no_row(session, stub_siwe):
 async def test_supported_chain_without_autosplit_rejected(session, stub_siwe):
     """chain=tron, token=USDT: chain IS supported and the token IS enabled
     (token_is_enabled("tron","USDT") is True — the counterexample proving the
-    token gate insufficient), but no AutoSplit is deployed there → 422
-    AUTO_SPLIT_UNAVAILABLE, no row. Nothing is stubbed: the fail-closed
+    token gate insufficient), but no AutoSplit ADDRESS is configured there →
+    422 AUTO_SPLIT_UNAVAILABLE, no row. Nothing is stubbed: the fail-closed
     default (no chain has AutoSplit until the operator sets the address map)
-    IS the condition under test. The EVM-format address is deliberate — the
-    CHAIN gate must be the rejector, not the address regex."""
+    IS the condition under test.
+
+    The address is a real TRON one, and that is a CHANGE. This test used to
+    pass an EVM address deliberately, on the reasoning that "the CHAIN gate
+    must be the rejector, not the address regex" — a premise the address-family
+    dispatch has since made obsolete. An 0x address on a TRON chain is now
+    refused at PARSE (`RECIPIENT_CHAIN_MISMATCH`-style, mirroring the intent
+    path), so passing one would never reach the AutoSplit gate and this test
+    would be asserting the wrong rejection. The family gate and the AutoSplit
+    gate are both real; each needs its own test, and this is the AutoSplit one.
+
+    Note what is NOT being asserted: that TRON is ineligible for Auto Split. It
+    is eligible — the contract runs there — and this 422 says only that no
+    address is configured on this chain today, exactly as it would for
+    base_sepolia with an empty map.
+    """
     from app.services.router_registry import token_is_enabled
 
     assert token_is_enabled("tron", "USDT") is True  # the trap being pinned
@@ -229,11 +247,45 @@ async def test_supported_chain_without_autosplit_rejected(session, stub_siwe):
     user_id, org_id = await _make_org(session)
     with pytest.raises(HTTPException) as exc:
         await _verify(
-            session, (user_id, org_id, "admin"), chain="tron", token_symbol="USDT"
+            session,
+            (user_id, org_id, "admin"),
+            chain="tron",
+            token_symbol="USDT",
+            address=TRON_ADDR,
         )
     assert exc.value.status_code == 422
     assert exc.value.detail["error"] == "AUTO_SPLIT_UNAVAILABLE"
     assert await _row_count(session) == 0
+
+
+@pytest.mark.asyncio
+async def test_address_from_the_wrong_family_is_refused_at_parse(session, stub_siwe):
+    """An 0x address on a TRON chain, and a T-address on an EVM chain.
+
+    The gate the test above used to stand in for. Dispatch is on the chain's
+    declared `addressFormat`, never on the string's shape, so neither is
+    migrated to the other family — a wallet the keeper will move funds out of
+    is not something to guess about.
+    """
+    from app.models.source_wallet_schemas import SourceWalletVerifyRequest
+
+    def _build(chain, token_symbol, address):
+        return SourceWalletVerifyRequest(
+            chain=chain,
+            token_symbol=token_symbol,
+            address=address,
+            nonce=secrets.token_hex(8),
+            signature="0x" + "1" * 130,
+        )
+
+    # Controls: each address is fine on its own chain.
+    assert _build(CHAIN, "USDC", ADDR).address == ADDR
+    assert _build("tron", "USDT", TRON_ADDR).address == TRON_ADDR
+
+    with pytest.raises(ValidationError):
+        _build("tron", "USDT", ADDR)
+    with pytest.raises(ValidationError):
+        _build(CHAIN, "USDC", TRON_ADDR)
 
 
 @pytest.mark.asyncio

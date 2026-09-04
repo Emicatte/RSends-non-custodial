@@ -15,12 +15,19 @@ row carries only the org linkage, the keeper's watch scope, and the pause flag.
 Tenancy is `org_id`, never an owner address — a new table has no reason to join
 the custodial-era wallet-address tenant key that `payment_intents` and
 `merchant_webhooks` are still waiting to be re-keyed off.
+
+The chain is keyed by NAME, not by an EVM chain id: AutoSplit runs on TRON as
+well as Base, and TRON has no EVM chain id to key by. The full reasoning — why a
+synthetic id is refused, and why `728126428` in an EVM chain table SystemExits
+the boot — is in 0024's docstring; it is not repeated here so the two cannot
+drift apart. The id is derived where needed via `router_registry.chain_id_for`,
+which is the honest direction: every name has at most one id, not every chain
+has one at all.
 """
 
 import uuid
 
 from sqlalchemy import (
-    BigInteger,
     CheckConstraint,
     Column,
     DateTime,
@@ -58,7 +65,7 @@ class SourceWallet(Base):
         # user_wallets there is no `true`/`1` split to carry.
         Index(
             "uq_source_wallets_active",
-            "chain_id",
+            "chain",
             "address",
             "token_symbol",
             unique=True,
@@ -69,13 +76,20 @@ class SourceWallet(Base):
             "environment IN ('test', 'live')",
             name="ck_source_wallets_environment",
         ),
-        # Backstop for the lowercase-at-rest invariant: a writer that forgets
-        # to fold the address fails loudly instead of inserting a row the
-        # uniqueness index cannot recognise as a duplicate.
-        CheckConstraint(
-            "address = lower(address)",
-            name="ck_source_wallets_address_lower",
-        ),
+        # NO `address = lower(address)` CHECK — see 0024 for the full reasoning.
+        # In short: this table now holds base58check addresses, which that
+        # predicate would reject outright, and SQL cannot express the
+        # alternative (base58check is a double-SHA256 over the decoded
+        # payload). A conditional form would enforce nothing on exactly the
+        # chains it was extended for while still reading like a guarantee.
+        #
+        # The invariant it used to back — that the uniqueness index above can
+        # actually SEE a duplicate — now rests entirely on the request schemas
+        # normalising before the insert. That is pinned by the case-collision
+        # tests in `tests/test_source_wallets.py`: the same EVM wallet in a
+        # different case must not enter twice, and a TRON address must round-
+        # trip byte-identical. If you change normalisation, those tests are the
+        # ones that stop you.
     )
 
     id = Column(_UUID(), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -94,15 +108,26 @@ class SourceWallet(Base):
         nullable=True,
     )
 
-    # BIGINT, not INTEGER: migration 0020 had to widen two other chain_id
-    # columns because a TRON id overflows a Postgres INTEGER and SQLite cannot
-    # reproduce the failure. AutoSplit is EVM-only today; the column is wide
-    # anyway because a future chain id is what nobody re-checks.
-    chain_id = Column(BigInteger, nullable=False)
+    # Canonical registry chain NAME ("base_sepolia", "tron_nile"), never an EVM
+    # chain id. See the module docstring and 0024.
+    chain = Column(Text, nullable=False)
     # Derived from the chain server-side, never client-supplied.
     environment = Column(Text, nullable=False)
 
-    # Lowercase at rest for matching; checksummed twin for display.
+    # Canonical form for the chain's address FAMILY, not unconditionally
+    # lowercased. EVM folds to lowercase for case-insensitive matching;
+    # base58check is stored byte-identical, because base58 excludes `0 O I l`
+    # and folding a T-address stops it decoding at all. `display_address` is
+    # the EIP-55 twin on EVM and the same string on TRON.
+    #
+    # Both forms are produced by the address-family dispatch in
+    # `source_wallet_schemas` (`_normalize_address_for_chain` and
+    # `display_address_for_chain`), which keys off the chain's declared
+    # `addressFormat` rather than the string's shape. NOTE the display half is
+    # deliberately NOT `input_validator.display_payment_address`: that one
+    # lowercases an EVM address, which is right for the settlement surfaces it
+    # serves but would collapse this column onto `address` and remove the twin.
+    # `payment_intents.recipient` follows the same family rule for storage.
     address = Column(Text, nullable=False)
     display_address = Column(Text, nullable=False)
 

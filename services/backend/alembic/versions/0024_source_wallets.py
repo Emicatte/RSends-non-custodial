@@ -21,7 +21,7 @@ tracked as the "re-key session tenancy on org_id" follow-up; a new table has no
 legacy rows, so it simply does not join that debt — and it therefore never needs
 `owner_identity.resolve_owner_address`, nor inherits its 409 conflict semantics.
 
-  uq_source_wallets_active  UNIQUE (chain_id, address, token_symbol)
+  uq_source_wallets_active  UNIQUE (chain, address, token_symbol)
                             WHERE disabled_at IS NULL
 
 The index is GLOBAL (cross-org), not org-scoped, and that is only safe because
@@ -47,13 +47,36 @@ up in CI, or worse, in a test that never ran on SQLite. No boolean literal
 appears in this predicate, so unlike 0017 there is no `true`/`1` dialect split
 to carry.
 
-Deliberate deviation from the Phase 0 spec, which said `chain_id INTEGER`:
-this uses BIGINT, following the lesson migration 0020 had to learn the hard way
-(`indexer_cursors.chain_id` / `payment_settlements.chain_id` were widened
-because TRON Nile's id overflows a Postgres INTEGER, and SQLite cannot
-reproduce that failure — so the bug ships). AutoSplit is EVM-only today and
-every supported EVM id fits in INTEGER, but the column costs nothing wider and
-a future chain id is exactly the kind of value nobody re-checks.
+The chain is keyed by NAME (`base_sepolia`, `tron_nile`), not by an EVM chain
+id. Deliberate deviation from the Phase 0 spec, which said `chain_id INTEGER`,
+and a correction to this revision's own first draft, which said BIGINT.
+
+RSendsAutoSplit is no longer EVM-only: it compiles under the tronprotocol solc
+fork and executes on TRON, and TRON has no EVM chain id. A numeric column can
+therefore only hold a TRON chain by inventing one, which is precisely what
+`router_registry._load_registry` refuses to do and says why:
+
+    a non-EVM chain has no EVM chain id, and keying it by a synthetic number is
+    exactly how a reader comes to believe it is an EVM chain.
+
+It is also actively unsafe here. `728126428` (TRON mainnet) reaching any EVM
+chain table starts a `PaymentWatcher` against a non-EVM node and `SystemExit`s
+the boot — pinned by `test_tron_poller.py::test_tron_chain_id_is_in_no_evm_chain_table`.
+A nullable id would dodge that but replace it with a NULL that no uniqueness
+index can compare, so two TRON registrations of the same wallet would both be
+"active".
+
+The name is not a new vocabulary: `token_registry.json` already keys `tron` and
+`tron_nile` by name (they carry `addressFormat: base58check`), and the money
+path already stores a NAME — `payment_intents.chain` is `String(32)`, and
+`uq_intent_pending_amount` keys on that string column for the same reason this
+index does. A new table keying money-routing config numerically while the older
+one keys by name would be the inconsistency, not this.
+
+The EVM chain id is DERIVED where it is needed (`router_registry.chain_id_for`),
+which is the honest direction: every name has at most one id, not every chain
+has one at all. `TEXT` rather than `String(32)` matches this table's other
+columns; the value is bounded by the registry, not by user input.
 
 Guarded by `_has_table`: migration 0001 is a `Base.metadata.create_all` of the
 CURRENT model, which now declares this table, so on a from-scratch
@@ -122,13 +145,22 @@ def upgrade() -> None:
                 sa.ForeignKey("users.id", ondelete="SET NULL"),
                 nullable=True,
             ),
-            # See the BIGINT note in the docstring.
-            sa.Column("chain_id", sa.BigInteger(), nullable=False),
+            # Canonical registry chain NAME, never an EVM chain id. See the
+            # name-keying note in the docstring.
+            sa.Column("chain", sa.Text(), nullable=False),
             # Derived server-side from the chain, never client-supplied, so the
             # session surface can scope reads in SQL exactly like intents do.
             sa.Column("environment", sa.Text(), nullable=False),
-            # Lowercased at rest for case-insensitive matching; the checksum
-            # twin is what the UI renders. Same split as user_wallets.
+            # Stored in the canonical form for its chain's address FAMILY, not
+            # unconditionally lowercased. An EVM address folds to lowercase for
+            # case-insensitive matching, as before; a base58check address is
+            # stored byte-identical, because base58 excludes `0 O I l` and
+            # folding a T-address does not merely change it — it stops
+            # decoding and its checksum stops verifying. `display_address` is
+            # the checksummed twin on EVM and the same string on TRON.
+            # `normalize_payment_address` / `display_payment_address`
+            # (app/security/input_validator.py) are the one implementation of
+            # that rule; `payment_intents.recipient` already follows it.
             sa.Column("address", sa.Text(), nullable=False),
             sa.Column("display_address", sa.Text(), nullable=False),
             # Symbol only. The on-chain token ADDRESS is never stored and never
@@ -160,15 +192,32 @@ def upgrade() -> None:
                 "environment IN ('test', 'live')",
                 name="ck_source_wallets_environment",
             ),
-            # DB-level backstop for the lowercase-at-rest invariant, mirroring
-            # 0023's ck_tron_hint_tx_hash_lower. The service lowercases; this
-            # makes a future writer that forgets fail loudly instead of
-            # silently creating a row the uniqueness index cannot see as a
-            # duplicate.
-            sa.CheckConstraint(
-                "address = lower(address)",
-                name="ck_source_wallets_address_lower",
-            ),
+            # NO `address = lower(address)` CHECK. The first draft of this
+            # revision carried one, mirroring 0023's
+            # ck_tron_hint_tx_hash_lower; it is removed rather than made
+            # conditional, deliberately.
+            #
+            # A tx hash is always hex, so folding it is always safe. An address
+            # is not: this table now holds base58check addresses, which that
+            # predicate would reject outright — every valid TRON registration
+            # would fail on a constraint whose purpose was to catch writers who
+            # FORGET to normalise.
+            #
+            # Conditioning it is worse than dropping it. SQL can express
+            # `chain NOT IN ('tron','tron_nile') AND address = lower(address)`,
+            # but it cannot express base58check — verifying one means decoding
+            # base58 and re-running a double-SHA256 over the payload. So the
+            # conditional form enforces nothing at all on precisely the chains
+            # it was extended for, while still reading like a guarantee. A
+            # constraint that silently stops applying is worse than an absent
+            # one, because the next reader trusts it.
+            #
+            # The invariant is enforced where it can be enforced completely:
+            # the request schemas are the single write path and dispatch on
+            # `router_registry.chain_address_format(chain)` — the chain's own
+            # declared address family — rather than guessing from the string's
+            # shape. Same placement as `payment_intents.recipient`, which holds
+            # both families with no such CHECK.
         )
 
     # Declared here AND in the model's __table_args__: `create_all` builds the
@@ -180,7 +229,7 @@ def upgrade() -> None:
         op.create_index(
             INDEX_ACTIVE,
             TABLE,
-            ["chain_id", "address", "token_symbol"],
+            ["chain", "address", "token_symbol"],
             unique=True,
             postgresql_where=sa.text("disabled_at IS NULL"),
             sqlite_where=sa.text("disabled_at IS NULL"),
