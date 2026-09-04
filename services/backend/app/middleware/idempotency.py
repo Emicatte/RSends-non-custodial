@@ -6,12 +6,22 @@ Se la stessa key è già stata usata:
   → ritorna la risposta precedente (cached)
   → NON ri-esegue la logica
 
+Cache key: (tenant, environment, path, idem_key). The idem_key alone is
+client-supplied and scopes nothing — see `_tenant` for why the first component
+exists and where it comes from on each auth surface.
+
+The request body is NOT in the key. Its fingerprint rides alongside the cached
+record: a matching one replays, a differing one is 409 IDEMPOTENCY_KEY_REUSED.
+
 Storage: Redis con TTL 24h.
 Se Redis è down: fail-closed per endpoint finanziari, fail-open per il resto.
 
-FINANCIAL ENDPOINTS (fail-closed = rifiuta se non può verificare):
-  - POST /api/v1/tx/callback
-  - POST /api/v1/forwarding/rules (create = muove configurazione fondi)
+FINANCIAL (fail-closed = 503 se non può verificare) — FINANCIAL_PATH_PREFIXES:
+  - /api/v1/tx/callback
+  - /api/v1/merchant/  (create, cancel, resolve, webhook register/test)
+
+Fail-closed covers every way the store can be lost — no connection, a failing
+read, a failing lock — not just a null client.
 
 NON-FINANCIAL (fail-open = processa comunque):
   - Tutti gli altri POST/PUT
@@ -29,11 +39,39 @@ from app.services.cache_service import get_redis
 
 logger = logging.getLogger("idempotency")
 
-FINANCIAL_PATHS = {
+# PREFIXES, matched with startswith — the same idiom as `is_exempt`
+# (app/security/api_keys.py) and `_match_endpoint` (rate_limit.py). An
+# exact-match set could never cover the parameterised merchant routes:
+# `request.url.path` here is the CONCRETE path
+# (/api/v1/merchant/payment-intent/pi_abc/cancel), not the route template, so
+# /cancel and /resolve were structurally unreachable. Prefix matching also
+# closes the trailing-slash bypass on /tx/callback.
+FINANCIAL_PATH_PREFIXES = (
     "/api/v1/tx/callback",
-}
+    "/api/v1/merchant/",   # every mutating merchant route: create, cancel,
+                           # resolve, webhook register, webhook test
+)
 
 IDEMPOTENCY_TTL = 86400  # 24 ore
+
+
+def _is_financial(path: str) -> bool:
+    return path.startswith(FINANCIAL_PATH_PREFIXES)
+
+
+def _unavailable(path: str, reason: str) -> JSONResponse:
+    """Fail closed: we could not verify idempotency, so we refuse rather than
+    let a possible duplicate through on a path that moves money."""
+    logger.error(
+        "Redis unavailable for idempotency on financial endpoint %s (%s)", path, reason
+    )
+    return JSONResponse(
+        status_code=503,
+        content={
+            "error": "SERVICE_TEMPORARILY_UNAVAILABLE",
+            "message": "Cannot verify idempotency — retry later",
+        },
+    )
 
 
 def _tenant(request: Request) -> str | None:
@@ -87,16 +125,16 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         if request.method not in ("POST", "PUT"):
             return await call_next(request)
 
-        # Leggi l'header
+        # Leggi l'header. The header is OPT-IN: a caller that does not send one
+        # gets no idempotency and is not refused, financial path or not.
+        # Requiring it would break every integrator not sending it today.
+        # (A branch here used to test FINANCIAL_PATHS and then fall through to
+        # this same return on every arm — it decided nothing and is gone. It
+        # also meant the 503 below could be skipped simply by omitting the
+        # header, which is still true and is a property of opt-in, not of that
+        # dead code.)
         idem_key = request.headers.get("X-Idempotency-Key")
         if not idem_key:
-            # Se è un endpoint finanziario, RICHIEDI la key
-            if request.url.path in FINANCIAL_PATHS:
-                # Per webhook Alchemy, usa il webhook_id come key implicita
-                if "alchemy" in request.url.path:
-                    return await call_next(request)
-                # Per altri endpoint finanziari senza key: warning ma processa
-                # (per backward compat — in futuro sarà obbligatorio)
             return await call_next(request)
 
         # Costruisci cache key: (tenant, environment, path, idem_key).
@@ -121,15 +159,12 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
             f"{tenant}:{env}:{request.url.path}:{idem_key}".encode()
         ).hexdigest()
 
+        is_financial = _is_financial(request.url.path)
+
         r = await get_redis()
         if r is None:
-            is_financial = request.url.path in FINANCIAL_PATHS
             if is_financial:
-                logger.error("Redis unavailable for idempotency on financial endpoint %s", request.url.path)
-                return JSONResponse(
-                    status_code=503,
-                    content={"error": "SERVICE_TEMPORARILY_UNAVAILABLE", "message": "Cannot verify idempotency — retry later"}
-                )
+                return _unavailable(request.url.path, "no connection")
             # Non-financial: processa comunque
             return await call_next(request)
 
@@ -172,6 +207,13 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                     headers={"X-Idempotency-Replayed": "true"},
                 )
         except Exception as e:
+            # A Redis that ERRORS is a Redis that is down. Reaching the handler
+            # here means the request runs with no duplicate protection at all,
+            # which on a financial path is the outcome fail-closed exists to
+            # prevent — the `r is None` check above is not the only way to lose
+            # the store.
+            if is_financial:
+                return _unavailable(request.url.path, f"read failed: {e}")
             logger.warning("Idempotency check failed: %s", e)
 
         # Acquire in-flight lock. If another request is processing this key,
@@ -180,6 +222,8 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         try:
             acquired = await r.set(lock_key, "processing", nx=True, ex=30)
         except Exception as e:
+            if is_financial:
+                return _unavailable(request.url.path, f"lock failed: {e}")
             logger.warning("Idempotency lock acquire failed: %s", e)
             acquired = True  # degrade gracefully — same as current behavior
 
