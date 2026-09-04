@@ -31,9 +31,19 @@ payload keys, new optional fields, **new enumerated values**) are always allowed
 are contractually required to tolerate them.
 
 Open work list: `contract-gaps-2026-08-12.md` (unenforced promises, ranked; plus known
-inconsistencies). Its item 1 — the idempotency cache key is not tenant-scoped
-(`app/middleware/idempotency.py:56`) — is a live cross-merchant data-leak path, not just a
-missing test.
+inconsistencies). Its **item 1 is CLOSED (2026-09-04)** — the idempotency cache key was not
+tenant-scoped, which was a live cross-merchant data-leak path and not just a missing test.
+The key is now `(tenant, environment, path, idem_key)` (`app/middleware/idempotency.py:158`),
+the body fingerprint sits **beside** the cached record (in the key it would make a
+byte-different retry miss and create the duplicate the mechanism prevents; a mismatch is
+`409 IDEMPOTENCY_KEY_REUSED`), and merchant paths fail **closed** on any Redis loss —
+`FINANCIAL_PATH_PREFIXES`, matched with `startswith`, because `request.url.path` in a
+middleware is the concrete path and an exact-match set could never cover
+`/payment-intent/{id}/cancel`. Pinned by `tests/test_idempotency_tenant_scope.py`.
+Two residues, deliberate: the tenant is the owner **wallet address** (it tracks
+`PaymentIntent.merchant_id`, so it moves with the org_id re-key below, not before it), and
+the session surface's `environment` is a query param that is in neither the path nor the
+fingerprint — unreachable while `/app` is test-locked and sends no idempotency key.
 
 ## Build invariants (apps/web)
 

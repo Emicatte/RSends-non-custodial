@@ -78,6 +78,7 @@ export default function ErrorsPage() {
           [<Code key="8">WEBHOOK_NOT_FOUND</Code>, '404', 'No webhook with that id for your account and environment'],
           [<Code key="sf">SETTLEMENT_IN_FLIGHT</Code>, '409', 'Cancel attempted after an on-chain payment was already observed'],
           [<Code key="9">DUPLICATE_REQUEST_IN_FLIGHT</Code>, '409', 'Same idempotency key still being processed — see below'],
+          [<Code key="ir">IDEMPOTENCY_KEY_REUSED</Code>, '409', 'Same idempotency key sent with a different request body — see below'],
           [<Code key="sw">SETTLEMENT_WALLET_MISSING</Code>, '422', 'No recipient given and no settlement wallet configured'],
           [<Code key="sa">SETTLEMENT_WALLET_AMBIGUOUS</Code>, '422', 'The owner wallet maps to more than one organisation — pass an explicit recipient'],
           [<Code key="su">SPLIT_UNAVAILABLE</Code>, '422', 'Split payments are not enabled on that chain'],
@@ -151,6 +152,8 @@ export default function ErrorsPage() {
         rows={[
           ['Repeated request', <>A retry with the same key replays the original response instead of re-running the call. The record is kept <strong>24 hours</strong>; successful responses are what get replayed.</>],
           ['Concurrent duplicate', <>A retry arriving while the first is still in flight waits briefly, then returns <Code>409 DUPLICATE_REQUEST_IN_FLIGHT</Code> rather than racing.</>],
+          ['Other merchants', <>Keys are scoped to your account and environment. Another merchant sending the same key string cannot reach your record, and you cannot reach theirs.</>],
+          ['Key reused for a different call', <>The same key with a <strong>different request body</strong> is <Code>409 IDEMPOTENCY_KEY_REUSED</Code> — never the first call’s response, and never a second intent. Retries must resend the original body unchanged; a genuinely new request needs a new key.</>],
           ['Webhook deliveries', <>Each carries a stable <Code>X-RSend-Delivery-Id</Code>. Dedupe on it — a retried delivery is the same event, not a new one.</>],
           ['Settlement matching', <>A given on-chain payment matches one intent once. The indexer will not record it twice, and a reversed payment is signalled with <Code>payment.reversed</Code>.</>],
         ]}

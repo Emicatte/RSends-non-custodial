@@ -3,10 +3,11 @@
 **Status: normative.** This is the authoritative copy. Breaking anything promised here is a
 review stop, not a judgement call.
 
-Last verified against the code on **2026-08-12** (`main`, tip `6c79e8d9`). Every promise in
-this document carries a `file:line` anchor. Nothing here was taken from the public
-documentation site — at the time of writing that site disagrees with the code in at least
-seven places.
+Last verified against the code on **2026-08-12** (`main`, tip `6c79e8d9`), except the
+idempotency promises in "Your half of the contract" item 2 and §10, re-anchored **2026-09-04**
+when the cache key gained its tenant scope. Every promise in this document carries a
+`file:line` anchor. Nothing here was taken from the public documentation site — at the time of
+writing that site disagrees with the code in at least seven places.
 
 ---
 
@@ -59,13 +60,19 @@ reader. If your client does not do these five things, we cannot promise the rest
    without notice. A client that throws on an unknown status or an unknown event name is
    broken by design. Branch on the values you know, default-case everything else.
 
-2. **`X-Idempotency-Key` must be globally unique — not unique within your store.** This is
-   an obligation, not a suggestion. The cache key is derived from the request path and your
-   key string only (`app/middleware/idempotency.py:56`); it is **not** scoped by merchant,
-   environment, or request body. Two integrations that both send `ORD-1024` to
-   `/api/v1/merchant/payment-intent` within 24 hours will receive **each other's payment
-   intent**, including the other party's recipient address and calldata. Namespace your key
-   with something globally unique — an installation UUID, not an order number. See §10.
+2. **Keep `X-Idempotency-Key` unique within your own store, and don't reuse one for a
+   different request.** The cache key is scoped by merchant, environment and path
+   (`app/middleware/idempotency.py:158`), so your keys no longer have to be unique against
+   the whole world — another integration sending `ORD-1024` cannot collide with yours.
+   What still matters is your own reuse: the same key sent with a **different request body**
+   is `409 IDEMPOTENCY_KEY_REUSED` (`:195`), never a silently replayed first response. A
+   retry must resend the original request byte-for-byte, or carry a new key. See §10.
+
+   *Was, before 2026-09-04: the key was `sha256(path + ":" + your_key)` with no merchant
+   dimension, and two integrations sending `ORD-1024` to `/api/v1/merchant/payment-intent`
+   within 24 hours received each other's payment intent, recipient address included. If your
+   client namespaces its keys with an installation UUID because this document used to
+   require it, keep doing so — it is still good practice and costs nothing.*
 
 3. **Compare `chain` case-insensitively.** The value you send is stored and echoed back
    verbatim (`app/services/intent_service.py:415`, `merchant_routes.py:131`). Send `"BASE"`,
@@ -714,8 +721,27 @@ Source: `app/middleware/rate_limit.py:50-101`, `:388-416`.
 
 **Idempotency.** The header is **`X-Idempotency-Key`** (not `Idempotency-Key`), it applies to
 `POST` and `PUT`, the TTL is 24 hours, and **only 2xx responses are replayed**
-(`app/middleware/idempotency.py:34, :44, :120`). A concurrent duplicate that arrives while
+(`app/middleware/idempotency.py:55, :136, :257`). A concurrent duplicate that arrives while
 the first is still in flight gets `409 DUPLICATE_REQUEST_IN_FLIGHT`.
+
+**Your records are yours** (since 2026-09-04). The cache key is
+`(merchant, environment, path, your_key)` (`idempotency.py:158`), so a key you send can only
+ever return a response to a request *you* made, on the environment you made it in. Another
+merchant using the same key string is invisible to you and you to them.
+
+**One key, one request body.** The fingerprint of the raw request body is stored with the
+record. Send the same key with a **different** body and you get `409 IDEMPOTENCY_KEY_REUSED`
+(`:195`) — never the first request's response, and never a second intent. Retries must be
+byte-identical; anything else needs a new key. Note this is the raw body, not canonicalised
+JSON: if your client re-serialises between attempts and the key ordering changes, that is a
+different body.
+
+**Idempotency fails closed on money paths.** If the store cannot be reached — no connection,
+a failing read, a failing lock — a `POST` to `/api/v1/merchant/*` or `/api/v1/tx/callback`
+carrying an idempotency key answers `503 SERVICE_TEMPORARILY_UNAVAILABLE`
+(`idempotency.py:62`, `:49`) rather than running unprotected. It is transient; retry with
+backoff and the same key. The header remains opt-in: a request without one is not refused,
+and gets no idempotency either.
 
 ### We do not promise
 
@@ -728,13 +754,18 @@ the first is still in flight gets `409 DUPLICATE_REQUEST_IN_FLIGHT`.
   also allowlists **request** headers (`:33-46`) — anything outside
   `content-type, accept, x-wallet-*, x-timestamp, x-idempotency-key, x-chain-id,
   authorization` is dropped before it reaches the backend.
-- **Cross-merchant idempotency isolation.** The cache key is
-  `sha256(path + ":" + your_key)` (`idempotency.py:56`) with no merchant, environment,
-  method, or body in it. This is why globally-unique keys are an obligation and not a
-  suggestion. See "Your half of the contract", item 2.
-- **Idempotency during a Redis outage.** Rate limiting is fail-**closed** (503). Idempotency
-  on merchant paths is fail-**open** — the request executes unprotected
-  (`idempotency.py:58-68`).
+- **Idempotency isolation between two API keys of the same merchant.** The tenant component
+  is the key owner's address (`idempotency.py:106`), which a merchant's `test` and `live` keys
+  share — the environment component separates those, but two `live` keys of the same merchant
+  do not separate. That is deliberate: they are one merchant, and a retry sent from a second
+  key of yours should still deduplicate. Do not rely on per-key isolation.
+- **Idempotency on paths outside `/api/v1/merchant/` and `/api/v1/tx/callback`.** Everything
+  else stays fail-**open** — during a store outage those requests execute unprotected
+  (`idempotency.py:49`, `:168-169`).
+- **Idempotency for a request we cannot attribute to a caller.** If neither an API key nor a
+  session token identifies you, the cache is **skipped** rather than shared with other
+  unidentified callers (`idempotency.py:150`). Not reachable on the merchant API, where auth
+  is mandatory.
 
 ### Enforced by
 
@@ -743,10 +774,24 @@ the first is still in flight gets `409 DUPLICATE_REQUEST_IN_FLIGHT`.
 `::test_get_intent_by_id_uses_get_subpath_limit`.
 `tests/test_public_intent_view.py::test_public_view_per_ip_rate_limited`.
 
-⚠ **NOT ENFORCED:** **the idempotency middleware has zero test coverage** — not the header
-name, not the cache key, not the TTL, not the 2xx-only replay, not the 409, not the
-fail-open. Also unenforced: the `/transactions` and webhook-route limits; `Retry-After` on
-any response; the fail-closed 503 at runtime.
+`tests/test_idempotency_tenant_scope.py` holds the idempotency promises above:
+`::test_two_clients_same_key_do_not_share_a_response` and
+`::test_session_users_same_key_do_not_share_a_response` (tenant isolation, on both auth
+surfaces), `::test_same_key_different_environment_does_not_collide` and
+`::test_same_key_different_path_does_not_collide` (the other two key components),
+`::test_identical_retry_is_replayed_and_creates_no_second_row` (replay),
+`::test_same_key_different_body_is_409_and_creates_no_second_row` (the 409), and
+`::test_redis_down_on_a_merchant_route_fails_closed` +
+`::test_redis_down_on_a_parameterised_merchant_route_fails_closed` (the 503, including the
+`{id}/cancel` shape an exact-match path list could not have covered). Two controls
+(`::test_control_without_the_middleware_both_requests_go_through`,
+`::test_control_redis_down_without_the_middleware_still_creates_the_row`) prove those
+rejections belong to the idempotency layer rather than to validation firing earlier.
+
+⚠ **NOT ENFORCED:** the header NAME and the 24-hour TTL (both asserted only implicitly, by
+tests that send the header and never wait out the TTL); `409 DUPLICATE_REQUEST_IN_FLIGHT`;
+the 2xx-only replay rule; the `/transactions` and webhook-route rate limits; `Retry-After` on
+any response; the rate limiter's own fail-closed 503 at runtime.
 
 ---
 
