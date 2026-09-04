@@ -17,7 +17,36 @@ Nothing in this session changed code or tests.
 
 ## Part A — unenforced commitments, worst first
 
-### 1. The idempotency middleware has zero test coverage — and is actively broken
+### 1. ~~The idempotency middleware has zero test coverage — and is actively broken~~ CLOSED 2026-09-04
+
+**Fixed on `fix/idempotency-tenant-scope`.** The key is now
+`(tenant, environment, path, idem_key)` (`idempotency.py:158`), where the tenant is the API
+key's `client_id` or, on the session surface, the access token's `sub`; a request with no
+derivable identity skips the cache rather than sharing one. One carve-out, `SHARED_SECRET_PATHS`
+(`/api/v1/tx/callback`): it authenticates with the single shared HMAC secret, so every request
+that gets in is the same principal and one bucket cannot leak — without it, the only path that
+was already financial would have silently lost both its dedup and its 503. The carve-out is a
+list and not a general "unidentified" fallback on purpose: `/api/v1/auth/signup` is exempt too,
+and pooling strangers there would reintroduce this very bug. The body fingerprint rides
+**beside** the record, not in the key — in the key it would make a byte-different retry miss
+and create the duplicate the mechanism exists to prevent — and a mismatch is
+`409 IDEMPOTENCY_KEY_REUSED`. `FINANCIAL_PATHS` became `FINANCIAL_PATH_PREFIXES` with
+`startswith`, which is what the parameterised `/{id}/cancel` and `/resolve` routes needed
+(an exact-match set could never have matched them), and fail-closed now covers a failing
+read and a failing lock, not only a null client. `tests/test_idempotency_tenant_scope.py`
+pins all of it, including two controls proving the rejections are this layer's.
+
+Two things this did NOT close, both deliberate:
+
+- The tenant is the owner **wallet address**, not `org_id` — the same key
+  `PaymentIntent.merchant_id` uses. Two orgs sharing an owner address still share a bucket.
+  That moves with the org_id re-key, not before it.
+- Session routes take `environment` as a **query param**, which is in neither the path nor
+  the fingerprint. A session caller reusing one key across `?environment=test` and `=live`
+  with an identical body would collide. Not reachable today: `/app` is test-locked and sends
+  no idempotency key at all. Folding `request.url.query` into the fingerprint would close it.
+
+*Original text follows.*
 
 `app/middleware/idempotency.py`. A grep for `IdempotencyMiddleware` or `X-Idempotency-Key`
 outside the module itself and `main.py` returns nothing. (`test_webhook_idem_rollback.py` is
@@ -289,9 +318,9 @@ OpenAPI description at `merchant_routes.py:369`.
 - **`network`** is accepted by the request schema and discarded
   (`intent_service.py:406, :417`).
 - **`request.state.testnet_only`** is set at `api_auth.py:76-77` and read nowhere.
-- **`FINANCIAL_PATHS` dead branch:** `idempotency.py:47` guards a block whose body is only a
+- ~~**`FINANCIAL_PATHS` dead branch:** `idempotency.py:47` guards a block whose body is only a
   comment, and the nested `"alchemy" in request.url.path` check at `:49` can never be true
-  given `FINANCIAL_PATHS = {"/api/v1/tx/callback"}`.
+  given `FINANCIAL_PATHS = {"/api/v1/tx/callback"}`.~~ Removed 2026-09-04 with item 1.
 - **`process_pending_deliveries`** assigns `success = await _attempt_delivery(...)` and never
   uses it (`webhook_service.py:1156`); the inactive-webhook branch marks the row failed
   without incrementing `processed`, so the returned count under-reports.

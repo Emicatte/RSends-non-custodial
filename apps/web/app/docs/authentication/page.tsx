@@ -128,8 +128,11 @@ export default function AuthenticationPage() {
       <P>
         Send an <Code>X-Idempotency-Key</Code> header on any <Code>POST</Code> and a retry with the
         same key replays the original response instead of re-running the operation. The record is
-        kept for 24 hours. A retry that arrives while the first request is still in flight gets{' '}
-        <Code>409 DUPLICATE_REQUEST_IN_FLIGHT</Code>. See <A href="/docs/errors">Errors</A>.
+        kept for 24 hours, and it is scoped to your account and environment — no other merchant&apos;s
+        key can collide with yours. Resend the original body unchanged: the same key with a
+        different body is <Code>409 IDEMPOTENCY_KEY_REUSED</Code>. A retry that arrives while the
+        first request is still in flight gets <Code>409 DUPLICATE_REQUEST_IN_FLIGHT</Code>. See{' '}
+        <A href="/docs/errors">Errors</A>.
       </P>
 
       <H3>Authentication errors</H3>
