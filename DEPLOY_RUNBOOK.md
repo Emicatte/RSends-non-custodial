@@ -193,6 +193,41 @@ Until this var is set, split intent creation fail-closes with 422
 `SPLIT_UNAVAILABLE` — deploying late is safe, deploying and not recording the
 address just keeps splits disabled.
 
+### 1f. Record the RSendsAutoSplit address (source wallets) **[AZIONE UTENTE]**
+Ownerless like the two above, and already deployed + verified on Base Sepolia:
+
+| | |
+|---|---|
+| address | `0x3185681dD66A2BF280D7aBd37a0396494A805dD4` |
+| runtime | 4,201 bytes, keccak `0x55c17eba5d1a59948f2a5cb180cf2982392ab58938766d6dcc90e5029e0b8785` |
+
+Deploy script (on the contracts branch):
+```bash
+cd packages/contracts
+forge script script/DeployAutoSplit.s.sol:DeployAutoSplit \
+  --rpc-url "$BASE_SEPOLIA_RPC" \
+  --account rsends-deployer \
+  --broadcast
+```
+Record it in the backend:
+```
+AUTO_SPLIT_ADDRESSES_JSON={"84532":"0x3185681dD66A2BF280D7aBd37a0396494A805dD4"}
+```
+No frontend env. Until this var is set, source-wallet registration fail-closes
+with 422 `AUTO_SPLIT_UNAVAILABLE` on every chain — deploying late is safe, and
+deploying without recording the address just keeps the feature off.
+
+> **Never put this address in `RSENDS_ROUTER_ADDRESSES_JSON`,
+> `RSENDS_ROUTER_V2_ADDRESSES_JSON` or `SPLIT_ROUTER_ADDRESSES_JSON`.** The
+> indexer builds its log filters from those chain sets, so it would fetch every
+> `SplitExecuted` and then discard it with one WARNING per execution. The
+> backend refuses a colliding address outright (resolves to `None`, logs an
+> ERROR naming it) rather than trusting the operator to remember this.
+
+Unlike the three router maps, a *malformed* value here does not block startup:
+AutoSplit is keeper policy, not the money path, so a typo warns and degrades to
+the same 422 the unconfigured state produces.
+
 ---
 
 ## Part 2 — Backend on Render (Blueprint)
@@ -430,6 +465,7 @@ re-deploy re-runs `upgrade head`, which is a no-op once at `0007`.
 | `ALCHEMY_API_KEY` | RPC — required unless `RPC_PROVIDERS_JSON` covers every indexed chain | SECRET | dashboard.alchemy.com | `<alchemy_key>` |
 | `RSENDS_ROUTER_ADDRESSES_JSON` | chain→router map (v1) | PUBLIC | Part 1 deploy output | `{"84532":"<FILL_AFTER_CONTRACT_DEPLOY>"}` |
 | `RSENDS_ROUTER_V2_ADDRESSES_JSON` | chain→RouterV2 map — **the mainnet cutover** (Part 6) | PUBLIC | Part 6 deploy output; **manual on Render: NOT in `render.yaml`**, the blueprint will never carry it | unset until cutover |
+| `AUTO_SPLIT_ADDRESSES_JSON` | chain→RSendsAutoSplit map (source wallets, **§1f**) — never also in a router map | PUBLIC | Part 1f; **manual on Render: NOT in `render.yaml`** | `{"84532":"0x3185681dD66A2BF280D7aBd37a0396494A805dD4"}` |
 | `RPC_PROVIDERS_JSON` | second RPC vendor, chain→list (**§2b-ter**) | SECRET (holds the endpoint token) | QuickNode dashboard; **manual on Render: NOT in `render.yaml`** | `{"84532":[{"name":"quicknode","url":"https://<SUB>.base-sepolia.quiknode.pro/<TOKEN>/"}]}` |
 | `CORS_ORIGINS` / `APP_URL` | allowed origins / public URL | PUBLIC | your Vercel URL | `https://<app>.vercel.app` |
 | `ENVIRONMENT` / `DEBUG` | guard posture | PUBLIC | `production` / `false` (in blueprint) | — |
