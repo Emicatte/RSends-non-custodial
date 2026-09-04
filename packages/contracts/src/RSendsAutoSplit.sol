@@ -83,6 +83,9 @@ contract RSendsAutoSplit is ReentrancyGuard {
         for (uint256 i; i < n; ++i) {
             address to = recipients[i];
             if (to == address(0)) revert ZeroRecipient();
+            // Un leg verso il merchant è un self-transfer: il saldo non scende
+            // e il resto NON chiude a zero (v. invariante in testa al file).
+            if (to == msg.sender) revert SelfRecipient();
             if (bps[i] == 0) revert ZeroBps();
             bpsSum += bps[i];
             for (uint256 j = i + 1; j < n; ++j) {
