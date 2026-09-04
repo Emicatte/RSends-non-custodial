@@ -367,6 +367,21 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
   fabricates phantom ERRORs in the depth-finality/indexer-cursor/reorg-evidence modules. They also
   reference `./venv/bin/python`, a path the Makefile no longer creates (it builds
   `services/backend/.venv`). Stale on both counts.
+- **A from-scratch `alembic upgrade head` on SQLite dies at 0007.** It runs an unguarded
+  `CREATE UNIQUE INDEX uq_users_email_lower`, which migration 0001's `Base.metadata.create_all`
+  has already built from the `User` model → `index uq_users_email_lower already exists`. 0007
+  lacks the `_has_index` guard that 0011/0017/0024 carry for exactly this reason. Found
+  2026-09-04 while verifying 0024, **pre-existing and deliberately left alone**: editing a
+  revision that has already run in production is its own decision, and the blast radius is
+  limited — Postgres deployments are long past 0007, and the tests build their schema with
+  `create_all`, never with alembic. What it costs is the ability to verify a *later* revision
+  end-to-end on SQLite. The workaround, if you need that: `create_all` → `alembic stamp head` →
+  `downgrade -1` → `upgrade head`, which exercises just the revision under test.
+  Two invocation gotchas that cost time when you do: run alembic as
+  `venv/bin/python venv/bin/alembic …`, because the project's local `alembic/` package shadows
+  the installed library from `services/backend` (this is why every revision imports `op` lazily
+  inside `upgrade()`), and `venv/bin/alembic` on its own has a stale shebang pointing at a
+  `~/Desktop/...` path that no longer exists.
 - **`docs/INTEGRATION_CONTRACT.md:667-669` quotes 8 keys for the public checkout view; the code
   has 12.** `public_routes.py:40-79` and its pinned test `test_public_intent_view.py:40-46` were
   extended and the document was not. Code is the source of truth, so this is a doc fix.
