@@ -52,6 +52,14 @@ FINANCIAL_PATH_PREFIXES = (
                            # resolve, webhook register, webhook test
 )
 
+# Paths authenticated by the SINGLE shared HMAC secret rather than by a
+# per-caller credential (`verify_signature()`; see api_keys.EXEMPT_PATHS). Every
+# request that gets in is the same principal, so one bucket for all of them is
+# not a shared bucket in the sense that matters — there is no second tenant to
+# leak to. Without this they would have no derivable identity and lose the
+# request-level idempotency they have today.
+SHARED_SECRET_PATHS = ("/api/v1/tx/callback",)
+
 IDEMPOTENCY_TTL = 86400  # 24 ore
 
 
@@ -100,10 +108,16 @@ def _tenant(request: Request) -> str | None:
         money path. `sub` is narrower than the org, so it cannot leak ACROSS
         orgs; the residue is one user reusing a key across an active-org switch
         inside the TTL, who then replays their own earlier response.
+
+    `h:` The shared-HMAC-secret paths. One principal by construction, so they
+        keep the single bucket they have always had.
     """
     client = getattr(request.state, "client", None)
     if isinstance(client, dict) and client.get("client_id"):
         return f"k:{client['client_id']}"
+
+    if request.url.path.startswith(SHARED_SECRET_PATHS):
+        return "h:shared-secret"
 
     auth = request.headers.get("Authorization", "")
     if auth.startswith("Bearer "):

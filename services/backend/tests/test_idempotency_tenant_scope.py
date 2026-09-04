@@ -456,6 +456,99 @@ async def test_redis_down_on_a_parameterised_merchant_route_fails_closed(monkeyp
 
 
 # ═══════════════════════════════════════════════════════════════════════
+#  The one financial path with no per-caller credential
+# ═══════════════════════════════════════════════════════════════════════
+
+async def test_shared_secret_path_keeps_its_idempotency():
+    """`/api/v1/tx/callback` authenticates with the single shared HMAC secret,
+    so no API key and no JWT identifies the caller. Tenant scoping must not
+    quietly cost it the deduplication it has today: every request that gets in
+    IS the same principal, so one bucket is correct there and cannot leak —
+    there is no second tenant to leak to.
+
+    Without the carve-out this request has no derivable identity, the cache is
+    skipped, and the handler runs twice.
+    """
+    idem = f"CB-{uuid4()}"
+    app = _build_app()
+    calls = []
+
+    @app.post("/api/v1/tx/callback")
+    async def _stub_callback():
+        calls.append(1)
+        return {"status": "success", "n": len(calls)}
+
+    async with _client(app) as c:
+        r1 = await c.post(
+            "/api/v1/tx/callback", json={"tx": "0xabc"},
+            headers={"X-Idempotency-Key": idem},
+        )
+        r2 = await c.post(
+            "/api/v1/tx/callback", json={"tx": "0xabc"},
+            headers={"X-Idempotency-Key": idem},
+        )
+
+    assert r1.status_code == 200, r1.text
+    assert r2.json() == r1.json()
+    assert r2.headers.get("X-Idempotency-Replayed") == "true"
+    assert len(calls) == 1, "the callback handler ran twice for one key"
+
+
+async def test_shared_secret_path_still_fails_closed(monkeypatch):
+    """It was the ONLY financial path before this change, and it keeps its 503.
+    Pinned separately because the tenant lookup now runs before the Redis check,
+    so a regression there would turn this into a silent pass-through."""
+    async def _no_redis():
+        return None
+
+    monkeypatch.setattr("app.middleware.idempotency.get_redis", _no_redis)
+
+    app = _build_app()
+
+    @app.post("/api/v1/tx/callback")
+    async def _stub_callback():
+        return {"status": "success"}
+
+    async with _client(app) as c:
+        r = await c.post(
+            "/api/v1/tx/callback", json={"tx": "0xabc"},
+            headers={"X-Idempotency-Key": f"CB-{uuid4()}"},
+        )
+
+    assert r.status_code == 503, r.text
+    assert r.json()["error"] == "SERVICE_TEMPORARILY_UNAVAILABLE"
+
+
+async def test_unidentified_caller_gets_no_bucket_at_all():
+    """Everything else without an identity — an unauthenticated POST to a
+    non-financial path, e.g. signup — must SKIP the cache rather than fall into
+    a shared "anonymous" bucket. Two strangers sending the same key string would
+    otherwise read each other's response, which is the original bug wearing a
+    different hat.
+    """
+    idem = f"ANON-{uuid4()}"
+    app = _build_app()
+
+    @app.post("/api/v1/auth/signup")
+    async def _stub_signup(request: Request):
+        return {"who": request.headers.get("X-Test-Who")}
+
+    async with _client(app) as c:
+        r1 = await c.post(
+            "/api/v1/auth/signup", json={"x": 1},
+            headers={"X-Idempotency-Key": idem, "X-Test-Who": "alice"},
+        )
+        r2 = await c.post(
+            "/api/v1/auth/signup", json={"x": 1},
+            headers={"X-Idempotency-Key": idem, "X-Test-Who": "bob"},
+        )
+
+    assert r1.json() == {"who": "alice"}
+    assert r2.json() == {"who": "bob"}, "unidentified callers shared a bucket"
+    assert r2.headers.get("X-Idempotency-Replayed") is None
+
+
+# ═══════════════════════════════════════════════════════════════════════
 #  CONTROL — every rejection above is the idempotency layer's
 # ═══════════════════════════════════════════════════════════════════════
 
