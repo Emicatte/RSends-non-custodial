@@ -68,11 +68,20 @@ class Settings(BaseSettings):
     # for any chain not in this map — set it only after the contract is
     # deployed and the indexer knows the event (see DEPLOY_RUNBOOK 1e).
     split_router_addresses_json: str = ""
-    # JSON map of chain_id → RSendsAutoSplit address (ownerless, fee-less
+    # JSON map of chain NAME → RSendsAutoSplit address (ownerless, fee-less
     # keeper-executed split of an incoming balance). FAIL-CLOSED: source-wallet
     # registration 422s AUTO_SPLIT_UNAVAILABLE for any chain not in this map,
     # so deploying the contract and not recording the address just keeps the
     # feature off (see DEPLOY_RUNBOOK 1f).
+    #
+    # Keyed by NAME, unlike the three router maps above, which key by EVM chain
+    # id. AutoSplit runs on TRON as well as Base and TRON has no EVM chain id —
+    # and must not be given a synthetic one, since a TRON id in an EVM chain
+    # table starts a PaymentWatcher against a non-EVM node and SystemExits the
+    # boot. Same vocabulary as token_registry.json, which already keys `tron`
+    # and `tron_nile` by name. This map is ALSO the eligibility gate: a chain
+    # being `settlement: watch_only` does not exclude it, so what is listed here
+    # is exactly what Auto Split is live on.
     #
     # NEVER put an address from this map into any RSENDS_ROUTER_* or
     # SPLIT_ROUTER map: the indexer builds its log filters from those chain
@@ -233,7 +242,7 @@ class Settings(BaseSettings):
 
     @property
     def auto_split_addresses(self) -> dict:
-        """{chain_id(str) -> RSendsAutoSplit address} parsed from the JSON env.
+        """{chain_name(str) -> RSendsAutoSplit address} parsed from the JSON env.
 
         Deliberately NOT in the `validate_settings` malformed-map loop below,
         unlike the three router maps: a malformed value here WARNS and the
