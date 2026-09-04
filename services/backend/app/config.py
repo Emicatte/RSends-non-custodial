@@ -68,6 +68,18 @@ class Settings(BaseSettings):
     # for any chain not in this map — set it only after the contract is
     # deployed and the indexer knows the event (see DEPLOY_RUNBOOK 1e).
     split_router_addresses_json: str = ""
+    # JSON map of chain_id → RSendsAutoSplit address (ownerless, fee-less
+    # keeper-executed split of an incoming balance). FAIL-CLOSED: source-wallet
+    # registration 422s AUTO_SPLIT_UNAVAILABLE for any chain not in this map,
+    # so deploying the contract and not recording the address just keeps the
+    # feature off (see DEPLOY_RUNBOOK 1f).
+    #
+    # NEVER put an address from this map into any RSENDS_ROUTER_* or
+    # SPLIT_ROUTER map: the indexer builds its log filters from those chain
+    # sets and would fetch every SplitExecuted only to drop it with a WARNING
+    # per execution. `auto_split_address_for` refuses a colliding address
+    # outright rather than trusting this comment.
+    auto_split_addresses_json: str = ""
     # Optional JSON map { chain_id : [ {name, url[, priority]} ] } of EXTRA
     # RPC providers merged into rpc_manager's failover list, between Alchemy
     # (priority -1) and the built-in public fallbacks (default priority 0,
@@ -218,6 +230,19 @@ class Settings(BaseSettings):
     def split_router_addresses(self) -> dict:
         """{chain_id(str) -> RSendsSplitRouter address} parsed from the JSON env."""
         return _parse_json_map(self.split_router_addresses_json, "SPLIT_ROUTER_ADDRESSES_JSON")
+
+    @property
+    def auto_split_addresses(self) -> dict:
+        """{chain_id(str) -> RSendsAutoSplit address} parsed from the JSON env.
+
+        Deliberately NOT in the `validate_settings` malformed-map loop below:
+        those three are the money path, where a typo silently stops payment
+        detection and must refuse to boot. AutoSplit is keeper policy — a typo
+        here degrades to the documented 422 AUTO_SPLIT_UNAVAILABLE, which is
+        already the shipping state, so the parser's WARNING is the right volume
+        and taking the whole backend down over it is not.
+        """
+        return _parse_json_map(self.auto_split_addresses_json, "AUTO_SPLIT_ADDRESSES_JSON")
 
     @property
     def rpc_extra_providers(self) -> dict:
