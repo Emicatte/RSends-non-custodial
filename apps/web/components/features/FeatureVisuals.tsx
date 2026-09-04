@@ -206,7 +206,12 @@ interface Row {
 const HISTORY: Row[] = [
   { token: 'USDC', chain: 'Arbitrum', status: 'confirmed', amount: '5,000', date: 'Apr 2' },
   { token: 'USDT', chain: 'Tron', status: 'confirmed', amount: '1,200', date: 'Apr 1' },
-  { token: 'DAI', chain: 'Base', status: 'failed', amount: '800', date: 'Mar 30' },
+  // Was DAI on Base — the one pair here that never becomes true: DAI is
+  // enabled:false on Base in token_registry.json (reason: low_demand), so
+  // create-intent refuses it outright rather than waiting on mainnet. USDT on
+  // Ethereum is enabled and only gated, so the failed-row example survives
+  // without asserting something the backend will not do.
+  { token: 'USDT', chain: 'Ethereum', status: 'failed', amount: '800', date: 'Mar 30' },
   { token: 'USDC', chain: 'Ethereum', status: 'pending', amount: '2,400', date: 'Mar 29' },
 ]
 

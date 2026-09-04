@@ -667,7 +667,11 @@ function HeroTitle({ isMobile }: { isMobile?: boolean }) {
           background: C.border,
           maxWidth: 1600,
           marginTop: 20,
-          marginBottom: isMobile ? 40 : 80,
+          // The hero's own trailing space. The gap to the next section is that
+          // section's to own — this used to carry 80px of it, `main` another
+          // 80px below, and the section 104px on top of that: 264px split three
+          // ways, none of them individually wrong-looking.
+          marginBottom: isMobile ? 16 : 24,
           '--rs-hero-delay': '1.35s',
         } as React.CSSProperties}
       />
@@ -793,11 +797,26 @@ export default function Home() {
       {/* Main content — padded below the navbar (mounted globally via HeaderMount).
           The page-in fade lives in globals.css under MOTION_QUERY; it used to be
           `opacity: ready ? 1 : 0` flipped by an effect, which shipped the whole
-          page at opacity 0 and left it blank until hydration. */}
+          page at opacity 0 and left it blank until hydration.
+
+          No `min-height: 100dvh`. This box holds ONLY the hero, and the hero is
+          a fixed ~750px tall at every viewport — so a viewport-height floor did
+          not make the hero fill the screen, it padded dead stone underneath it,
+          one pixel for every pixel the viewport was taller than the content.
+          Measured: 255px of empty background on a 900px-tall viewport, 555px
+          (46% of the screen) at 1200px, 787px (55%) at 1440px, all of it landing
+          between the hero and the showcase heading. That is the "roughly a full
+          viewport of empty background" in the report — it only looks like a
+          section-spacing bug, and it is invisible on a laptop, which is why the
+          gap under the heading (a flat 64px at every size) got the blame.
+          Without the floor the distance is a constant 184px: this box's own
+          80px of bottom padding plus the showcase section's 104px of top
+          padding. */}
       <main className="main-content" style={{
-        minHeight: '100dvh',
         paddingTop: isMobileHome ? '72px' : 'clamp(64px, 5vh, 76px)',
-        paddingBottom: isMobileHome ? '40px' : '80px',
+        // Zero, not a value: the only child is the hero, whose divider carries
+        // the trailing space above, and the section below carries the gap.
+        paddingBottom: '0px',
         display: 'flex', flexDirection: 'column', alignItems: 'stretch',
       }}>
 

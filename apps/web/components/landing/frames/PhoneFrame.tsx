@@ -40,8 +40,16 @@ export function PhoneFrame({
         }}
       >
         {/* Status bar. Its height is what the Dynamic Island sits inside, so
-            content below never collides with it. */}
+            content below never collides with it.
+
+            Hidden from assistive technology as a whole. The signal bars and the
+            island already were; the time was not, so a screen reader announced
+            "9:41" between the merchant dashboard and the payer's receipt — a
+            mock clock is scenery, and there is nothing a listener can do with
+            it. The checkout inside the frame is the real product and stays in
+            the tree. Same defect as the browser chrome's address bar. */}
         <div
+          aria-hidden="true"
           style={{
             position: 'relative',
             height: 40,

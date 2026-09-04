@@ -85,14 +85,18 @@ type State = 'dashboard' | 'payments'
 const ADVANCE_AT = 0.5
 
 /**
- * The stack's box, reserved before anything initialises and never derived from
- * content. Inline rather than in a stylesheet: it has to apply before any CSS
- * has loaded, and it is what the jsdom test can see. 560px shows the rail, the
- * cards, the chart and the first transactions, then clips — which is what a
- * dashboard does inside a viewport, and which is why the last row is cut by the
- * window edge rather than sitting above empty grey.
+ * The window's screen height, reserved before anything initialises and never
+ * derived from content. Inline rather than in a stylesheet: it has to apply
+ * before any CSS has loaded, and it is what the jsdom test can see. 560px shows
+ * the rail, the cards, the chart and the first transactions, then clips — which
+ * is what a dashboard does inside a viewport, and which is why the last row is
+ * cut by the window edge rather than sitting above empty grey.
+ *
+ * There was a `STAGE_MIN_HEIGHT = 620` floor on the stage as well. It never
+ * bound — the stage's in-flow content measures 631px at 1440 and 782px at 390,
+ * at every viewport height — so it reserved nothing while reading as though it
+ * did. This constant is the one that actually holds the box open.
  */
-const STAGE_MIN_HEIGHT = 620
 const SCREEN_HEIGHT = 560
 
 /** The crossfade. Outgoing blurs and shrinks a touch; incoming reverses it. */
@@ -171,7 +175,7 @@ export default function DeviceShowcase() {
   return (
     <section className="rs-showcase" aria-labelledby="rs-showcase-heading">
       <style>{`
-        .rs-showcase { width: 100%; padding: 104px 24px 48px; }
+        .rs-showcase { width: 100%; padding: 88px 24px 8px; }
         .rs-showcase-head { max-width: 760px; margin: 0 auto 64px; text-align: center; }
         /* ── The one piece of arithmetic this section rests on
 
@@ -199,10 +203,26 @@ export default function DeviceShowcase() {
            and one inside a CSS comment silently terminates the string — the
            parse error lands on the JSX below it and reads as unrelated. */
         .rs-showcase-stage { position: relative; margin: 0 auto; max-width: 1356px; }
-        .rs-showcase-browser { width: fit-content; position: relative; }
+        /* The reservation, on the element the phone and its caption are
+           positioned against. They are absolute and used to be anchored BELOW
+           this box, so nothing in the layout accounted for the ~64px they
+           occupy under it; anything downstream then measured from a box ending
+           above what the reader sees, and the only way to clear them was a
+           fixed 128px margin on the note — a constant standing in for a
+           relationship, which is why the real clearance drifted 64 / 75 / 86 /
+           128 across the zoom bands. The 88px below is offset back out of both
+           anchors (38px and 2px, from -50px and -86px), so the devices sit
+           exactly where they did and the box now ends underneath them. */
+        .rs-showcase-browser { width: fit-content; position: relative; padding-bottom: 88px; }
         .rs-showcase-screen { width: 1186px; }
-        .rs-showcase-phone { width: 250px; position: absolute; right: -170px; bottom: -50px; z-index: 2; }
-        .rs-showcase-label--phone { position: absolute; right: -170px; bottom: -86px; width: 250px; text-align: center; }
+        .rs-showcase-phone { width: 250px; position: absolute; right: -170px; bottom: 38px; z-index: 2; }
+        .rs-showcase-label--phone { position: absolute; right: -170px; bottom: 2px; width: 250px; text-align: center; }
+        .rs-showcase-note { margin: 24px 0 0; text-align: center; }
+        /* 32px of margin renders as ~18px of gap: the caption sits inside the
+           frame's rotateY(6deg), which pushes the frame's rendered box below its
+           layout box and eats the difference. Measured 0px of clearance at 14px
+           of margin, against 17px under the phone. */
+        .rs-showcase-label--browser { margin-top: 32px; }
         .rs-showcase-body { padding: 20px 96px 20px 20px; }
         .rs-showcase-body--flat { padding: 20px; }
         /* Responsive scale bands. The zoom goes on the STAGE, so the window,
@@ -260,8 +280,10 @@ export default function DeviceShowcase() {
           .rs-showcase-stage { max-width: none; zoom: 1; }
           .rs-showcase-screen { zoom: 0.60; }
           .rs-showcase-phone { position: static; width: 280px; margin: 60px auto 0; }
-          .rs-showcase-browser { margin: 0 auto; }
-          .rs-showcase-label--phone { position: static; width: auto; margin-top: 10px; }
+          /* In flow down here, so the box already contains the phone and there
+             is nothing to reserve. */
+          .rs-showcase-browser { margin: 0 auto; padding-bottom: 0; }
+          .rs-showcase-label--phone { position: static; width: auto; margin-top: 14px; }
           /* Nothing to cast onto once the phone is not over the window. */
           .rs-showcase-castshadow { display: none; }
           /* And nothing to keep clear on the right. */
@@ -271,8 +293,14 @@ export default function DeviceShowcase() {
            TS constant, so the two are kept in step by convention, exactly as
            globals.css already does. Below it the section is flat and static. */
         @media (max-width: 767px) {
-          .rs-showcase { padding: 72px 20px 40px; }
-          .rs-showcase-head { margin-bottom: 44px; }
+          .rs-showcase { padding: 56px 20px 8px; }
+          /* The header and the frame are one section, so this is intra-section
+             space, not the gap between two sections: 40px on a phone, 64px on a
+             desktop. */
+          .rs-showcase-head { margin-bottom: 40px; }
+          .rs-showcase-note { margin-top: 16px; }
+          /* No rotation down here, so the margin IS the gap. */
+          .rs-showcase-label--browser { margin-top: 14px; }
           /* A dashboard is a desktop surface. Reflowing it into a phone-width
              column would show a truthful-but-useless two-column stub of the
              table — which is what /app/payments really does at 390px, inside
@@ -318,7 +346,6 @@ export default function DeviceShowcase() {
         className="rs-showcase-stage"
         data-showcase-stage=""
         style={{
-          minHeight: STAGE_MIN_HEIGHT,
           // One space for both devices, so their vanishing lines converge.
           perspective: sequence ? PERSPECTIVE : undefined,
         }}
@@ -332,7 +359,11 @@ export default function DeviceShowcase() {
           }}
         >
           <div className="rs-showcase-screen">
-            <BrowserFrame url="app.rsends.io">
+            {/* The deployed path. This used to name an `app.` subdomain that
+                exists in no deploy config, no CORS allowlist and no redirect —
+                a screenshot of a product is allowed to be a mock-up, but the
+                address bar is the one part of it a reader may try to type. */}
+            <BrowserFrame url="rsends.io/app">
               <div style={{ position: 'relative', height: SCREEN_HEIGHT }}>
                 <ShowcaseScreen
                   state="dashboard"
@@ -426,21 +457,28 @@ export default function DeviceShowcase() {
           <DeviceLabel className="rs-showcase-label--phone">{t('payerLabel')}</DeviceLabel>
         </div>
 
+        {/* Inside the group, not between two sections. It is a note about these
+            two devices, and the two device captions read as attached to what
+            they label precisely because they sit in the group's own box; this
+            line did not, so it read as a stray element. Its old `128px 0 0` was
+            never spacing either — it was clearance for the phone's unreserved
+            overhang, which is why the real gap drifted 64 / 75 / 86 / 128 across
+            the zoom bands. The overhang is reserved on the stage now, so this
+            is a spacing token measured from a box that contains what it shows. */}
+        <p
+          className="rs-showcase-note"
+          style={{
+            fontFamily: C.M,
+            fontSize: 11,
+            lineHeight: '14px',
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            color: C.sub,
+          }}
+        >
+          {t('demoDataLabel')}
+        </p>
       </div>
-
-      <p
-        style={{
-          margin: '128px 0 0',
-          textAlign: 'center',
-          fontFamily: C.M,
-          fontSize: 11,
-          letterSpacing: '0.14em',
-          textTransform: 'uppercase',
-          color: C.sub,
-        }}
-      >
-        {t('demoDataLabel')}
-      </p>
     </section>
   )
 }
@@ -484,9 +522,11 @@ function DeviceLabel({ className, children }: { className?: string; children: Re
     <p
       className={className}
       style={{
-        margin: '14px 0 0',
         fontFamily: C.M,
         fontSize: 11,
+        // Explicit, because the phone caption's `bottom` anchor is computed
+        // against this height: without it the arithmetic moves when a font loads.
+        lineHeight: '14px',
         letterSpacing: '0.14em',
         textTransform: 'uppercase',
         color: C.sub,

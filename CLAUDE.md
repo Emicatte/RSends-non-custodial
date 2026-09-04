@@ -509,6 +509,53 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
   teaching the TRON matcher the late-payment vocabulary the EVM side already speaks, together
   with whichever of the two options in the note above is chosen. **Own branch, after the TRON
   checkout branch merges** — it changes when a merchant gets paid, which is not a drive-by.
+- **Review at mainnet launch: surfaces that name a token/chain pair (2026-09-02).** The
+  landing "how it works" card and the pricing FAQ were corrected — they claimed
+  `USDT on Base`, which is `enabled: false` (`bridged_asset`) in `token_registry.json` and
+  400s at `intent_service.py:439` regardless of environment or activation, so it never
+  becomes true. The root `<meta description>`/`keywords` (`apps/web/app/layout.tsx`) dropped
+  chain names entirely, deliberately: it ships on every page and is the first string to go
+  stale. **These remain, all asserting pairs that are gated rather than false, and all need a
+  read the day mainnet opens:** `README.md:177-181` (a `## Networks` table listing Base and
+  Ethereum mainnet as `live`, contradicting `docs/INTEGRATION_CONTRACT.md:43`);
+  `merchant_models.py:341` (OpenAPI description offering `ARBITRUM`, which is in no registry);
+  `docs/INTEGRATION_CONTRACT.md:267` (currency enum includes `cbBTC` and `DEGEN`, neither
+  chargeable); `features.savedRoutes.howItWorks[1].body` and `.example.text` (USDC×Arbitrum as
+  a present-tense flow, five locales); `twoPaths.businesses.b4` (bare `"USDC · USDT"`);
+  `how-it-works/page.tsx:28` (`method: 'USDC · Base'`, hardcoded, no testnet marker at the
+  render site); `CompanyProfileForm.tsx:42` (onboarding offers USDT and EURC as primary
+  stablecoin); and this file's own former claim that DAI is enabled on
+  `base`/`base_sepolia`/`ethereum` — only `ethereum` is true (`base` is `enabled: false`
+  `low_demand`, `base_sepolia` has no DAI at all). **The two ToS keys
+  (`legal.terms.sections.service.body`, `.settlement.body`) still carry the uncorrected
+  claim in five locales** and are Emilio's to write — that is a live gate, not a launch
+  review. Note also that **no in-app path ever sets `activation_status = "active"`**
+  (`org_service.py:122,162` write `"not_started"`), so every mainnet intent 403s today: that
+  is what makes the gated pairs false in practice and not only in principle.
+- **`apps/web/messages/{es,fr,de}.json` are partly untranslated English.** The whole
+  `auth.whySignIn.*` block (es/fr/de:139-159) plus `hero.titleLine1/2/3`,
+  `hero.ctaPrimary/ctaSecondary` and `hero.metrics.*` ship the English strings verbatim in
+  three locales. `localeKeys.test.ts` checks key shape and emptiness, not that a value
+  differs from `en`, so nothing catches it. Larger than any one change and Emilio's call how
+  to handle it; the 2026-09-02 copy fix deliberately left those three at English rather than
+  creating half-translated blocks.
+- **EURC's absence from the checkout has the wrong reason recorded.**
+  `deviceShowcase.test.tsx:11` and `showcaseFixture.ts:14` say EURC "is in NO backend registry
+  and create-intent 422s it". False: `token_registry.json` carries EURC `enabled: true` on
+  both `ethereum` and `base`, so `token_is_enabled("base","EURC")` is `True`. The correct
+  reason is **"not offered on the deployed Base Sepolia router"** — the `enabled: false` lives
+  in the web registry (`payTokens.ts:56`, pinned by `payTokens.test.ts:27-32`). The tests pass
+  either way; only the justification is wrong, which is worse than no comment because it stops
+  the next person checking. Belongs with issue #87 (the two token gates diverging).
+- **Mobile CLS on the landing hero: ~0.48 at 390, measured, and it is the hero.** Seven cold
+  loads of `/it` at 390×844 give 0.4799–0.4943, spread ±0.014, essentially unchanged by the
+  2026-09-02 mockup spacing work (0.4948 → 0.4828 mean, i.e. inside the noise). Warm dev
+  servers report ~0.003 for the same page and that number is not representative — measure on a
+  cold build. Consequence for the record: the 0.0020 → 0.0031 delta attributed to `7fe3d1f3`
+  in its own commit message was **noise, not signal from either the `100dvh` removal or the
+  44→40px caption gap**; there is nothing to attribute. Anyone fixing the hero should treat
+  0.48 ± 0.014 as the baseline to beat. Not pinned by a test: the repo has no Playwright
+  harness and adding one was out of scope.
 
 Closed (2026-07-05): **CI backend job now has a Redis service** (`redis:7`, health-checked,
 `REDIS_URL=redis://localhost:6379/0` — plain scheme is CI/test-scoped, the `rediss://` guard

@@ -14,8 +14,11 @@ const dmMono = DM_Mono({
 
 export const metadata: Metadata = {
   title:       'RSends — Non-custodial stablecoin payment gateway',
-  description: 'Get paid in stablecoin, straight to your own wallet. A non-custodial B2B payment gateway priced as a monthly subscription, not a percentage of your sales. USDC and USDT on Base and Ethereum.',
-  keywords:    ['non-custodial', 'stablecoin', 'payment gateway', 'USDC', 'USDT', 'Base', 'Ethereum', 'B2B', 'subscription'],
+  // No chain names here, deliberately. This is the one string that ships on
+  // every page, so it is the first thing to go stale — and it named a pair
+  // (USDT on Base) the backend refuses outright.
+  description: 'Non-custodial stablecoin payment gateway. USDC and USDT settle on-chain directly into your wallet. One monthly subscription, no per-transaction fee.',
+  keywords:    ['non-custodial', 'stablecoin', 'payment gateway', 'USDC', 'USDT', 'B2B', 'subscription'],
   icons: {
     icon: [
       

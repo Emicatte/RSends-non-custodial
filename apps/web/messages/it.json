@@ -145,7 +145,7 @@
       },
       "history": {
         "title": "Il cliente paga in stablecoin",
-        "description": "Paga in USDC o USDT su Base o Ethereum."
+        "description": "USDC su Base ed Ethereum, USDT su Ethereum e TRON. Solo Base Sepolia finché siamo su testnet."
       },
       "contacts": {
         "title": "I fondi si regolano on-chain",
@@ -1265,7 +1265,7 @@
         },
         {
           "q": "Quali chain e token sono supportati?",
-          "a": "USDC e USDT su Base ed Ethereum. Il prodotto è attualmente una demo su testnet Base Sepolia."
+          "a": "USDC su Base ed Ethereum, USDT su Ethereum e TRON. Solo Base Sepolia finché siamo su testnet."
         },
         {
           "q": "Posso provarlo prima di pagare?",
