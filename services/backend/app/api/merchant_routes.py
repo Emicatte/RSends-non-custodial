@@ -53,7 +53,6 @@ from app.services.router_registry import (
     derive_invoice_id,
     build_onchain_payment,
     chain_is_supported,
-    token_is_enabled,
 )
 from app.services.key_usage_service import increment_intent_count, check_monthly_limits
 
