@@ -342,3 +342,67 @@ def test_rate_limit_bare_get_matched():
     from app.middleware.rate_limit import _match_endpoint
 
     assert _match_endpoint("GET", BASE_PREFIX) == (120, 60, "ip")
+
+
+# ── The index is the real backstop; the pre-check is only the fast path ───
+
+
+@pytest.mark.asyncio
+async def test_index_violation_surfaces_as_409_not_500(
+    session, stub_siwe, open_autosplit, monkeypatch
+):
+    """When the pre-check misses and the INDEX is what rejects, the client
+    still gets 409 source_wallet_taken — never a 500.
+
+    The pre-check SELECT and `uq_source_wallets_active` state the same rule in
+    two places, and between the two there is a window: two orgs verifying the
+    same wallet concurrently both see an empty pre-check, and only one insert
+    survives. The loser must not be handed an unhandled IntegrityError. This
+    blinds the pre-check (returning None, exactly what the racing transaction
+    would have seen) so the insert reaches the index for real.
+    """
+    import app.api.source_wallet_routes as swr
+
+    user_a, org_a = await _make_org(session)
+    user_b, org_b = await _make_org(session)
+    await _verify(session, (user_a, org_a, "admin"))
+
+    async def _blind(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(swr, "_active_holder", _blind)
+
+    with pytest.raises(HTTPException) as exc:
+        await _verify(session, (user_b, org_b, "admin"))
+    assert exc.value.status_code == 409
+    assert exc.value.detail["code"] == "source_wallet_taken"
+
+    rows = await _rows(session)
+    assert len([r for r in rows if r.disabled_at is None]) == 1
+
+
+@pytest.mark.asyncio
+async def test_unrelated_integrity_error_is_not_mislabelled_as_409(
+    session, stub_siwe, open_autosplit, monkeypatch
+):
+    """A DIFFERENT constraint must not be reported as source_wallet_taken.
+
+    `_violated` discriminates by constraint name (Postgres) or column set
+    (SQLite) and returns False for anything it does not recognise, so the
+    error re-raises as a 500 — ugly but honest. Blaming the uniqueness index
+    for a foreign-key violation would tell the merchant their address is
+    taken when the real fault is elsewhere. Here the org_id is a well-formed
+    uuid that no organization row owns, so the insert trips the FK.
+    """
+    user_id, _org_id = await _make_org(session)
+    orphan_org = str(uuid4())
+
+    with pytest.raises(Exception) as exc:
+        await _verify(session, (user_id, orphan_org, "admin"))
+
+    # Explicitly NOT an HTTPException 409: the FK violation propagates.
+    assert not (
+        isinstance(exc.value, HTTPException)
+        and exc.value.status_code == 409
+    ), "an unrelated IntegrityError was mislabelled as source_wallet_taken"
+    assert await _rows(session) == []
