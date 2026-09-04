@@ -235,12 +235,28 @@ class Settings(BaseSettings):
     def auto_split_addresses(self) -> dict:
         """{chain_id(str) -> RSendsAutoSplit address} parsed from the JSON env.
 
-        Deliberately NOT in the `validate_settings` malformed-map loop below:
-        those three are the money path, where a typo silently stops payment
-        detection and must refuse to boot. AutoSplit is keeper policy — a typo
-        here degrades to the documented 422 AUTO_SPLIT_UNAVAILABLE, which is
-        already the shipping state, so the parser's WARNING is the right volume
-        and taking the whole backend down over it is not.
+        Deliberately NOT in the `validate_settings` malformed-map loop below,
+        unlike the three router maps: a malformed value here WARNS and the
+        backend still boots.
+
+        OWNER'S DECISION (Emilio, 2026-09-04), asked and answered explicitly
+        when this map was wired — not an oversight, and not a default that fell
+        out of the implementation. The reasoning, recorded so nobody "fixes" it
+        into parity later:
+
+        `auto_split_address_for` is fail-closed. A malformed value parses to
+        `{}`, every chain resolves to None, and source-wallet registration 422s
+        AUTO_SPLIT_UNAVAILABLE — which is exactly the state the product ships
+        in today. Auto Split simply stays INERT: nothing settles wrongly,
+        nothing is half-configured, no money moves on a bad address. Refusing
+        to start the entire backend — payments, checkout, webhooks, dashboard —
+        over a typo in an inert feature's env var is disproportionate to that
+        outcome.
+
+        The three router maps are a different case and keep the hard stop: they
+        are the money path, where `{}` silently disables payment detection
+        while everything else looks healthy. There the failure is invisible and
+        expensive, so booting is the wrong answer.
         """
         return _parse_json_map(self.auto_split_addresses_json, "AUTO_SPLIT_ADDRESSES_JSON")
 

@@ -224,9 +224,16 @@ deploying without recording the address just keeps the feature off.
 > backend refuses a colliding address outright (resolves to `None`, logs an
 > ERROR naming it) rather than trusting the operator to remember this.
 
-Unlike the three router maps, a *malformed* value here does not block startup:
-AutoSplit is keeper policy, not the money path, so a typo warns and degrades to
-the same 422 the unconfigured state produces.
+**Malformed value → warning, NOT a startup block** (owner's decision, Emilio,
+2026-09-04). The three router maps refuse to boot in production when they are
+present but unparseable; this one deliberately does not. The reason: the
+resolver is fail-closed, so a bad value parses to `{}`, every chain resolves to
+nothing, and Auto Split stays **inert** — registration returns the same 422 as
+the unconfigured state, no money moves, nothing is half-configured. Taking the
+whole backend down (payments, checkout, webhooks, dashboard) over a typo in an
+inert feature's env var is out of proportion to that outcome. The router maps
+keep the hard stop because there `{}` silently kills payment detection while
+everything else looks healthy.
 
 ---
 
