@@ -20,9 +20,11 @@ import asyncio
 import hashlib
 import json
 import logging
+import jwt
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response, JSONResponse
+from app.config import get_settings
 from app.services.cache_service import get_redis
 
 logger = logging.getLogger("idempotency")
@@ -32,6 +34,51 @@ FINANCIAL_PATHS = {
 }
 
 IDEMPOTENCY_TTL = 86400  # 24 ore
+
+
+def _tenant(request: Request) -> str | None:
+    """Tenant component of the cache key — who the cached response belongs to.
+
+    Returns None when no identity can be established. The caller must then NOT
+    cache: a shared "anonymous" bucket is the very bug this component exists to
+    remove, and skipping the cache only costs a duplicate the caller already
+    risks today.
+
+    Two namespaces, prefixed so they can never collide:
+
+    `k:` API-key requests. `request.state.client` is populated by
+        APIKeyMiddleware, which is mounted OUTERMOST (main.py:330 vs :314) and
+        so has already run. `client_id` is the owner wallet address — the same
+        value stamped on `PaymentIntent.merchant_id`, so the cache is scoped
+        exactly like the data it holds. (When the org_id re-key lands, this
+        component moves with `merchant_id`, not before it.)
+
+    `u:` Session requests. `/api/v1/user/` is exempt from APIKeyMiddleware, so
+        there is no `state.client` and every org would otherwise share one
+        bucket. The access token's `sub` is signature-verified here with no I/O.
+        `org_id` is deliberately NOT used: it is not a claim — reaching it means
+        a DB read (`user.active_org_id`) plus the Redis session check inside
+        `verify_access_token`, neither of which belongs in a middleware on the
+        money path. `sub` is narrower than the org, so it cannot leak ACROSS
+        orgs; the residue is one user reusing a key across an active-org switch
+        inside the TTL, who then replays their own earlier response.
+    """
+    client = getattr(request.state, "client", None)
+    if isinstance(client, dict) and client.get("client_id"):
+        return f"k:{client['client_id']}"
+
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        try:
+            claims = jwt.decode(
+                auth[7:], get_settings().auth_jwt_secret, algorithms=["HS256"]
+            )
+        except Exception:
+            return None
+        if claims.get("typ") == "access" and claims.get("sub"):
+            return f"u:{claims['sub']}"
+
+    return None
 
 
 class IdempotencyMiddleware(BaseHTTPMiddleware):
@@ -52,8 +99,27 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                 # (per backward compat — in futuro sarà obbligatorio)
             return await call_next(request)
 
-        # Costruisci cache key
-        cache_key = f"idem:{hashlib.sha256(f'{request.url.path}:{idem_key}'.encode()).hexdigest()}"
+        # Costruisci cache key: (tenant, environment, path, idem_key).
+        # The idem_key alone is CLIENT-SUPPLIED, so on its own it scopes nothing
+        # — two merchants sending "ORD-1024" to the same path used to collide on
+        # one record and receive each other's response, recipient included.
+        # The request BODY is deliberately NOT in the key: it belongs beside the
+        # record instead, or a byte-different retry (reordered JSON, one added
+        # field) would MISS the cache and create a second intent — the exact
+        # duplicate idempotency exists to prevent.
+        tenant = _tenant(request)
+        if tenant is None:
+            # No identity → no bucket to put this in that isn't shared.
+            logger.warning(
+                "Idempotency skipped: no tenant identity on %s", request.url.path
+            )
+            return await call_next(request)
+
+        client = getattr(request.state, "client", None)
+        env = client.get("environment", "-") if isinstance(client, dict) else "-"
+        cache_key = "idem:" + hashlib.sha256(
+            f"{tenant}:{env}:{request.url.path}:{idem_key}".encode()
+        ).hexdigest()
 
         r = await get_redis()
         if r is None:
