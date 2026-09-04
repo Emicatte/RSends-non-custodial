@@ -23,7 +23,10 @@ error BelowMinAmount(uint256 amount, uint256 minAmount);
 /// bps a somma ESATTA 10000, minAmount). executeSplit è permissionless:
 /// chiunque (keeper incluso) distribuisce min(balance, allowance) via
 /// transferFrom merchant -> recipient[i], tutto-o-niente, e con allowance MAX
-/// il wallet chiude a saldo ESATTAMENTE zero. Revoca unilaterale: approve(0).
+/// il wallet chiude a saldo ESATTAMENTE zero — salvo le due condizioni nelle
+/// NOTE in fondo, che sono i soli modi noti di romperlo: un token non standard
+/// (non difendibile on-chain) e un leg verso il merchant stesso (ora rifiutato
+/// in setPolicy). Revoca unilaterale: approve(0).
 /// Nessun owner, pause, upgrade, delegatecall o call arbitraria: il contratto
 /// non detiene mai saldo e nessun ruolo privilegiato esiste.
 ///
@@ -41,6 +44,35 @@ error BelowMinAmount(uint256 amount, uint256 minAmount);
 /// il backend deve rifiutare setPolicy per token assenti dal registry
 /// (token_registry.json) e la UI non deve mai esporre un campo token address
 /// libero.
+///
+/// NOTA self-recipient: un leg verso il merchant stesso rompe la STESSA
+/// invariante per una via diversa dal token. transferFrom(merchant, merchant, X)
+/// è un self-transfer valido: il saldo scende di X e risale di X, cioè non
+/// scende affatto, e il residuo finale è ESATTAMENTE quel leg — qualunque
+/// posizione occupi nell'array (il residuo vale sempre amounts[m], perché gli
+/// amounts sommano a total). L'ultima posizione è solo il caso peggiore: la
+/// regola del resto le assegna anche il dust.
+/// Il danno però non si ferma all'invariante. executeSplit è permissionless e
+/// senza cooldown, quindi ogni chiamata successiva ri-splitta quel residuo e la
+/// quota del merchant si erode a favore degli altri destinatari: 1000 a
+/// 50/30/20 col merchant in ultima posizione fa 500/300/200 alla prima
+/// chiamata e 625/374/1 dopo cinque. Non serve un attaccante — è la normale
+/// cadenza del keeper; un co-destinatario può accelerarla e ci guadagna.
+/// Per questo setPolicy rifiuta msg.sender tra i recipients (SelfRecipient).
+/// A differenza della NOTA token, qui l'enforcement è ON-CHAIN e non delegato
+/// al chiamante: il backend non costruisce policy (recipients e bps li firma il
+/// merchant con la propria chiave), quindi non avrebbe nulla da validare.
+///
+/// Il fix NON è retroattivo. Il contratto è immutabile e non ha migrazione: una
+/// policy già registrata su un'ISTANZA PRECEDENTE — qualunque deploy anteriore
+/// all'introduzione di SelfRecipient — conserva il vecchio comportamento per
+/// sempre, e nessuna chiamata a questa istanza la corregge. Solo le
+/// registrazioni fatte su QUESTO bytecode sono protette; le policy vive su
+/// deploy anteriori vanno riscritte dal merchant contro la nuova istanza. Chi
+/// legge lo stato on-chain di una registrazione (pannello dashboard) dovrebbe
+/// segnalare un leg che paga il source wallet stesso: è il caso che questo
+/// contratto non può più creare ma che gli indirizzi vecchi possono ancora
+/// contenere.
 contract RSendsAutoSplit is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -71,6 +103,21 @@ contract RSendsAutoSplit is ReentrancyGuard {
     /// Registra (o sostituisce integralmente) la policy di msg.sender per
     /// `token`. Valida forma e somma; i duplicati sono rifiutati perché una
     /// leg doppia è quasi certamente un errore di configurazione.
+    ///
+    /// msg.sender NON può comparire tra i recipients (SelfRecipient): pagarsi
+    /// da solo è un self-transfer in esecuzione, il saldo non scende e ogni
+    /// chiamata successiva di executeSplit ri-splitta il residuo — v. NOTA
+    /// self-recipient in testa al file per la matematica e per la
+    /// non-retroattività su istanze precedenti.
+    /// Errore DEDICATO e non DuplicateRecipient: in una policy del genere non
+    /// c'è nulla di duplicato, e il nome sbagliato manderebbe chi lo incontra a
+    /// cercare un indirizzo ripetuto che non esiste.
+    /// La regola è contro msg.sender, non contro una lista globale: un ALTRO
+    /// merchant può legittimamente pagare questo indirizzo.
+    /// Questo è anche l'UNICO punto in cui la regola si può applicare: in
+    /// executeSplit il self-transfer è un'operazione ERC-20 legittima, e
+    /// rifiutarlo lì impedirebbe per sempre di splittare a chi una policy così
+    /// ce l'ha già.
     function setPolicy(
         address token, address[] calldata recipients, uint16[] calldata bps, uint256 minAmount
     ) external {
