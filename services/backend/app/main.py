@@ -401,6 +401,8 @@ from app.api.user_org_merchant_keys_routes import router as user_org_merchant_ke
 app.include_router(user_org_merchant_keys_router)
 from app.api.user_onboarding_routes import router as user_onboarding_router
 app.include_router(user_onboarding_router)
+from app.api.source_wallet_routes import router as source_wallet_router
+app.include_router(source_wallet_router)
 
 
 # ── Health checks ────────────────────────────────────────
