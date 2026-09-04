@@ -53,7 +53,10 @@ from app.services.router_registry import (
 )
 from app.services.source_wallet_service import auto_split_address_for
 
-AUTOSPLIT = "0x3333333333333333333333333333333333333333"
+# Letter-bearing on purpose: an all-digit address makes every case-folding
+# assertion below vacuously true (`"0x333…".upper() == "0x333…".lower()`), so a
+# case-SENSITIVE collision compare would slip through the pin unnoticed.
+AUTOSPLIT = "0xAaBbCcDdEeFf00112233445566778899aAbBcCdD"
 MALFORMED = '{"84532": "0xdeadbeef"'          # unterminated object
 NOT_AN_OBJECT = '["84532"]'                   # valid JSON, wrong shape
 
@@ -253,13 +256,23 @@ def test_address_also_in_a_router_map_is_refused(auto_split_json, monkeypatch, c
 
 def test_collision_is_case_insensitive(auto_split_json, monkeypatch):
     """Checksummed in one map, lowercase in the other, is the SAME address —
-    a case-sensitive compare would wave the collision straight through."""
+    a case-sensitive compare would wave the collision straight through.
+
+    `_parse_json_map` does no normalization of any kind (no checksum, no
+    lowercasing, not even a 0x check), so the two maps really can disagree on
+    case and the resolver is the only place the equality can be decided.
+    """
+    upper = AUTOSPLIT.upper().replace("0X", "0x")
+    lower = AUTOSPLIT.lower()
+    # Guard against this pin going vacuous: an all-digit address would make the
+    # two spellings identical and a case-sensitive compare would still pass.
+    assert upper != lower
+    assert upper.lower() == lower
+
     monkeypatch.setattr(
-        get_settings(),
-        "rsends_router_addresses_json",
-        '{"84532": "' + AUTOSPLIT.upper().replace("0X", "0x") + '"}',
+        get_settings(), "rsends_router_addresses_json", '{"84532": "' + upper + '"}'
     )
-    auto_split_json('{"84532": "' + AUTOSPLIT.lower() + '"}')
+    auto_split_json('{"84532": "' + lower + '"}')
 
     assert auto_split_address_for("base_sepolia") is None
 
