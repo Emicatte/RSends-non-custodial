@@ -65,11 +65,18 @@ if (hard.length) {
   process.exit(1);
 }
 
-const c = out.contracts['RSendsAutoSplit.sol']['RSendsAutoSplit'];
+const NAME = path.basename(SRC, '.sol');
+const c = out.contracts['RSendsAutoSplit.sol'][NAME];
+if (!c) {
+  console.log('contracts produced:', Object.keys(out.contracts['RSendsAutoSplit.sol']));
+  throw new Error(`contract ${NAME} not in output`);
+}
 const runtime = c.evm.deployedBytecode.object;
 const creation = c.evm.bytecode.object;
-fs.writeFileSync(path.join(path.dirname(SRC), '..', 'artifact.json'),
-  JSON.stringify({ abi: c.abi, runtime, creation, metadata: c.metadata }, null, 2));
+const outPath = path.join(path.dirname(SRC), '..',
+  NAME === 'RSendsAutoSplit' ? 'artifact.json' : `artifact.${NAME}.json`);
+fs.writeFileSync(outPath, JSON.stringify({ abi: c.abi, runtime, creation, metadata: c.metadata }, null, 2));
+console.log('artifact ->', path.basename(outPath));
 
 const crypto = require('crypto');
 // keccak256 is not in node crypto; use the value solc records in metadata plus
