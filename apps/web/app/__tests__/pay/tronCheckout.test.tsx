@@ -11,13 +11,14 @@
  * what it copies, and what it encodes into the QR are the same bytes as what
  * the API sent, with nothing in between having touched them.
  */
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 jest.mock('next-intl', () => require('@/test-utils/intlMock').intlModuleMock())
 
 import { TronCheckout } from '@/app/pay/[intentId]/_components/TronCheckout'
 import { normalizeIntent, type RawPaymentIntent } from '@/lib/web3/paymentIntent'
+import { tronNetworkFor } from '@/lib/web3/tron/tronNetwork'
 
 // A real TRON mainnet address. The mixed case is the point of the fixture.
 const TRON_PAYEE = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t'
@@ -68,6 +69,31 @@ function instructionBlock(): HTMLDetailsElement {
   const details = summary.closest('details')
   if (!details) throw new Error('the instruction block is not inside a <details>')
   return details as HTMLDetailsElement
+}
+
+/**
+ * Terminal states must drop the WHOLE payment surface, wallet flow included —
+ * not just the address. Today this holds because TronCheckout early-returns
+ * the status views before the wallet block; this pins it. The wallet panel
+ * mounts through next/dynamic, so a wrongly-rendered panel appears a beat
+ * AFTER render — settle it before asserting absence, or the pin would pass
+ * against a panel still loading. The empty async act() is that settle, and it
+ * is deterministic, not timed: under jest a dynamic chunk resolves in
+ * microtasks (the CJS transform makes import() a resolved-promise .then), and
+ * act drains the whole microtask queue, chained promises included — verified
+ * by the bite check in this test's history (a panel wrongly rendered in the
+ * expired state IS caught through the dynamic mount). If next/dynamic ever
+ * starts scheduling a real timer here, this pin goes vacuous rather than
+ * flaky — re-verify the bite before trusting it after upgrading Next.
+ */
+async function expectNoWalletUi() {
+  await act(async () => {})
+  expect(
+    screen.queryByRole('button', { name: /connect wallet/i }),
+  ).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole('button', { name: /pay .* USDT/i }),
+  ).not.toBeInTheDocument()
 }
 
 describe('the instruction screen', () => {
@@ -183,7 +209,7 @@ describe('the amount is the backend value, unmodified', () => {
 })
 
 describe('status', () => {
-  it('shows what arrived and what is missing on a partial payment', () => {
+  it('shows what arrived and what is missing on a partial payment', async () => {
     renderTron({
       status: 'partial',
       amount_received: '4.5',
@@ -200,6 +226,7 @@ describe('status', () => {
     // transfer would not close this invoice either.
     expect(screen.queryByText(TRON_PAYEE)).not.toBeInTheDocument()
     expect(document.querySelector('[data-qr-value]')).toBeNull()
+    await expectNoWalletUi()
     expect(screen.getByText(/Contact the merchant/i)).toBeInTheDocument()
   })
 
@@ -232,20 +259,138 @@ describe('status', () => {
     )
   })
 
-  it('shows the paid card once the transfer is matched', () => {
+  it('shows the paid card once the transfer is matched', async () => {
     renderTron({ status: 'paid', matched_tx_hash: TRON_HASH })
     expect(screen.getByText(/already completed/i)).toBeInTheDocument()
     expect(screen.queryByText(TRON_PAYEE)).not.toBeInTheDocument()
+    await expectNoWalletUi()
   })
 
-  it('shows the expired card, with no address left on screen to pay', () => {
+  it('shows the expired card, with no address left on screen to pay', async () => {
     renderTron({ status: 'expired' })
     expect(screen.getByText(/has expired/i)).toBeInTheDocument()
     expect(screen.queryByText(TRON_PAYEE)).not.toBeInTheDocument()
+    await expectNoWalletUi()
   })
 
-  it('treats a cancelled intent the same way', () => {
+  it('treats a cancelled intent the same way', async () => {
     renderTron({ status: 'cancelled' })
     expect(screen.queryByText(TRON_PAYEE)).not.toBeInTheDocument()
+    await expectNoWalletUi()
+  })
+})
+
+describe('the connected wallet flow', () => {
+  // A payer address distinct from the payee, so "Paying from" can never match
+  // the destination row by accident.
+  const TRON_PAYER = 'TWd4WrZ9wn84f5x1hZhL4DHvk738ns5jwb'
+
+  /**
+   * Minimal working adapter, in the shape tronWalletProvider.test.tsx uses:
+   * live listeners (the provider subscribes to adapter events), a connect that
+   * lands on a real address, and a network() that agrees with the intent's
+   * chain so the connected branch renders without the wrong-network note.
+   */
+  function connectedAdapter(chainId: string) {
+    const listeners = new Map<string, Set<(...args: never[]) => void>>()
+    const adapter: Record<string, unknown> = {
+      name: 'TronLink',
+      address: null as string | null,
+      readyState: 'Found',
+      network: async () => ({ chainId }),
+      connect: async () => {
+        adapter.address = TRON_PAYER
+      },
+      disconnect: async () => {
+        adapter.address = null
+      },
+      signTransaction: async (tx: unknown) => tx,
+      on: (event: string, fn: (...args: never[]) => void) => {
+        if (!listeners.has(event)) listeners.set(event, new Set())
+        listeners.get(event)!.add(fn)
+      },
+      off: (event: string, fn: (...args: never[]) => void) =>
+        listeners.get(event)?.delete(fn),
+    }
+    return adapter
+  }
+
+  it('reaches the connected branch through an injected adapter', async () => {
+    const network = tronNetworkFor(tronIntent().raw.chain)
+    if (!network) throw new Error('fixture chain resolved no TRON network')
+    const adapter = connectedAdapter(network.chainId)
+
+    render(
+      <TronCheckout
+        intent={tronIntent()}
+        onLocalExpiry={() => {}}
+        createAdapters={async () => ({
+          tronlink: adapter as never,
+          walletconnect: null,
+        })}
+      />,
+    )
+
+    const user = userEvent.setup()
+    await user.click(
+      await screen.findByRole('button', { name: /connect wallet/i }),
+    )
+    await user.click(await screen.findByRole('button', { name: /^TronLink$/ }))
+
+    // Connected branch: the summary names the payer's own wallet and the pay
+    // CTA is live — the whole point of connecting.
+    expect(await screen.findByText('Paying from')).toBeInTheDocument()
+    expect(screen.getByText(/TWd4Wr/)).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /pay 10\.000001 USDT/i }),
+    ).toBeEnabled()
+  })
+
+  it('offers Switch network when the wallet sits on the wrong chain', async () => {
+    const nile = tronNetworkFor('tron_nile')
+    if (!nile) throw new Error('no Nile network config')
+    // Wallet on Nile, invoice on mainnet: chainReadable and mismatching, the
+    // one combination the preflight refuses as wrong_network. switchChain is
+    // what makes canSwitchChain true — without it the button must not render.
+    const adapter = connectedAdapter(nile.chainId)
+    adapter.switchChain = async () => {}
+
+    // Preflight step 1 re-fetches the intent through global fetch before the
+    // network check can run; answer it with the still-pending fixture.
+    const originalFetch = global.fetch
+    global.fetch = jest.fn(async () => ({
+      json: async () => ({ status: 'pending', expires_at: EXPIRES }),
+    })) as unknown as typeof fetch
+
+    try {
+      render(
+        <TronCheckout
+          intent={tronIntent()}
+          onLocalExpiry={() => {}}
+          createAdapters={async () => ({
+            tronlink: adapter as never,
+            walletconnect: null,
+          })}
+        />,
+      )
+
+      const user = userEvent.setup()
+      await user.click(
+        await screen.findByRole('button', { name: /connect wallet/i }),
+      )
+      await user.click(await screen.findByRole('button', { name: /^TronLink$/ }))
+      await user.click(
+        await screen.findByRole('button', { name: /pay 10\.000001 USDT/i }),
+      )
+
+      // failed:wrong_network — the copy names the problem and the button
+      // offers the way out, on the invoice's own network.
+      expect(await screen.findByText(/different network/i)).toBeInTheDocument()
+      expect(
+        await screen.findByRole('button', { name: 'Switch network' }),
+      ).toBeInTheDocument()
+    } finally {
+      global.fetch = originalFetch
+    }
   })
 })
