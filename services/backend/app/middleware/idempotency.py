@@ -133,12 +133,39 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
             # Non-financial: processa comunque
             return await call_next(request)
 
+        # Fingerprint of the RAW body bytes — not canonicalised JSON. Ordering
+        # and whitespace are part of what the client sent; normalising them adds
+        # a parser (and its bugs) to the money path, and a client whose retry
+        # reorders its own JSON is doing something worth surfacing rather than
+        # papering over. Safe to read here: Starlette's BaseHTTPMiddleware wraps
+        # the request in _CachedRequest, so the body is replayed downstream.
+        fingerprint = hashlib.sha256(await request.body()).hexdigest()
+
         # Check se già processata (fast path)
         try:
             cached = await r.get(cache_key)
             if cached:
-                logger.info("Idempotency hit: key=%s path=%s", idem_key[:16], request.url.path)
                 data = json.loads(cached)
+                if data.get("fp") != fingerprint:
+                    # Same key, different request. Replaying the first response
+                    # would silently drop this one; running it would defeat the
+                    # key. Say so instead.
+                    logger.warning(
+                        "Idempotency key reused with a different body: key=%s path=%s",
+                        idem_key[:16], request.url.path,
+                    )
+                    return JSONResponse(
+                        status_code=409,
+                        content={
+                            "error": "IDEMPOTENCY_KEY_REUSED",
+                            "message": (
+                                "This idempotency key was already used with a "
+                                "different request body. Use a new key, or resend "
+                                "the original request unchanged."
+                            ),
+                        },
+                    )
+                logger.info("Idempotency hit: key=%s path=%s", idem_key[:16], request.url.path)
                 return JSONResponse(
                     status_code=data["status_code"],
                     content=data["body"],
@@ -193,6 +220,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                     cache_data = json.dumps({
                         "status_code": response.status_code,
                         "body": json.loads(body_str) if body_str else {},
+                        "fp": fingerprint,
                     })
                     await r.set(cache_key, cache_data, ex=IDEMPOTENCY_TTL)
 
