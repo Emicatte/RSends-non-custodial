@@ -23,11 +23,19 @@
  * the clipboard touches it — no trim, no case fold, no truncation on the value
  * (only the wrapping is cosmetic).
  *
- * There is no TronLink button. The `transfer` deeplink requires the payer's
- * own address (`from` + `loginAddress`), which a page with no wallet
- * connection never learns, plus a callbackUrl we do not host; the only
- * callback-free action prefills nothing. A guessed scheme would open a wallet
- * with a wrong or missing amount, and the matcher has no tolerance for that.
+ * THERE IS NOW A WALLET, and the reason the earlier version of this file gave
+ * for not having one is worth recording, because it was right at the time. A
+ * TronLink `transfer` deeplink needs the payer's own address (`from` +
+ * `loginAddress`) plus a callbackUrl we do not host, and a page with no wallet
+ * connection never learns either; a guessed scheme would open a wallet with a
+ * wrong or missing amount, which the zero-tolerance matcher would reject. A
+ * CONNECTED wallet answers all of that: it tells us the payer's address, so the
+ * page builds the exact transfer itself and the wallet only signs it. No
+ * deeplink is guessed and no amount is left to a human.
+ *
+ * The instruction block below is kept, not replaced, and collapsed beneath the
+ * wallet flow. Turkish payers move USDT from exchanges, where there is no
+ * wallet to connect, and it remains the only path open to them.
  */
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
@@ -43,7 +51,9 @@ import {
   merchantName,
   type PaymentIntent,
 } from '@/lib/web3/paymentIntent'
+import { tronNetworkFor } from '@/lib/web3/tron/tronNetwork'
 import { AlreadyPaidView, ExpiredView } from './StatusViews'
+import type { CreateAdapters } from './TronWalletProvider'
 
 // Only the instruction screen needs the QR encoder, and only a TRON intent
 // reaches the instruction screen — keep `qrcode` out of the shared /pay chunk.
@@ -51,6 +61,20 @@ const TronQr = dynamic(() => import('./TronQr').then((m) => m.TronQr), {
   ssr: false,
   loading: () => <QrPlaceholder />,
 })
+
+/**
+ * The wallet stack, client-only and loaded only on this branch. The EVM route
+ * never reaches this file, so its bundle and its hydration are unchanged, and
+ * nothing here can probe an injected provider while React is reconciling.
+ */
+const TronWalletProvider = dynamic(
+  () => import('./TronWalletProvider').then((m) => m.TronWalletProvider),
+  { ssr: false },
+)
+const TronPayPanel = dynamic(
+  () => import('./TronPayPanel').then((m) => m.TronPayPanel),
+  { ssr: false },
+)
 
 const QR_SIZE = 176
 
@@ -206,9 +230,21 @@ function PartialView({ intent }: { intent: PaymentIntent }) {
 export function TronCheckout({
   intent,
   onLocalExpiry,
+  // Optional so this component still renders standalone: the wallet flow is
+  // self-contained, and the polling wiring belongs to whoever owns the intent
+  // poll. Defaulted rather than required so a caller that only wants the
+  // screen does not have to fabricate a poller.
+  backendPaid = false,
+  onBroadcast = () => {},
+  // Forwarded to TronWalletProvider so tests can reach the connected branch;
+  // left undefined, the provider builds the real adapters.
+  createAdapters,
 }: {
   intent: PaymentIntent
   onLocalExpiry: () => void
+  backendPaid?: boolean
+  onBroadcast?: () => void
+  createAdapters?: CreateAdapters
 }) {
   const t = useTranslations('pay')
 
@@ -259,6 +295,10 @@ export function TronCheckout({
 
   const address = intent.recipient
   const amount = intent.amountExact
+  // Null only for a chain this checkout cannot pay on, which the family gate
+  // above already excludes; the guard keeps the wallet flow off screen rather
+  // than guessing a network.
+  const network = tronNetworkFor(intent.raw.chain)
 
   // Without an address there is no instruction to give, and inventing one is
   // out of the question. This is the same shape as the EVM "on-chain block is
@@ -308,6 +348,44 @@ export function TronCheckout({
             </span>
           </div>
 
+          {/* Connect and pay. The primary path now: the page can know the
+              payer's address, so it can build the transfer for them. */}
+          {network && (
+            <TronWalletProvider network={network} createAdapters={createAdapters}>
+              <TronPayPanel
+                intent={intent}
+                network={network}
+                backendPaid={backendPaid}
+                onBroadcast={onBroadcast}
+              />
+            </TronWalletProvider>
+          )}
+
+          {/* The manual instructions, kept and collapsed rather than removed.
+              Turkish payers move USDT from exchanges, where there is no wallet
+              to connect, and this is the only path open to them. Closed by
+              default because it is now the secondary route; the content stays
+              in the DOM so it is findable and copyable without a round trip. */}
+          <details>
+            <summary
+              style={{
+                cursor: 'pointer',
+                fontFamily: C.D,
+                fontSize: 13,
+                color: C.sub,
+              }}
+            >
+              {t('tron.fallbackSummary')}
+            </summary>
+
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 16,
+                paddingTop: 16,
+              }}
+            >
           {/* The amount. Loudest element on the page, because it is the one a
               human has to reproduce exactly. */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -371,6 +449,8 @@ export function TronCheckout({
           </Warning>
 
           <Note>{t('tron.waiting')}</Note>
+            </div>
+          </details>
         </div>
       </Card>
     </Shell>

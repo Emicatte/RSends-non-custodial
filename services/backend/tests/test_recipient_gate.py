@@ -46,8 +46,15 @@ async def session():
 
 @pytest.fixture(autouse=True)
 def _patch_side_effects(monkeypatch):
-    """Neutralise external effects (token registry / on-chain quote / audit log)
-    so tests exercise ONLY the recipient gate."""
+    """Neutralise external effects (on-chain quote / audit log) so tests
+    exercise ONLY the recipient gate.
+
+    The token gate is deliberately NOT mocked: every payload here is USDC on
+    base_sepolia, which the registry enables, so the real gate never fires.
+    (It used to be patched on `merchant_routes`; Phase D moved the call into
+    `intent_service.create_intent`, which left the patch inert — it neutralised
+    nothing. Repointing it would only hide a genuine break in the platform's
+    baseline settleable pair.)"""
     import app.api.merchant_routes as mr
 
     async def _no_onchain(intent):
@@ -56,7 +63,6 @@ def _patch_side_effects(monkeypatch):
     async def _no_log(*a, **k):
         return None
 
-    monkeypatch.setattr(mr, "token_is_enabled", lambda chain, cur: True)
     monkeypatch.setattr(mr, "build_onchain_payment", _no_onchain)
     monkeypatch.setattr(mr, "log_event", _no_log)
 

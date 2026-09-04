@@ -9,9 +9,17 @@ production config (no RSEND_DEV_AUTH_BYPASS). Rules for anything added here:
   enables enumeration.
 - Serialize an EXPLICIT allowlisted response model, never the ORM object:
   a future column must not leak by default.
-- Read-only: no DB writes from a public handler.
-- Per-IP rate limited (see ENDPOINT_LIMITS in app/middleware/rate_limit.py)
-  and allowlisted in GET_PUBLIC_PREFIXES (app/security/api_keys.py).
+- Read-only, with ONE named exception: the TRON transaction hint POST at the
+  bottom of this file. It writes a row recording which transaction the payer
+  says they broadcast. It is allowed here because a caller can influence only
+  two values — a transaction hash and their own address — and both are checked
+  against the chain before anything follows from them. Recipient, amount, token
+  and network are never accepted; they are re-derived from the intent. The row
+  is a claim, not a credit. Any further write needs the same argument made
+  again, in writing, or it does not belong on this surface.
+- Per-IP rate limited (see ENDPOINT_LIMITS in app/middleware/rate_limit.py) and
+  allowlisted in GET_PUBLIC_PREFIXES / POST_PUBLIC_PREFIXES
+  (app/security/api_keys.py).
 """
 
 import logging
@@ -19,11 +27,14 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import re
+
 from app.db.session import get_db
+from app.security.input_validator import normalize_payment_address
 from app.models.merchant_models import IntentStatus, OnchainPayment, PaymentIntent
 from app.services.router_registry import (
     build_onchain_payment,
@@ -35,6 +46,9 @@ from app.services.router_registry import (
 logger = logging.getLogger("rsend.public")
 
 public_router = APIRouter(prefix="/api/v1/public", tags=["public"])
+
+#: TRON txids are 64 hex characters and carry no `0x`, unlike EVM.
+_TX_HASH_RE = re.compile(r"^[0-9a-fA-F]{64}$")
 
 
 class PublicPaymentIntentResponse(BaseModel):
@@ -161,4 +175,187 @@ async def get_public_payment_intent(
         amount_exact=_exact_amount(intent),
         amount_received=intent.amount_received,
         underpaid_amount=intent.underpaid_amount,
+    )
+
+
+# ═══════════════════════════════════════════════════════════════
+#  The TRON transaction hint (B1)
+# ═══════════════════════════════════════════════════════════════
+#
+# The one WRITE on an otherwise read-only public surface. The module docstring
+# names it as the single exception rather than leaving the rule quietly false.
+# What makes it acceptable is what the payer can influence: a transaction hash and their own address, both of which are
+# checked against the chain before anything follows from them. There is no
+# recipient, amount, token or network on the schema, so there is no field a
+# caller could use to redirect a payment. The row it writes is a claim, not a
+# credit.
+
+class TronTxHintRequest(BaseModel):
+    """A hash, and who says they sent it. Nothing else is accepted."""
+
+    tx_hash: str = Field(..., description="TRON txid: 64 hex characters, no 0x")
+    payer_address: Optional[str] = Field(default=None)
+
+    @field_validator("tx_hash")
+    @classmethod
+    def _hash_shape(cls, v: str) -> str:
+        # TRON txids carry no `0x`, unlike EVM. Lowercased so the unique
+        # constraint cannot be defeated by case alone.
+        if not isinstance(v, str) or not _TX_HASH_RE.match(v):
+            raise ValueError("tx_hash must be 64 hexadecimal characters")
+        return v.lower()
+
+    @field_validator("payer_address")
+    @classmethod
+    def _payer_shape(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v == "":
+            return None
+        # The conditional normaliser: base58 survives untouched, and anything
+        # that is not an address at all is refused rather than stored.
+        normalized = normalize_payment_address(v)
+        if normalized is None:
+            raise ValueError("payer_address is not a valid address")
+        return normalized
+
+
+class TronTxHintResponse(BaseModel):
+    hint_state: str
+    status: str
+    rejection_reason: Optional[str] = None
+
+
+@public_router.post(
+    "/payment-intent/{intent_id}/tx-hint", response_model=TronTxHintResponse,
+)
+async def submit_tron_tx_hint(
+    intent_id: str,
+    body: TronTxHintRequest,
+    db: AsyncSession = Depends(get_db),
+    _source=None,
+) -> TronTxHintResponse:
+    """Record the hash the payer's wallet broadcast, and try to verify it now.
+
+    Id-as-secret, exactly like the GET: whoever holds the intent link may tell
+    us about a transaction for that one intent. `_source` is a test seam for the
+    node reader and is never supplied over HTTP.
+    """
+    from sqlalchemy.exc import IntegrityError
+
+    from app.models.tron_hint_models import HintState, TronPaymentHint
+    from app.services import tron_hints
+    from app.services.tron_poller import TRON_MAINNET, TRON_NILE
+    from app.services.tron_verifier import Pending, Rejected, Verified
+
+    intent = (await db.execute(
+        select(PaymentIntent).where(PaymentIntent.intent_id == intent_id)
+    )).scalar_one_or_none()
+    if intent is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "INTENT_NOT_FOUND",
+                    "message": f"Payment intent '{intent_id}' not found"},
+        )
+
+    chain = (intent.chain or "").lower()
+    network = {TRON_MAINNET.chain_name: TRON_MAINNET,
+               TRON_NILE.chain_name: TRON_NILE}.get(chain)
+    if network is None:
+        # An EVM intent has a router and an indexer; there is no hint path for
+        # it, and pretending otherwise would invite a client to build one.
+        raise HTTPException(
+            status_code=409,
+            detail={"error": "CHAIN_NOT_WATCH_ONLY",
+                    "message": "Transaction hints apply to TRON intents only"},
+        )
+
+    # The same effective-status helper the public GET uses, so the two surfaces
+    # can never disagree about whether an intent is still open.
+    effective = _effective_status(intent)
+    if effective == IntentStatus.expired.value:
+        raise HTTPException(
+            status_code=409,
+            detail={"error": "INTENT_EXPIRED", "message": "This payment has expired"},
+        )
+    if effective not in (IntentStatus.pending.value, IntentStatus.partial.value):
+        raise HTTPException(
+            status_code=409,
+            detail={"error": "INTENT_NOT_PAYABLE",
+                    "message": f"This payment is {effective}"},
+        )
+
+    # A transaction already bound to a DIFFERENT intent cannot also be this one.
+    from app.models.settlement_models import PaymentSettlement
+
+    claimed = (await db.execute(
+        select(PaymentSettlement.intent_id).where(
+            PaymentSettlement.tx_hash == body.tx_hash,
+            PaymentSettlement.intent_id.is_not(None),
+            PaymentSettlement.intent_id != intent.intent_id,
+        ).limit(1)
+    )).scalar_one_or_none()
+    if claimed is not None:
+        raise HTTPException(
+            status_code=409,
+            detail={"error": "TX_ALREADY_SETTLED",
+                    "message": "That transaction already settled another payment"},
+        )
+
+    # Insert first, catch the collision. A select-then-insert loses the race a
+    # double-click creates, and the unique constraint is the thing that actually
+    # decides — so it may as well be the thing that is asked.
+    # In its OWN session: a failed INSERT leaves the object pending, and the
+    # re-read that follows would autoflush it straight back into the same
+    # collision. Isolating the write also keeps a lost race from poisoning the
+    # request session that still has to answer.
+    from app.db.session import async_session
+
+    fresh = True
+    async with async_session() as writer:
+        writer.add(TronPaymentHint(
+            intent_pk=intent.id,
+            tx_hash=body.tx_hash,
+            payer_address=body.payer_address,
+        ))
+        try:
+            await writer.commit()
+        except IntegrityError:
+            await writer.rollback()
+            fresh = False
+
+    hint = (await db.execute(
+        select(TronPaymentHint).where(
+            TronPaymentHint.intent_pk == intent.id,
+            TronPaymentHint.tx_hash == body.tx_hash,
+        )
+    )).scalar_one()
+
+    # Verify immediately only when this submission is new. A resubmission of a
+    # hint already pending or verified must not spend a node call: the tick pass
+    # owns it from here.
+    if fresh or hint.state == HintState.rejected:
+        result = await tron_hints.verify_hint(
+            network,
+            tx_hash=body.tx_hash,
+            payer_address=body.payer_address,
+            intent=intent,
+            source=_source,
+        )
+        await tron_hints.apply_result(network, hint.id, result)
+        state = (
+            HintState.verified if isinstance(result, Verified)
+            else HintState.rejected if isinstance(result, Rejected)
+            else HintState.pending
+        )
+        reason = result.reason if isinstance(result, Rejected) else None
+    else:
+        state, reason = hint.state, hint.rejection_reason
+
+    refreshed = (await db.execute(
+        select(PaymentIntent).where(PaymentIntent.intent_id == intent_id)
+    )).scalar_one()
+    await db.refresh(refreshed)
+    return TronTxHintResponse(
+        hint_state=state.value if hasattr(state, "value") else str(state),
+        status=_effective_status(refreshed),
+        rejection_reason=reason,
     )

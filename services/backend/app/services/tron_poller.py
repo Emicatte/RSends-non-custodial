@@ -469,6 +469,24 @@ async def _run_matching_pass(network: TronNetwork) -> dict:
         return {}
 
 
+async def _run_hint_pass(network: TronNetwork) -> dict:
+    """Work through this network's submitted transaction hashes. Never raises.
+
+    Lazily imported for the same reason as the matcher: `tron_hints` imports the
+    network descriptors from here.
+    """
+    from app.services import tron_hints
+
+    try:
+        return await tron_hints.run_hint_pass(network)
+    except Exception:
+        logger.exception(
+            "[tron-poller] hint pass failed — settlements ARE recorded and the "
+            "cursor is unaffected; hints stay pending and are retried"
+        )
+        return {}
+
+
 class TronPoller:
     """Polls one TRON network for incoming USDT TRC-20 transfers, then matches.
 
@@ -495,6 +513,34 @@ class TronPoller:
                 async with httpx.AsyncClient(timeout=TRON_HTTP_TIMEOUT) as client:
                     resp = await client.get(
                         url, params=params, headers=_auth_headers()
+                    )
+                if resp.status_code != 200:
+                    last = TronEnrichmentError(
+                        f"{url} answered HTTP {resp.status_code}"
+                    )
+                    continue
+                return resp.json()
+            except Exception as exc:  # transport, timeout, unparseable body
+                last = exc
+                continue
+        raise TronEnrichmentError(f"no TRON node answered {path}: {last!r}")
+
+    async def _post_json(self, path: str, body: dict) -> dict:
+        """POST `body` to `path` on the first node that answers.
+
+        The solidity endpoints the verifier reads are POST-only, and this is a
+        sibling of `_get_json` rather than a second client on purpose: same
+        node list, same proven nodes, same headers, same timeout, same error
+        type. A verifier that dialled its own nodes could read a chain the boot
+        guard never proved.
+        """
+        last: Optional[Exception] = None
+        for base in self.node_urls:
+            url = f"{base}{path}"
+            try:
+                async with httpx.AsyncClient(timeout=TRON_HTTP_TIMEOUT) as client:
+                    resp = await client.post(
+                        url, json=body, headers=_auth_headers()
                     )
                 if resp.status_code != 200:
                     last = TronEnrichmentError(
@@ -554,6 +600,9 @@ class TronPoller:
         payment we recorded but failed to match is still on the table.
         """
         observed = await self._observe()
+        # Hints before matching: a hash verified now records its settlement in
+        # time for this same tick's matcher to close the invoice.
+        observed.update(await _run_hint_pass(self.network))
         observed.update(await _run_matching_pass(self.network))
         return observed
 
@@ -729,6 +778,22 @@ async def start_tron_poller_if_needed() -> list[TronPoller]:
 
     _pollers = started
     return started
+
+
+def poller_for_chain(chain_name: str) -> Optional[TronPoller]:
+    """The running poller for a registry chain name, or None.
+
+    Borrowing a started poller is how the verifier inherits the boot-time
+    chain-identity proof: every node in its list answered with the pinned
+    genesis blockID or the process would not be up. Returning None when nothing
+    is running is deliberate, and callers must treat it as "cannot verify right
+    now" rather than "not this chain".
+    """
+    folded = (chain_name or "").lower()
+    for poller in _pollers:
+        if poller.network.chain_name == folded:
+            return poller
+    return None
 
 
 async def stop_tron_poller() -> None:

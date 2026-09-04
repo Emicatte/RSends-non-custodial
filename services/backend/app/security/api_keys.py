@@ -90,6 +90,29 @@ GET_PUBLIC_PREFIXES = {
 }
 
 
+# ── Public POSTs, method-scoped ───────────────────────────────────
+# Deliberately a SEPARATE list from EXEMPT_PATHS. `is_exempt` is a bare
+# startswith, so an /api/v1/public entry there would exempt every future method
+# and path under that prefix, silently and forever. This list is checked only
+# for POST and only against a full path prefix, so widening it is a decision
+# somebody has to write down.
+POST_PUBLIC_PREFIXES = {
+    # The hosted checkout telling us which transaction it broadcast. The body
+    # carries a hash and the payer's address and nothing else; every value that
+    # decides where money went is re-derived from the intent and verified on
+    # chain. See app/api/public_routes.py.
+    "/api/v1/public/payment-intent",
+}
+
+
+def is_post_public(path: str) -> bool:
+    """True if a POST to `path` may proceed without an API key."""
+    for prefix in POST_PUBLIC_PREFIXES:
+        if path.startswith(prefix):
+            return True
+    return False
+
+
 def is_get_public(path: str) -> bool:
     """True if a GET to `path` may proceed without an API key (M8 allowlist)."""
     for prefix in GET_PUBLIC_PREFIXES:
