@@ -22,7 +22,12 @@ Nothing in this session changed code or tests.
 **Fixed on `fix/idempotency-tenant-scope`.** The key is now
 `(tenant, environment, path, idem_key)` (`idempotency.py:158`), where the tenant is the API
 key's `client_id` or, on the session surface, the access token's `sub`; a request with no
-derivable identity skips the cache rather than sharing one. The body fingerprint rides
+derivable identity skips the cache rather than sharing one. One carve-out, `SHARED_SECRET_PATHS`
+(`/api/v1/tx/callback`): it authenticates with the single shared HMAC secret, so every request
+that gets in is the same principal and one bucket cannot leak — without it, the only path that
+was already financial would have silently lost both its dedup and its 503. The carve-out is a
+list and not a general "unidentified" fallback on purpose: `/api/v1/auth/signup` is exempt too,
+and pooling strangers there would reintroduce this very bug. The body fingerprint rides
 **beside** the record, not in the key — in the key it would make a byte-different retry miss
 and create the duplicate the mechanism exists to prevent — and a mismatch is
 `409 IDEMPOTENCY_KEY_REUSED`. `FINANCIAL_PATHS` became `FINANCIAL_PATH_PREFIXES` with
