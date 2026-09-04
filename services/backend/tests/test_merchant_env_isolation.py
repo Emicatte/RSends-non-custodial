@@ -122,7 +122,6 @@ async def test_create_stamps_key_environment(session, monkeypatch):
     async def _no_log(*a, **k):
         return None
 
-    monkeypatch.setattr(mr, "token_is_enabled", lambda chain, cur: True)
     monkeypatch.setattr(mr, "build_onchain_payment", _no_onchain)
     monkeypatch.setattr(mr, "log_event", _no_log)
 

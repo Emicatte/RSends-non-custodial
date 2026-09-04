@@ -60,6 +60,8 @@ async def session():
 
 @pytest.fixture(autouse=True)
 def _patch_side_effects(monkeypatch):
+    """Only the on-chain quote and the audit log are neutralised — see the same
+    fixture in test_recipient_gate.py for why the token gate is left real."""
     import app.api.merchant_routes as mr
 
     async def _no_onchain(intent):
@@ -68,7 +70,6 @@ def _patch_side_effects(monkeypatch):
     async def _no_log(*a, **k):
         return None
 
-    monkeypatch.setattr(mr, "token_is_enabled", lambda chain, cur: True)
     monkeypatch.setattr(mr, "build_onchain_payment", _no_onchain)
     monkeypatch.setattr(mr, "log_event", _no_log)
 
