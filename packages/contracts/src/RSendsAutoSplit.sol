@@ -13,6 +13,7 @@ error ZeroBps();
 error ZeroAmount();
 error ZeroToken();
 error DuplicateRecipient();
+error SelfRecipient();
 error NoPolicy();
 error BelowMinAmount(uint256 amount, uint256 minAmount);
 

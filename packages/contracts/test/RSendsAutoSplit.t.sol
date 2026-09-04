@@ -199,6 +199,83 @@ contract RSendsAutoSplitTest is Test {
         autoSplit.setPolicy(address(usdc), rcpts, _bps(5000, 5000), 0);
     }
 
+    /*//////////// setPolicy: the merchant is not a valid recipient ////////////
+
+    A leg paying the merchant is a self-transfer at execution time: balanceOf
+    goes down by X and straight back up by X, so the wallet does NOT land at
+    zero and the residue equals that leg. Because executeSplit is
+    permissionless and has no cooldown, the residue is then re-split by every
+    subsequent call — the merchant's own share erodes to dust in favour of the
+    other recipients, under the ordinary keeper cadence and with no attacker
+    required. Rejected at configuration time, which is the only place it can be
+    rejected: the policy is what is wrong, not the execution.
+    //////////////////////////////////////////////////////////////////////////*/
+
+    function test_setPolicy_revert_selfRecipient_firstPosition() public {
+        address[] memory rcpts = _recipients3();
+        rcpts[0] = merchant;
+        vm.prank(merchant);
+        vm.expectRevert(SelfRecipient.selector);
+        autoSplit.setPolicy(address(usdc), rcpts, _bps(5000, 3000, 2000), 0);
+    }
+
+    function test_setPolicy_revert_selfRecipient_middlePosition() public {
+        address[] memory rcpts = _recipients3();
+        rcpts[1] = merchant;
+        vm.prank(merchant);
+        vm.expectRevert(SelfRecipient.selector);
+        autoSplit.setPolicy(address(usdc), rcpts, _bps(5000, 3000, 2000), 0);
+    }
+
+    /// Last position is the sharpest case: the remainder rule hands this leg
+    /// `total - allocated`, so the merchant would retain the rounding dust too.
+    function test_setPolicy_revert_selfRecipient_lastPosition() public {
+        address[] memory rcpts = _recipients3();
+        rcpts[2] = merchant;
+        vm.prank(merchant);
+        vm.expectRevert(SelfRecipient.selector);
+        autoSplit.setPolicy(address(usdc), rcpts, _bps(5000, 3000, 2000), 0);
+    }
+
+    /// The revert must NAME the real problem. DuplicateRecipient would be
+    /// wrong — nothing is duplicated — and would send whoever hits it looking
+    /// for a repeated address that is not there. Asserted on the raw revert
+    /// payload rather than via expectRevert, so the test states positively
+    /// which selector came back AND negatively which one did not.
+    function test_setPolicy_selfRecipient_revertsWithSelfRecipient_notDuplicateRecipient() public {
+        address[] memory rcpts = _recipients2();
+        rcpts[0] = merchant;
+
+        vm.prank(merchant);
+        (bool ok, bytes memory ret) = address(autoSplit).call(
+            abi.encodeCall(
+                RSendsAutoSplit.setPolicy,
+                (address(usdc), rcpts, _bps(5000, 5000), 0)
+            )
+        );
+
+        assertFalse(ok, "setPolicy accepted the merchant as its own recipient");
+        assertEq(ret.length, 4, "expected a 4-byte custom-error selector");
+        assertEq(bytes4(ret), SelfRecipient.selector);
+        assertTrue(bytes4(ret) != DuplicateRecipient.selector, "mislabelled as a duplicate");
+    }
+
+    /// The merchant is only rejected for ITS OWN policy. `alice` setting a
+    /// policy that pays `merchant` is ordinary and must keep working — the
+    /// check is against msg.sender, not against some global address list.
+    function test_setPolicy_anotherMerchantMayPayThisMerchant() public {
+        address[] memory rcpts = _recipients2();
+        rcpts[0] = merchant; // alice pays merchant: fine, merchant is not the caller
+        rcpts[1] = bob;
+
+        vm.prank(alice);
+        autoSplit.setPolicy(address(usdc), rcpts, _bps(5000, 5000), 0);
+
+        (address[] memory got,,) = autoSplit.getPolicy(alice, address(usdc));
+        assertEq(got[0], merchant);
+        assertEq(got[1], bob);
+    }
+
     function test_setPolicy_revert_zeroToken() public {
         vm.prank(merchant);
         vm.expectRevert(ZeroToken.selector);
@@ -262,8 +339,11 @@ contract RSendsAutoSplitTest is Test {
     function test_setPolicy_isolation_cannotWriteAnotherMerchantsPolicy() public {
         _setPolicy3(0);
 
+        // carol, not mallory: a caller may not be its own recipient, and this
+        // test is about WHOSE KEY the write lands under — not about the
+        // recipient rules.
         address[] memory theirs = new address[](2);
-        theirs[0] = mallory;
+        theirs[0] = carol;
         theirs[1] = keeper;
         vm.prank(mallory);
         autoSplit.setPolicy(address(usdc), theirs, _bps(9000, 1000), 0);
@@ -277,7 +357,7 @@ contract RSendsAutoSplitTest is Test {
         // mallory's write landed under mallory's own key only
         (address[] memory mRcpts,,) = autoSplit.getPolicy(mallory, address(usdc));
         assertEq(mRcpts.length, 2);
-        assertEq(mRcpts[0], mallory);
+        assertEq(mRcpts[0], carol);
     }
 
     /*//////////////////// clearPolicy ////////////////////*/
@@ -431,6 +511,59 @@ contract RSendsAutoSplitTest is Test {
         vm.prank(keeper);
         vm.expectRevert(ZeroAmount.selector);
         autoSplit.executeSplit(merchant, address(usdc));
+    }
+
+    /// REGRESSION GUARD for the self-recipient finding — this is the property
+    /// that self-recipient policies violated, stated directly.
+    ///
+    /// executeSplit is permissionless and has no cooldown, so the ONLY thing
+    /// stopping anyone from re-running it and re-splitting whatever is left is
+    /// that one call leaves nothing behind. When the merchant was a recipient
+    /// that stopped being true: their own leg was a self-transfer, the residue
+    /// survived, and each further call moved ~80% of it to the other
+    /// recipients — 500/300/200 became 625/374/1 in five calls, with no
+    /// attacker and no malice, just the ordinary keeper cadence.
+    ///
+    /// So: after one execution nothing may remain to re-split, and repeated
+    /// calls must be inert rather than redistributive. If a future change makes
+    /// any leg a no-op transfer (self-recipient again, a rebasing token, an
+    /// early `continue` on a zero amount), THIS is what breaks.
+    ///
+    /// Honest note on its power: it cannot go RED for the self-recipient case
+    /// any more, because setPolicy now refuses to build such a policy — the
+    /// precondition is unreachable through the public API. It guards the
+    /// invariant, and the setPolicy tests above guard the door.
+    function test_executeSplit_oneCallLeavesNothingToReSplit_selfRecipientGuard() public {
+        _setPolicy3(0);
+        _fundAndApproveMax(1_000_000);
+
+        vm.prank(keeper);
+        autoSplit.executeSplit(merchant, address(usdc));
+
+        // One call is the whole distribution: the wallet is empty and every
+        // unit is accounted for at a recipient.
+        assertEq(usdc.balanceOf(merchant), 0, "residue left behind after one execution");
+        assertEq(
+            usdc.balanceOf(alice) + usdc.balanceOf(bob) + usdc.balanceOf(carol),
+            1_000_000
+        );
+
+        uint256 aliceAfter = usdc.balanceOf(alice);
+        uint256 bobAfter   = usdc.balanceOf(bob);
+        uint256 carolAfter = usdc.balanceOf(carol);
+
+        // Anyone may keep calling. Nothing may move, ever — no drift, no dust
+        // fixed point that quietly keeps paying out.
+        for (uint256 i; i < 3; ++i) {
+            vm.prank(mallory);
+            vm.expectRevert(ZeroAmount.selector);
+            autoSplit.executeSplit(merchant, address(usdc));
+        }
+
+        assertEq(usdc.balanceOf(merchant), 0);
+        assertEq(usdc.balanceOf(alice), aliceAfter, "a repeat execution moved funds");
+        assertEq(usdc.balanceOf(bob),   bobAfter,   "a repeat execution moved funds");
+        assertEq(usdc.balanceOf(carol), carolAfter, "a repeat execution moved funds");
     }
 
     /*//////////////////// executeSplit: atomicity ////////////////////*/
