@@ -89,6 +89,12 @@ ENDPOINT_LIMITS: list[tuple[str, str, int, int, str]] = [
     ("POST",   "/api/v1/user/org/merchant-keys/",    10,    60,  "ip"),  # {id}/revoke
     ("POST",   "/api/v1/user/org/merchant-keys",      5,  3600,  "ip"),  # mint
     ("GET",    "/api/v1/user/org/merchant-keys",     120,    60,  "ip"),  # list
+    # AutoSplit source wallets — per-IP. The trailing-slash prefix covers the
+    # SIWE pair (/challenge, /verify) and {id}/disable, and MUST precede the
+    # bare GET: _match_endpoint returns the first startswith hit, so a bare
+    # entry placed above would shadow the write rule into dead code.
+    ("POST",   "/api/v1/user/org/source-wallets/",   10,    60,  "ip"),
+    ("GET",    "/api/v1/user/org/source-wallets",   120,    60,  "ip"),
     # Session-authed org stats (Phase E) — per-IP. The volume-series SUBPATH must
     # precede the bare `stats` prefix: _match_endpoint returns the first
     # startswith hit, so the bare entry would otherwise shadow it into dead code.
