@@ -60,7 +60,7 @@ Legend: **[AUTO]** = done by Render/Vercel/CI · **[AZIONE UTENTE]** = you do it
 | `DEBUG` must not be true | ERROR | `DEBUG=false` |
 | `AUTH_JWT_SECRET` ≥64 chars | ERROR | manual `token_hex(32)` |
 | `ADMIN_API_TOKEN` non-empty/placeholder, ≥32 chars, ≠ `HMAC_SECRET` | ERROR | manual `openssl rand -hex 32` |
-| `INTERNAL_PROXY_SECRET` non-empty | ERROR | Render `generateValue` |
+| `INTERNAL_PROXY_SECRET` non-empty, ≥32 chars, ≠ `HMAC_SECRET`/`ADMIN_API_TOKEN` | ERROR | Render `generateValue` — **verify it is ≥32 chars**, else set manually |
 | `WALLET_AUTH_ALLOW_LEGACY` not true | ERROR | `=false` |
 | `DATABASE_URL` not localhost | WARNING | real host |
 | `RSENDS_ROUTER_ADDRESSES_JSON` non-empty | WARNING | set after Part 1 |
@@ -492,7 +492,7 @@ re-deploy re-runs `upgrade head`, which is a no-op once at `0007`.
 | `CELERY_BROKER_URL` | Celery broker | SECRET | TLS Redis URL `/1` | `rediss://host:6379/1` |
 | `CELERY_RESULT_BACKEND` | Celery results | SECRET | TLS Redis URL `/2` | `rediss://host:6379/2` |
 | `HMAC_SECRET` | inbound callback HMAC (≥32) | SECRET | Render generateValue | (auto) |
-| `INTERNAL_PROXY_SECRET` | gates `/api/internal/*` | SECRET | Render generateValue | (auto) |
+| `INTERNAL_PROXY_SECRET` | gates `/api/internal/keeper/*` (the Auto Split keeper's work list) — its ONLY auth, on a deliberately cross-tenant read. Also set on the keeper service (same value) | SECRET | Render generateValue (≥32 chars, ≠ `HMAC_SECRET`/`ADMIN_API_TOKEN`) | (auto) |
 | `AUTH_JWT_SECRET` | session JWT (≥64) | SECRET | **manual** `token_hex(32)` | (64-char hex) |
 | `ADMIN_API_TOKEN` | admin surface bearer (≥32, ≠ `HMAC_SECRET`) | SECRET | **manual** `openssl rand -hex 32` | (64-char hex) |
 | `ALCHEMY_API_KEY` | RPC — required unless `RPC_PROVIDERS_JSON` covers every indexed chain | SECRET | dashboard.alchemy.com | `<alchemy_key>` |
@@ -511,7 +511,7 @@ re-deploy re-runs `upgrade head`, which is a no-op once at `0007`.
 | `NEXT_PUBLIC_WC_PROJECT_ID` | WalletConnect | PUBLIC | cloud.walletconnect.com | `<wc_project_id>` |
 | `RPAGOS_BACKEND_URL` | backend (server) | PUBLIC | Render web URL | `https://rsends-non-custodial.onrender.com` |
 | `NEXT_PUBLIC_RPAGOS_BACKEND_URL` / `NEXT_PUBLIC_API_URL` | backend (client) | PUBLIC | same | same |
-| `INTERNAL_PROXY_SECRET` | proxy auth | SECRET | **match backend** | (copy from Render) |
+| `INTERNAL_PROXY_SECRET` | ⚠️ **inert on Vercel** — no `apps/web` code reads it, and the proxy 404s `api/internal` (`app/api/backend/[...path]/route.ts`). The consumer is the keeper worker, not the frontend. Kept only because the `fix/xff-and-pay-poll-limit` branch would give the web app a use for it | SECRET | **match backend** | (copy from Render) |
 | `HMAC_SECRET` | callback signing | SECRET | **match backend** | (copy from Render) |
 | `NEXT_PUBLIC_RSENDS_ROUTER_BASE_SEPOLIA` | ⚠️ vestigial — zero consumers (see 1d) | PUBLIC | Part 1 deploy output | `<FILL_AFTER_CONTRACT_DEPLOY>` |
 | `NEXT_PUBLIC_TARGET_CHAIN_ID` | active chain | PUBLIC | — | `84532` |

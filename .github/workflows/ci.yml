@@ -98,6 +98,38 @@ jobs:
         # EIP-55 checksums, enabled⇒verified, and the registry schema.
         run: pytest -q -m "not e2e and not integration"
 
+  keeper:
+    name: Keeper (pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: services/keeper
+    # The keeper's lock is the only thing standing between two overlapping ticks
+    # and two executeSplit transactions, so its test runs against a REAL Redis.
+    # An in-memory fake driven from one thread proves branching, not atomicity.
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      KEEPER_TEST_REDIS_URL: "redis://localhost:6379/0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies (pinned)
+        run: pip install -r requirements-dev.txt
+      - name: Unit tests
+        run: pytest -q
+
   frontend:
     name: Frontend (tsc)
     runs-on: ubuntu-latest

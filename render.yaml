@@ -98,6 +98,53 @@ services:
       - key: RUN_MIGRATIONS_ON_BOOT
         value: "0"
 
+  # ── Auto Split keeper (SINGLE INSTANCE, ALWAYS-ON) ──────────────────────
+  # Polls previewSplit for each active source wallet and calls executeSplit.
+  # NOT part of services/backend: two static pins there
+  # (test_no_custodial_surface, test_rpc_failover) forbid a signing, web3-using
+  # module inside app/ — which is the point, not an obstacle.
+  #
+  # ⚠️ Deliberately NOT `fromGroup: rsends-shared`. That group carries
+  #    DATABASE_URL, AUTH_JWT_SECRET, HMAC_SECRET and ADMIN_API_TOKEN; this is
+  #    the one service in the system that holds a private key, so it gets the
+  #    smallest blast radius we can give it and none of those four. It reaches
+  #    merchant data only through the internal endpoint, over HTTP, read-only.
+  #
+  # ⚠️ numInstances: 1. A second instance is SAFE but wasteful — the Redis lock
+  #    makes overlapping ticks a no-op, so the loser burns a round trip and
+  #    nothing else. Raise it only if one instance cannot keep up.
+  #
+  # [MANUAL] KEEPER_PRIVATE_KEY and the gas wallet are created by the operator;
+  # this blueprint never generates a key. Fund it with a small amount of native
+  # gas — the account can trigger a merchant's own published policy or waste
+  # gas, and nothing else (executeSplit takes no destination and no amount).
+  - type: worker
+    name: rsends-autosplit-keeper
+    runtime: docker
+    plan: starter
+    region: frankfurt
+    numInstances: 1
+    dockerfilePath: ./services/keeper/Dockerfile
+    dockerContext: ./services/keeper
+    envVars:
+      # Same value as the backend's INTERNAL_PROXY_SECRET (rsends-shared,
+      # generateValue). Copy it here; a drift is a silent 403 that looks
+      # exactly like "no wallets are registered".
+      - key: INTERNAL_PROXY_SECRET
+        sync: false
+      - key: KEEPER_BACKEND_URL          # https://rsends-api.onrender.com
+        sync: false
+      - key: KEEPER_REDIS_URL            # rediss://…/3 — its own db index
+        sync: false
+      - key: KEEPER_RPC_URLS_JSON        # {"84532":"https://…"}
+        sync: false
+      - key: KEEPER_PRIVATE_KEY          # gas-only account — see above
+        sync: false
+      - key: KEEPER_ENVIRONMENT
+        value: "test"
+      - key: KEEPER_TICK_SECONDS
+        value: "60"
+
 # ═══════════════════════════════════════════════════════════════════════════
 #  Shared env group. `generateValue: true` = Render creates it once (shared).
 #  `sync: false` = you paste it in the dashboard.

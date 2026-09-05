@@ -72,9 +72,23 @@ flag the divergence and update this file in the same review.
 
 ### Security invariants (apply to every change)
 
-- **Non-custodial is absolute.** RSends never holds funds or private keys. Never add a code path
+- **Non-custodial is absolute — with ONE named, bounded exception (the keeper).** RSends never
+  holds funds, and the **backend** holds no private key and signs nothing. Never add a code path
   where the platform custodies, sweeps, or moves user funds. On-chain settlement goes
   payer → merchant / fee → fee collector via the immutable router only.
+  The exception is `services/keeper` (Auto Split), which **does** hold a key. It is bounded by
+  the shape of what it can send, not by trust: `executeSplit(merchant, token)` takes **no
+  destination and no amount**, so the account can trigger a merchant's own on-chain policy or
+  waste gas — it cannot choose a recipient, an amount, or an unregistered token. Enforced
+  statically by `services/backend/tests/test_no_custodial_surface.py`, which scans **two roots**:
+  `services/backend/app` (signs nothing — unchanged) and `services/keeper` (`Account.from_key`
+  and broadcasting confined to `executor.py`; that module may name exactly one contract method,
+  `executeSplit`; no `approve`/`transfer`/`setPolicy`/`clearPolicy` anywhere). A change that
+  widens the keeper's method set is a **review stop**. The keeper also holds **no database
+  credentials** (pinned by `services/keeper/tests/test_no_database_authority.py`) — it reads its
+  work list over `/api/internal/keeper/*` and keeps all state in Redis, so it **cannot** write
+  `source_wallets.disabled_at`, which is the merchant's pause switch and must stay
+  distinguishable from an operational back-off.
 - **Rate limiting on every public/mutating endpoint.** Backend merchant routes are enforced by
   the Redis sliding-window middleware with per-endpoint rules
   (`services/backend/app/middleware/rate_limit.py`, `ENDPOINT_LIMITS`). It is **fail-closed**:
@@ -295,7 +309,31 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
 |---|---|---|
 | `GET /api/v1/audit/log`, `/admin/aml/*` (4 routes), `/admin/approvals` (list) + `/{org_id}/approve\|decline`, `GET /health/config` | `X-Admin-Token` == **`ADMIN_API_TOKEN`** (dedicated env var) | Single `require_admin` dependency (`audit_routes.py`): constant-time `secrets.compare_digest`, denies everything when unset. **Never reuse `HMAC_SECRET` as an auth token** — startup fails in prod if the two are equal, too short, or placeholder. X-Admin-Token surfaces must also be exempt from the API-key middleware (`EXEMPT_PATHS`) or they 401 in prod before `require_admin` runs — pinned by `test_admin_approvals.py::test_admin_approvals_exempt_from_api_key_middleware`. |
 
+Internal surface (service-to-service only; the web proxy denylists `api/internal` → 404):
+
+| Surface | Auth | Notes |
+|---|---|---|
+| `GET /api/internal/keeper/source-wallets` | `X-RSend-Internal-Secret` == **`INTERNAL_PROXY_SECRET`** | The Auto Split keeper's work list. **Deliberately cross-tenant** — the keeper serves every org, so there is no org to scope by and no JWT to scope from, which makes this secret the endpoint's ONLY auth. `require_internal_secret` (`app/api/deps/`) is on the **router**, so a second endpoint added under the prefix inherits it; constant-time compare, emptiness checked BEFORE it (`compare_digest("","")` is True), **no `debug` bypass** — the version deleted in `cc768dde` had one and it does not come back. Prod guard: ≥32 chars, ≠ `HMAC_SECRET`/`ADMIN_API_TOKEN`. Returns only ACTIVE rows (`disabled_at IS NULL`) — note the SESSION list route deliberately returns disabled rows too, so do not "unify" the two queries. Resolves `chain_id`/`token_address`/`token_decimals`/`auto_split` server-side (the row never carries them) and **omits** any wallet that does not resolve rather than shipping nulls. Like the admin surface it must be in `EXEMPT_PATHS` — that means exempt from **API-key** auth, not unauthenticated; a non-exempt path 401s in the middleware before the router dependency runs. Pinned by `test_internal_keeper_endpoint.py`. |
+
 ### Known follow-ups (tracked here so they're not forgotten — do not fix as a drive-by)
+
+- **The Auto Split keeper has no push alert channel, and no on-chain test.** Two gaps left
+  open deliberately when the keeper shipped, both stated rather than half-built.
+  (a) `alert_service` (Telegram/webhook) is backend-only and the keeper is a separate service,
+  so the keeper escalates with `logger.critical` and stable greppable tokens —
+  `KEEPER_SELF_RECIPIENT_POLICY`, `KEEPER_WALLET_BACKED_OFF` — which is the same "guaranteed
+  fallback" channel `alert_service` itself ends at. Nothing pages anyone. This is the same
+  shape as the TRON cursor-stall gap below; fix them together.
+  (b) There is **no Anvil e2e for the keeper**, because `RSendsAutoSplit.sol` is not on `main`
+  (it lives on `feat/auto-split-contract`), so there is no contract to deploy into Anvil. The
+  keeper therefore carries a **hand-written minimal ABI** (`services/keeper/keeper/abi.py`),
+  whose selectors are pinned against literals taken from the compiled artifact
+  (`tests/test_abi.py`). **When that branch merges**, switch the pin to read
+  `packages/contracts/out/` directly and add the e2e — the harness at
+  `services/backend/tests/e2e/conftest.py` is copyable in ~80 lines with zero `app` imports.
+  Until then the keeper's real-chain check is the parity run described in the PR: the keeper's
+  preflight and `verify-autosplit-sepolia.sh --dry-run` must reach the same verdict for the
+  same wallet.
 
 - **Re-key session tenancy on `org_id` (durable fix for the owner-identity fallback).** The
   wallet-address tenant key is custodial-era; the settlement-wallet fallback (2026-07-12) is a
