@@ -1,0 +1,12 @@
+[
+  {
+    "address": "TWd6ezLhi7NMYv2bgRp9xyxEWiRfzCj3xh",
+    "txid": "2b5bd794d607c071aa14c2566a420175b0728939fb854b5fb02122c02e904e29",
+    "runtimeBytes": 4321,
+    "runtimeKeccak": "0xb9f7dc75fe395716479bf323df1e2ddbbb130b08c0661d9c58f491e8778948ba",
+    "retiredOn": "2026-09-05",
+    "reason": "predates the SelfRecipient fix (fix/autosplit-exclude-merchant): setPolicy accepts the merchant as its own recipient, so the zero-balance invariant can be broken and the residue re-split by any caller",
+    "measurements": "measurements.retired-TWd6ez.jsonl",
+    "note": "allowance from the spike merchant is bricked at 12345 by the guard probe and was never reset; do not reuse this address for anything"
+  }
+]

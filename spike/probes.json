@@ -1,0 +1,80 @@
+{
+  "usdt": {
+    "decimals": "6",
+    "basisPointsRate": "0",
+    "maximumFee": "0",
+    "deprecated": false,
+    "paused": false,
+    "isBlackListed_merchant": false
+  },
+  "approveZeroResetGuard": {
+    "allowanceBefore": "115792089237316195423570985008687907853269984665640564039457584007913129639935",
+    "attempted": "12345",
+    "txResult": "SUCCESS",
+    "allowanceAfter": "12345",
+    "guardPresent": false,
+    "note": "non-zero -> non-zero approve SUCCEEDED: no zero-reset guard on this deployment"
+  },
+  "addressFormat": {
+    "base58": "TT6QpDTnKqxNRYEedUc8jyGgu22PhpTucE",
+    "hex21_0x41": "41bbd6e93d434e5ef55e639e12a65ee9a58848c876",
+    "evm20": "0xbbd6e93d434e5ef55e639e12a65ee9a58848c876",
+    "note": "TRON address = 0x41 || the same 20 bytes an EVM address uses; the contract sees only the 20 bytes"
+  },
+  "splitLanded": {
+    "recipients": [
+      "TT6QpDTnKqxNRYEedUc8jyGgu22PhpTucE",
+      "TLoeXpaAuGoy7xZkPn5jczjYex8YuevKGG",
+      "TDNEBcF6gTszMB9JSjRApSXur82StwSttv",
+      "TSWqrmpepyx8GFdXYiuNB81rckksAQi8da",
+      "TX7H6YGUV6bXcQCVqxu8gRLqDhYhvx94X7",
+      "TQhU8xsioCbxUMtctnJN4hj1J3TBPduwf9",
+      "TYy6QCvVnrxySWQGJYGumcxXu5mmCeGxd9",
+      "TFee4jdcHqeKb3mKeLyn8NEQ4AHq5S4rKz",
+      "TXch8NBCxeBehaiAdEYkgiGe1zro7jiWxQ",
+      "TRZv9d8DpBzB3382e5aUmXcqj37YT2rsBY"
+    ],
+    "balances": [
+      "2000000",
+      "2000000",
+      "2000000",
+      "2000000",
+      "2000000",
+      "2000000",
+      "2000000",
+      "2000000",
+      "2000000",
+      "2000000"
+    ],
+    "expectedAfterTwoRuns": "2000000 per leg (1 USDT x 2 runs)",
+    "allEqual": true,
+    "merchantBalance": "0"
+  },
+  "getPolicyRoundTrip": {
+    "recipients": [
+      "TT6QpDTnKqxNRYEedUc8jyGgu22PhpTucE",
+      "TLoeXpaAuGoy7xZkPn5jczjYex8YuevKGG",
+      "TDNEBcF6gTszMB9JSjRApSXur82StwSttv",
+      "TSWqrmpepyx8GFdXYiuNB81rckksAQi8da",
+      "TX7H6YGUV6bXcQCVqxu8gRLqDhYhvx94X7",
+      "TQhU8xsioCbxUMtctnJN4hj1J3TBPduwf9",
+      "TYy6QCvVnrxySWQGJYGumcxXu5mmCeGxd9",
+      "TFee4jdcHqeKb3mKeLyn8NEQ4AHq5S4rKz",
+      "TXch8NBCxeBehaiAdEYkgiGe1zro7jiWxQ",
+      "TRZv9d8DpBzB3382e5aUmXcqj37YT2rsBY"
+    ],
+    "bps": [
+      1000,
+      1000,
+      1000,
+      1000,
+      1000,
+      1000,
+      1000,
+      1000,
+      1000,
+      1000
+    ],
+    "minAmount": "0"
+  }
+}
