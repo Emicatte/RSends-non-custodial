@@ -127,6 +127,41 @@ def test_nothing_distributable_is_skipped():
         assert chain.preview_calls == 0
 
 
+def test_an_empty_wallet_and_a_revoked_approval_are_told_apart_in_the_log():
+    """`_plan` collapses both into one revert (`total == 0` → ZeroAmount), so the
+    DECISION is rightly identical — but the two are opposite events and the log
+    line is the only place that can say which happened.
+
+    balance 0 with a live allowance is the normal idle wallet: nothing has
+    arrived yet, and nobody should be woken. allowance 0 with money sitting
+    there is the merchant having pulled their trustless brake
+    (`approve(spender, 0)`) — the one an operator actually wants to see. Neither
+    is an error, so nothing escalates and nothing else will ever distinguish
+    them.
+
+    Found by the live parity run against Base Sepolia: states 2 and 3 produced
+    byte-identical keeper output while the reference script, which interpolates
+    both numbers, told them apart at a glance.
+    """
+    idle = preflight(
+        FakeChain(balance=0, allowance=2**256 - 1), WALLET
+    )
+    revoked = preflight(FakeChain(balance=5_000_000, allowance=0), WALLET)
+
+    # Same decision and same reason — that part mirrors the contract.
+    assert (idle.execute, idle.reason) == (False, SKIP_ZERO_AMOUNT)
+    assert (revoked.execute, revoked.reason) == (False, SKIP_ZERO_AMOUNT)
+
+    # ...but an operator must not have to guess which one they are looking at.
+    assert idle.detail != revoked.detail
+    assert idle.detail and revoked.detail, "an empty detail explains nothing"
+
+    # Each names the number that is actually zero, and the one that is not.
+    assert "balance=0" in idle.detail
+    assert "allowance=0" in revoked.detail
+    assert "5000000" in revoked.detail, "the stranded balance is the whole point"
+
+
 def test_below_min_amount_is_skipped():
     chain = FakeChain(balance=99_999, allowance=10_000_000)
 

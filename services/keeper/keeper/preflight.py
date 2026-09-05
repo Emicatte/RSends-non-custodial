@@ -114,10 +114,20 @@ def preflight(chain, wallet) -> Decision:
     if policy is None or not policy.recipients:
         return Decision(False, SKIP_NO_POLICY)
 
-    # 2. ZeroAmount — the wallet is empty, or the merchant revoked the approval.
+    # 2. ZeroAmount — the wallet is empty, OR the merchant revoked the approval.
+    #    `_plan` collapses both into one revert, so the decision cannot tell them
+    #    apart and should not try. The log line must: an idle wallet is nothing
+    #    happening, while `approve(spender, 0)` on a funded wallet is the
+    #    merchant pulling their trustless brake. Neither escalates, so if this
+    #    string does not separate them nothing else ever will.
     total = min(balance, allowance)
     if total == 0:
-        return Decision(False, SKIP_ZERO_AMOUNT, total=0)
+        return Decision(
+            False,
+            SKIP_ZERO_AMOUNT,
+            total=0,
+            detail=f"min(balance={balance}, allowance={allowance}) = 0",
+        )
 
     # 3. BelowMinAmount — the merchant's own floor, so a split is worth its gas.
     if total < policy.min_amount:
