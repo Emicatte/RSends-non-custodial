@@ -8,10 +8,10 @@ where collapsing it would be invisible until a live outage looked like a skip.
 
 import httpx
 import pytest
-from web3.exceptions import ContractLogicError
+from web3.exceptions import ContractCustomError, ContractLogicError
 
 from keeper.backend_client import BackendClient, BackendUnavailable
-from keeper.chain import Chain, PermanentRpcError, _classify
+from keeper.chain import _ERRORS_BY_SELECTOR, Chain, PermanentRpcError, _classify
 from keeper.models import Wallet
 from keeper.preflight import PreviewReverted, RpcUnavailable
 
@@ -122,6 +122,63 @@ def test_a_transport_fault_during_preview_is_not_a_revert():
 
     with pytest.raises(RpcUnavailable):
         chain.preview_split(WALLET)
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Naming the revert — web3 7.16 does not
+# ═══════════════════════════════════════════════════════════════
+
+# keccak256 of the signatures declared in RSendsAutoSplit.sol, as LITERALS.
+# Recomputing them from `abi.py`'s own strings would be circular and would pin
+# nothing: a typo there would move both sides together and still match.
+EXPECTED_ERROR_SELECTORS = {
+    "cefa6b05": "NoPolicy",
+    "1f2a2005": "ZeroAmount",
+    "12d7693c": "BelowMinAmount",
+}
+
+
+def test_the_error_table_matches_the_contracts_selectors():
+    """The table is only useful if a live revert's four bytes land in it."""
+    assert {s: e[0] for s, e in _ERRORS_BY_SELECTOR.items()} == EXPECTED_ERROR_SELECTORS
+
+
+def _custom_error(data: str) -> ContractCustomError:
+    """How web3 7.16 raises: the raw data as BOTH the message and `.data`, with
+    no name anywhere in it (`raise_contract_logic_error_on_revert`)."""
+    return ContractCustomError(data, data=data)
+
+
+def test_an_argument_less_revert_is_named():
+    chain = Chain(_W3(_custom_error("0xcefa6b05")))
+
+    with pytest.raises(PreviewReverted) as exc:
+        chain.preview_split(WALLET)
+
+    assert str(exc.value) == "NoPolicy()"
+
+
+def test_BelowMinAmount_carries_the_two_numbers_that_explain_the_skip():
+    """The whole point of decoding: "0.04 arrived against a 0.10 floor" is an
+    operational fact a merchant can act on. The raw selector is not."""
+    data = "0x12d7693c" + f"{40000:064x}" + f"{100000:064x}"
+    chain = Chain(_W3(_custom_error(data)))
+
+    with pytest.raises(PreviewReverted) as exc:
+        chain.preview_split(WALLET)
+
+    assert str(exc.value) == "BelowMinAmount(amount=40000, minAmount=100000)"
+
+
+def test_an_unknown_selector_keeps_the_raw_bytes_instead_of_guessing():
+    """A revert we cannot name is still a skip, and the bytes are what makes it
+    diagnosable — inventing the nearest known name would be worse than opaque."""
+    chain = Chain(_W3(_custom_error("0xdeadbeef")))
+
+    with pytest.raises(PreviewReverted) as exc:
+        chain.preview_split(WALLET)
+
+    assert "0xdeadbeef" in str(exc.value)
 
 
 # ═══════════════════════════════════════════════════════════════

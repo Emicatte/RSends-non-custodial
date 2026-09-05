@@ -13,6 +13,13 @@ So a call has three outcomes, not two:
     transient fault   →  try again       →  RpcUnavailable
     permanent fault   →  bad config      →  PermanentRpcError
 
+Naming the revert is this module's job, not web3's. web3 7.16 re-raises the
+node's error `data` as BOTH the exception message and `.data`
+(`error_formatters_utils.raise_contract_logic_error_on_revert`) without ever
+consulting the contract ABI, so `str(exc)` is `"('0xcefa6b05', '0xcefa6b05')"` —
+four bytes of selector and no name. `_ERRORS_BY_SELECTOR` below is the lookup
+web3 does not do, built from the error entries `abi.py` declares.
+
 The transient/permanent split mirrors `rpc_manager._is_permanent_rpc_error`,
 including its `_TRANSIENT_OVERRIDE_PATTERNS`. That override list is not
 decoration: the 2026-08-22 incident was a quota 429 classified as permanent, so
@@ -23,6 +30,7 @@ permanent patterns match for an unrelated reason (the getLogs range limit).
 
 import logging
 
+from eth_abi import decode as abi_decode
 from web3 import Web3
 from web3.exceptions import ContractCustomError, ContractLogicError
 
@@ -56,6 +64,70 @@ def _classify(exc: Exception) -> Exception:
     if any(p in message for p in _PERMANENT_PATTERNS):
         return PermanentRpcError(str(exc))
     return RpcUnavailable(str(exc))
+
+
+def _error_table(abi) -> dict:
+    """selector → (name, argument names, argument types), from the ABI's errors.
+
+    Built once, from the same declarations `abi.py` carries for this purpose.
+    A renamed or mistyped error here changes a selector and stops matching —
+    `tests/test_chain_and_client.py` pins all three against the contract.
+    """
+    table = {}
+    for entry in abi:
+        if entry.get("type") != "error":
+            continue
+        arg_names = [i["name"] for i in entry["inputs"]]
+        arg_types = [i["type"] for i in entry["inputs"]]
+        signature = f"{entry['name']}({','.join(arg_types)})"
+        selector = bytes(Web3.keccak(text=signature))[:4].hex()
+        table[selector] = (entry["name"], arg_names, arg_types)
+    return table
+
+
+_ERRORS_BY_SELECTOR = _error_table(AUTO_SPLIT_ABI)
+
+
+def _named(raw: str):
+    """`0x12d7693c…` → `BelowMinAmount(amount=50000, minAmount=100000)`.
+
+    None when the string is not revert data we can name — the caller then keeps
+    what web3 gave it rather than inventing a decoding.
+    """
+    body = raw[2:] if raw[:2].lower() == "0x" else raw
+    known = _ERRORS_BY_SELECTOR.get(body[:8].lower())
+    if known is None:
+        return None
+    name, arg_names, arg_types = known
+    if not arg_types:
+        return f"{name}()"
+    try:
+        values = abi_decode(arg_types, bytes.fromhex(body[8:]))
+    except Exception:
+        # The selector matched, so the name is still the useful half.
+        return f"{name}(<undecodable args: 0x{body[8:]}>)"
+    return f"{name}(" + ", ".join(f"{n}={v}" for n, v in zip(arg_names, values)) + ")"
+
+
+def _revert_detail(exc: Exception) -> str:
+    """What the revert SAYS, decoded here because web3 7.16 does not decode it.
+
+    `BelowMinAmount(amount, minAmount)` is the reason declaring the errors was
+    worth it: it is the one revert that carries the numbers, and "the merchant's
+    floor is 0.10 USDC and 0.04 arrived" is a different operational fact from
+    "no policy". Falls back to web3's own text — never raises, and never turns
+    an unknown selector into a guess.
+    """
+    fallback = None
+    for candidate in (getattr(exc, "data", None), getattr(exc, "message", None)):
+        if not isinstance(candidate, str):
+            continue
+        named = _named(candidate)
+        if named is not None:
+            return named
+        if fallback is None:
+            fallback = candidate
+    return fallback if fallback is not None else str(exc)
 
 
 class Chain:
@@ -129,9 +201,9 @@ class Chain:
             )
             return int(total), [int(a) for a in amounts]
         except (ContractCustomError, ContractLogicError) as exc:
-            # Named because the ABI declares the three errors `_plan` can throw.
-            # BelowMinAmount carries (amount, minAmount) — the one genuinely
-            # informative revert, and the reason declaring them was worth it.
-            raise PreviewReverted(str(exc)) from exc
+            # Named HERE: web3 hands back the raw selector, so the ABI's error
+            # declarations only become a name once `_revert_detail` looks them
+            # up. An unknown selector keeps web3's text rather than a guess.
+            raise PreviewReverted(_revert_detail(exc)) from exc
         except Exception as exc:
             raise _classify(exc) from exc
