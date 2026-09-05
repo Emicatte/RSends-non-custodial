@@ -32,6 +32,7 @@ import {
   INITIAL_RETRY_GIVE_UP_AFTER,
   SLOW_NOTICE_AFTER,
   pollDelay,
+  throttleDelay,
   type PollKind,
 } from '@/lib/web3/intentPoll'
 
@@ -66,15 +67,47 @@ export function usePaymentIntent(intentId: string): UsePaymentIntentResult {
     }
   }
 
-  const schedule = useCallback((run: () => void) => {
+  const scheduleIn = useCallback((delay: number, run: () => void) => {
     if (modeRef.current === 'stopped') return
     clearTimer()
-    const delay = pollDelay(
-      modeRef.current,
-      attemptRef.current,
-      Date.now() - startedAtRef.current,
-    )
     timerRef.current = setTimeout(run, delay)
+  }, [])
+
+  const schedule = useCallback(
+    (run: () => void) => {
+      if (modeRef.current === 'stopped') return
+      scheduleIn(
+        pollDelay(
+          modeRef.current,
+          attemptRef.current,
+          Date.now() - startedAtRef.current,
+        ),
+        run,
+      )
+    },
+    [scheduleIn],
+  )
+
+  /**
+   * The initial fetch, and only it, gives up after its window: the payer has
+   * seen nothing at all, so an honest "cannot reach the service" plus a retry
+   * beats a shimmer that never resolves. Returns true once it has done so.
+   */
+  const giveUpIfInitialExhausted = useCallback((detail: string | null) => {
+    if (
+      modeRef.current !== 'initial' ||
+      Date.now() - startedAtRef.current < INITIAL_RETRY_GIVE_UP_AFTER
+    ) {
+      return false
+    }
+    modeRef.current = 'stopped'
+    clearTimer()
+    if (slowTimerRef.current) {
+      clearTimeout(slowTimerRef.current)
+      slowTimerRef.current = null
+    }
+    setPhase({ kind: 'unreachable', detail })
+    return true
   }, [])
 
   const tick = useCallback(async () => {
@@ -91,6 +124,16 @@ export function usePaymentIntent(intentId: string): UsePaymentIntentResult {
         setPhase({ kind: 'not_found' })
         return
       }
+      // Rate limited (429), or the limiter itself is down and failing closed
+      // (503 RATE_LIMIT_UNAVAILABLE). Both mean "ask again later", and both are
+      // made worse by the steady cadence the other errors deliberately keep:
+      // each retry re-enters the very bucket it is waiting on.
+      if (res.status === 429 || res.status === 503) {
+        if (giveUpIfInitialExhausted(`HTTP ${res.status}`)) return
+        scheduleIn(throttleDelay(retryAfterSeconds(res)), () => void tick())
+        return
+      }
+
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
       const raw = (await res.json()) as RawPaymentIntent
@@ -127,19 +170,7 @@ export function usePaymentIntent(intentId: string): UsePaymentIntentResult {
       // retry beats a shimmer that never resolves. watch/sync keep their
       // cadence instead — there the intent is already on screen and a
       // transient error must not kill the poll.
-      if (
-        modeRef.current === 'initial' &&
-        Date.now() - startedAtRef.current >= INITIAL_RETRY_GIVE_UP_AFTER
-      ) {
-        modeRef.current = 'stopped'
-        clearTimer()
-        if (slowTimerRef.current) {
-          clearTimeout(slowTimerRef.current)
-          slowTimerRef.current = null
-        }
-        setPhase({ kind: 'unreachable', detail: errorDetail(err) })
-        return
-      }
+      if (giveUpIfInitialExhausted(errorDetail(err))) return
       // Schedule with the CURRENT attempt (first retry uses the first delay),
       // then advance the counter for the next round.
       schedule(() => void tick())
@@ -204,6 +235,17 @@ export function usePaymentIntent(intentId: string): UsePaymentIntentResult {
   }, [intentId, tick])
 
   return { phase, backendPaid, refresh, startSyncPolling }
+}
+
+/**
+ * The server's Retry-After in seconds, or null when it is absent or not a
+ * number. The proxy replays the header precisely so this can be read.
+ */
+function retryAfterSeconds(res: Response): number | null {
+  const raw = res.headers?.get?.('retry-after')
+  if (!raw) return null
+  const seconds = Number(raw)
+  return Number.isFinite(seconds) ? seconds : null
 }
 
 /** First line of the raw error, bounded. Support-facing only, never a headline. */

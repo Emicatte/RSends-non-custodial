@@ -13,6 +13,7 @@ import {
   INITIAL_RETRY_GIVE_UP_AFTER,
   SLOW_NOTICE_AFTER,
   SYNC_DELAYS,
+  THROTTLE_MAX_DELAY,
   WATCH_INTERVAL,
 } from '@/lib/web3/intentPoll'
 
@@ -309,5 +310,134 @@ describe('usePaymentIntent when the payment service cannot be reached', () => {
       window.dispatchEvent(new Event('online'))
     })
     expect(fetchMock).toHaveBeenCalledTimes(callsAtGiveUp)
+  })
+})
+
+// ── rate limiting ────────────────────────────────────────────
+//
+// The watch poll deliberately keeps its cadence through errors (a transient
+// blip must not kill a poll whose intent is already on screen). A 429 is not a
+// blip: holding the cadence means hammering a bucket that then never drains,
+// so the tab stays limited for as long as it is open. Back off instead.
+
+describe('usePaymentIntent when the backend rate limits it', () => {
+  function limited(retryAfter?: string) {
+    return {
+      ok: false,
+      status: 429,
+      headers: { get: (h: string) => (h.toLowerCase() === 'retry-after' ? retryAfter ?? null : null) },
+      json: async () => ({ error: 'RATE_LIMIT_EXCEEDED', retry_after: 60 }),
+    }
+  }
+
+  it('backs off instead of holding the watch cadence', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(okResponse(RAW)) // initial load succeeds
+      .mockResolvedValue(limited('60'))
+    global.fetch = fetchMock as never
+    jest.useFakeTimers()
+
+    const { unmount } = renderHook(() => usePaymentIntent('pi_limited'))
+    await flush()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    // First watch tick is rate limited.
+    await act(async () => {
+      jest.advanceTimersByTime(WATCH_INTERVAL)
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+
+    // The normal cadence would fire again here. It must not.
+    await act(async () => {
+      jest.advanceTimersByTime(WATCH_INTERVAL)
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+
+    await act(async () => {
+      jest.advanceTimersByTime(THROTTLE_MAX_DELAY)
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    unmount()
+  })
+
+  it('keeps the loaded intent on screen while throttled', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(okResponse(RAW))
+      .mockResolvedValue(limited('60'))
+    global.fetch = fetchMock as never
+    jest.useFakeTimers()
+
+    const { result, unmount } = renderHook(() => usePaymentIntent('pi_limited2'))
+    await flush()
+    await act(async () => {
+      jest.advanceTimersByTime(WATCH_INTERVAL)
+    })
+
+    // Being throttled is not being unreachable: the intent is still valid.
+    expect(result.current.phase.kind).toBe('ready')
+    unmount()
+  })
+
+  it('recovers the normal cadence once the limit clears', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(okResponse(RAW))
+      .mockResolvedValueOnce(limited('60'))
+      .mockResolvedValue(okResponse(RAW))
+    global.fetch = fetchMock as never
+    jest.useFakeTimers()
+
+    const { unmount } = renderHook(() => usePaymentIntent('pi_recover'))
+    await flush()
+    await act(async () => {
+      jest.advanceTimersByTime(WATCH_INTERVAL)
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+
+    // Backoff elapses, the retry succeeds...
+    await act(async () => {
+      jest.advanceTimersByTime(THROTTLE_MAX_DELAY)
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+
+    // ...and the steady cadence resumes: one watch interval, exactly one call.
+    // Still throttled, this window (well under THROTTLE_MIN_DELAY) would be
+    // silent.
+    await act(async () => {
+      jest.advanceTimersByTime(WATCH_INTERVAL)
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+    unmount()
+  })
+
+  it('backs off on the fail-closed 503 too', async () => {
+    // Redis loss makes the limiter itself answer 503 RATE_LIMIT_UNAVAILABLE.
+    // Retrying every 5s through an outage is exactly the wrong response.
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(okResponse(RAW))
+      .mockResolvedValue({
+        ok: false,
+        status: 503,
+        headers: { get: () => '5' },
+        json: async () => ({ error: 'RATE_LIMIT_UNAVAILABLE' }),
+      })
+    global.fetch = fetchMock as never
+    jest.useFakeTimers()
+
+    const { unmount } = renderHook(() => usePaymentIntent('pi_503'))
+    await flush()
+    await act(async () => {
+      jest.advanceTimersByTime(WATCH_INTERVAL)
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+
+    await act(async () => {
+      jest.advanceTimersByTime(WATCH_INTERVAL)
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    unmount()
   })
 })

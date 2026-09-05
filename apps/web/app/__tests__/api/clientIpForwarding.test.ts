@@ -137,3 +137,37 @@ describe.each(PROXIES)('%s proxy', (_name, call) => {
     }
   })
 })
+
+describe('pay proxy rate-limit headers', () => {
+  it('replays Retry-After and the X-RateLimit trio on a 429', async () => {
+    // The route re-encodes the body, so backend headers are not copied
+    // wholesale. These are the ones the client needs: without Retry-After a
+    // 429-aware poller has nothing to back off by.
+    fetchMock.mockResolvedValue(
+      new Response('{"error":"RATE_LIMIT_EXCEEDED","retry_after":60}', {
+        status: 429,
+        headers: {
+          'content-type': 'application/json',
+          'retry-after': '60',
+          'x-ratelimit-limit': '40',
+          'x-ratelimit-remaining': '0',
+          'x-ratelimit-reset': '1789999999',
+        },
+      }),
+    )
+
+    const res = await callPay()
+
+    expect(res.status).toBe(429)
+    expect(res.headers.get('retry-after')).toBe('60')
+    expect(res.headers.get('x-ratelimit-limit')).toBe('40')
+    expect(res.headers.get('x-ratelimit-remaining')).toBe('0')
+    expect(res.headers.get('x-ratelimit-reset')).toBe('1789999999')
+  })
+
+  it('leaves the headers off when the backend sends none', async () => {
+    const res = await callPay()
+    expect(res.status).toBe(200)
+    expect(res.headers.get('retry-after')).toBeNull()
+  })
+})

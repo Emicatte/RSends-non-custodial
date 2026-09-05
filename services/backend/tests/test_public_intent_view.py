@@ -391,7 +391,13 @@ def test_merchant_get_no_longer_public(monkeypatch):
 # ── middleware: per-IP rate limit ────────────────────────────
 
 def test_public_view_per_ip_rate_limited(monkeypatch):
-    """21st request in the window from one IP → 429 (20/min per-IP rule)."""
+    """41st request in the window from one IP → 429 (40/min per-IP rule).
+
+    Sized from what the checkout actually does: a single tab spends 13 of these
+    in its first minute (one initial fetch, then the 5s watch ladder) and 6/min
+    after it slows down. 20 left no room for a second viewer or a reload, and
+    raising a limit is a compatible change (INTEGRATION_CONTRACT.md §10).
+    """
     from app.middleware.rate_limit import RateLimitMiddleware
 
     async def _redis_down(*a, **k):
@@ -410,9 +416,9 @@ def test_public_view_per_ip_rate_limited(monkeypatch):
     c = TestClient(app, raise_server_exceptions=False)
     url = f"/api/v1/public/payment-intent/pi_{secrets.token_hex(16)}"
 
-    codes = [c.get(url).status_code for _ in range(21)]
-    assert codes[:20] == [200] * 20
-    assert codes[20] == 429
+    codes = [c.get(url).status_code for _ in range(41)]
+    assert codes[:40] == [200] * 40
+    assert codes[40] == 429
 
 
 # ── middleware: per-intent global ceiling ────────────────────

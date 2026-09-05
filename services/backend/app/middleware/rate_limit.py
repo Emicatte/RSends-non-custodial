@@ -13,7 +13,7 @@ Limiti specifici:
   POST /api/v1/merchant/payment-intent       → 30/min  per API key
   POST /api/v1/merchant/webhook/register      → 5/hora  per API key
   GET  /api/v1/merchant/payment-intent/{id}   → 60/min  per API key
-  GET  /api/v1/public/payment-intent/{id}     → 20/min  per IP (hosted checkout)
+  GET  /api/v1/public/payment-intent/{id}     → 40/min  per IP + 240/min per intent
   POST /api/v1/tx/callback                    → 10/min  per IP
   GET  /api/v1/audit/log                      → 30/min  per IP
   Admin brute-force: 5/min per IP, ban 15min dopo 10 fail/ora
@@ -56,7 +56,14 @@ ENDPOINT_LIMITS: list[tuple[str, str, int, int, str]] = [
     ("GET",  "/api/v1/merchant/payment-intent/",     60,    60,  "api_key"),  # get by id
     ("GET",  "/api/v1/merchant/transactions",        60,    60,  "api_key"),
     ("POST", "/api/v1/public/payment-intent",        5,     60,  "ip"),  # tx hint (unauthenticated → per-IP)
-    ("GET",  "/api/v1/public/payment-intent",        20,    60,  "ip"),  # hosted checkout polling (unauthenticated → per-IP)
+    # Hosted checkout polling (unauthenticated → per-IP). Sized from what the
+    # checkout actually does: one tab spends 13 in its first minute (the initial
+    # fetch, then the 5s watch ladder) and 6/min once it slows down. At 20 a
+    # second viewer of the same link — a reload, a phone beside a laptop — put
+    # the pair over, and the payer-facing symptom was a "cannot reach the
+    # payment service" card on a perfectly healthy service. See also
+    # PUBLIC_INTENT_GLOBAL_LIMIT, which is what bounds the RPC cost here.
+    ("GET",  "/api/v1/public/payment-intent",        40,    60,  "ip"),
     ("POST", "/api/v1/tx/callback",                  10,    60,  "ip"),
     ("GET",  "/api/v1/audit/log",                    30,    60,  "ip"),
     # Admin approval surface (X-Admin-Token, server-to-server). Most-specific

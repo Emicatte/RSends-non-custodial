@@ -6,6 +6,14 @@ function getBackendUrl() {
   return requireEnv('RPAGOS_BACKEND_URL')
 }
 
+/** Replayed to the browser so the poll can honour the limit it just hit. */
+const RATE_LIMIT_HEADERS = [
+  'retry-after',
+  'x-ratelimit-limit',
+  'x-ratelimit-remaining',
+  'x-ratelimit-reset',
+] as const
+
 /**
  * GET /api/pay/{intentId}
  *
@@ -38,7 +46,19 @@ export async function GET(
     })
 
     const body = await res.json()
-    return NextResponse.json(body, { status: res.status })
+
+    // The body is re-encoded here, so backend headers are not copied wholesale
+    // (content-length/encoding would no longer describe what we send). These
+    // four are replayed explicitly: without Retry-After the checkout's poll has
+    // nothing to back off by, and a client that cannot back off keeps the
+    // bucket it is waiting on permanently full.
+    const headers = new Headers()
+    for (const h of RATE_LIMIT_HEADERS) {
+      const v = res.headers.get(h)
+      if (v) headers.set(h, v)
+    }
+
+    return NextResponse.json(body, { status: res.status, headers })
   } catch (err) {
     console.error('[pay proxy] Backend fetch failed:', err)
     return NextResponse.json(
