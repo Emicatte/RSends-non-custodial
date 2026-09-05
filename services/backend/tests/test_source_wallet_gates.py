@@ -145,11 +145,30 @@ async def _row_count(session) -> int:
 
 def _open_autosplit(monkeypatch):
     """The AutoSplit chain gate sits BEFORE the token gate and is fail-closed
-    None on every chain until the operator configures the address map — mock
-    it open so a LATER gate can be the deciding check."""
+    None on every unconfigured chain — mock it open so a LATER gate can be the
+    deciding check, on any chain, without depending on the address map."""
     import app.services.source_wallet_service as svc
 
     monkeypatch.setattr(svc, "auto_split_address_for", lambda chain: AUTOSPLIT_ADDR)
+
+
+@pytest.fixture
+def autosplit_configured(monkeypatch):
+    """The operator env flip: RSendsAutoSplit deployed on base_sepolia only.
+
+    Nothing is mocked — this patches the raw AUTO_SPLIT_ADDRESSES_JSON string
+    on the cached settings (the `split_enabled` idiom from
+    test_intent_split_gate.py; the parsed map is a property that re-parses per
+    access, so no cache clearing) and lets the real resolver run. Tests using
+    this fixture exercise the shipping code path, not a stub of it.
+    """
+    from app.config import get_settings
+
+    monkeypatch.setattr(
+        get_settings(),
+        "auto_split_addresses_json",
+        '{"' + CHAIN + '": "' + AUTOSPLIT_ADDR + '"}',
+    )
 
 
 # ── Token gate: rejects both flavors, control proves attribution ──────────
@@ -218,31 +237,43 @@ async def test_unknown_chain_rejected_no_row(session, stub_siwe):
 
 
 @pytest.mark.asyncio
-async def test_supported_chain_without_autosplit_rejected(session, stub_siwe):
+async def test_supported_chain_without_autosplit_rejected(
+    session, stub_siwe, autosplit_configured
+):
     """chain=tron, token=USDT: chain IS supported and the token IS enabled
     (token_is_enabled("tron","USDT") is True — the counterexample proving the
     token gate insufficient), but no AutoSplit ADDRESS is configured there →
-    422 AUTO_SPLIT_UNAVAILABLE, no row. Nothing is stubbed: the fail-closed
-    default (no chain has AutoSplit until the operator sets the address map)
-    IS the condition under test.
+    422 AUTO_SPLIT_UNAVAILABLE, no row.
 
-    The address is a real TRON one, and that is a CHANGE. This test used to
-    pass an EVM address deliberately, on the reasoning that "the CHAIN gate
-    must be the rejector, not the address regex" — a premise the address-family
-    dispatch has since made obsolete. An 0x address on a TRON chain is now
-    refused at PARSE (`RECIPIENT_CHAIN_MISMATCH`-style, mirroring the intent
-    path), so passing one would never reach the AutoSplit gate and this test
-    would be asserting the wrong rejection. The family gate and the AutoSplit
-    gate are both real; each needs its own test, and this is the AutoSplit one.
+    `autosplit_configured` is the load-bearing part. Before the address map was
+    wired this test passed because auto_split_address_for returned None for
+    EVERY chain — the refusal was real but unattributable, and would have
+    survived the gate being deleted. The map is configured for real here, so
+    the assertions below are non-vacuous: base_sepolia resolves in the very
+    same environment in which tron does not.
 
-    Note what is NOT being asserted: that TRON is ineligible for Auto Split. It
-    is eligible — the contract runs there — and this 422 says only that no
-    address is configured on this chain today, exactly as it would for
-    base_sepolia with an empty map.
+    Note carefully what is NOT being asserted, because this test used to assert
+    it: that TRON is ineligible for Auto Split. It is eligible — the contract
+    compiles and runs there — and the refusal is no longer "tron is watch_only"
+    but simply "no address is configured for this chain", exactly what
+    base_sepolia would get from an empty map. The map is the gate.
+
+    The address is a real TRON one, and that is also a change. Passing an EVM
+    address here used to be deliberate ("the CHAIN gate must be the rejector,
+    not the address regex"), a premise the address-family dispatch has since
+    made obsolete: an 0x address on a TRON chain is now refused at PARSE, so it
+    would never reach the AutoSplit gate and this test would be asserting the
+    wrong rejection. Both gates are real; each has its own test, and
+    `test_address_from_the_wrong_family_is_refused_at_parse` is the other one.
     """
     from app.services.router_registry import token_is_enabled
+    from app.services.source_wallet_service import auto_split_address_for
 
     assert token_is_enabled("tron", "USDT") is True  # the trap being pinned
+    # …and the feature is NOT simply off everywhere — the control that makes
+    # the refusal below attributable to tron's absence from the map:
+    assert auto_split_address_for(CHAIN) == AUTOSPLIT_ADDR
+    assert auto_split_address_for("tron") is None
 
     user_id, org_id = await _make_org(session)
     with pytest.raises(HTTPException) as exc:
@@ -298,6 +329,34 @@ async def test_control_autosplit_gate_mocked_open_succeeds(session, stub_siwe, m
 
     await _verify(session, (user_id, org_id, "admin"))
     assert await _row_count(session) == 1
+
+
+@pytest.mark.asyncio
+async def test_configured_chain_registers_with_nothing_mocked(
+    session, stub_siwe, autosplit_configured
+):
+    """The positive half: base_sepolia + USDC registers through the REAL
+    resolver reading the REAL address map — no gate is stubbed.
+
+    The control above proves the 422 belongs to the AutoSplit gate; this proves
+    the gate opens on the operator's env flip rather than only on a mock, and
+    that the row is stamped with the address the map actually names.
+    """
+    from app.models.source_wallet_models import SourceWallet
+    from app.services.source_wallet_service import resolve_registration_context
+
+    user_id, org_id = await _make_org(session)
+
+    await _verify(session, (user_id, org_id, "admin"))
+
+    row = (await session.execute(select(SourceWallet))).scalar_one()
+    assert row.chain == CHAIN
+    assert row.environment == "test"
+    assert row.token_symbol == "USDC"
+    # The registration context the row was built from carries the configured
+    # address — not a default, and not the mock the other tests inject.
+    ctx = resolve_registration_context(CHAIN, "USDC")
+    assert ctx["auto_split_address"] == AUTOSPLIT_ADDR
 
 
 # ── Schema: the client can never name a token by address ──────────────────

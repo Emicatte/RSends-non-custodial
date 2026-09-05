@@ -68,6 +68,27 @@ class Settings(BaseSettings):
     # for any chain not in this map — set it only after the contract is
     # deployed and the indexer knows the event (see DEPLOY_RUNBOOK 1e).
     split_router_addresses_json: str = ""
+    # JSON map of chain NAME → RSendsAutoSplit address (ownerless, fee-less
+    # keeper-executed split of an incoming balance). FAIL-CLOSED: source-wallet
+    # registration 422s AUTO_SPLIT_UNAVAILABLE for any chain not in this map,
+    # so deploying the contract and not recording the address just keeps the
+    # feature off (see DEPLOY_RUNBOOK 1f).
+    #
+    # Keyed by NAME, unlike the three router maps above, which key by EVM chain
+    # id. AutoSplit runs on TRON as well as Base and TRON has no EVM chain id —
+    # and must not be given a synthetic one, since a TRON id in an EVM chain
+    # table starts a PaymentWatcher against a non-EVM node and SystemExits the
+    # boot. Same vocabulary as token_registry.json, which already keys `tron`
+    # and `tron_nile` by name. This map is ALSO the eligibility gate: a chain
+    # being `settlement: watch_only` does not exclude it, so what is listed here
+    # is exactly what Auto Split is live on.
+    #
+    # NEVER put an address from this map into any RSENDS_ROUTER_* or
+    # SPLIT_ROUTER map: the indexer builds its log filters from those chain
+    # sets and would fetch every SplitExecuted only to drop it with a WARNING
+    # per execution. `auto_split_address_for` refuses a colliding address
+    # outright rather than trusting this comment.
+    auto_split_addresses_json: str = ""
     # Optional JSON map { chain_id : [ {name, url[, priority]} ] } of EXTRA
     # RPC providers merged into rpc_manager's failover list, between Alchemy
     # (priority -1) and the built-in public fallbacks (default priority 0,
@@ -218,6 +239,35 @@ class Settings(BaseSettings):
     def split_router_addresses(self) -> dict:
         """{chain_id(str) -> RSendsSplitRouter address} parsed from the JSON env."""
         return _parse_json_map(self.split_router_addresses_json, "SPLIT_ROUTER_ADDRESSES_JSON")
+
+    @property
+    def auto_split_addresses(self) -> dict:
+        """{chain_name(str) -> RSendsAutoSplit address} parsed from the JSON env.
+
+        Deliberately NOT in the `validate_settings` malformed-map loop below,
+        unlike the three router maps: a malformed value here WARNS and the
+        backend still boots.
+
+        OWNER'S DECISION (Emilio, 2026-09-04), asked and answered explicitly
+        when this map was wired — not an oversight, and not a default that fell
+        out of the implementation. The reasoning, recorded so nobody "fixes" it
+        into parity later:
+
+        `auto_split_address_for` is fail-closed. A malformed value parses to
+        `{}`, every chain resolves to None, and source-wallet registration 422s
+        AUTO_SPLIT_UNAVAILABLE — which is exactly the state the product ships
+        in today. Auto Split simply stays INERT: nothing settles wrongly,
+        nothing is half-configured, no money moves on a bad address. Refusing
+        to start the entire backend — payments, checkout, webhooks, dashboard —
+        over a typo in an inert feature's env var is disproportionate to that
+        outcome.
+
+        The three router maps are a different case and keep the hard stop: they
+        are the money path, where `{}` silently disables payment detection
+        while everything else looks healthy. There the failure is invisible and
+        expensive, so booting is the wrong answer.
+        """
+        return _parse_json_map(self.auto_split_addresses_json, "AUTO_SPLIT_ADDRESSES_JSON")
 
     @property
     def rpc_extra_providers(self) -> dict:

@@ -37,6 +37,7 @@ from typing import Optional
 
 from fastapi import HTTPException
 
+from app.config import get_settings
 from app.services.chain_access import is_testnet_chain, is_watch_only_testnet
 from app.services.router_registry import (
     _enc_addr,
@@ -50,32 +51,85 @@ from app.services.router_registry import (
 logger = logging.getLogger(__name__)
 
 
+def _address_in_any_router_map(address: str, settings) -> bool:
+    """True iff `address` appears in ANY router address map, on any chain.
+
+    The constraint is flat, not per-chain: an address the indexer watches on
+    base is not made safe by being registered for base_sepolia, because the
+    watcher set is a union and the filters are built from it.
+    """
+    wanted = address.lower()
+    for attr in (
+        "rsends_router_addresses",
+        "rsends_router_v2_addresses",
+        "split_router_addresses",
+    ):
+        for configured in (getattr(settings, attr, {}) or {}).values():
+            if isinstance(configured, str) and configured.lower() == wanted:
+                return True
+    return False
+
+
 def auto_split_address_for(chain: str) -> Optional[str]:
     """The deployed RSendsAutoSplit for `chain`, or None if there is none.
 
-    THE SEAM, and deliberately fail-closed: it returns None for every chain
-    today, so no source wallet can be registered anywhere until an operator
-    wires the address map. That is the correct default for a feature whose
-    contract is deployed on exactly one testnet — "not configured" and "not
-    deployed" should be indistinguishable from the API's side.
+    Reads `AUTO_SPLIT_ADDRESSES_JSON` through the
+    `SPLIT_ROUTER_ADDRESSES_JSON` three-layer pattern: raw settings field ->
+    parsed property -> this resolver. Fail-closed everywhere it can be — unset,
+    malformed, unknown chain and unconfigured chain are one answer, None, and
+    a source wallet cannot be registered on a chain that gives it.
 
-    The map itself (`AUTO_SPLIT_ADDRESSES_JSON`, `{chain_name: address}`,
-    following the `SPLIT_ROUTER_ADDRESSES_JSON` three-layer pattern: raw
-    settings field -> parsed property -> resolver) is NOT wired here yet; that
-    is a separate, operator-facing change. When it lands, only this function
-    body changes.
+    Keyed by chain NAME (`{chain_name: address}`), unlike the three router maps,
+    which key by EVM chain id. AutoSplit runs on TRON as well as Base, and TRON
+    has no EVM chain id to key by — nor may it be given a synthetic one, since
+    `728126428` in an EVM chain table starts a PaymentWatcher against a non-EVM
+    node and SystemExits the boot (`test_tron_poller.py:790`). The name is the
+    registry's own vocabulary: `token_registry.json` already keys `tron` and
+    `tron_nile` that way.
 
-    Keyed by chain NAME, not by chain id, unlike the three router maps: TRON is
-    a supported AutoSplit chain and has no EVM chain id to key by. Same
-    vocabulary as `token_registry.json`, which already keys `tron`/`tron_nile`
-    by name.
+    THE MAP IS THE GATE. There is deliberately no `is_watch_only_chain` refusal
+    here. That field describes settlement ROUTING for the payment path — the
+    payer sends TRC-20 straight to the merchant, with no router — and says
+    nothing about whether a merchant may point a keeper at their own wallet on
+    the same chain. Auto Split is a separate capability, the contract does run
+    on TRON, and which chains are actually live is decided by what the operator
+    put in the map and nothing else.
 
-    One hard constraint for whoever wires it: the AutoSplit address must NEVER
-    be added to any `RSENDS_ROUTER_*_ADDRESSES_JSON` map. The indexer builds
-    its log filters from those chain sets, so it would fetch every
-    `SplitExecuted` and then drop it with a WARNING per execution.
+    Two guards the router resolvers do not have, because this one is reached by
+    a registration surface rather than by the payment builder:
+
+    1. `chain_is_supported` — the map is operator-supplied text, so a key that
+       names no chain this system has a settlement path for must not resolve.
+       `chain_is_supported("arbitrum")` is False even though `CHAIN_IDS` knows
+       42161, so an `"arbitrum"` entry gives back nothing.
+
+    2. `_address_in_any_router_map` — the address must NEVER also live in a
+       `RSENDS_ROUTER_*` or `SPLIT_ROUTER` map. The indexer builds its log
+       filters from those chain sets, so it would fetch every `SplitExecuted`
+       and then drop it with a WARNING per execution. A colliding address is
+       refused and the collision is logged, because otherwise the only symptom
+       is that per-execution warning in a log nobody is reading.
     """
-    return None
+    if not chain_is_supported(chain):
+        return None
+
+    settings = get_settings()
+    addresses = getattr(settings, "auto_split_addresses", {}) or {}
+    address = addresses.get(chain)
+    if address is None:
+        return None
+
+    if _address_in_any_router_map(address, settings):
+        logger.error(
+            "AUTO_SPLIT_ADDRESSES_JSON: %s (chain %s) is ALSO configured in a "
+            "RSENDS_ROUTER_*/SPLIT_ROUTER address map. Refusing to use it — the "
+            "indexer would ingest every SplitExecuted from it and then discard "
+            "each one. Remove the address from the router map.",
+            address, chain,
+        )
+        return None
+
+    return address
 
 
 def resolve_registration_context(chain: str, token_symbol: str) -> dict:
