@@ -60,9 +60,10 @@ class RpcUnavailable(Exception):
 class PreviewReverted(Exception):
     """`previewSplit` reverted — a DECISION, not an error.
 
-    Carries the decoded custom error when web3 could name it (`NoPolicy()`,
-    `BelowMinAmount(amount, minAmount)`), which is the difference between a log
-    line that explains itself and one that says "call failed".
+    Carries the custom error that `chain._revert_detail` decoded from the raw
+    selector web3 returns (`NoPolicy()`, `BelowMinAmount(amount, minAmount)`),
+    which is the difference between a log line that explains itself and one that
+    says "call failed".
     """
 
 

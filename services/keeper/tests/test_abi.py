@@ -54,10 +54,11 @@ def test_erc20_selectors_match():
 
 
 def test_the_three_reachable_custom_errors_are_declared():
-    """Only these three are reachable from `_plan`, and declaring them is what
-    lets web3 decode a revert BY NAME instead of handing back opaque bytes.
-    `BelowMinAmount` is the only one carrying arguments, which makes it the one
-    useful log line — so its inputs must be right, not just its name."""
+    """Only these three are reachable from `_plan`, and they are declared for
+    `chain._ERRORS_BY_SELECTOR` to decode with — web3 7.16 hands back the raw
+    selector and never reads this ABI. `BelowMinAmount` is the only one carrying
+    arguments, which makes it the one useful log line — so its inputs must be
+    right, not just its name."""
     errors = {e["name"]: e for e in AUTO_SPLIT_ABI if e.get("type") == "error"}
 
     assert set(errors) == {"NoPolicy", "ZeroAmount", "BelowMinAmount"}

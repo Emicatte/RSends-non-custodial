@@ -11,13 +11,19 @@ belong to the merchant's key. A method the keeper cannot name is a method it
 cannot call, and `tests/test_abi.py` pins that the only state-changing entry
 here is `executeSplit`.
 
-Declaring the three custom errors is what lets web3 decode a revert BY NAME.
-Without them a skip and an outage both arrive as opaque bytes, and the keeper
-cannot tell "this merchant has no policy" from "the node is broken". Only these
-three are reachable from `_plan`, the shared guard behind both `previewSplit`
-and `executeSplit`.
+The three custom errors are declared for the keeper's OWN decoder, not for
+web3's. web3 7.16 does not decode a custom error: it re-raises the node's error
+`data` as both the message and `.data` and never consults this ABI, so a revert
+arrives as four bytes of selector. `chain._ERRORS_BY_SELECTOR` is built from the
+entries below and is what turns those bytes into `NoPolicy()` or
+`BelowMinAmount(amount, minAmount)` — without that pair, a skip and an outage
+would log identically and the keeper could not tell "this merchant has no
+policy" from "the node is broken". Only these three are reachable from `_plan`,
+the shared guard behind both `previewSplit` and `executeSplit`.
 
-Selectors are pinned against the compiled artifact in tests/test_abi.py.
+Function selectors are pinned against the compiled artifact in
+tests/test_abi.py; the error selectors, which only matter once something looks
+them up, are pinned beside that lookup in tests/test_chain_and_client.py.
 """
 
 AUTO_SPLIT_ABI = [
