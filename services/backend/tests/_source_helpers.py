@@ -22,7 +22,17 @@ def code_without_prose(module) -> str:
     Line structure is preserved, so a multi-token substring like
     `"enumerate(transfers"` still matches.
     """
-    src = inspect.getsource(module)
+    return source_without_prose(inspect.getsource(module))
+
+
+def source_without_prose(src: str) -> str:
+    """The same, for source that cannot be reached through an import.
+
+    `test_no_custodial_surface.py` scans `services/keeper` by PATH — that
+    package is a separate service, deliberately not importable from this suite
+    (it must never share a process with `app.*`), so there is no module object
+    to hand `code_without_prose`.
+    """
     lines = src.splitlines()
 
     drop: set = set()
