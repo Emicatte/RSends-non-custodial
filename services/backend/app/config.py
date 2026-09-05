@@ -30,6 +30,15 @@ class Settings(BaseSettings):
     # fully denied (fail-closed in require_admin).
     admin_api_token: str = ""
 
+    # Shared secret gating `/api/internal/*` (X-RSend-Internal-Secret). Today
+    # that is the Auto Split keeper's work-list endpoint, whose read is
+    # deliberately cross-tenant — this secret is its ONLY auth, so it is a third
+    # trust domain and must not equal hmac_secret or admin_api_token. Empty ⇒
+    # the internal surface is fully denied (fail-closed in
+    # require_internal_secret). Removed in cc768dde when the last internal route
+    # went away; restored with the keeper.
+    internal_proxy_secret: str = ""
+
     # H4 transition flag: accept the legacy replayable wallet-signature bearer
     # (RSends:{address}:{timestamp}) IN ADDITION to the new session-HMAC scheme.
     # Set to false once both backend and frontend are deployed, to fully close
@@ -580,6 +589,35 @@ def validate_settings(settings: Settings) -> None:
             errors.append(
                 f"AUTH_JWT_SECRET is too short ({len(settings.auth_jwt_secret)} chars). "
                 "Must be >= 64 characters (hex-encoded 32 random bytes) in production."
+            )
+
+        # ── INTERNAL_PROXY_SECRET (the /api/internal/* gate) ──
+        # Deliberately the ADMIN_API_TOKEN shape rather than the non-empty-only
+        # check deleted in cc768dde: this secret is the ONLY auth on a
+        # cross-tenant read, so it is a third trust domain and reusing either of
+        # the other two would collapse them together.
+        if not settings.internal_proxy_secret:
+            errors.append(
+                "INTERNAL_PROXY_SECRET is empty in production. The internal "
+                "surface (/api/internal/keeper/*, the Auto Split keeper's work "
+                "list) is its only auth and is fully denied without it. Set a "
+                "unique secret >= 32 chars, distinct from HMAC_SECRET and "
+                "ADMIN_API_TOKEN."
+            )
+        elif len(settings.internal_proxy_secret) < 32:
+            errors.append(
+                f"INTERNAL_PROXY_SECRET is too short "
+                f"({len(settings.internal_proxy_secret)} chars). "
+                "Must be >= 32 characters in production."
+            )
+        elif settings.internal_proxy_secret in (
+            settings.hmac_secret,
+            settings.admin_api_token,
+        ):
+            errors.append(
+                "INTERNAL_PROXY_SECRET must be DIFFERENT from HMAC_SECRET and "
+                "ADMIN_API_TOKEN — three surfaces, three trust domains, three "
+                "secrets."
             )
 
     # ── APP_URL (email verification links) ───────────────

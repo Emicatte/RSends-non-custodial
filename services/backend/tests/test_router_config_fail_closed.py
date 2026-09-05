@@ -108,6 +108,11 @@ def _prod_settings(**over):
         alchemy_api_key="alch-key",
         hmac_secret="x" * 32,
         admin_api_token="y" * 32,
+        # Gates /api/internal/* (the keeper work list); prod-guarded, and must
+        # differ from both secrets above. This stand-in is a SimpleNamespace,
+        # so a missing key surfaces as AttributeError rather than a failed
+        # assertion — see the same key in test_config_hardening._prod_settings.
+        internal_proxy_secret="z" * 32,
         database_url="postgresql+asyncpg://u:p@db.internal/rpagos",
         telegram_bot_token="tg",
         redis_url="rediss://redis.internal:6379/0",

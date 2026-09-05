@@ -31,6 +31,11 @@ def _prod_settings(**over):
         alchemy_api_key="alch-key",
         hmac_secret="x" * 32,
         admin_api_token="y" * 32,  # dedicated admin bearer — MUST differ from hmac_secret
+        # Gates /api/internal/* (the keeper work list). A third trust domain:
+        # MUST differ from both secrets above. Removed by cc768dde with the
+        # guard; restored with it — this is a SimpleNamespace, so a guard
+        # without this key fails with AttributeError, not an assertion.
+        internal_proxy_secret="z" * 32,
         database_url="postgresql+asyncpg://u:p@db.internal/rpagos",
         telegram_bot_token="tg",
         redis_url="rediss://redis.internal:6379/0",
@@ -75,6 +80,22 @@ def test_bad_admin_api_token_blocks_in_prod(bad_token):
     """Audit #9: the admin bearer must be set, >=32 chars, and DISTINCT from
     the HMAC secret ('x'*32 in the stand-in) — prod startup blocks otherwise."""
     s = _prod_settings(admin_api_token=bad_token)
+    with patch.dict(os.environ, {"ENVIRONMENT": ""}, clear=False):
+        with pytest.raises(StartupValidationError):
+            validate_settings(s)
+
+
+@pytest.mark.parametrize(
+    "bad_secret",
+    ["", "short", "x" * 32, "y" * 32],
+    ids=["empty", "too-short", "equals-hmac-secret", "equals-admin-token"],
+)
+def test_bad_internal_proxy_secret_blocks_in_prod(bad_secret):
+    """The /api/internal/* gate is the ONLY auth on a deliberately cross-tenant
+    read (the keeper work list), so it must be set, >=32 chars, and distinct
+    from BOTH other secrets — 'x'*32 is hmac_secret and 'y'*32 is
+    admin_api_token in the stand-in. cc768dde's version checked non-empty only."""
+    s = _prod_settings(internal_proxy_secret=bad_secret)
     with patch.dict(os.environ, {"ENVIRONMENT": ""}, clear=False):
         with pytest.raises(StartupValidationError):
             validate_settings(s)
