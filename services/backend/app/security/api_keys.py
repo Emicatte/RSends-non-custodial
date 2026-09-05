@@ -55,8 +55,11 @@ EXEMPT_PATHS = {
     # ── Admin token / internal ──
     "/api/v1/audit",           # X-Admin-Token
     "/admin/approvals",        # X-Admin-Token (require_admin on the router)
-    "/api/internal/signing",   # called by Next.js oracle, internal-only
-    "/api/internal/oracle",    # oracle digest signer, internal-only (M1)
+    # REMOVED: "/api/internal/signing" and "/api/internal/oracle". Both routes
+    # were deleted in the custodial teardown; only the exempt prefixes
+    # outlived them. is_exempt is a bare startswith with no boundary check, so
+    # an exempt prefix with nothing behind it is a loaded gun — mount any
+    # route under it and it is reachable with no auth at all.
     # ── HMAC-signed ingestion ──
     "/api/v1/tx/callback",     # verify_signature() (HMAC)
 }
