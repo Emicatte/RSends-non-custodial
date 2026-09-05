@@ -714,10 +714,18 @@ raising them is always fine.
 | `GET /transactions` | 60 / 60 s | API key |
 | `POST /webhook/register` | 5 / hour | API key |
 | `POST /webhook/test` | 10 / 60 s | API key |
-| `GET /public/payment-intent/{id}` | 20 / 60 s | **IP** |
+| `GET /public/payment-intent/{id}` | 40 / 60 s | **IP** |
+| `GET /public/payment-intent/{id}` | 240 / 60 s | **intent** (all callers) |
 | Global, all endpoints | 100 / minute | API key |
 
-Source: `app/middleware/rate_limit.py:50-101`, `:388-416`.
+The hosted checkout's status view carries a second ceiling, counted per intent
+across every caller rather than per IP. It sits well above the per-IP rule — a
+single client cannot reach it alone — and exists because that endpoint takes no
+auth and does live on-chain work per request. Both refusals are the same
+`429 {error, retry_after}` described above.
+
+Source: `app/middleware/rate_limit.py:50-124`, `:442-470`; the per-intent ceiling is
+`PUBLIC_INTENT_GLOBAL_LIMIT` (`:155`), applied at `:517-549`.
 
 **Idempotency.** The header is **`X-Idempotency-Key`** (not `Idempotency-Key`), it applies to
 `POST` and `PUT`, the TTL is 24 hours, and **only 2xx responses are replayed**
@@ -772,7 +780,9 @@ and gets no idempotency either.
 `tests/test_rate_limit_matching.py::test_create_intent_uses_create_limit`,
 `::test_cancel_uses_stricter_subpath_limit`, `::test_resolve_uses_stricter_subpath_limit`,
 `::test_get_intent_by_id_uses_get_subpath_limit`.
-`tests/test_public_intent_view.py::test_public_view_per_ip_rate_limited`.
+`tests/test_public_intent_view.py::test_public_view_per_ip_rate_limited`,
+`::test_one_intent_is_capped_across_distinct_ips`, `::test_the_ceiling_is_scoped_to_one_intent`,
+`::test_ceiling_429_uses_the_frozen_error_envelope`.
 
 `tests/test_idempotency_tenant_scope.py` holds the idempotency promises above:
 `::test_two_clients_same_key_do_not_share_a_response` and

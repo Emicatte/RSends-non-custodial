@@ -391,7 +391,13 @@ def test_merchant_get_no_longer_public(monkeypatch):
 # ── middleware: per-IP rate limit ────────────────────────────
 
 def test_public_view_per_ip_rate_limited(monkeypatch):
-    """21st request in the window from one IP → 429 (20/min per-IP rule)."""
+    """41st request in the window from one IP → 429 (40/min per-IP rule).
+
+    Sized from what the checkout actually does: a single tab spends 13 of these
+    in its first minute (one initial fetch, then the 5s watch ladder) and 6/min
+    after it slows down. 20 left no room for a second viewer or a reload, and
+    raising a limit is a compatible change (INTEGRATION_CONTRACT.md §10).
+    """
     from app.middleware.rate_limit import RateLimitMiddleware
 
     async def _redis_down(*a, **k):
@@ -410,6 +416,127 @@ def test_public_view_per_ip_rate_limited(monkeypatch):
     c = TestClient(app, raise_server_exceptions=False)
     url = f"/api/v1/public/payment-intent/pi_{secrets.token_hex(16)}"
 
-    codes = [c.get(url).status_code for _ in range(21)]
-    assert codes[:20] == [200] * 20
-    assert codes[20] == 429
+    codes = [c.get(url).status_code for _ in range(41)]
+    assert codes[:40] == [200] * 40
+    assert codes[40] == 429
+
+
+# ── middleware: per-intent global ceiling ────────────────────
+#
+# The per-IP rule alone bounds nothing once a caller holds several addresses,
+# and this endpoint is unauthenticated AND costs a live quoteFee eth_call per
+# request (public_routes.get_public_payment_intent → build_onchain_payment).
+# Until the real client IP reached the backend, every request carried the same
+# proxy address, so the per-IP bucket WAS a global one and that accident was the
+# only bound on RPC spend here. This ceiling replaces it deliberately.
+
+PROXY_SECRET = "per-intent-ceiling-test-secret"
+
+
+def _limiter_client(monkeypatch):
+    """A middleware-only app on the deterministic in-memory limiter, able to
+    present a different client IP per request through the proxy header pair."""
+    from app.middleware.rate_limit import RateLimitMiddleware
+
+    async def _redis_down(*a, **k):
+        raise ConnectionError("no redis in tests")
+
+    monkeypatch.setattr("app.middleware.rate_limit._check_redis", _redis_down)
+    monkeypatch.setenv("INTERNAL_PROXY_SECRET", PROXY_SECRET)
+
+    app = FastAPI()
+    app.add_middleware(RateLimitMiddleware)
+
+    @app.get("/api/v1/public/payment-intent/{intent_id}")
+    async def _public(intent_id: str):
+        return {"ok": True}
+
+    return TestClient(app, raise_server_exceptions=False)
+
+
+def _as_ip(ip: str) -> dict:
+    return {"X-RSend-Client-IP": ip, "X-RSend-Proxy-Secret": PROXY_SECRET}
+
+
+def test_one_intent_is_capped_across_distinct_ips(monkeypatch):
+    """Each IP stays well inside its own per-IP allowance; together they hit the
+    intent's ceiling. This is the property the per-IP rule cannot express."""
+    monkeypatch.setattr(
+        "app.middleware.rate_limit.PUBLIC_INTENT_GLOBAL_LIMIT", (5, 60)
+    )
+    c = _limiter_client(monkeypatch)
+    url = f"/api/v1/public/payment-intent/pi_{secrets.token_hex(16)}"
+
+    codes = [
+        c.get(url, headers=_as_ip(f"203.0.113.{i}")).status_code for i in range(1, 7)
+    ]
+
+    assert codes[:5] == [200] * 5
+    assert codes[5] == 429
+
+
+def test_the_ceiling_is_scoped_to_one_intent(monkeypatch):
+    """A busy payment link must not stop anyone else from being paid."""
+    monkeypatch.setattr(
+        "app.middleware.rate_limit.PUBLIC_INTENT_GLOBAL_LIMIT", (5, 60)
+    )
+    c = _limiter_client(monkeypatch)
+    busy = f"/api/v1/public/payment-intent/pi_{secrets.token_hex(16)}"
+    other = f"/api/v1/public/payment-intent/pi_{secrets.token_hex(16)}"
+
+    for i in range(6):
+        c.get(busy, headers=_as_ip(f"203.0.113.{i}"))
+
+    assert c.get(busy, headers=_as_ip("203.0.113.99")).status_code == 429
+    assert c.get(other, headers=_as_ip("203.0.113.99")).status_code == 200
+
+
+def test_a_blocked_ip_does_not_burn_the_shared_ceiling(monkeypatch):
+    """Per-IP is checked FIRST, so one abusive address is stopped by its own
+    allowance instead of spending everyone else's."""
+    monkeypatch.setattr(
+        "app.middleware.rate_limit.PUBLIC_INTENT_GLOBAL_LIMIT", (5, 60)
+    )
+    monkeypatch.setattr(
+        "app.middleware.rate_limit.ENDPOINT_LIMITS",
+        [("GET", "/api/v1/public/payment-intent", 2, 60, "ip")],
+    )
+    c = _limiter_client(monkeypatch)
+    url = f"/api/v1/public/payment-intent/pi_{secrets.token_hex(16)}"
+
+    # One address burns its 2 and is refused 10 more times.
+    codes = [c.get(url, headers=_as_ip("198.51.100.1")).status_code for _ in range(12)]
+    assert codes[:2] == [200, 200]
+    assert set(codes[2:]) == {429}
+
+    # The shared ceiling has only seen the 2 that were served.
+    assert c.get(url, headers=_as_ip("203.0.113.7")).status_code == 200
+
+
+def test_ceiling_429_uses_the_frozen_error_envelope(monkeypatch):
+    """`{error, retry_after}` is promised to integrators
+    (docs/INTEGRATION_CONTRACT.md §9) — a second bucket must not invent a
+    second shape."""
+    monkeypatch.setattr(
+        "app.middleware.rate_limit.PUBLIC_INTENT_GLOBAL_LIMIT", (1, 60)
+    )
+    c = _limiter_client(monkeypatch)
+    url = f"/api/v1/public/payment-intent/pi_{secrets.token_hex(16)}"
+
+    c.get(url, headers=_as_ip("203.0.113.1"))
+    blocked = c.get(url, headers=_as_ip("203.0.113.2"))
+
+    assert blocked.status_code == 429
+    assert set(blocked.json()) == {"error", "retry_after"}
+    assert blocked.json()["error"] == "RATE_LIMIT_EXCEEDED"
+    assert blocked.headers["Retry-After"] == "60"
+
+
+def test_other_public_paths_are_not_given_a_ceiling(monkeypatch):
+    """The ceiling is specific to intent polling, not to `/public/*`."""
+    from app.middleware.rate_limit import _public_intent_id
+
+    assert _public_intent_id("/api/v1/public/payment-intent/pi_abc") == "pi_abc"
+    assert _public_intent_id("/api/v1/public/payment-intent") is None
+    assert _public_intent_id("/api/v1/public/payment-intent/") is None
+    assert _public_intent_id("/api/v1/merchant/payment-intent/pi_abc") is None

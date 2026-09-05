@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireEnv } from '@/lib/env'
+import { clientIpHeaders } from '@/lib/proxyClientIp'
 
 export const maxDuration = 30
 
@@ -82,12 +83,15 @@ async function proxyRequest(
   const queryString = req.nextUrl.search // preserves ?owner_address=...&foo=bar
   const targetUrl = `${backend}/${subPath}${queryString}`
 
-  // Build forwarded headers.
+  // Build forwarded headers. The client IP is DERIVED and appended after the
+  // allowlist loop, never taken from it — a browser-supplied value must not be
+  // able to overwrite what we observed.
   const headers: Record<string, string> = {}
   for (const h of FORWARD_HEADERS) {
     const v = req.headers.get(h)
     if (v) headers[h] = v
   }
+  Object.assign(headers, clientIpHeaders(req))
 
   // Read body for methods that have one.
   let body: string | undefined

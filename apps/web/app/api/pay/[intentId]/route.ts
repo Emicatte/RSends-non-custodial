@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireEnv } from '@/lib/env'
+import { clientIpHeaders } from '@/lib/proxyClientIp'
 
 function getBackendUrl() {
   return requireEnv('RPAGOS_BACKEND_URL')
 }
+
+/** Replayed to the browser so the poll can honour the limit it just hit. */
+const RATE_LIMIT_HEADERS = [
+  'retry-after',
+  'x-ratelimit-limit',
+  'x-ratelimit-remaining',
+  'x-ratelimit-reset',
+] as const
 
 /**
  * GET /api/pay/{intentId}
@@ -15,7 +24,7 @@ function getBackendUrl() {
  * limited backend-side; merchant-private fields are never returned.
  */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ intentId: string }> },
 ) {
   const { intentId } = await params
@@ -31,10 +40,25 @@ export async function GET(
   const url = `${backend}/api/v1/public/payment-intent/${encodeURIComponent(intentId)}`
 
   try {
-    const res = await fetch(url, { cache: 'no-store' })
+    const res = await fetch(url, {
+      cache: 'no-store',
+      headers: clientIpHeaders(req),
+    })
 
     const body = await res.json()
-    return NextResponse.json(body, { status: res.status })
+
+    // The body is re-encoded here, so backend headers are not copied wholesale
+    // (content-length/encoding would no longer describe what we send). These
+    // four are replayed explicitly: without Retry-After the checkout's poll has
+    // nothing to back off by, and a client that cannot back off keeps the
+    // bucket it is waiting on permanently full.
+    const headers = new Headers()
+    for (const h of RATE_LIMIT_HEADERS) {
+      const v = res.headers.get(h)
+      if (v) headers.set(h, v)
+    }
+
+    return NextResponse.json(body, { status: res.status, headers })
   } catch (err) {
     console.error('[pay proxy] Backend fetch failed:', err)
     return NextResponse.json(

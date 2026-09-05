@@ -130,7 +130,7 @@ router.pay(
         <Code>expires_at</Code>, <Code>merchant_name</Code>, <Code>tx_hash</Code> and the same{' '}
         <Code>onchain</Code> object — and nothing else. It is what the hosted checkout itself
         polls. The <Code>intent_id</Code> is the credential, so keep the link private; rate limit
-        is 20/min per IP.
+        is 40/min per IP, plus a 240/min ceiling per intent across all callers.
       </P>
 
       <PageNav

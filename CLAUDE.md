@@ -81,6 +81,31 @@ flag the divergence and update this file in the same review.
   Redis loss → 503 `RATE_LIMIT_UNAVAILABLE`, never fail-open. Unauthenticated/public endpoints
   (tx callback, auth, user routes, public checkout polling) rate-limit **per-IP** — auth-based
   limits don't apply when there's no key. New endpoints must get an `ENDPOINT_LIMITS` entry.
+  **Per-IP means per-IP only because the proxy hop proves the address** (fixed 2026-09-05).
+  Before that, no Next proxy forwarded a client IP and `TRUSTED_PROXIES` was unset, so
+  `get_real_client_ip` fell back to the socket peer — the same value for every request — and
+  every `"ip"` rule was in effect a **global** cap. The web proxies now derive the address
+  (`apps/web/lib/proxyClientIp.ts` → the pre-existing hardened `getClientIp` in
+  `lib/rateLimit.ts`) and send it as `X-RSend-Client-IP` with `X-RSend-Proxy-Secret`;
+  `trusted_proxy.get_real_client_ip` honours it only on a constant-time `INTERNAL_PROXY_SECRET`
+  match and only when it parses as an address, falling back to the existing trusted-proxy/XFF
+  path otherwise. A CIDR allowlist could not do this job: Vercel egress IPs rotate, and the
+  backend URL is reachable directly (no `TrustedHostMiddleware`), so leftmost-XFF trust would
+  let anyone with curl pick their own bucket. **Do not set `FORWARDED_ALLOW_IPS`** for uvicorn —
+  `request.client.host` must stay the honest socket peer. If the secret ever drifts between the
+  two sides, the backend logs one warning and silently reverts to the collapsed behaviour.
+  Pinned by `tests/test_trusted_proxy.py` and `apps/web/app/__tests__/api/clientIpForwarding.test.ts`.
+- **The public checkout carries two ceilings.** `GET /api/v1/public/payment-intent/{id}` is
+  40/60s per (IP, intent) **and** 240/60s per intent across all callers
+  (`PUBLIC_INTENT_GLOBAL_LIMIT`). The second is not redundant: the endpoint is unauthenticated
+  and every request runs a live `quoteFee` `eth_call`, so per-IP alone bounds nothing against a
+  caller with several addresses. It replaces, deliberately, the bound that used to exist by
+  accident while all IPs collapsed. It is checked **after** the per-IP rule and only for
+  requests that rule allowed, so a blocked address does not spend the shared budget, and its
+  429 goes through `_make_429` — `{error, retry_after}` is frozen (`docs/INTEGRATION_CONTRACT.md`
+  §10). The checkout client backs off on 429/503 rather than holding its cadence
+  (`apps/web/lib/web3/intentPoll.ts:throttleDelay`); a client that ignores the limit keeps the
+  bucket it is waiting on permanently full.
 - **Server-side validation always.** Validate & **reject** (never coerce) on the server even if
   the client also validates. Bounded lengths, whitelisted enums, address regex
   `^0x[a-fA-F0-9]{40}$` (`services/backend/app/security/input_validator.py`).
@@ -340,6 +365,27 @@ Admin surface (server-to-server only; the web proxy denylists these paths):
   `blacklisted_wallets` (dead, superseded by `sanctions_list`); dead `EXEMPT_PATHS` entries;
   root non-locale `app/page.tsx` legacy landing (own decision). DB-only orphan tables
   (`anomaly_alerts`, `compliance_snapshots`) belong to the Alembic reconciliation (PR #18).
+- **Login and signup are rate-limited platform-wide, not per user — and fail open.**
+  `LOGIN_RL_IP_MAX = 5` over `LOGIN_RL_IP_WINDOW = 15 * 60`, keyed `auth_rl:login:ip:{ip}`
+  (`app/services/email_auth_service.py:51-52`, applied `:287`); signup is 10/hour the same way
+  (`:171`). While every request carried the same proxy address these were **platform-wide**
+  ceilings: five logins per fifteen minutes for everyone. The client-IP fix (2026-09-05) repairs
+  them as a side effect — they are per-IP now, as always intended. Two things still want a
+  decision: whether those numbers are right now that they bind per user, and that
+  `_rate_limit_check` is **fail-open** on a Redis error (`:92-94`, `:108`) while the rate-limit
+  middleware is fail-closed — a Redis outage removes the login/signup/reset limits entirely.
+  Worth checking against the 2026-08-26 auth incident as a *separate candidate mechanism*; that
+  incident's proven cause was the NextAuth session not landing, so this is a hypothesis, not a
+  re-diagnosis.
+- **The default rule's blanket ceiling is gone.** `rate_limit.py`'s unmatched-path branch keys
+  per-IP, so while IPs collapsed, **every endpoint without an explicit `ENDPOINT_LIMITS` entry
+  was capped globally** at 60/min GET, 30/min POST. Making IPs real removed that platform-wide
+  backstop — correctly, but it means the "new endpoints must get an `ENDPOINT_LIMITS` entry"
+  rule above is now load-bearing where it used to be belt-and-braces. Audit which live routes
+  rely on the default and give the ones that matter explicit entries.
+- **`check_signing_rate_limit` is dead code.** `app/services/signing_rate_limit.py:43` has no
+  callers anywhere (only `check_nonce_uniqueness` is used), so its per-wallet/per-IP/global
+  signing limits are not enforced. Wire it or delete it.
 - **Redis-DOWN (degraded/fail-closed) path is untested** — with CI now running against a real
   Redis, no active test exercises health-`degraded` or rate-limit fail-closed with Redis
   absent (the in-memory-fallback test in `test_circuit_breaker.py` is skipped "pending
