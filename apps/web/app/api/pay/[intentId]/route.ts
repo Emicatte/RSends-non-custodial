@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireEnv } from '@/lib/env'
+import { clientIpHeaders } from '@/lib/proxyClientIp'
 
 function getBackendUrl() {
   return requireEnv('RPAGOS_BACKEND_URL')
@@ -15,7 +16,7 @@ function getBackendUrl() {
  * limited backend-side; merchant-private fields are never returned.
  */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ intentId: string }> },
 ) {
   const { intentId } = await params
@@ -31,7 +32,10 @@ export async function GET(
   const url = `${backend}/api/v1/public/payment-intent/${encodeURIComponent(intentId)}`
 
   try {
-    const res = await fetch(url, { cache: 'no-store' })
+    const res = await fetch(url, {
+      cache: 'no-store',
+      headers: clientIpHeaders(req),
+    })
 
     const body = await res.json()
     return NextResponse.json(body, { status: res.status })

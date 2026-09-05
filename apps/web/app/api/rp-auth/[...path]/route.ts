@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireEnv } from '@/lib/env'
+import { clientIpHeaders } from '@/lib/proxyClientIp'
 
 export const maxDuration = 30
 
@@ -80,11 +81,15 @@ async function proxyRequest(
   const subPath = (path ?? []).join('/')
   const targetUrl = `${getBackendUrl()}/${subPath}${req.nextUrl.search}`
 
+  // Derived, not forwarded: the allowlist above carries browser-supplied
+  // headers, and the client IP must never come from one. Login/refresh are the
+  // brute-force-sensitive surface, so this is the hop that most needs it.
   const headers: Record<string, string> = {}
   for (const h of FORWARD_HEADERS) {
     const v = req.headers.get(h)
     if (v) headers[h] = v
   }
+  Object.assign(headers, clientIpHeaders(req))
 
   let body: string | undefined
   if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'DELETE') {
