@@ -126,6 +126,27 @@ ADMIN_BAN_DURATION = 900               # 15 min ban
 DEFAULT_GET_LIMIT = (60, 60)
 DEFAULT_POST_LIMIT = (30, 60)
 
+# ── Per-intent ceiling on the hosted checkout poll ────────────
+#
+# The public status view is unauthenticated AND every request runs a live
+# quoteFee eth_call (public_routes.get_public_payment_intent →
+# router_registry.build_onchain_payment, uncached), so it amplifies one cheap
+# HTTP request into paid RPC work. The per-IP rule above bounds a single
+# address; it bounds nothing against a caller holding several. This second
+# bucket is keyed on the intent ALONE and is what actually caps the RPC spend
+# one payment link can cause.
+#
+# Sized well clear of legitimate use: at the checkout's steady 6 req/min this is
+# ~20 concurrent watchers on one link, while capping the endpoint at 4 eth_calls
+# per second per intent no matter how many addresses are polling.
+#
+# NOTE: this bound used to exist by accident. Before the client IP reached the
+# backend every request carried the same proxy address, so the per-IP bucket was
+# in effect a global one. Making IPs real removed that; this restores it on
+# purpose.
+PUBLIC_INTENT_PREFIX = "/api/v1/public/payment-intent"
+PUBLIC_INTENT_GLOBAL_LIMIT = (240, 60)
+
 # Paths exempt from rate limiting entirely
 RATE_LIMIT_EXEMPTIONS: set[str] = set()
 
@@ -291,6 +312,16 @@ def _get_api_key_id(request: Request) -> str | None:
         if token:
             return token[:24]  # Use prefix as identifier (no full key in Redis)
     return None
+
+
+def _public_intent_id(path: str) -> str | None:
+    """The intent id from a public checkout status path, or None if this is not
+    one. Deliberately narrow: the ceiling belongs to intent polling, not to
+    `/public/*` in general."""
+    if not path.startswith(PUBLIC_INTENT_PREFIX + "/"):
+        return None
+    intent_id = path[len(PUBLIC_INTENT_PREFIX):].strip("/")
+    return intent_id or None
 
 
 def _match_endpoint(method: str, path: str) -> tuple[int, int, str] | None:
@@ -475,6 +506,40 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         if not allowed:
             return _make_429(max_req, remaining, reset_epoch, retry_after=window)
+
+        # ── Per-intent ceiling (hosted checkout only) ────────
+        # Checked AFTER the per-IP rule, and only for requests that rule let
+        # through: an address already over its own allowance must not spend the
+        # budget shared by everyone else watching the same link.
+        intent_id = _public_intent_id(path)
+        if intent_id is not None:
+            _i_max, _i_window = PUBLIC_INTENT_GLOBAL_LIMIT
+            _i_key = f"rl:intent:{intent_id}"
+            try:
+                _i_allowed, _i_remaining, _i_reset = await _check_redis(
+                    _i_key, _i_max, _i_window
+                )
+            except Exception:
+                from app.config import get_settings
+                if not get_settings().debug:
+                    return JSONResponse(
+                        status_code=503,
+                        content={
+                            "error": "RATE_LIMIT_UNAVAILABLE",
+                            "message": "Rate limiting service temporarily unavailable — retry later",
+                        },
+                        headers={"Retry-After": "5"},
+                    )
+                _i_allowed, _i_remaining, _i_reset = _memory_limiter.check(
+                    _i_key, _i_max, _i_window
+                )
+
+            if not _i_allowed:
+                # Same envelope as every other 429 — `{error, retry_after}` is a
+                # frozen promise (docs/INTEGRATION_CONTRACT.md §9).
+                return _make_429(
+                    _i_max, _i_remaining, _i_reset, retry_after=_i_window
+                )
 
         # ── Execute request ──────────────────────────────────
         response = await call_next(request)
