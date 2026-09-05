@@ -1,0 +1,10 @@
+{
+  "name": "@rsends/autosplit-keeper",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "echo \"no build step (Python service)\"",
+    "test": "pytest",
+    "lint": "ruff check . || true"
+  }
+}

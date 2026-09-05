@@ -1,0 +1,12 @@
+-r requirements.txt
+
+# Same version the backend suite runs on, so an idiom that works there works
+# here. The keeper suite needs a real Redis (the lock's whole point is that it
+# is atomic across processes) — CI provides redis:7, same as the backend job,
+# and tests/test_tick.py reads KEEPER_TEST_REDIS_URL.
+#
+# No pytest-asyncio: the keeper is deliberately synchronous. It does one thing
+# at a time on purpose — the lock, the send and the receipt wait are a sequence
+# whose ordering IS the safety argument, and concurrency there would buy nothing
+# but ways to get it wrong.
+pytest==8.3.0

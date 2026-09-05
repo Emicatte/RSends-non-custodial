@@ -1,0 +1,23 @@
+# ═══════════════════════════════════════════════════════════
+#  RSends Auto Split keeper — runtime dependencies
+#
+#  EXACT pins, deliberately, and not merely for reproducibility.
+#  `eth-account` is the signing surface for the only RSends-held key in the
+#  product. CLAUDE.md already tracks the backend's `eth-account>=0.11.0` floor
+#  pin as an auth-surface risk (it sits beside `eth-utils==6.0.0`, which carries
+#  an explicit "security-sensitive" exact-pin comment); a keeper turns the same
+#  library into a SIGNING surface, where "whatever is latest at build time"
+#  is not a posture worth defending. Pin both ends here regardless of what the
+#  backend does.
+#
+#  `web3` is NEW to a production image. It exists in this repo today only in
+#  services/backend/requirements-e2e.txt (`web3>=6.20,<8`, test-only). Nothing
+#  in services/backend/requirements.txt changes — and it must not, or
+#  tests/test_rpc_failover.py's "no backend module talks to a node through
+#  web3.py" pin becomes a lie.
+# ═══════════════════════════════════════════════════════════
+
+web3==7.16.0
+eth-account==0.13.7
+redis[hiredis]==5.1.0
+httpx==0.27.0

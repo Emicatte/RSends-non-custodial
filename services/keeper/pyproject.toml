@@ -1,0 +1,18 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rsends-autosplit-keeper"
+version = "1.0.0"
+description = "Auto Split keeper — polls source-wallet policies and calls executeSplit"
+requires-python = ">=3.12"
+
+# The keeper is deliberately NOT installed alongside the backend: it must never
+# import `app.*`. Discovery is restricted to its own package so an accidental
+# co-install cannot pull anything else in.
+[tool.setuptools.packages.find]
+include = ["keeper*"]
