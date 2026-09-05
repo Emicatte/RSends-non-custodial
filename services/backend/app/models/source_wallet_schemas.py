@@ -203,3 +203,40 @@ class SourceWalletListResponse(BaseModel):
     source_wallets: List[SourceWalletResponse]
     max_allowed: int
     remaining_slots: int
+
+
+class KeeperSourceWallet(BaseModel):
+    """One unit of keeper work: everything the keeper cannot derive on its own.
+
+    A separate model from `SourceWalletResponse` on purpose — different reader,
+    different trust boundary, different fields. Three notes:
+
+    • `org_id` IS present here and deliberately absent from the session model.
+      This read is cross-tenant, so the org is the only way a log line can name
+      whose wallet stalled.
+    • `token_address`, `token_decimals` and `auto_split` are NOT columns. They
+      are re-resolved from the registry and config at each use site, so the row
+      never carries them; resolving them here is what keeps the keeper from
+      needing the registry, the config, and therefore the backend.
+    • No `disabled_at`: a disabled wallet is omitted from the list entirely,
+      not shipped with a flag for the keeper to remember to check.
+    """
+
+    id: str
+    org_id: str
+    #: Registry chain NAME (`base_sepolia`), never an EVM id — see
+    #: SourceWalletResponse.chain.
+    chain: str
+    #: The EVM id, resolved. Present because the keeper picks an RPC by it and
+    #: must put it in the transaction; a watch-only chain has none, and such a
+    #: wallet is omitted rather than sent with a null.
+    chain_id: int
+    address: str
+    token_symbol: str
+    token_address: str
+    token_decimals: int
+    auto_split: str
+
+
+class KeeperSourceWalletList(BaseModel):
+    wallets: List[KeeperSourceWallet]

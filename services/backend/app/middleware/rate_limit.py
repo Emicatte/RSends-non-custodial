@@ -114,6 +114,13 @@ ENDPOINT_LIMITS: list[tuple[str, str, int, int, str]] = [
     ("PATCH",  "/api/v1/user/routes",                60,    60,  "ip"),
     ("DELETE", "/api/v1/user/routes",                30,    60,  "ip"),
     ("GET",    "/api/v1/user/routes",               120,    60,  "ip"),
+    # Auto Split keeper work list (X-RSend-Internal-Secret, server-to-server).
+    # Per-IP deliberately, not by accident: no rsend_ key exists on this path,
+    # and "api_key" degrades to `api_key_id or client_ip` — the same bucket,
+    # reached by a route nobody would think to re-read. The keeper polls on a
+    # fixed cadence from ONE egress IP and shares this single bucket, so an
+    # under-sized ceiling here self-DoSes it rather than protecting anything.
+    ("GET",    "/api/internal/keeper",              120,    60,  "ip"),
 ]
 
 

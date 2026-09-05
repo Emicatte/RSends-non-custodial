@@ -55,6 +55,12 @@ EXEMPT_PATHS = {
     # ── Admin token / internal ──
     "/api/v1/audit",           # X-Admin-Token
     "/admin/approvals",        # X-Admin-Token (require_admin on the router)
+    # X-RSend-Internal-Secret (require_internal_secret ON THE ROUTER). Exempt
+    # from API-KEY auth, NOT unauthenticated: the middleware below consults
+    # is_exempt before anything else and is deny-by-default on every method, so
+    # a NON-exempt path would 401 here and its router dependency would never
+    # run. Same shape as /admin/approvals above.
+    "/api/internal/keeper",    # Auto Split keeper work list
     # REMOVED: "/api/internal/signing" and "/api/internal/oracle". Both routes
     # were deleted in the custodial teardown; only the exempt prefixes
     # outlived them. is_exempt is a bare startswith with no boundary check, so

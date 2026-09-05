@@ -404,6 +404,9 @@ app.include_router(user_onboarding_router)
 from app.api.source_wallet_routes import router as source_wallet_router
 app.include_router(source_wallet_router)
 
+from app.api.internal_keeper_routes import router as internal_keeper_router
+app.include_router(internal_keeper_router)
+
 
 # ── Health checks ────────────────────────────────────────
 @app.get("/health")
