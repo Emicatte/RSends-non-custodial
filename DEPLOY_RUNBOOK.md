@@ -198,8 +198,15 @@ Ownerless like the two above, and already deployed + verified on Base Sepolia:
 
 | | |
 |---|---|
-| address | `0x3185681dD66A2BF280D7aBd37a0396494A805dD4` |
-| runtime | 4,201 bytes, keccak `0x55c17eba5d1a59948f2a5cb180cf2982392ab58938766d6dcc90e5029e0b8785` |
+| address | `0x2EfA853754E56690EAd915bC5D18131EeE9AbDDE` |
+| runtime | 4,223 bytes, keccak `0xa9b4603a53ddf63ef90ae583eeae3c77fe33bf74b6541d0e9324d851e191d9ad` |
+
+> **`0x3185681dD66A2BF280D7aBd37a0396494A805dD4` is RETIRED — do not record it.** It predates
+> the `SelfRecipient` fix (`feat/auto-split-contract` @ `c9ab4722`), so `setPolicy` there still
+> accepts the merchant as its own recipient: the split leaves the wallet non-empty and any
+> caller can re-split the residue. It is still the address in the local `forge` broadcast
+> receipts under `packages/contracts/broadcast/`, which is the likeliest way to reinstate it by
+> accident.
 
 Deploy script (on the contracts branch):
 ```bash
@@ -211,7 +218,7 @@ forge script script/DeployAutoSplit.s.sol:DeployAutoSplit \
 ```
 Record it in the backend:
 ```
-AUTO_SPLIT_ADDRESSES_JSON={"base_sepolia":"0x3185681dD66A2BF280D7aBd37a0396494A805dD4"}
+AUTO_SPLIT_ADDRESSES_JSON={"base_sepolia":"0x2EfA853754E56690EAd915bC5D18131EeE9AbDDE"}
 ```
 No frontend env. Until this var is set, source-wallet registration fail-closes
 with 422 `AUTO_SPLIT_UNAVAILABLE` on every chain — deploying late is safe, and
@@ -231,7 +238,7 @@ about how a *payment* settles, not about a keeper emptying a wallet the merchant
 owns). So TRON becomes live the moment you add it, and to add it you record a
 base58check address:
 ```
-AUTO_SPLIT_ADDRESSES_JSON={"base_sepolia":"0x3185…","tron_nile":"T…"}
+AUTO_SPLIT_ADDRESSES_JSON={"base_sepolia":"0x2EfA…","tron_nile":"T…"}
 ```
 Nothing is deployed on TRON mainnet yet, so `tron` stays out of the map until it
 is.
@@ -491,7 +498,7 @@ re-deploy re-runs `upgrade head`, which is a no-op once at `0007`.
 | `ALCHEMY_API_KEY` | RPC — required unless `RPC_PROVIDERS_JSON` covers every indexed chain | SECRET | dashboard.alchemy.com | `<alchemy_key>` |
 | `RSENDS_ROUTER_ADDRESSES_JSON` | chain→router map (v1) | PUBLIC | Part 1 deploy output | `{"84532":"<FILL_AFTER_CONTRACT_DEPLOY>"}` |
 | `RSENDS_ROUTER_V2_ADDRESSES_JSON` | chain→RouterV2 map — **the mainnet cutover** (Part 6) | PUBLIC | Part 6 deploy output; **manual on Render: NOT in `render.yaml`**, the blueprint will never carry it | unset until cutover |
-| `AUTO_SPLIT_ADDRESSES_JSON` | chain **NAME**→RSendsAutoSplit map (source wallets, **§1f**) — never also in a router map; a numeric key resolves to nothing | PUBLIC | Part 1f; **manual on Render: NOT in `render.yaml`** | `{"base_sepolia":"0x3185681dD66A2BF280D7aBd37a0396494A805dD4"}` |
+| `AUTO_SPLIT_ADDRESSES_JSON` | chain **NAME**→RSendsAutoSplit map (source wallets, **§1f**) — never also in a router map; a numeric key resolves to nothing | PUBLIC | Part 1f; **manual on Render: NOT in `render.yaml`** | `{"base_sepolia":"0x2EfA853754E56690EAd915bC5D18131EeE9AbDDE"}` |
 | `RPC_PROVIDERS_JSON` | second RPC vendor, chain→list (**§2b-ter**) | SECRET (holds the endpoint token) | QuickNode dashboard; **manual on Render: NOT in `render.yaml`** | `{"84532":[{"name":"quicknode","url":"https://<SUB>.base-sepolia.quiknode.pro/<TOKEN>/"}]}` |
 | `CORS_ORIGINS` / `APP_URL` | allowed origins / public URL | PUBLIC | your Vercel URL | `https://<app>.vercel.app` |
 | `ENVIRONMENT` / `DEBUG` | guard posture | PUBLIC | `production` / `false` (in blueprint) | — |
