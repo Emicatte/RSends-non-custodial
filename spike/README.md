@@ -2,6 +2,21 @@
 
 Throwaway. Not production. Nile testnet only.
 
+> **RETIRED 2026-09-05 — do not deploy from, or measure against, this record.**
+> The address this spike deployed, `TWd6ezLhi7NMYv2bgRp9xyxEWiRfzCj3xh`, predates
+> the SelfRecipient fix: `setPolicy` there still accepts the merchant as its own
+> recipient, so the zero-balance invariant this spike measured can be broken and
+> the residue re-split by any caller. The spike merchant's allowance to it is also
+> still bricked at 12345 from the guard probe.
+>
+> Superseded by **`TYi2uuk9SKA9tyP4iRQJs5sNHU3wdHURAo`** (runtime 4343 bytes,
+> keccak `0x5c656773c7bdb1c947769e38fe629321a4ec90383f2798650ca2daeea312daab`),
+> deployed on branch `spike/tron-autosplit-redeploy`, which carries the corrected
+> contract and the re-run measurements. The energy figures recorded HERE remain
+> valid — they reproduced exactly on the new deployment — but they were taken
+> against the uncorrected contract, and `deployed.json` on this branch points at
+> the retired address.
+
 Settles two inferences from the TRON research pass:
 1. does tronprotocol solc 0.8.31 compile RSendsAutoSplit against OZ 5.6.1?  -> STEP 1
 2. does a 10-leg TRC-20 split fit inside getMaxCpuTimeOfOneTx?             -> STEP 2
